@@ -1,0 +1,11 @@
+# Continuous deployment config for the Jacked PWA.
+# The app is a static single-file PWA — there is no build step. Netlify should
+# publish the `jacked-pwa/` subfolder as-is (NOT the repo root, which also holds
+# docs like APP_STORE_READINESS.md and the watch-client contract).
+[build]
+  base = ""
+  publish = "jacked-pwa"
+  command = ""
+
+# Production deploys come from the `main` branch (set in the Netlify UI when the
+# repo is linked). Deploy previews for PRs are fine to leave on the defaults.
