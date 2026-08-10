@@ -156,6 +156,10 @@ Unknown: which plan the account is currently on.
 
 ## Context a fresh session needs
 
+- **Source of truth is now GitHub**: `https://github.com/jat-coding/Jacked` (branch `main`).
+  Git root is the `C:\Users\jackb\Claude` workspace; the app is `jacked-pwa/index.html`. Commit +
+  push every change here (build zips, screenshots and data dumps are gitignored). The repo can be
+  ahead of the live Netlify deploy (CLI deploy is separate, not auto-wired to GitHub yet).
 - **Deploy**: `netlify deploy --prod --dir jacked-pwa --site ae6d4847-2dfe-4e27-becd-0cb83230fbad --message "<version>"`
   (working dir isn't linked — pass `--site`). PowerShell shows netlify's stderr as
   NativeCommandError noise even on success; look for "Deploy is live!", not the exit code.
