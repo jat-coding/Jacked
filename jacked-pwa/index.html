@@ -3034,7 +3034,14 @@ function openFriend(code){
 function openFriendDay(code,ds){
   const p=personByCode(code); if(!p) return;
   const i=(p.wd||[]).findIndex(w=>dayKey(w.date)===ds);
-  if(i<0){ toast('Only the last 30 days of workout detail are shared','err'); return; }
+  if(i<0){
+    // A friend syncing on pre-v1.5 code publishes no wd at all — say so instead
+    // of the misleading 30-day message (their fix arrives via the auto-updater).
+    toast((p.wd||[]).length===0&&(p.workouts||0)>0
+      ? "Their app needs an update to share workout details"
+      : 'Only the last 30 days of workout detail are shared','err');
+    return;
+  }
   openFriendWorkout(code,i);
 }
 
@@ -3935,9 +3942,19 @@ function fmtV(v){ if(!v||isNaN(v))return'0'; const a=Math.abs(v);
 // PWA
 // ============================================================
 if ('serviceWorker' in navigator) {
-  let _refreshing=false;
+  let _refreshing=false, _updateReady=false;
+  // AUTO-UPDATE POLICY: apply a ready update at the next SAFE moment — never
+  // mid-workout (aw survives reloads, but yanking the screen mid-set is hostile).
+  const maybeApplyUpdate=()=>{
+    if(!_updateReady||_refreshing) return;
+    if(typeof aw!=='undefined'&&aw) return;          // workout in progress → defer
+    _refreshing=true; window.location.reload();
+  };
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
-    if(_refreshing) return; _refreshing=true; window.location.reload();
+    _updateReady=true;
+    if(typeof aw!=='undefined'&&aw&&typeof toast==='function')
+      toast('Update ready — applies after your workout');
+    maybeApplyUpdate();
   });
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('sw.js').then(reg=>{
@@ -3950,6 +3967,17 @@ if ('serviceWorker' in navigator) {
           }
         });
       });
+      // RESIDENT-PAGE FIX: browsers only check sw.js on navigation, so an
+      // installed PWA kept alive for weeks never discovers new deploys — three
+      // family devices synced daily on months-old code this way. Check for
+      // updates on re-focus and hourly; retry a deferred update every minute
+      // (covers "workout just finished").
+      const check=()=>{ reg.update().catch(()=>{}); maybeApplyUpdate(); };
+      document.addEventListener('visibilitychange',()=>{
+        if(document.visibilityState==='visible') check();
+      });
+      setInterval(check, 60*60*1000);
+      setInterval(maybeApplyUpdate, 60*1000);
     }).catch(e=>console.warn('SW:',e));
   });
 }
@@ -3962,7 +3990,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.6';
+const BUILD = 'v1.7';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

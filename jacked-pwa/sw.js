@@ -1,5 +1,5 @@
 // Bump CACHE whenever you ship a new build so clients re-fetch the shell.
-const CACHE = 'jacked-v0.13';
+const CACHE = 'jacked-v1.7';
 const ASSETS = [
   './',
   './index.html',
@@ -41,6 +41,14 @@ function isShell(req) {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+
+  // API responses must NEVER be cached: the old catch-all cache-first branch
+  // served a session's FIRST cloud read for every later read, so a second
+  // backup in the same page-session merged against stale cloud state and
+  // erased newer workouts (caught by network capture in harness testing —
+  // this silently defeated v1.5's merge-safety on repeat backups, and the
+  // poisoned entry persisted across days on resident pages).
+  if (req.url.includes('supabase.co')) return; // network, no SW involvement
 
   // Exercise DB + images: cache-first with background refresh (rarely changes,
   // big payloads, must work offline).
