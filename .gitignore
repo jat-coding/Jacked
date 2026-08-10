@@ -1,0 +1,19 @@
+# Build artifacts (versioned deploy bundles)
+/*.zip
+
+# Local screenshots, design refs, and data dumps — not source
+/*.png
+/*.csv
+/*.json
+
+# Local tooling / state
+.claude/
+.netlify/
+
+# Transient working dirs
+Archive/
+Input Files/
+
+# OS cruft
+Thumbs.db
+.DS_Store

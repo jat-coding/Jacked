@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Jacked app icon. Recolor `--icon-accent` (the circle) to match the app's --accent. -->
+  <rect width="512" height="512" fill="#0c0c10"/>
+  <circle cx="256" cy="256" r="232" fill="#20d3c2"/>
+  <text x="256" y="262" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-weight="800"
+        font-size="360" fill="#0a0a0a" text-anchor="middle" dominant-baseline="central">J</text>
+</svg>
