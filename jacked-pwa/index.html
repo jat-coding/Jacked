@@ -3404,30 +3404,67 @@ function mergeBackup(cloud, local){
 // MERGE-SAFE: reads the current cloud blob first and unions it with local before
 // writing, so a stale island can no longer blind-overwrite newer workouts (the
 // bug that destroyed a real workout twice in one day).
+// Stamp "this device has backed up today" (gates the daily cold-boot sync).
+function stampBackedUp(){ try{ S.s('lastCloudBackup', dayKey(new Date())); }catch(_){} }
+
 async function syncBackup() {
   if (!supaEnabled()) return false;
   const p=gProf(); if(!p||!p.code) return false;
-  const local=collectBackup();
-  try {
-    // 1) Read current cloud blob. On a genuine missing-column project there's
-    //    nothing to merge (fall through to a plain write). On ANY other read
-    //    failure (network/timeout) we must NOT write — skip and retry next cycle,
-    //    because writing local-only would recreate the very data loss we fix.
-    let cloud=null;
-    const { data, error:selErr } = await SUPA.from('profiles').select('backup').eq('code',p.code).maybeSingle();
-    if (selErr){
-      if(!isMissingColumn(selErr)){ console.warn('syncBackup read',selErr); return false; }
-    } else if (data && data.backup && typeof data.backup==='object'){
-      cloud=data.backup;
-    }
-    // 2) Merge (or write local as-is when there's no cloud blob yet).
-    const merged = cloud ? mergeBackup(cloud, local) : local;
-    const { error } = await SUPA.from('profiles')
-      .upsert({code:p.code, backup:merged, updated_at:new Date().toISOString()},{onConflict:'code'});
-    if (error){ console.warn('syncBackup',error); return false; }
-    try{ S.s('lastCloudBackup', dayKey(new Date())); }catch(_){}
-    return true;
-  } catch(e){ console.warn('syncBackup',e); return false; }
+  // WATERMARK CAS (API.md §6 / sync playbook §3). Merging before writing is not
+  // enough on its own: another device can write in the gap between our read and
+  // our write, and a plain upsert would silently erase it. The conditional
+  // UPDATE below lands ONLY if `updated_at` still matches what we read; on a
+  // miss we re-read, re-merge against the FRESH blob, and retry. The watch has
+  // always done this (SyncEngine steps 1-4) — the PWA blind-wrote until now,
+  // which is why this was safe at once-a-day and would NOT be safe on-change.
+  //
+  // `updated_at` is an OPAQUE token: Postgres reformats it (it strips the
+  // milliseconds we send), so only ever hand the server-returned string back.
+  for (let attempt=0; attempt<4; attempt++){
+    const local=collectBackup();   // re-collected per attempt — local may have moved on
+    try {
+      // 1) Read current cloud blob + its watermark. On a genuine missing-column
+      //    project there's nothing to merge (fall through to a plain write). On ANY
+      //    other read failure (network/timeout) we must NOT write — skip and retry
+      //    next cycle, because writing local-only would recreate the data loss we fix.
+      let cloud=null, ts0=null, rowExists=false;
+      const { data, error:selErr } = await SUPA.from('profiles')
+        .select('backup,updated_at').eq('code',p.code).maybeSingle();
+      if (selErr){
+        if(!isMissingColumn(selErr)){ console.warn('syncBackup read',selErr); return false; }
+      } else if (data){
+        rowExists=true;
+        if (data.backup && typeof data.backup==='object') cloud=data.backup;
+        ts0 = data.updated_at || null;
+      }
+      // 2) Merge (or write local as-is when there's no cloud blob yet).
+      const merged = cloud ? mergeBackup(cloud, local) : local;
+
+      // 3) Nothing new to say → don't spend a ~190KB write, and don't churn the
+      //    watermark (which would make every other client re-merge for nothing).
+      if (cloud && JSON.stringify(merged)===JSON.stringify(cloud)){ stampBackedUp(); return true; }
+
+      // 4) Conditional write, guarded by the watermark we just read.
+      if (rowExists && ts0){
+        const { data:rows, error } = await SUPA.from('profiles')
+          .update({backup:merged, updated_at:new Date().toISOString()})
+          .eq('code',p.code).eq('updated_at',ts0).select('code');
+        if (error){ console.warn('syncBackup write',error); return false; }
+        if (rows && rows.length){ stampBackedUp(); return true; }
+        continue;   // watermark moved under us → re-read, re-merge, retry
+      }
+
+      // 5) First-time enrolment (no row yet) or a legacy missing-column project:
+      //    nothing to compare against, so a plain upsert is the only option.
+      const { error } = await SUPA.from('profiles')
+        .upsert({code:p.code, backup:merged, updated_at:new Date().toISOString()},{onConflict:'code'});
+      if (error){ console.warn('syncBackup',error); return false; }
+      stampBackedUp();
+      return true;
+    } catch(e){ console.warn('syncBackup',e); return false; }
+  }
+  console.warn('syncBackup: watermark contention, gave up after 4 attempts');
+  return false;
 }
 
 // Pull the cloud blob and MERGE it into local (union history/PRs, honour
