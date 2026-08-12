@@ -3412,6 +3412,15 @@ function mergeBackup(cloud, local){
 // Stamp "this device has backed up today" (gates the daily cold-boot sync).
 function stampBackedUp(){ try{ S.s('lastCloudBackup', dayKey(new Date())); }catch(_){} }
 
+// Key-order-insensitive stringify for change detection. jsonb rewrites key
+// order on every round trip, so byte comparison is meaningless across the cloud.
+function canonJson(v){
+  return JSON.stringify(v,(k,val)=>
+    (val && typeof val==='object' && !Array.isArray(val))
+      ? Object.keys(val).sort().reduce((o,kk)=>(o[kk]=val[kk],o),{})
+      : val);
+}
+
 async function syncBackup() {
   if (!supaEnabled()) return false;
   const p=gProf(); if(!p||!p.code) return false;
@@ -3447,7 +3456,10 @@ async function syncBackup() {
 
       // 3) Nothing new to say → don't spend a ~190KB write, and don't churn the
       //    watermark (which would make every other client re-merge for nothing).
-      if (cloud && JSON.stringify(merged)===JSON.stringify(cloud)){ stampBackedUp(); return true; }
+      //    CANONICAL compare: Postgres jsonb reorders object keys (length, then
+      //    bytewise), so plain stringify almost never matches a cloud round trip
+      //    and would defeat this check entirely (playbook §5).
+      if (cloud && canonJson(merged)===canonJson(cloud)){ stampBackedUp(); return true; }
 
       // 4) Conditional write, guarded by the watermark we just read.
       if (rowExists && ts0){
@@ -3612,6 +3624,20 @@ async function syncNow(){
 const SYNC_SKIP = new Set(['activeWorkout','lastCloudBackup','appVersion']);
 let _syncTimer=null, _syncing=false, _syncAgain=false;
 
+// PERSISTENT dirty flag — "scheduled" is not "done". A sync in flight dies
+// silently when Android freezes a backgrounded page, when the SW auto-update
+// reloads mid-chain, or when the network blinks; an in-memory flag dies with
+// it. This one survives, and boot/foreground re-arm from it, so a killed sync
+// heals at the next opportunity instead of stranding the change on-device.
+// (Field-caught: "Save as Routine" then immediately pocketing the phone lost
+// the upload; the daily cold-boot chain died the same way to the v1.8
+// update's own reload.) Deliberately NOT jk_-prefixed: it's device state, not
+// account data — it must never ride along into the cloud blob.
+const DIRTY_KEY='jacked_syncDirty';
+const markDirty=()=>{ try{ localStorage.setItem(DIRTY_KEY,'1'); }catch(_){} };
+const clearDirty=()=>{ try{ localStorage.removeItem(DIRTY_KEY); }catch(_){} };
+const isDirty=()=>{ try{ return localStorage.getItem(DIRTY_KEY)==='1'; }catch(_){ return false; } };
+
 function scheduleSync(){ clearTimeout(_syncTimer); _syncTimer=setTimeout(drainSync, 3000); }
 
 async function drainSync(){
@@ -3622,7 +3648,12 @@ async function drainSync(){
   if(!S.g('lastCloudBackup')) return;
   if(_syncing){ _syncAgain=true; return; }   // non-reentrant — playbook §4 double-drain race
   _syncing=true;
-  try{ await syncBackup(); }
+  try{
+    const ok = await syncBackup();
+    // Clear only on confirmed success with nothing queued behind us — a write
+    // that landed mid-flight re-marked the flag and deserves its own drain.
+    if(ok && !_syncAgain) clearDirty();
+  }
   catch(e){ console.warn('drainSync',e); }
   finally{
     _syncing=false;
@@ -3632,13 +3663,18 @@ async function drainSync(){
 
 // Wrap the writer rather than editing every caller.
 const _sWrite = S.s;
-S.s = (k,v)=>{ _sWrite(k,v); if(!SYNC_SKIP.has(k)) scheduleSync(); };
+S.s = (k,v)=>{ _sWrite(k,v); if(!SYNC_SKIP.has(k)){ markDirty(); scheduleSync(); } };
 
-// Leaving the app with an unflushed change is the one way the debounce could
-// lose a write, so flush on the way out (best-effort — the browser may cut us off).
+// Leaving the app with an unflushed change: flush best-effort — the browser may
+// freeze us mid-flight, in which case the dirty flag re-arms us on return/boot.
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState==='hidden' && _syncTimer){ clearTimeout(_syncTimer); drainSync(); }
+  else if(document.visibilityState==='visible' && isDirty() && !_syncing) scheduleSync();
 });
+
+// Boot re-arm: a reload (SW auto-update, crash, tab discard) that killed an
+// in-flight sync left the flag set — pick the change back up now.
+if(isDirty()) scheduleSync();
 
 
 // ============================================================
@@ -4130,7 +4166,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8';
+const BUILD = 'v1.8.1';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
