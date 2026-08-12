@@ -281,7 +281,14 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
    landscape, hide the app and show a rotate prompt (max-height:600px keeps desktop/
    tablet landscape usable). Runtime screen.orientation.lock() is also attempted. */
 #rotateGuard{display:none}
-@media (orientation:landscape) and (max-height:600px){
+/* min-width guard: with interactive-widget=resizes-content, the on-screen keyboard
+   shrinks the LAYOUT viewport, and CSS `orientation` is derived from the viewport —
+   not the device. A keyboard-shrunk portrait viewport reads as landscape and used to
+   trip this guard, display:none-ing the focused input out from under the IME (keyboard
+   flashed up, then vanished, on every field in the app). Real phone landscape puts the
+   long edge on the x-axis (~780px), so min-width keeps the guard working there while
+   a keyboard-shrunk portrait viewport (~360px wide) can never match. */
+@media (orientation:landscape) and (max-height:600px) and (min-width:480px){
   body>*:not(#rotateGuard):not(.tc){display:none!important}
   #rotateGuard{display:flex;position:fixed;inset:0;z-index:9998;background:var(--bg);
     flex-direction:column;align-items:center;justify-content:center;text-align:center;
