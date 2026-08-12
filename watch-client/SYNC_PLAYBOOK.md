@@ -45,7 +45,19 @@ total overwrite of someone's entire history — from every other device.
   re-read; if the watermark moved, re-merge against the fresh blob, then write.
 - **Compare only server-returned strings to each other.** PostgREST reformats
   timestamps; parsing or comparing to locally-generated time breaks. Treat the
-  watermark as an opaque token.
+  watermark as an opaque token. (Confirmed on the wire: send
+  `…T21:24:56.000Z`, get back `…T21:24:56+00:00` — the milliseconds are gone.)
+- **Better than re-read-then-write: let the database do the compare.** A
+  conditional update — `PATCH /profiles?code=eq.<code>&updated_at=eq.<ts0>` —
+  lands only if the watermark still matches, and returns an empty array when it
+  doesn't. Re-read-then-write still leaves a window between the re-read and the
+  write; a conditional update has none. On an empty response, re-read, re-merge
+  against the fresh blob, and retry (bounded). The PWA does this as of v1.8.
+- **Raw REST gotcha:** the `+` in `+00:00` MUST be percent-encoded as `%2B` in
+  the query string or it is read as a space and the filter silently matches
+  nothing — which looks exactly like permanent contention. Client libraries
+  that build the query via `URLSearchParams` (supabase-js, postgrest-js) handle
+  this for you; hand-rolled `curl` does not.
 
 ## 4. Offline-first outbox (Supabase free tier WILL fail you)
 
@@ -68,6 +80,15 @@ The Wear client models this as "typed fields + extras map" with hand-written
 codecs and round-trip tests asserting byte-equality on real PWA blobs. Do the
 same. A client that deserializes into a closed struct and re-serializes it
 deletes everyone else's data.
+
+**Byte-equality applies WITHIN your client, not across the cloud.** Postgres
+stores the blob as `jsonb`, which normalises object key order by (length, then
+bytewise) and does not preserve insertion order. Send
+`{id, date, name, exercises, hrSeries}` and it comes back
+`{id, date, name, hrSeries, exercises}` — every value intact, order rearranged.
+So assert byte-equality on your local encode/decode round trip, but compare
+**canonically** (sort keys recursively) when asserting against anything that has
+been through the database, or you will chase a data-loss bug that isn't there.
 
 ## 6. Canonical data facts (do not rediscover)
 
