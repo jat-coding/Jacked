@@ -702,14 +702,19 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 
     <div class="sep"></div>
     <div class="st" style="margin-bottom:8px">Data & Backup</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Your data lives only on this device. Export regularly so you don't lose it. Import a Jacked backup, or a Hevy CSV export (.csv/.txt) to bring in your history.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Changes sync to the cloud automatically, and your watch picks them up from there. Export any time for an offline copy. Import a Jacked backup, or a Hevy CSV export (.csv/.txt) to bring in your history.</div>
     <div class="fr">
       <button class="btn bg" onclick="exportData()">Export</button>
       <button class="btn bg" onclick="document.getElementById('importFile').click()">Import</button>
     </div>
     <input type="file" id="importFile" accept=".json,.csv,.txt,application/json,text/csv,text/plain" style="display:none" onchange="importData(this)">
-    <!-- Persistent manual backup: merge-safe, so tapping it can only ADD to the cloud. -->
-    <button class="btn ba wf" style="margin-top:10px" onclick="cloudBackupNow(false)">☁️ Back up now</button>
+    <!-- Two-way sync (pull then push). Primary action: this is what makes a routine
+         built here reach the watch, and a watch workout reach this phone, NOW rather
+         than on tomorrow's cold boot. -->
+    <button class="btn ba wf" style="margin-top:10px" onclick="syncNow()">🔄 Sync now</button>
+    <!-- Push-only. Still the right button before signing out or switching devices;
+         merge-safe, so tapping it can only ADD to the cloud. -->
+    <button class="btn bg wf" style="margin-top:8px" onclick="cloudBackupNow(false)">☁️ Back up now</button>
 
     <div class="sep"></div>
     <div class="st" style="margin-bottom:8px">Feedback</div>
@@ -3404,30 +3409,67 @@ function mergeBackup(cloud, local){
 // MERGE-SAFE: reads the current cloud blob first and unions it with local before
 // writing, so a stale island can no longer blind-overwrite newer workouts (the
 // bug that destroyed a real workout twice in one day).
+// Stamp "this device has backed up today" (gates the daily cold-boot sync).
+function stampBackedUp(){ try{ S.s('lastCloudBackup', dayKey(new Date())); }catch(_){} }
+
 async function syncBackup() {
   if (!supaEnabled()) return false;
   const p=gProf(); if(!p||!p.code) return false;
-  const local=collectBackup();
-  try {
-    // 1) Read current cloud blob. On a genuine missing-column project there's
-    //    nothing to merge (fall through to a plain write). On ANY other read
-    //    failure (network/timeout) we must NOT write — skip and retry next cycle,
-    //    because writing local-only would recreate the very data loss we fix.
-    let cloud=null;
-    const { data, error:selErr } = await SUPA.from('profiles').select('backup').eq('code',p.code).maybeSingle();
-    if (selErr){
-      if(!isMissingColumn(selErr)){ console.warn('syncBackup read',selErr); return false; }
-    } else if (data && data.backup && typeof data.backup==='object'){
-      cloud=data.backup;
-    }
-    // 2) Merge (or write local as-is when there's no cloud blob yet).
-    const merged = cloud ? mergeBackup(cloud, local) : local;
-    const { error } = await SUPA.from('profiles')
-      .upsert({code:p.code, backup:merged, updated_at:new Date().toISOString()},{onConflict:'code'});
-    if (error){ console.warn('syncBackup',error); return false; }
-    try{ S.s('lastCloudBackup', dayKey(new Date())); }catch(_){}
-    return true;
-  } catch(e){ console.warn('syncBackup',e); return false; }
+  // WATERMARK CAS (API.md §6 / sync playbook §3). Merging before writing is not
+  // enough on its own: another device can write in the gap between our read and
+  // our write, and a plain upsert would silently erase it. The conditional
+  // UPDATE below lands ONLY if `updated_at` still matches what we read; on a
+  // miss we re-read, re-merge against the FRESH blob, and retry. The watch has
+  // always done this (SyncEngine steps 1-4) — the PWA blind-wrote until now,
+  // which is why this was safe at once-a-day and would NOT be safe on-change.
+  //
+  // `updated_at` is an OPAQUE token: Postgres reformats it (it strips the
+  // milliseconds we send), so only ever hand the server-returned string back.
+  for (let attempt=0; attempt<4; attempt++){
+    const local=collectBackup();   // re-collected per attempt — local may have moved on
+    try {
+      // 1) Read current cloud blob + its watermark. On a genuine missing-column
+      //    project there's nothing to merge (fall through to a plain write). On ANY
+      //    other read failure (network/timeout) we must NOT write — skip and retry
+      //    next cycle, because writing local-only would recreate the data loss we fix.
+      let cloud=null, ts0=null, rowExists=false;
+      const { data, error:selErr } = await SUPA.from('profiles')
+        .select('backup,updated_at').eq('code',p.code).maybeSingle();
+      if (selErr){
+        if(!isMissingColumn(selErr)){ console.warn('syncBackup read',selErr); return false; }
+      } else if (data){
+        rowExists=true;
+        if (data.backup && typeof data.backup==='object') cloud=data.backup;
+        ts0 = data.updated_at || null;
+      }
+      // 2) Merge (or write local as-is when there's no cloud blob yet).
+      const merged = cloud ? mergeBackup(cloud, local) : local;
+
+      // 3) Nothing new to say → don't spend a ~190KB write, and don't churn the
+      //    watermark (which would make every other client re-merge for nothing).
+      if (cloud && JSON.stringify(merged)===JSON.stringify(cloud)){ stampBackedUp(); return true; }
+
+      // 4) Conditional write, guarded by the watermark we just read.
+      if (rowExists && ts0){
+        const { data:rows, error } = await SUPA.from('profiles')
+          .update({backup:merged, updated_at:new Date().toISOString()})
+          .eq('code',p.code).eq('updated_at',ts0).select('code');
+        if (error){ console.warn('syncBackup write',error); return false; }
+        if (rows && rows.length){ stampBackedUp(); return true; }
+        continue;   // watermark moved under us → re-read, re-merge, retry
+      }
+
+      // 5) First-time enrolment (no row yet) or a legacy missing-column project:
+      //    nothing to compare against, so a plain upsert is the only option.
+      const { error } = await SUPA.from('profiles')
+        .upsert({code:p.code, backup:merged, updated_at:new Date().toISOString()},{onConflict:'code'});
+      if (error){ console.warn('syncBackup',error); return false; }
+      stampBackedUp();
+      return true;
+    } catch(e){ console.warn('syncBackup',e); return false; }
+  }
+  console.warn('syncBackup: watermark contention, gave up after 4 attempts');
+  return false;
 }
 
 // Pull the cloud blob and MERGE it into local (union history/PRs, honour
@@ -3445,8 +3487,17 @@ async function cloudPullMerge(){
     const merged=mergeBackup(cloud, collectBackup());
     // Write the merge-managed keys back to this device so it converges. Local-wins
     // keys are unchanged; cloud-only keys and unioned history/PRs are added.
-    Object.keys(merged).forEach(k=>{ try{ localStorage.setItem(k, JSON.stringify(merged[k])); }catch(_){} });
-    return true;
+    // Only touch keys that ACTUALLY differ, and report whether anything moved —
+    // callers use this to decide whether to re-render, and pull-on-focus would
+    // otherwise redraw the screen on every app switch for nothing.
+    let changed=false;
+    Object.keys(merged).forEach(k=>{
+      try{
+        const next=JSON.stringify(merged[k]);
+        if(localStorage.getItem(k)!==next){ localStorage.setItem(k,next); changed=true; }
+      }catch(_){}
+    });
+    return changed;
   }catch(e){ console.warn('cloudPullMerge',e); return false; }
 }
 
@@ -3523,6 +3574,71 @@ function maybeCloudBackup(){
   }
 }
 function cloudPromptYes(){ cloudBackupNow(false).then(ok=>{ if(ok) cm('cloudPromptModal'); }); }
+
+// Re-render whatever page the user is on — sp() doubles as the renderer switch.
+function reRenderActivePage(){
+  const el=document.querySelector('.page.active');
+  if(el && el.id && el.id.indexOf('page-')===0) sp(el.id.slice(5));
+}
+
+// TWO-WAY manual sync. Pull first (a union — it cannot drop local-only data),
+// then push the merged result back. Both halves are non-destructive, so unlike
+// cloudLogin() this can never replace what's on this device.
+//
+// Exists because the automatic pull runs only once a day, and only on a cold
+// boot: a routine created in the morning otherwise won't reach the watch until
+// the next day, and a workout logged on the watch won't reach the phone.
+async function syncNow(){
+  if(!supaEnabled()){ toast('No connection — try again later','err'); return false; }
+  if(!gProf()){ toast('Set up your profile first','err'); return false; }
+  toast('Syncing…');
+  const pulled = await cloudPullMerge();   // cloud → local
+  const pushed = await cloudBackupNow(true); // local → cloud (watermark CAS)
+  if(pulled) reRenderActivePage();
+  toast(pushed?'Synced ✓':'Sync incomplete — try again later', pushed?'ok':'err');
+  return pushed;
+}
+
+// ── SYNC ON CHANGE ───────────────────────────────────────────────────────────
+// Anything you'd reasonably call "saved" should reach the cloud in seconds, not
+// on tomorrow's cold boot. S.s() is the single choke point for every write, so
+// the trigger lives here instead of in ~40 call sites.
+//
+// The two exclusions are mandatory, not stylistic:
+//  - 'lastCloudBackup' is written BY syncBackup() itself → including it would
+//    retrigger the sync that just wrote it, forever.
+//  - 'activeWorkout' is written on EVERY logged set and is deliberately absent
+//    from collectBackup() → including it would cost a ~190KB round trip per set.
+const SYNC_SKIP = new Set(['activeWorkout','lastCloudBackup','appVersion']);
+let _syncTimer=null, _syncing=false, _syncAgain=false;
+
+function scheduleSync(){ clearTimeout(_syncTimer); _syncTimer=setTimeout(drainSync, 3000); }
+
+async function drainSync(){
+  _syncTimer=null;
+  if(typeof supaEnabled!=='function' || !supaEnabled() || !gProf()) return;
+  // Respect the existing opt-in: a user who has never backed up gets ASKED
+  // (cloudPromptModal) rather than silently enrolled by a routine edit.
+  if(!S.g('lastCloudBackup')) return;
+  if(_syncing){ _syncAgain=true; return; }   // non-reentrant — playbook §4 double-drain race
+  _syncing=true;
+  try{ await syncBackup(); }
+  catch(e){ console.warn('drainSync',e); }
+  finally{
+    _syncing=false;
+    if(_syncAgain){ _syncAgain=false; scheduleSync(); }
+  }
+}
+
+// Wrap the writer rather than editing every caller.
+const _sWrite = S.s;
+S.s = (k,v)=>{ _sWrite(k,v); if(!SYNC_SKIP.has(k)) scheduleSync(); };
+
+// Leaving the app with an unflushed change is the one way the debounce could
+// lose a write, so flush on the way out (best-effort — the browser may cut us off).
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='hidden' && _syncTimer){ clearTimeout(_syncTimer); drainSync(); }
+});
 
 
 // ============================================================
@@ -3915,6 +4031,23 @@ const _isField=el=>el&&el.matches&&el.matches('input,textarea,select');
 document.addEventListener('focusin', e=>{ if(_isField(e.target)) document.body.classList.add('kb'); });
 document.addEventListener('focusout', ()=>{ setTimeout(()=>{ if(!_isField(document.activeElement)) document.body.classList.remove('kb'); }, 80); });
 
+// PULL ON FOCUS. The daily cold-boot pull cannot see anything the watch pushes
+// while this app sits in the background — and coming back to the app is exactly
+// when you expect a just-finished workout to be here. Throttled so tab-switching
+// doesn't hammer the API, and skipped mid-workout so the screen can't shift under
+// an active set.
+let _lastFocusPull = 0;
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState!=='visible') return;
+  if(typeof aw!=='undefined' && aw) return;                     // mid-workout → leave it alone
+  if(typeof supaEnabled!=='function' || !supaEnabled()) return;
+  if(typeof gProf!=='function' || !gProf()) return;
+  const now=Date.now();
+  if(now - _lastFocusPull < 60000) return;                      // ≥60s between pulls
+  _lastFocusPull = now;
+  cloudPullMerge().then(changed=>{ if(changed) reRenderActivePage(); }).catch(()=>{});
+});
+
 // Keep friends/requests fresh: refresh when the app is re-focused, and poll
 // lightly while the Friends tab is open (no background notifications on web).
 const _onLB=()=>document.getElementById('page-leaderboard')&&document.getElementById('page-leaderboard').classList.contains('active');
@@ -3997,7 +4130,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.7.1';
+const BUILD = 'v1.8';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

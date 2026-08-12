@@ -1,5 +1,5 @@
 // Bump CACHE whenever you ship a new build so clients re-fetch the shell.
-const CACHE = 'jacked-v1.7.1';
+const CACHE = 'jacked-v1.8';
 const ASSETS = [
   './',
   './index.html',
