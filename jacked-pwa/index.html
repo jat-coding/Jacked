@@ -708,13 +708,12 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <button class="btn bg" onclick="document.getElementById('importFile').click()">Import</button>
     </div>
     <input type="file" id="importFile" accept=".json,.csv,.txt,application/json,text/csv,text/plain" style="display:none" onchange="importData(this)">
-    <!-- Two-way sync (pull then push). Primary action: this is what makes a routine
-         built here reach the watch, and a watch workout reach this phone, NOW rather
-         than on tomorrow's cold boot. -->
+    <!-- Two-way sync (pull then push). The ONLY cloud button on purpose: push-only
+         ("Back up now") was a strict subset — the pull is a union, so pull-then-push
+         can never do less than push alone — and two overlapping cloud buttons just
+         made users pick. cloudBackupNow() itself still serves the first-run prompt
+         and the daily boot path. -->
     <button class="btn ba wf" style="margin-top:10px" onclick="syncNow()">🔄 Sync now</button>
-    <!-- Push-only. Still the right button before signing out or switching devices;
-         merge-safe, so tapping it can only ADD to the cloud. -->
-    <button class="btn bg wf" style="margin-top:8px" onclick="cloudBackupNow(false)">☁️ Back up now</button>
 
     <div class="sep"></div>
     <div class="st" style="margin-bottom:8px">Feedback</div>
@@ -4166,7 +4165,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.1';
+const BUILD = 'v1.8.2';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
