@@ -1,7 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <!-- Jacked app icon. Recolor `--icon-accent` (the circle) to match the app's --accent. -->
+  <!-- Jacked app icon. Barbell path is Tabler Icons "barbell" (MIT, tabler.io/icons),
+       same source used for every icon inside the app (see _ICON in index.html). -->
+  <defs>
+    <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="6" x2="0" y2="18">
+      <stop offset="0%" stop-color="#5ce9da"/>
+      <stop offset="100%" stop-color="#14a99b"/>
+    </linearGradient>
+  </defs>
   <rect width="512" height="512" fill="#0c0c10"/>
-  <circle cx="256" cy="256" r="232" fill="#20d3c2"/>
-  <text x="256" y="262" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-weight="800"
-        font-size="360" fill="#0a0a0a" text-anchor="middle" dominant-baseline="central">J</text>
+  <g transform="translate(130,130) scale(10.5)" fill="none" stroke="url(#g)" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 12h1" />
+    <path d="M6 8h-2a1 1 0 0 0 -1 1v6a1 1 0 0 0 1 1h2" />
+    <path d="M6 7v10a1 1 0 0 0 1 1h1a1 1 0 0 0 1 -1v-10a1 1 0 0 0 -1 -1h-1a1 1 0 0 0 -1 1" />
+    <path d="M9 12h6" />
+    <path d="M15 7v10a1 1 0 0 0 1 1h1a1 1 0 0 0 1 -1v-10a1 1 0 0 0 -1 -1h-1a1 1 0 0 0 -1 1" />
+    <path d="M18 8h2a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-2" />
+    <path d="M22 12h-1" />
+  </g>
 </svg>
