@@ -303,7 +303,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <body>
 <div class="tc" id="tc"></div>
 <div id="rotateGuard">
-  <div class="rg-ic">📱</div>
+  <div class="rg-ic"><svg viewBox='0 0 24 24' width='52' height='52' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><rect x='7' y='2' width='10' height='20' rx='2'/><path d='M11 18h2'/></svg></div>
   <div class="rg-t">Rotate to portrait</div>
   <div class="rg-s">Jacked is designed for portrait mode — turn your device upright to keep going.</div>
 </div>
@@ -325,7 +325,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   </div>
 
   <div class="ob-step" id="ob2">
-    <div style="font-size:32px;margin-bottom:10px">🎉</div>
+    <div style="margin-bottom:10px"><svg viewBox='0 0 24 24' width='32' height='32' fill='none' stroke='var(--green)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='m8 12.5 2.5 2.5L16 9.5'/></svg></div>
     <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:8px">You're all set</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Share your username so friends can add you</div>
     <div class="invite-code">
@@ -339,7 +339,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 
 <!-- INSTALL BANNER -->
 <div class="install-banner hidden" id="installBanner">
-  <div style="font-size:26px">📲</div>
+  <div><svg viewBox='0 0 24 24' width='26' height='26' fill='none' stroke='var(--accent)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3v12m0 0-4-4m4 4 4-4'/><path d='M4 19h16'/></svg></div>
   <div style="flex:1">
     <div style="font-family:var(--fh);font-size:16px;font-weight:700">Install Jacked</div>
     <div style="font-size:11px;color:var(--muted)">Add to home screen for the full experience</div>
@@ -375,7 +375,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="ph">
     <div class="pt">JACKED<span>.</span></div>
     <div style="display:flex;gap:8px">
-      <button class="btn bg sm ic" onclick="openProf()">👤</button>
+      <button class="btn bg sm ic" onclick="openProf()"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='8' r='4'/><path d='M4 20c0-4 3.6-6 8-6s8 2 8 6'/></svg></button>
     </div>
   </div>
   <div class="stats-g" id="homeStats"></div>
@@ -400,7 +400,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="ph"><div class="pt">Routines</div><button class="btn ba sm" onclick="openCR()">+ New</button></div>
   <button class="btn bg wf" onclick="startEmpty()" style="margin-bottom:16px">Start Empty Workout</button>
   <div id="curatedWrap" style="margin-bottom:18px">
-    <div class="st" style="margin-bottom:8px">⭐ Trusted Programs</div>
+    <div class="st" style="margin-bottom:8px"><svg viewBox='0 0 24 24' width='14' height='14' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='m12 3 2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6Z'/></svg> Trusted Programs</div>
     <div class="chips" id="curatedList" style="gap:10px"></div>
   </div>
   <div class="st" style="margin-bottom:8px">My Routines</div>
@@ -411,7 +411,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="page" id="page-exercises">
   <div class="ph"><div class="pt">Library</div><button class="btn ba sm" onclick="openCE()">+ Custom</button></div>
   <div class="sticky-sub" style="padding-bottom:6px">
-    <div class="sw"><span class="sw-ic">🔍</span><input type="text" id="exSearch" placeholder="Search exercises..." oninput="renderEx()"></div>
+    <div class="sw"><span class="sw-ic"><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.35-4.35'/></svg></span><input type="text" id="exSearch" placeholder="Search exercises..." oninput="renderEx()"></div>
     <div class="chips" id="muscleChips"></div>
   </div>
   <div id="exLoadState" style="text-align:center;padding:20px;color:var(--muted);font-size:13px"></div>
@@ -431,11 +431,11 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div id="compareBoard"></div>
   <div class="st" style="margin-bottom:8px">You</div>
   <div id="lbYou"></div>
-  <div id="lbBuddiesWrap" style="display:none"><div class="st" style="margin:16px 0 8px">⭐ Close Buddies</div><div id="lbBuddies"></div></div>
+  <div id="lbBuddiesWrap" style="display:none"><div class="st" style="margin:16px 0 8px"><svg viewBox='0 0 24 24' width='14' height='14' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='m12 3 2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6Z'/></svg> Close Buddies</div><div id="lbBuddies"></div></div>
   <div class="st" style="margin:16px 0 8px">Friends</div>
   <div id="lbFriends"></div>
   <div id="pendingWrap" style="display:none">
-    <div class="st" style="margin-top:16px;color:var(--orange)">⏳ Pending</div>
+    <div class="st" style="margin-top:16px;color:var(--orange)"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M6 2h12M6 22h12M6 2c0 5 4 6.5 6 8-2 1.5-6 3-6 8M18 2c0 5-4 6.5-6 8 2 1.5 6 3 6 8'/></svg> Pending</div>
     <div id="pendingList"></div>
   </div>
 </div>
@@ -465,7 +465,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="st" style="margin-bottom:10px">Choose Routine</div>
     <div id="qsRoutines"></div>
     <div class="sep"></div>
-    <button class="btn bg wf" onclick="startEmpty()">⚡ Empty Workout</button>
+    <button class="btn bg wf" onclick="startEmpty()"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M13 2 4 14h6l-1 8 9-12h-6l1-8Z'/></svg> Empty Workout</button>
   </div>
 </div>
 
@@ -566,7 +566,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
         <div class="mt" id="aeModalTitle">Add Exercise</div>
         <button class="cb" onclick="cm('aeModal')">✕</button>
       </div>
-      <div class="sw" style="margin-bottom:8px"><span class="sw-ic">🔍</span><input type="text" id="aeSearch" placeholder="Search exercises..." oninput="renderAEList()"></div>
+      <div class="sw" style="margin-bottom:8px"><span class="sw-ic"><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.35-4.35'/></svg></span><input type="text" id="aeSearch" placeholder="Search exercises..." oninput="renderAEList()"></div>
       <div class="chips" id="aeChips" style="margin-bottom:6px"></div>
       <button class="btn bg sm wf" style="margin-bottom:8px" onclick="openCE(true)">+ Create new exercise</button>
       <div id="aeLoadNote" style="display:none;font-size:11px;color:var(--muted);margin-bottom:8px;text-align:center"></div>
@@ -713,7 +713,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
          can never do less than push alone — and two overlapping cloud buttons just
          made users pick. cloudBackupNow() itself still serves the first-run prompt
          and the daily boot path. -->
-    <button class="btn ba wf" style="margin-top:10px" onclick="syncNow()">🔄 Sync now</button>
+    <button class="btn ba wf" style="margin-top:10px" onclick="syncNow()"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M20 11A8 8 0 0 0 6.3 6.3M4 13a8 8 0 0 0 13.7 4.7'/><path d='M20 4v6h-6M4 20v-6h6'/></svg> Sync now</button>
 
     <div class="sep"></div>
     <div class="st" style="margin-bottom:8px">Feedback</div>
@@ -749,7 +749,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- FIRST-TIME CLOUD BACKUP PROMPT (shown to existing users with un-backed-up data) -->
 <div class="mo ctr" id="cloudPromptModal" style="z-index:600">
   <div class="md">
-    <div class="mh"><div class="mt">☁️ Save your data to the cloud?</div></div>
+    <div class="mh"><div class="mt"><svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-3px'><path d='M7 18a4.5 4.5 0 0 1-.5-8.97A5.5 5.5 0 0 1 17.4 8.5 4 4 0 0 1 17 18H7Z'/></svg> Save your data to the cloud?</div></div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Your workouts are currently saved <b>only on this device</b>. Back them up to your account so you can restore them on any device — and never lose them.</div>
     <button class="btn ba wf" onclick="cloudPromptYes()">Back up now</button>
     <button class="btn bg wf" style="margin-top:8px" onclick="cm('cloudPromptModal')">Not now</button>
@@ -820,9 +820,8 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const IMG_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
 const DB_URL   = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
 
-// Muscle colours & emojis
+// Muscle colours (drive the line-icon colour per exIcon/uic — no emoji)
 const MCOL = {chest:'#5aa9ff',back:'#3ddc97',shoulders:'#ff9f4d',biceps:'#b07cff',triceps:'#ff5d6c',legs:'#20d3c2',quadriceps:'#20d3c2',hamstrings:'#5ce9da',glutes:'#ffca4d',core:'#4ad9d9',abdominals:'#4ad9d9',cardio:'#ff5d6c','full body':'#20d3c2',lats:'#3ddc97',traps:'#ff9f4d',forearms:'#b07cff','lower back':'#5aa9ff'};
-const MEM  = {chest:'💪',back:'🏋️',shoulders:'🔝',biceps:'💪',triceps:'💪',legs:'🦵',quadriceps:'🦵',hamstrings:'🦵',calves:'🦵',glutes:'🍑',core:'🧱',abdominals:'🧱',forearms:'💪',traps:'🔝','lower back':'🏗️',cardio:'❤️','full body':'⚡',lats:'🏋️',neck:'⬆️',abductors:'🦵',adductors:'🦵'};
 const AVC  = ['#20d3c2','#3ddc97','#5aa9ff','#ff9f4d','#b07cff','#ff5d6c','#4ad9d9','#ffca4d'];
 // Categories we want to EXCLUDE from the library
 const EXCLUDED_CATS = new Set(['stretching','plyometrics','cardio','olympic weightlifting']);
@@ -848,18 +847,42 @@ const CURATED = [
 ];
 
 function mapMuscle(m){ m=(m||'').toLowerCase(); return m==='abdominals'?'core':m; }
-function em(m)  { return MEM[(m||'').toLowerCase()]  || '💪'; }
 // Professional line-icon placeholder (replaces emoji) for exercises with no photo.
 // Single-quoted attributes so it stays valid when embedded in inline onerror handlers.
 const _ICON={
   heart:`<path d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/>`,
-  dumbbell:`<path d='M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10'/>`
+  dumbbell:`<path d='M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10'/>`,
+  trophy:`<path d='M7 3h10v4a5 5 0 0 1-10 0V3Z'/><path d='M7 4H4a4 4 0 0 0 4 6M17 4h3a4 4 0 0 1-4 6'/><path d='M12 12v3.5M9.5 19.5h5M10 16h4v3.5h-4z'/>`,
+  target:`<circle cx='12' cy='12' r='8'/><circle cx='12' cy='12' r='4.5'/><circle cx='12' cy='12' r='1' fill='currentColor' stroke='none'/>`,
+  flame:`<path d='M12 3c1.2 3.2-3 4.6-3 8.3a3.3 3.3 0 0 0 6.6 0c0-1.3-.6-2-.6-2s1.6.9 1.6 3.3a4.6 4.6 0 0 1-9.2 0C7.4 8 12 6.5 12 3Z'/>`,
+  bed:`<path d='M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6M3 18v2M21 18v2M3 14h18'/><circle cx='7' cy='10' r='1.4'/>`,
+  medal:`<circle cx='12' cy='9' r='5'/><path d='M9 13.5 6.8 21 12 18l5.2 3-2.2-7.5'/>`,
+  calendar:`<rect x='3' y='5' width='18' height='16' rx='2'/><path d='M16 3v4M8 3v4M3 10h18'/>`,
+  barchart:`<path d='M4 20V12M10 20V6M16 20v-8M4 20h16'/>`,
+  clipboard:`<rect x='6' y='4' width='12' height='16' rx='2'/><rect x='9' y='2' width='6' height='4' rx='1'/><path d='M9 11h6M9 15h6'/>`,
+  checkcircle:`<circle cx='12' cy='12' r='9'/><path d='m8 12.5 2.5 2.5L16 9.5'/>`,
+  search:`<circle cx='11' cy='11' r='7'/><path d='m21 21-4.35-4.35'/>`,
+  user:`<circle cx='12' cy='8' r='4'/><path d='M4 20c0-4 3.6-6 8-6s8 2 8 6'/>`,
+  bolt:`<path d='M13 2 4 14h6l-1 8 9-12h-6l1-8Z'/>`,
+  refresh:`<path d='M20 11A8 8 0 0 0 6.3 6.3M4 13a8 8 0 0 0 13.7 4.7'/><path d='M20 4v6h-6M4 20v-6h6'/>`,
+  phone:`<rect x='7' y='2' width='10' height='20' rx='2'/><path d='M11 18h2'/>`,
+  download:`<path d='M12 3v12m0 0-4-4m4 4 4-4'/><path d='M4 19h16'/>`,
+  cloud:`<path d='M7 18a4.5 4.5 0 0 1-.5-8.97A5.5 5.5 0 0 1 17.4 8.5 4 4 0 0 1 17 18H7Z'/>`,
+  pencil:`<path d='M12 20h9'/><path d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/>`,
+  hourglass:`<path d='M6 2h12M6 22h12M6 2c0 5 4 6.5 6 8-2 1.5-6 3-6 8M18 2c0 5-4 6.5-6 8 2 1.5 6 3 6 8'/>`,
+  warning:`<path d='M12 3 2 20h20L12 3Z'/><path d='M12 10v4'/><circle cx='12' cy='17' r='.6' fill='currentColor' stroke='none'/>`,
+  star:`<path d='m12 3 2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6Z'/>`
 };
 function exIcon(muscle,size=24){
   const m=(muscle||'').toLowerCase();
   const p=(m==='cardio')?_ICON.heart:_ICON.dumbbell;
   const d=Math.round(size*0.46);
   return `<svg viewBox='0 0 24 24' width='${d}' height='${d}' fill='none' stroke='${mc(m)}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>${p}</svg>`;
+}
+// Same line-icon language as exIcon, for non-exercise UI chrome (buttons, badges,
+// stats, toasts-that-support-HTML). One shared style: 24x24 viewBox, 2px round stroke.
+function uic(name,color='currentColor',size=18){
+  return `<svg viewBox='0 0 24 24' width='${size}' height='${size}' fill='none' stroke='${color}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-3px;flex-shrink:0'>${_ICON[name]||''}</svg>`;
 }
 function mc(m)  { return MCOL[(m||'').toLowerCase()] || '#a0a0b0'; }
 function avc(n) { let h=0; for(let c of(n||'?')) h=c.charCodeAt(0)+((h<<5)-h); return AVC[Math.abs(h)%AVC.length]; }
@@ -1049,7 +1072,7 @@ async function loadDB() {
     buildMuscleChips('aeChips', handleAEChip, null);
   } catch(e) {
     dbLoading = false;
-    if (el) el.innerHTML = '<span style="color:var(--muted);font-size:12px">⚠️ Could not load library. Add custom exercises below.</span>';
+    if (el) el.innerHTML = `<span style="color:var(--muted);font-size:12px">${uic('warning')} Could not load library. Add custom exercises below.</span>`;
     renderEx();
   }
 }
@@ -1299,7 +1322,7 @@ function renderHome() {
   const sb=document.getElementById('streakBanner');
   if (streak>0) {
     sb.style.display='flex';
-    sb.innerHTML=`<div style="font-size:26px">🔥</div>
+    sb.innerHTML=`<div>${uic('flame','var(--orange)',26)}</div>
       <div><div style="font-family:var(--fh);font-size:26px;font-weight:900;color:var(--accent);line-height:1">${streak} day${streak!==1?'s':''}</div>
       <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Current streak — keep it alive</div></div>`;
   } else {
@@ -1364,7 +1387,7 @@ function openDay(ds){
   const addBtn=`<button class="btn ba wf" style="margin-top:10px" onclick="startEmptyOn('${ds}')">+ Log a workout for this day</button>`;
   if(!ws.length){
     c.innerHTML=`<div style="text-align:center;padding:14px 6px">
-      <div style="font-size:40px;margin-bottom:8px">😴</div>
+      <div style="margin-bottom:8px">${uic('bed','var(--muted)',40)}</div>
       <div style="font-size:15px;color:var(--text2);font-weight:600">sorry little baby didn't workout this day</div></div>`+addBtn;
   } else {
     c.innerHTML=ws.map(w=>`<div class="card-dark" style="margin-bottom:8px">
@@ -1658,7 +1681,7 @@ function renderRoutines() {
           <div style="font-size:12px;color:var(--muted);margin-top:2px">${r.desc||''} · ${exs.length} exercises</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn bg ic sm" onclick="editR('${r.id}')">✏️</button>
+          <button class="btn bg ic sm" onclick="editR('${r.id}')">${uic('pencil')}</button>
           <button class="btn bd ic sm" onclick="delR('${r.id}')">✕</button>
         </div>
       </div>
@@ -2309,7 +2332,7 @@ function showFinishSummary(o) {
   const {name,dur,ts,vol,prList}=o;
   const c=document.getElementById('fsContent');
   c.innerHTML=`
-    <div style="text-align:center;font-size:42px;margin-bottom:4px">${prList.length?'🏆':'💪'}</div>
+    <div style="text-align:center;margin-bottom:4px">${prList.length?uic('trophy','#ffd700',42):uic('dumbbell','var(--muted)',42)}</div>
     <div style="text-align:center;font-family:var(--fh);font-size:24px;font-weight:800;margin-bottom:2px">${name}</div>
     <div style="text-align:center;font-size:12px;color:var(--muted);margin-bottom:18px">Workout complete</div>
     <div class="stats-g" style="margin-bottom:14px">
@@ -2606,23 +2629,23 @@ function computeBadges() {
 
   // NOTE: badge names follow the "<Title>-Maxing" convention — keep it for new badges.
   return [
-    {emoji:'🏋️',name:'Bench-Maxing',tier:benchT,earned:!!benchT,
+    {icon:'dumbbell',color:MCOL.chest,name:'Bench-Maxing',tier:benchT,earned:!!benchT,
       desc: `1-rep bench (lb): ${tline(bench,[135,225,315])}`},
-    {emoji:'💪',name:'Shoulder-Maxing',tier:ohpT,earned:!!ohpT,needsWeight:!haveBW,
+    {icon:'dumbbell',color:MCOL.shoulders,name:'Shoulder-Maxing',tier:ohpT,earned:!!ohpT,needsWeight:!haveBW,
       desc: !haveBW?'Enter body weight in Profile to unlock':`OHP ×5 (lb): ${tline(ohp,[0.25*bwLb,0.5*bwLb,1.0*bwLb])}`},
-    {emoji:'🦵',name:'Leg-Maxing',tier:sqT,earned:!!sqT,needsWeight:!haveBW,
+    {icon:'dumbbell',color:MCOL.legs,name:'Leg-Maxing',tier:sqT,earned:!!sqT,needsWeight:!haveBW,
       desc: !haveBW?'Enter body weight in Profile to unlock':`Squat ×5 (lb): ${tline(sq,[1.0*bwLb,1.5*bwLb,2.0*bwLb])}`},
-    {emoji:'🏆',name:'1000lb Club-Maxing',desc: bestSingle>0?`Best single-session Big-3: ${r0(bestSingle)} lb / 1000`:'Bench + Squat + Deadlift ≥ 1000 lb in one workout',earned:club},
-    {emoji:'🆙',name:'Pull-up-Maxing',tier:pullT,earned:!!pullT,
+    {icon:'trophy',color:'#ffd700',name:'1000lb Club-Maxing',desc: bestSingle>0?`Best single-session Big-3: ${r0(bestSingle)} lb / 1000`:'Bench + Squat + Deadlift ≥ 1000 lb in one workout',earned:club},
+    {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tier:pullT,earned:!!pullT,
       desc:`Best set: ${pullBest} reps — ${tline(pullBest,[10,15,20])}`},
-    {emoji:'🤸',name:'Push-up-Maxing',tier:pushT,earned:!!pushT,
+    {icon:'dumbbell',color:MCOL.triceps,name:'Push-up-Maxing',tier:pushT,earned:!!pushT,
       desc:`Best set: ${pushBest} reps — ${tline(pushBest,[30,50,80])}`},
-    {emoji:'🏃',name:'Cardio-Maxing',tier:cardioT,earned:!!cardioT,
+    {icon:'heart',color:MCOL.cardio,name:'Cardio-Maxing',tier:cardioT,earned:!!cardioT,
       desc: isFinite(cardioBest)?`Best mile pace: ${fmtClock(cardioBest)}/mi — ${tlineLow(cardioBest,[6.5,8,9])}`:'Log a run (miles + minutes) to unlock'},
-    {emoji:'🎯',name:'Variety-Maxing',earned:variety>=100,
+    {icon:'target',color:'var(--blue)',name:'Variety-Maxing',earned:variety>=100,
       desc:`${variety} / 100 different exercises logged`},
-    {emoji:'🔥',name:'PR-Maxing',desc:'Hit a PR every day for 7 days straight',earned:prWeek},
-    {emoji:'🛌',name:'Coward-Maxing',desc:'Took 7+ days off in a row this quarter (resets every 3 months)',earned:weekOff},
+    {icon:'flame',color:'var(--orange)',name:'PR-Maxing',desc:'Hit a PR every day for 7 days straight',earned:prWeek},
+    {icon:'bed',color:'var(--muted)',name:'Coward-Maxing',desc:'Took 7+ days off in a row this quarter (resets every 3 months)',earned:weekOff},
   ];
 }
 const TIERC={bronze:'#cd7f32',silver:'#b8b8c8',gold:'#ffd700'};
@@ -2756,10 +2779,10 @@ function cardSummary(){
   const last30=h.filter(w=>+new Date(w.date)>=now-30*864e5).length;
   const avgVol=Math.round(h.reduce((a,w)=>a+(w.totalVolume||0),0)/h.length);
   const insights=[];
-  if(last7<3) insights.push({i:'⚠️',c:'var(--orange)',t:`Only ${last7} session${last7!==1?'s':''} in 7 days — aim for 3–5.`});
-  else insights.push({i:'✅',c:'var(--green)',t:`${last7} sessions this week — great consistency!`});
+  if(last7<3) insights.push({i:uic('warning','var(--orange)',20),c:'var(--orange)',t:`Only ${last7} session${last7!==1?'s':''} in 7 days — aim for 3–5.`});
+  else insights.push({i:uic('checkcircle','var(--green)',20),c:'var(--green)',t:`${last7} sessions this week — great consistency!`});
   const freq=muscleUsage(); const trained=MGROUPS.filter(g=>freq[g]>0).sort((a,b)=>freq[a]-freq[b]);
-  if(trained.length) insights.push({i:'🎯',c:'var(--blue)',t:`Least-trained group: <strong>${MGNAME[trained[0]]}</strong> — consider a dedicated session.`});
+  if(trained.length) insights.push({i:uic('target','var(--blue)',20),c:'var(--blue)',t:`Least-trained group: <strong>${MGNAME[trained[0]]}</strong> — consider a dedicated session.`});
   const html=`<div class="stats-g2">
       <div class="sc"><div class="sv" style="font-size:22px">${last7}</div><div class="sl">Sessions / 7d</div></div>
       <div class="sc"><div class="sv" style="font-size:22px">${last30}</div><div class="sl">Sessions / 30d</div></div>
@@ -2811,7 +2834,7 @@ function cardLifetime(){
       <div class="sc"><div class="sv">${fmtW(tv)}</div><div class="sl">${uL()} Lifted</div></div>
       <div class="sc"><div class="sv">${ts}</div><div class="sl">Total Sets</div></div>
       <div class="sc"><div class="sv">${avgMin}</div><div class="sl">Avg min/session</div></div>
-    </div>${tEx?`<div style="background:var(--bg3);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px;margin-top:8px"><div style="font-size:24px">🏆</div><div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Top PR</div><div style="font-weight:600;font-size:14px;margin-top:2px">${tEx.name}</div><div style="font-family:var(--fh);font-size:22px;font-weight:800;color:var(--accent)">${dW(topPR[1].weight)}${uL()} × ${topPR[1].reps} reps</div></div></div>`:''}`;
+    </div>${tEx?`<div style="background:var(--bg3);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px;margin-top:8px"><div>${uic('trophy','#ffd700',24)}</div><div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Top PR</div><div style="font-weight:600;font-size:14px;margin-top:2px">${tEx.name}</div><div style="font-family:var(--fh);font-size:22px;font-weight:800;color:var(--accent)">${dW(topPR[1].weight)}${uL()} × ${topPR[1].reps} reps</div></div></div>`:''}`;
   return {id:'lifetime',title:'Lifetime Stats',html};
 }
 
@@ -2823,7 +2846,7 @@ function cardBadges(){
       ? `<span class="badge" style="background:${TIERC[b.tier]}22;color:${TIERC[b.tier]};border:1px solid ${TIERC[b.tier]}66;text-transform:capitalize">${b.tier}</span>`
       : b.earned?'<span class="badge bgreen">Earned</span>':'<span class="badge bm">Locked</span>';
     return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);opacity:${b.earned?1:.45};cursor:pointer" onclick="badgeInfo('${b.name}')">
-      <div style="font-size:28px;filter:${b.earned?'none':'grayscale(1)'}">${b.emoji}</div>
+      <div style="filter:${b.earned?'none':'grayscale(1)'}">${uic(b.icon,b.color,28)}</div>
       <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${b.name}</div><div style="font-size:12px;color:var(--muted)">${b.desc}</div></div>
       ${status}
     </div>`;
@@ -2859,12 +2882,12 @@ function toggleCB(code){ const cb=new Set(gCB()); cb.has(code)?cb.delete(code):c
 // Categories for the close-buddy comparison filter. Each has an all-time getter
 // and a past-month getter (streak/consistency/badges are inherently current).
 const CMP=[
-  {k:'volume',      label:'🏋️ Weight',      all:p=>p.totalVolume||0, mon:p=>p.mVol||0,      fmt:v=>fmtW(v)+' '+uL()},
-  {k:'prs',         label:'🏆 PRs',          all:p=>p.prs||0,         mon:p=>p.mPRs||0,      fmt:v=>v},
-  {k:'workouts',    label:'📅 Sessions',     all:p=>p.workouts||0,    mon:p=>p.mWorkouts||0, fmt:v=>v},
-  {k:'streak',      label:'🔥 Streak',       all:p=>p.streak||0,      mon:p=>p.streak||0,    fmt:v=>v+'d'},
-  {k:'consistency', label:'📊 Consistency',  all:p=>p.consistency||0, mon:p=>p.consistency||0, fmt:v=>v+'%'},
-  {k:'badges',      label:'🏅 Badges',       all:p=>p.badges||0,      mon:p=>p.badges||0,    fmt:v=>v+' 🏅'},
+  {k:'volume',      label:`${uic('dumbbell')} Weight`,      all:p=>p.totalVolume||0, mon:p=>p.mVol||0,      fmt:v=>fmtW(v)+' '+uL()},
+  {k:'prs',         label:`${uic('trophy','#ffd700')} PRs`,          all:p=>p.prs||0,         mon:p=>p.mPRs||0,      fmt:v=>v},
+  {k:'workouts',    label:`${uic('calendar')} Sessions`,     all:p=>p.workouts||0,    mon:p=>p.mWorkouts||0, fmt:v=>v},
+  {k:'streak',      label:`${uic('flame','var(--orange)')} Streak`,       all:p=>p.streak||0,      mon:p=>p.streak||0,    fmt:v=>v+'d'},
+  {k:'consistency', label:`${uic('barchart')} Consistency`,  all:p=>p.consistency||0, mon:p=>p.consistency||0, fmt:v=>v+'%'},
+  {k:'badges',      label:`${uic('medal')} Badges`,       all:p=>p.badges||0,      mon:p=>p.badges||0,    fmt:v=>v+' '+uic('medal')},
 ];
 let cmpM='volume', cmpRange='all';   // 'all' | 'month'
 function cmpSw(k){ cmpM=k; renderLB(); }
@@ -2903,7 +2926,7 @@ function yourStats() {
 // My calendar days + recent workouts + month summary + earned badges
 // (all synced so friends can view them). Badge keys kept short: n/t/e.
 function myBadgeList(){
-  return computeBadges().filter(b=>b.earned).map(b=>({n:b.name,t:b.tier||'',e:b.emoji}));
+  return computeBadges().filter(b=>b.earned).map(b=>({n:b.name,t:b.tier||'',e:`${b.icon}|${b.color}`}));
 }
 // A privacy-safe RICHER summary of one workout for friends: name/date/volume plus
 // each exercise's single BEST set. Deliberately omits per-set detail, body weight
@@ -2967,7 +2990,7 @@ function lbRow(p,opts={}){
     ${avHTML(p)}
     <div style="flex:1;min-width:0">
       <div style="font-weight:600;font-size:14px">${p.name}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div>
-      <div style="font-size:11px;color:var(--muted)">${p.username||''} · ${p.workouts||0} workouts · ${p.badges||0} 🏅</div>
+      <div style="font-size:11px;color:var(--muted)">${p.username||''} · ${p.workouts||0} workouts · ${p.badges||0} ${uic('medal',undefined,12)}</div>
     </div>
     ${opts.star?`<button class="btn bg ic xs" title="Close buddy" style="font-size:16px;color:${isCB?'#ffd700':'var(--muted)'}" onclick="event.stopPropagation();toggleCB('${p.code}')">★</button>`:''}
     ${opts.canRemove?`<button class="btn bd xs" onclick="event.stopPropagation();rmFr('${p.code}')">✕</button>`:''}
@@ -3002,8 +3025,8 @@ function openFriend(code){
       <div class="sc"><div class="sv">${p.prs||0}</div><div class="sl">PRs</div></div>
     </div>
     <div class="stats-g2" style="margin-bottom:14px">
-      <div class="sc"><div class="sv" style="font-size:20px">🔥 ${p.streak||0}</div><div class="sl">Day Streak</div></div>
-      <div class="sc" style="cursor:pointer" onclick="showFriendBadges('${code}')"><div class="sv" style="font-size:20px">🏅 ${p.badges||0}</div><div class="sl">Badges ›</div></div>
+      <div class="sc"><div class="sv" style="font-size:20px">${uic('flame','var(--orange)',18)} ${p.streak||0}</div><div class="sl">Day Streak</div></div>
+      <div class="sc" style="cursor:pointer" onclick="showFriendBadges('${code}')"><div class="sv" style="font-size:20px">${uic('medal',undefined,18)} ${p.badges||0}</div><div class="sl">Badges ›</div></div>
     </div>`;
   h+=miniCal(days, code);
   // Prefer the richer 30-day list (wd) — each row taps through to exercise detail.
@@ -3078,7 +3101,7 @@ function openFriendWorkout(code,idx){
       <div class="sc"><div class="sv">${w.sets||0}</div><div class="sl">Sets</div></div>
       <div class="sc"><div class="sv">${(w.ex||[]).length}</div><div class="sl">Exercises</div></div>
     </div>
-    <button class="btn ba wf" style="margin-bottom:14px" onclick="copyFriendWorkout('${code}',${idx})">📋 Copy to my workout</button>
+    <button class="btn ba wf" style="margin-bottom:14px" onclick="copyFriendWorkout('${code}',${idx})">${uic('clipboard')} Copy to my workout</button>
     <div class="st" style="margin-bottom:8px">Exercises &amp; sets</div>`;
   h+=(w.ex||[]).length ? (w.ex||[]).map(e=>{
     const sets=e.sets||[];
@@ -3144,8 +3167,9 @@ function showFriendBadges(code){
       const status=tier
         ? `<span class="badge" style="background:${TIERC[tier]}22;color:${TIERC[tier]};border:1px solid ${TIERC[tier]}66;text-transform:capitalize">${tier}</span>`
         : '<span class="badge bgreen">Earned</span>';
+      const [bIcon,bColor]=(b.e||'medal|var(--muted)').split('|');
       return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div style="font-size:28px">${b.e||'🏅'}</div>
+        <div>${uic(bIcon,bColor,28)}</div>
         <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${b.n}</div><div style="font-size:12px;color:var(--muted)">${BADGE_HOW[b.n]||''}</div></div>
         ${status}</div>`;
     }).join('');
@@ -3165,7 +3189,7 @@ function renderLB() {
   // Compare YOU + close buddies, filterable by category and time range.
   const def=CMP.find(c=>c.k===cmpM)||CMP[0];
   const getv = cmpRange==='month' ? def.mon : def.all;
-  const medal=i=>i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1);
+  const medal=i=>i<3?uic('medal',[TIERC.gold,TIERC.silver,TIERC.bronze][i],16):'#'+(i+1);
   const chips=CMP.map(c=>`<button class="chip ${c.k===cmpM?'on':''}" onclick="cmpSw('${c.k}')">${c.label}</button>`).join('');
   const rangeTog=`<div class="unit-tog" style="margin-bottom:10px">
       <button type="button" class="${cmpRange==='month'?'active':''}" onclick="cmpRangeSet('month')">Past Month</button>
@@ -3173,7 +3197,7 @@ function renderLB() {
     </div>`;
   let board;
   if(!buddies.length){
-    board=`<div style="color:var(--muted);font-size:13px;padding:6px 0">Mark friends as ⭐ close buddies below to compare them here.</div>`;
+    board=`<div style="color:var(--muted);font-size:13px;padding:6px 0">Mark friends as ${uic('star','#ffd700')} close buddies below to compare them here.</div>`;
   } else {
     const ranked=[you,...buddies].sort((a,b)=>getv(b)-getv(a));
     board=ranked.map((p,i)=>`<div class="lbi ${p.isYou?'lbyou':''}" style="cursor:pointer" onclick="openFriend('${p.code}')">
@@ -3195,7 +3219,7 @@ function renderLB() {
   if(buddies.length){ document.getElementById('lbBuddiesWrap').style.display='block'; document.getElementById('lbBuddies').innerHTML=buddies.map(f=>lbRow(f,{star:true,canRemove:true})).join(''); }
   else document.getElementById('lbBuddiesWrap').style.display='none';
   document.getElementById('lbFriends').innerHTML=others.length?others.map(f=>lbRow(f,{star:true,canRemove:true})).join('')
-    :(accepted.length?'<div style="color:var(--muted);font-size:13px;padding:6px 0">All friends are close buddies ⭐</div>':'<div style="color:var(--muted);font-size:13px;padding:6px 0">No friends yet. Tap + Friend to add by username.</div>');
+    :(accepted.length?`<div style="color:var(--muted);font-size:13px;padding:6px 0">All friends are close buddies ${uic('star','#ffd700')}</div>`:'<div style="color:var(--muted);font-size:13px;padding:6px 0">No friends yet. Tap + Friend to add by username.</div>');
 
   const pw=document.getElementById('pendingWrap');
   if(pending.length){pw.style.display='block';document.getElementById('pendingList').innerHTML=pending.map(f=>`
@@ -3225,10 +3249,10 @@ async function acceptFr(id) {
         .or(`and(from_code.eq.${id},to_code.eq.${my}),and(from_code.eq.${my},to_code.eq.${id})`);
       if(error) console.warn('acceptFr',error);
     }catch(e){ console.warn('acceptFr',e); }
-    await refreshFriends(); toast('Friend added! 🤝','ok'); return;
+    await refreshFriends(); toast('Friend added! ✓','ok'); return;
   }
   const fs=gFr(); const f=fs.find(x=>x.id===id||x.code===id);
-  if(f){f.pending=false;S.s('friends',fs);renderLB();toast('Friend added! 🤝','ok');}
+  if(f){f.pending=false;S.s('friends',fs);renderLB();toast('Friend added! ✓','ok');}
 }
 
 // ============================================================
@@ -3263,7 +3287,7 @@ async function doAF() {
         await SUPA.from('friend_requests').upsert(
           {from_code:myCode,to_code:code,status:'accepted'},{onConflict:'from_code,to_code'});
       }
-      toast('Friend added! 🤝','ok');
+      toast('Friend added! ✓','ok');
       document.getElementById('afCode').value=''; cm('afModal'); await refreshFriends();
     }catch(e){ console.warn('doAF',e); toast('Network error — try again','err'); }
     return;
@@ -3808,7 +3832,7 @@ async function cloudLogin() {
 function copyCode() {
   const u=(gProf()||{}).code||'';
   if (!u) { toast('No username found','err'); return; }
-  if (navigator.clipboard) navigator.clipboard.writeText(u).then(()=>toast('Username copied! 📋','ok')).catch(()=>toast(u,'ok'));
+  if (navigator.clipboard) navigator.clipboard.writeText(u).then(()=>toast('Username copied! ✓','ok')).catch(()=>toast(u,'ok'));
   else toast(u,'ok');
 }
 
@@ -4158,7 +4182,7 @@ if ('serviceWorker' in navigator) {
 }
 let deferredPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;document.getElementById('installBanner').classList.remove('hidden');});
-document.getElementById('installBtn').addEventListener('click',async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();const{outcome}=await deferredPrompt.userChoice;if(outcome==='accepted')toast('Jacked installed! 🎉','ok');deferredPrompt=null;document.getElementById('installBanner').classList.add('hidden');});
+document.getElementById('installBtn').addEventListener('click',async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();const{outcome}=await deferredPrompt.userChoice;if(outcome==='accepted')toast('Jacked installed! ✓','ok');deferredPrompt=null;document.getElementById('installBanner').classList.add('hidden');});
 window.addEventListener('appinstalled',()=>{document.getElementById('installBanner').classList.add('hidden');toast('Jacked installed! Launch from home screen.','ok');});
 
 // ============================================================
