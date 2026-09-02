@@ -757,6 +757,22 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   </div>
 </div>
 
+<!-- Custom confirm/prompt dialog. iOS Safari does not reliably show native
+     window.confirm()/prompt() when the app is installed to the home screen
+     (standalone display-mode) — the call can return with no visible dialog,
+     which looks exactly like a dead button. z-index above every other modal
+     (600) since this can be triggered from inside any of them. -->
+<div class="mo ctr" id="confirmModal" style="z-index:700">
+  <div class="md">
+    <div id="cfMsg" style="font-size:14px;line-height:1.5;white-space:pre-wrap"></div>
+    <div class="fg" id="cfInputWrap" style="display:none;margin-top:12px"><input type="text" id="cfInput"></div>
+    <div class="fr" style="margin-top:16px">
+      <button class="btn bg" id="cfCancel" onclick="_cfDone(null)">Cancel</button>
+      <button class="btn ba" id="cfOk" onclick="_cfSubmit()">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add Friend -->
 <div class="mo ctr" id="afModal">
   <div class="md">
@@ -1094,26 +1110,34 @@ function exRankCmp(a,b){
   return 0;
 }
 function toggleFav(id){ const f=new Set(gFav()); f.has(id)?f.delete(id):f.add(id); S.s('favEx',[...f]); if(document.getElementById('exInfoModal').classList.contains('open')) openExInfo(id); renderEx(); }
-function renameEx(id){ const cur=byId(id).name; const v=prompt('Rename exercise:',cur); if(v==null) return; const r=gRenameEx(); const t=v.trim(); if(t&&t!==cur) r[id]=t; else delete r[id]; S.s('exRename',r); openExInfo(id); renderEx(); }
+function renameEx(id){ const cur=byId(id).name; showConfirm('Rename exercise:',{isPrompt:true,defaultValue:cur}).then(v=>{ if(v==null) return; const r=gRenameEx(); const t=v.trim(); if(t&&t!==cur) r[id]=t; else delete r[id]; S.s('exRename',r); openExInfo(id); renderEx(); }); }
 // Exercises hidden from browse lists. Built-in DB exercises can't be deleted
 // from the public dataset, so "deleting" one just hides it everywhere it's browsed.
 const gHidden=()=>S.g('hiddenEx')||[];
 function isCustomEx(id,ex){ ex=ex||byId(id); return !!(ex&&ex._c)||String(id).startsWith('cex'); }
 function deleteEx(id){
+  const finish=()=>{
+    // Clean up favourite + rename overrides for the removed exercise.
+    S.s('favEx', gFav().filter(x=>x!==id));
+    const rn=gRenameEx(); if(rn[id]){ delete rn[id]; S.s('exRename',rn); }
+    cm('exInfoModal'); renderEx(); toast('Exercise removed','ok');
+  };
   if(isCustomEx(id)){
-    if(!confirm('Delete this custom exercise? It is removed from your library and routines. Logged history is kept.')) return;
-    S.s('cex', gCEx().filter(e=>e.id!==id));
-    const rs=gR(); let changed=false;
-    rs.forEach(r=>{ const n=(r.exercises||[]).filter(x=>x!==id); if(n.length!==(r.exercises||[]).length){ r.exercises=n; changed=true; } });
-    if(changed) S.s('routines',rs);
+    showConfirm('Delete this custom exercise? It is removed from your library and routines. Logged history is kept.').then(ok=>{
+      if(!ok) return;
+      S.s('cex', gCEx().filter(e=>e.id!==id));
+      const rs=gR(); let changed=false;
+      rs.forEach(r=>{ const n=(r.exercises||[]).filter(x=>x!==id); if(n.length!==(r.exercises||[]).length){ r.exercises=n; changed=true; } });
+      if(changed) S.s('routines',rs);
+      finish();
+    });
   } else {
-    if(!confirm('Hide this exercise from your library? Built-in exercises can’t be deleted, but this removes it from all lists.')) return;
-    const h=new Set(gHidden()); h.add(id); S.s('hiddenEx',[...h]);
+    showConfirm('Hide this exercise from your library? Built-in exercises can’t be deleted, but this removes it from all lists.').then(ok=>{
+      if(!ok) return;
+      const h=new Set(gHidden()); h.add(id); S.s('hiddenEx',[...h]);
+      finish();
+    });
   }
-  // Clean up favourite + rename overrides for the removed exercise.
-  S.s('favEx', gFav().filter(x=>x!==id));
-  const rn=gRenameEx(); if(rn[id]){ delete rn[id]; S.s('exRename',rn); }
-  cm('exInfoModal'); renderEx(); toast('Exercise removed','ok');
 }
 function exName(id,base){ return gRenameEx()[id]||base; }
 
@@ -1711,9 +1735,9 @@ function editR(id) {
   renderREP(); om('crModal');
 }
 function delR(id) {
-  if (!confirm('Delete this routine?')) return;
+  showConfirm('Delete this routine?').then(ok=>{ if(!ok) return;
   S.s('routines',gR().filter(r=>r.id!==id));
-  renderRoutines(); toast('Routine deleted','ok');
+  renderRoutines(); toast('Routine deleted','ok'); });
 }
 function renderREP() {
   const el=document.getElementById('rExPicker');
@@ -1916,8 +1940,9 @@ function maybeResumeAW() {
   if(!hasWork){ clearAW(); return; }
   aw=saved.aw; awStart=saved.awStart||Date.now(); awTouch=saved.awTouch||awStart;
   if(Date.now()-awTouch > STALE_MS) { autoFinishStale(); return; }  // dead timer → resolve it
-  if(confirm('Resume your unfinished workout?')) { beginW(); }
-  else { aw=null; clearAW(); }
+  showConfirm('Resume your unfinished workout?').then(ok=>{
+    if(ok) { beginW(); } else { aw=null; clearAW(); }
+  });
 }
 
 function openQS() {
@@ -2302,7 +2327,12 @@ function finishW(auto) {
   if (!aw) return;
   const ts=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   // Verify finish so an accidental tap doesn't end the session (skipped on auto-finish — no one's there).
-  if (!auto && !confirm(ts===0 ? 'No sets logged — finish anyway?' : 'Finish and save this workout?')) return;
+  if (auto) { _finishWContinue(auto,ts); return; }
+  showConfirm(ts===0 ? 'No sets logged — finish anyway?' : 'Finish and save this workout?').then(ok=>{
+    if(ok) _finishWContinue(auto,ts);
+  });
+}
+function _finishWContinue(auto,ts) {
   clearInterval(wt); skipRest();   // skipRest also hides the rest bar + clears .resting
   // Auto-finish stops the clock at the LAST logged set (awTouch) so the idle period
   // before the auto-trigger isn't counted; a manual finish ends now.
@@ -2355,15 +2385,18 @@ function showFinishSummary(o) {
 function saveAsNewRoutine(idsCsv){
   const ids=idsCsv.split(',').filter(Boolean);
   if(!ids.length){ toast('No exercises to save','err'); return; }
-  const nm=prompt('Name this routine:',''); if(nm==null) return;
-  const name=nm.trim()||'My Routine';
-  const rs=gR(); rs.push({id:'r'+Date.now(), name, desc:'', exercises:ids}); S.s('routines',rs);
-  toast('Routine "'+name+'" saved ✓','ok');
+  showConfirm('Name this routine:',{isPrompt:true}).then(nm=>{
+    if(nm==null) return;
+    const name=nm.trim()||'My Routine';
+    const rs=gR(); rs.push({id:'r'+Date.now(), name, desc:'', exercises:ids}); S.s('routines',rs);
+    toast('Routine "'+name+'" saved ✓','ok');
+  });
 }
 
 function cancelW() {
-  if (!confirm('Cancel workout? All progress will be lost.')) return;
-  clearInterval(wt); skipRest(); clearAW(); aw=null; sp('home');
+  showConfirm('Cancel workout? All progress will be lost.').then(ok=>{ if(!ok) return;
+    clearInterval(wt); skipRest(); clearAW(); aw=null; sp('home');
+  });
 }
 
 // ============================================================
@@ -2455,15 +2488,16 @@ function openWD(id) {
   });
   document.getElementById('wdContent').innerHTML=h;
   document.getElementById('wdDel').onclick=()=>{
-    if (!confirm('Delete this workout?')) return;
-    S.s('hist',gH().filter(h=>h.id!==id));
-    // Tombstone the id so a later cloud merge (union by id) can't resurrect this
-    // deletion from a stale island's copy. Kept forever (tiny id strings).
-    S.s('deleted',[...new Set([...(S.g('deleted')||[]), id])]);
-    // Merge-safe backup now so the delete + tombstone propagate to the cloud
-    // instead of an old blob re-adding the workout on another device.
-    if (typeof syncBackup==='function') syncBackup();
-    cm('wdModal'); renderHome(); toast('Workout deleted','ok');
+    showConfirm('Delete this workout?').then(ok=>{ if(!ok) return;
+      S.s('hist',gH().filter(h=>h.id!==id));
+      // Tombstone the id so a later cloud merge (union by id) can't resurrect this
+      // deletion from a stale island's copy. Kept forever (tiny id strings).
+      S.s('deleted',[...new Set([...(S.g('deleted')||[]), id])]);
+      // Merge-safe backup now so the delete + tombstone propagate to the cloud
+      // instead of an old blob re-adding the workout on another device.
+      if (typeof syncBackup==='function') syncBackup();
+      cm('wdModal'); renderHome(); toast('Workout deleted','ok');
+    });
   };
   document.getElementById('wdSaveR').onclick=()=>saveWorkoutAsRoutine(id);
   document.getElementById('wdEdit').onclick=()=>openWE(id);
@@ -2516,7 +2550,7 @@ function weUpd(ei,si,f,v,conv){ const s=weDraft.exercises[ei].sets[si]; if(s) s[
 function weTogDone(ei,si){ const s=weDraft.exercises[ei].sets[si]; if(s){ s.done=!s.done; renderWE(); } }
 function weAddSet(ei){ const e=weDraft.exercises[ei]; (e.sets=e.sets||[]).push({weight:0,reps:0,done:true}); renderWE(); }
 function weRemoveSet(ei){ const e=weDraft.exercises[ei]; if((e.sets||[]).length>1){ e.sets.pop(); renderWE(); } }
-function weRemoveEx(ei){ if(!confirm('Remove this exercise from the workout?')) return; weDraft.exercises.splice(ei,1); renderWE(); }
+function weRemoveEx(ei){ showConfirm('Remove this exercise from the workout?').then(ok=>{ if(!ok) return; weDraft.exercises.splice(ei,1); renderWE(); }); }
 function saveWE(){
   if(!weDraft) return;
   weDraft.name=document.getElementById('weName').value.trim()||weDraft.name||'Workout';
@@ -3131,7 +3165,10 @@ function resolveSharedEx(e){
 function copyFriendWorkout(code,idx){
   const p=personByCode(code); if(!p) return;
   const w=(p.wd||[])[idx]; if(!w) return;
-  if(aw && !confirm('You have a workout in progress. Replace it with a copy of this one?')) return;
+  if(aw){ showConfirm('You have a workout in progress. Replace it with a copy of this one?').then(ok=>{ if(ok) _copyFriendWorkoutNow(w); }); return; }
+  _copyFriendWorkoutNow(w);
+}
+function _copyFriendWorkoutNow(w){
   const exs=[]; let skipped=0;
   (w.ex||[]).forEach(e=>{
     const lib=resolveSharedEx(e);
@@ -3790,10 +3827,12 @@ function openProf() {
 // clears it from this device — we warn hard and push Export first. After the
 // reload the onboarding screen offers "Restore from backup" to load another account.
 function signOut() {
-  if (!confirm("Sign out on this device?\n\nYour workouts, PRs and routines are saved ONLY on this device — signing out removes them here. Export a backup first if you want to keep them or move them to another account.\n\nOK = sign out   •   Cancel = go back")) return;
-  Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
-  toast('Signed out','ok');
-  setTimeout(()=>window.location.reload(), 400);
+  showConfirm("Sign out on this device?\n\nYour workouts, PRs and routines are saved ONLY on this device — signing out removes them here. Export a backup first if you want to keep them or move them to another account.",{okText:'Sign out'}).then(ok=>{
+    if(!ok) return;
+    Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
+    toast('Signed out','ok');
+    setTimeout(()=>window.location.reload(), 400);
+  });
 }
 
 // Log in to an existing account: pull its full cloud backup onto this device.
@@ -3817,7 +3856,7 @@ async function cloudLogin() {
       const msg = incomingHist
         ? `Loading "${data.name||u}" (${incomingHist} workout${incomingHist===1?'':'s'}) will REPLACE the ${localHist} workout(s) on this device. Export a backup first if you want to keep them.\n\nContinue?`
         : `"${data.name||u}" has no saved workouts yet. Logging in will REPLACE the ${localHist} workout(s) on this device with an empty account.\n\nContinue?`;
-      if(!confirm(msg)) return;
+      if(!(await showConfirm(msg))) return;
     }
     // Replace this device's data with the account's cloud snapshot.
     Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
@@ -3963,11 +4002,13 @@ function importJsonBackup(t) {
   const data=parsed&&parsed.data&&typeof parsed.data==='object' ? parsed.data : parsed;
   const keys=Object.keys(data||{}).filter(k=>k.startsWith('jk_'));
   if (!keys.length) { toast('No Jacked data found in file','err'); return; }
-  if (!confirm('Import will REPLACE all current data on this device. Continue?')) return;
-  keys.forEach(k=>{ try{ localStorage.setItem(k, typeof data[k]==='string'?data[k]:JSON.stringify(data[k])); }catch(e){} });
-  localStorage.setItem('jk_appVersion', APP_VERSION);
-  toast('Data imported — reloading…','ok');
-  setTimeout(()=>window.location.reload(),700);
+  showConfirm('Import will REPLACE all current data on this device. Continue?').then(ok=>{
+    if(!ok) return;
+    keys.forEach(k=>{ try{ localStorage.setItem(k, typeof data[k]==='string'?data[k]:JSON.stringify(data[k])); }catch(e){} });
+    localStorage.setItem('jk_appVersion', APP_VERSION);
+    toast('Data imported — reloading…','ok');
+    setTimeout(()=>window.location.reload(),700);
+  });
 }
 
 // Minimal RFC-4180-ish CSV parser (handles quotes, commas, CRLF, newlines in quotes).
@@ -4083,6 +4124,32 @@ async function importWorkoutCsv(text) {
 function om(id) { const el=document.getElementById(id); if(el) el.classList.add('open'); }
 function cm(id) { const el=document.getElementById(id); if(el) el.classList.remove('open'); }
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+// In-app replacement for window.confirm()/window.prompt(). iOS Safari drops
+// those silently once the app is installed to the home screen — the call
+// returns with nothing shown, so a button just looks dead. Same call shape
+// (returns a Promise instead of blocking), same visual language as every
+// other modal in the app.
+let _cfResolve=null;
+function showConfirm(msg,{isPrompt=false,defaultValue='',okText='OK',cancelText='Cancel'}={}){
+  return new Promise(resolve=>{
+    _cfResolve=resolve;
+    document.getElementById('cfMsg').textContent=msg;
+    const wrap=document.getElementById('cfInputWrap'), input=document.getElementById('cfInput');
+    wrap.style.display=isPrompt?'block':'none';
+    if(isPrompt){ input.value=defaultValue; setTimeout(()=>input.focus(),50); }
+    document.getElementById('cfOk').textContent=okText;
+    document.getElementById('cfCancel').textContent=cancelText;
+    om('confirmModal');
+  });
+}
+function _cfSubmit(){
+  const isPrompt=document.getElementById('cfInputWrap').style.display!=='none';
+  _cfDone(isPrompt?document.getElementById('cfInput').value:true);
+}
+function _cfDone(val){ cm('confirmModal'); const r=_cfResolve; _cfResolve=null; if(r) r(val); }
+document.getElementById('confirmModal').addEventListener('click',e=>{ if(e.target.id==='confirmModal') _cfDone(null); });
+document.getElementById('cfInput').addEventListener('keydown',e=>{ if(e.key==='Enter') _cfSubmit(); });
 
 // Keyboard handling: hide fixed bottom chrome (nav/banner) while typing so the
 // on-screen keyboard overlays it instead of shoving it up the screen.
