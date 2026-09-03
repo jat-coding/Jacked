@@ -1554,11 +1554,17 @@ function openExInfo(exId){
 // ============================================================
 function renderCurated() {
   const el=document.getElementById('curatedList'); if(!el) return;
+  const pick=todaysCuratedPick(dayKey(new Date()));
   el.innerHTML=CURATED.map((p,i)=>{
     const days=p.routines.length;
+    const routineList=p.routines.map((rt,ri)=>{
+      const isPick=pick&&pick.pi===i&&pick.ri===ri;
+      return `<div style="font-size:12px;margin-top:3px;${isPick?'color:var(--blue);font-weight:700':'color:var(--text2)'}">${isPick?"Today's pick · ":''}${rt.name}</div>`;
+    }).join('');
     return `<div class="cur-card">
       <div style="font-family:var(--fh);font-size:18px;font-weight:800;line-height:1.05">${p.name}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">${p.desc}</div>
+      <div style="margin-top:6px">${routineList}</div>
       <div style="font-size:10px;color:var(--muted);margin-top:6px">${days} workout${days!==1?'s':''} · ${p.source}</div>
       <button class="btn ba xs" style="margin-top:10px" onclick="addCurated(${i})">+ Add to Routines</button>
     </div>`;
