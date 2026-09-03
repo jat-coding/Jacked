@@ -1288,14 +1288,39 @@ function bestRoutineFor(group){
   return bc>0?best:null;
 }
 function dismissSuggest(){ S.s('suggestDismiss', dayKey(new Date())); const el=document.getElementById('suggestCard'); if(el) el.style.display='none'; }
+// Pick (and cache per day) the trusted-program routine to feature today, cycling
+// through every routine across every CURATED program before repeating any of them.
+function todaysCuratedPick(today){
+  const cache=S.g('sugToday')||{};
+  if(cache.day===today && cache.curated) return cache.curated;
+  const log=S.g('sugCuratedLog')||{};
+  const key=c=>c.pi+'_'+c.ri;
+  const shownAgo=k=>{ const d=log[k]; return d?Math.round((new Date(today)-new Date(d))/864e5):999; };
+  const ranked=[...CURATED_FLAT].sort((a,b)=>shownAgo(key(b))-shownAgo(key(a)));
+  const pick=ranked.find(c=>shownAgo(key(c))>=CURATED_FLAT.length-1)||ranked[0]||null;
+  if(pick){ S.s('sugCuratedLog',{...log,[key(pick)]:today}); }
+  S.s('sugToday',{...cache,day:today,curated:pick});
+  return pick;
+}
+function curatedPickHtml(pick){
+  if(!pick) return '';
+  return `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px">Trusted pick of the day</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div style="min-width:0"><span style="font-weight:700">${pick.name}</span> <span style="font-size:11px;color:var(--muted)">· ${pick.program} (${pick.source})</span></div>
+        <button class="btn ba sm" onclick="startCuratedRoutine(${pick.pi},${pick.ri})">Start</button>
+      </div>
+    </div>`;
+}
 function renderSuggest(){
   const el=document.getElementById('suggestCard'); if(!el) return;
   const today=dayKey(new Date());
   if(S.g('suggestDismiss')===today){ el.style.display='none'; return; }
   const h=gH();
   el.style.display='flex';
+  const curated=todaysCuratedPick(today);
   if(!h.length){
-    el.innerHTML=`<div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--blue)">Let's get started</div><div style="font-size:12px;color:var(--text2);margin-top:3px;line-height:1.4">Pick a routine, or start an empty workout.</div></div><button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss">✕</button>`;
+    el.innerHTML=`<div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--blue)">Let's get started</div><div style="font-size:12px;color:var(--text2);margin-top:3px;line-height:1.4">Pick a routine, or start an empty workout.</div>${curatedPickHtml(curated)}</div><button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss">✕</button>`;
     return;
   }
   const last={};
@@ -1304,7 +1329,7 @@ function renderSuggest(){
   // Pick (and cache per day) up to 3 groups: most overdue first, but skip anything
   // suggested in the last 2 days so the suggestions rotate instead of repeating.
   let cache=S.g('sugToday');
-  if(!cache||cache.day!==today){
+  if(!cache||cache.day!==today||!cache.groups){
     const log=S.g('sugLog')||{};
     const shownAgo=g=>{ const d=log[g]; return d?Math.round((new Date(today)-new Date(d))/864e5):999; };
     const ranked=[...MGROUPS].sort((a,b)=>{
@@ -1316,7 +1341,7 @@ function renderSuggest(){
     const picks=[]; const usedLabels=new Set();
     for(const g of ranked){ const lbl=SUGNAME[g]||g; if(usedLabels.has(lbl))continue; usedLabels.add(lbl); picks.push(g); if(picks.length>=3)break; }
     const nlog={...log}; picks.forEach(g=>nlog[g]=today); S.s('sugLog',nlog);
-    cache={day:today,groups:picks}; S.s('sugToday',cache);
+    cache={...cache,day:today,groups:picks}; S.s('sugToday',cache);
   }
   const item=g=>{ const nm=SUGNAME[g]||g, d=since(g), r=bestRoutineFor(g);
     const sub = d>=900?'not trained yet':d===0?'trained today':`${d}d since last`;
@@ -1329,6 +1354,7 @@ function renderSuggest(){
       <div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--blue)">Suggested today</div>
       <div style="font-size:12px;color:var(--text2);margin:3px 0 2px;line-height:1.4">A few good options — mix it up.</div>
       ${cache.groups.map(item).join('')}
+      ${curatedPickHtml(curated)}
     </div>
     <button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss" style="align-self:flex-start">✕</button>`;
 }
@@ -1586,6 +1612,27 @@ async function addCurated(i) {
   S.s('routines',rs);
   renderRoutines();
   toast(`Added ${prog.name} (${added} workout${added!==1?'s':''}) ✓`,'ok');
+}
+
+// Every individual routine across every trusted (CURATED) program, flattened
+// for the daily rotation in renderSuggest() below.
+const CURATED_FLAT = CURATED.flatMap((p,pi)=>p.routines.map((r,ri)=>(
+  {pi,ri,name:r.name,program:p.name,source:p.source}
+)));
+// Start a single routine from a trusted program (the "Suggested today" pick).
+// Reuses an already-added copy if one exists, so re-suggesting the same
+// program on a later cycle doesn't spam duplicate routines.
+async function startCuratedRoutine(pi,ri){
+  const prog=CURATED[pi]; if(!prog) return;
+  const rt=prog.routines[ri]; if(!rt) return;
+  const tag=prog.name+' · '+prog.source;
+  const existing=gR().find(r=>r.name===rt.name && r.desc===tag);
+  if(existing){ startRW(existing.id); return; }
+  if(!dbLoaded) { toast('Loading exercises…'); await loadDB(); }
+  const ids=rt.exercises.map(resolveExercise).filter(Boolean);
+  const id='r'+Date.now();
+  const rs=gR(); rs.push({id,name:rt.name,desc:tag,exercises:ids}); S.s('routines',rs);
+  startRW(id);
 }
 
 // ============================================================
