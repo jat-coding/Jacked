@@ -907,7 +907,9 @@ const _ICON={
   pencil:`<path d='M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4'/><path d='M13.5 6.5l4 4'/>`,
   hourglass:`<path d='M6.5 7h11'/><path d='M6.5 17h11'/><path d='M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1'/><path d='M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1'/>`,
   warning:`<path d='M12 9v4'/><path d='M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0'/><path d='M12 16h.01'/>`,
-  star:`<path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/>`
+  star:`<path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/>`,
+  link:`<path d='M9 15l6 -6'/><path d='M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464'/><path d='M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463'/>`,
+  unlink:`<path d='M17 22v-2'/><path d='M9 15l6 -6'/><path d='M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464'/><path d='M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463'/><path d='M20 17h2'/><path d='M2 7h2'/><path d='M7 2v2'/>`
 };
 function exIcon(muscle,size=24){
   const m=(muscle||'').toLowerCase();
@@ -2077,6 +2079,7 @@ function startEmpty() {
 function beginW() {
   if(!awStart) awStart=Date.now();
   awTouch=Date.now();   // mark active NOW so the stale-auto-finish doesn't fire on start
+  if(aw) aw._pairFrom=null;   // never resume mid-way through picking a superset partner
   clearInterval(wt);
   wt=setInterval(updWT,1000);
   updWT();
@@ -2128,7 +2131,12 @@ function renderWS() {
     ex.sets.forEach((s,i)=>{ if(s.done&&beatsPR(s)){ const sc=score(s); if(sc>prScore){ prScore=sc; prIdx=i; } } });
     const exGotPR=prIdx>=0;
     const dispW=v=>isW?dW(v):(v||0);
-    return `<div class="eb" id="eb${ei}">
+    const picking=aw._pairFrom===ei;
+    const paired=!!ex.supersetId;
+    const linkBtnColor=picking?'var(--accent)':paired?'var(--blue)':'currentColor';
+    return `<div class="eb" id="eb${ei}" style="${paired?'border-left:3px solid var(--blue)':''}">
+      ${paired?`<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--blue);font-weight:700;margin-bottom:6px">${uic('link','var(--blue)',13)} Superset with ${supersetPartnerName(ei)}<button class="btn bg ic xs" style="margin-left:auto" onclick="unlinkSuperset(${ei})" aria-label="Unlink">${uic('unlink',undefined,12)}</button></div>`:''}
+      ${picking?`<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:6px">Tap another exercise's link icon to pair</div>`:''}
       <div class="ebh">${ih}
         <div style="flex:1;min-width:0">
           <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${ex.name}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}</div>
@@ -2136,6 +2144,7 @@ function renderWS() {
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0">
           <button class="btn bg ic xs" onclick="openReorder()" aria-label="Reorder">↕</button>
+          <button class="btn bg ic xs" style="color:${linkBtnColor}" onclick="tapSuperset(${ei})" aria-label="Superset">${uic('link',linkBtnColor,14)}</button>
           <button class="btn bg ic xs" onclick="switchEx(${ei})" aria-label="Switch exercise">⇄</button>
           <button class="btn bd ic xs" onclick="rmEx(${ei})" aria-label="Remove">✕</button>
         </div>
@@ -2202,6 +2211,40 @@ function addExToWorkout(id) {
     tracking:ex.tracking||'weight_reps', imgUrl:imgUrl(ex)||null,
     sets:seedSets(id)
   });
+  renderWS();
+}
+
+// Supersets: tap the link icon on one exercise, then tap it on another to pair
+// them (2 exercises per group). Grouping only -- logging/rest-timer behaviour
+// is unchanged, this just labels the pair and keeps them next to each other.
+function supersetPartnerName(ei){
+  const id=aw.exercises[ei].supersetId;
+  const partner=aw.exercises.find((e,i)=>i!==ei&&e.supersetId===id);
+  return partner?partner.name:'';
+}
+function tapSuperset(ei){
+  if(!aw) return;
+  const ex=aw.exercises[ei];
+  if(ex.supersetId){ unlinkSuperset(ei); return; }
+  if(aw._pairFrom===ei){ aw._pairFrom=null; renderWS(); return; }
+  if(aw._pairFrom==null){ aw._pairFrom=ei; renderWS(); return; }
+  const otherIdx=aw._pairFrom, otherEx=aw.exercises[otherIdx];
+  if(!otherEx){ aw._pairFrom=null; renderWS(); return; }
+  if(otherEx.supersetId){ toast('That exercise is already paired','err'); aw._pairFrom=null; renderWS(); return; }
+  const id='ss'+Date.now();
+  ex.supersetId=id; otherEx.supersetId=id;
+  // Keep paired exercises adjacent so the grouping reads clearly: move the
+  // later one to sit right after the earlier one.
+  const lo=Math.min(ei,otherIdx), hi=Math.max(ei,otherIdx);
+  if(hi-lo>1){ const [moved]=aw.exercises.splice(hi,1); aw.exercises.splice(lo+1,0,moved); }
+  aw._pairFrom=null;
+  renderWS();
+  toast('Paired as a superset','ok');
+}
+function unlinkSuperset(ei){
+  if(!aw||!aw.exercises[ei]) return;
+  const id=aw.exercises[ei].supersetId; if(!id) return;
+  aw.exercises.forEach(e=>{ if(e.supersetId===id) delete e.supersetId; });
   renderWS();
 }
 
