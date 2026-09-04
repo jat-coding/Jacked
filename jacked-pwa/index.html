@@ -682,6 +682,11 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <div class="fg"><label id="bwProfLabel">Body Weight (lb)</label><input type="number" id="bwInput" inputmode="decimal" min="0" step="0.5" placeholder="175" onchange="saveBWField()"></div>
       <div class="fg"><label>Default Rest (sec)</label><input type="number" id="setRest" min="5" max="600" step="5" inputmode="numeric" placeholder="90"></div>
     </div>
+    <div class="fg" style="margin-bottom:4px">
+      <label>Birthday</label>
+      <input type="date" id="profBirthday" onchange="renderProfAge()">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px" id="profAgeReadout"></div>
+    </div>
     <div class="tog-row">
       <div>
         <div style="font-weight:600;font-size:14px">Auto rest timer</div>
@@ -2787,9 +2792,8 @@ function heatColor(p){ if(p<=0)return'#6b6b7a'; if(p<0.34)return'#ffe24d'; if(p<
 // Front + back body heat-map SVG, zones tinted by relative usage.
 // MuscleWiki-style flat muscle map: front + back, male/female proportions,
 // each muscle group tinted by training heat. Original artwork (not MuscleWiki's).
-function bodySimSVG(freq, sex){
-  const max=Math.max(1,...MGROUPS.map(g=>freq[g]||0));
-  const c=g=>heatColor((freq[g]||0)/max);
+function bodySimSVG(score, sex){
+  const c=g=>heatColor(score[g]||0);
   const sk='#2a2a33', edge='#0c0c10';
   const fem = sex==='female';
   const sp = fem?12:15;   // shoulder spread
@@ -2830,33 +2834,92 @@ function bodySimSVG(freq, sex){
 function metricsHidden(){ return new Set(gSet().hiddenCards||[]); }
 function toggleCard(id){ const s=gSet(); const h=new Set(s.hiddenCards||[]); h.has(id)?h.delete(id):h.add(id); S.s('settings',{...s,hiddenCards:[...h]}); renderMetricsPage(); }
 
+// Strength standards: how much of a representative lift (as a fraction of
+// bodyweight) counts as Needs Work / Building / Strong / Elite, per muscle
+// group and sex. chest/shoulders/legs match the Bench/Shoulder/Leg-Maxing
+// badge lifts (same numbers as computeBadges' tierOf calls). back (bent-over
+// row) and glutes (hip thrust) come off Strength Level's published 5-tier
+// bodyweight-ratio tables (strengthlevel.com). biceps (barbell curl), triceps
+// (close-grip bench) and core (cable crunch) only publish two reference
+// points there (beginner / average-intermediate) — the Building/Elite bands
+// for those three are interpolated from that, not independently sourced.
+const STRENGTH_STD = {
+  chest:     {male:[.5,.75,1.0,1.5],   female:[.3,.45,.6,.9]},
+  shoulders: {male:[.25,.375,.5,.75],  female:[.15,.22,.3,.45]},
+  legs:      {male:[1.0,1.25,1.5,2.0], female:[.6,.75,.9,1.2]},
+  back:      {male:[.5,.75,1.0,1.5],   female:[.3,.45,.65,1.0]},
+  glutes:    {male:[.5,1.0,1.6,2.5],   female:[.4,.8,1.3,2.0]},
+  biceps:    {male:[.25,.4,.55,.85],   female:[.15,.24,.33,.5]},
+  triceps:   {male:[.6,.85,1.1,1.6],   female:[.36,.5,.66,1.0]},
+  core:      {male:[.3,.55,.8,1.2],    female:[.3,.5,.76,1.2]},
+};
+// Best estimated-1RM ÷ bodyweight per muscle group, from any exercise tagged
+// to that group (there's no per-exercise tagging finer than muscle group, so
+// the single best lift stands in for "the" representative lift).
+function muscleStrengthRatio(){
+  const bw=gBW(); const best={};
+  if(bw>0) gH().forEach(w=>(w.exercises||[]).forEach(ex=>{
+    const g=muscleGroup(ex.muscle); if(!g||!(g in STRENGTH_STD)) return;
+    if(!isWT(ex)) return;
+    (ex.sets||[]).forEach(s=>{
+      if(!(s.done||s.weight>0)) return;
+      const v=e1rm(effWeight(ex,s), s.reps||0);
+      if(v>0 && v>(best[g]||0)) best[g]=v;
+    });
+  }));
+  const out={}; MGROUPS.forEach(g=>out[g]=bw>0&&best[g]?best[g]/bw:0);
+  return out;
+}
+// 0..1 position within that group's Needs-Work..Elite band, for the heat map
+// / bar fill — an absolute scale against the standards above, not relative
+// to the user's own best-trained group.
+function strengthScore(group,ratio){
+  const std=STRENGTH_STD[group]; if(!std||!ratio) return 0;
+  const sex=(gProf()||{}).sex==='female'?'female':'male';
+  const [t1,t2,t3,t4]=std[sex];
+  if(ratio<t1) return (ratio/t1)*0.2;
+  if(ratio<t2) return 0.2+((ratio-t1)/(t2-t1))*0.2;
+  if(ratio<t3) return 0.4+((ratio-t2)/(t3-t2))*0.2;
+  if(ratio<t4) return 0.6+((ratio-t3)/(t4-t3))*0.2;
+  return Math.min(1,0.8+((ratio-t4)/t4)*0.2);
+}
+const strengthLabel=p=>p<=0?{l:'Untrained',b:'bm'}:p<0.34?{l:'Needs Work',b:'bred'}:p<0.67?{l:'Building',b:'borange'}:p<0.9?{l:'Strong',b:'bblue'}:{l:'Elite',b:'bgreen'};
+// Strength-relative-to-bodyweight ranking. Falls back to set-count (the old
+// behaviour) when no body weight is logged, since the ratio is meaningless
+// without one — every score would silently read as 0/Untrained otherwise.
+function musclePerf(){
+  const bw=gBW();
+  if(!bw){ const freq=muscleUsage(); const max=Math.max(1,...MGROUPS.map(g=>freq[g])); const score={}; MGROUPS.forEach(g=>score[g]=freq[g]/max); return {mode:'volume',score}; }
+  const ratio=muscleStrengthRatio(); const score={}; MGROUPS.forEach(g=>score[g]=strengthScore(g,ratio[g]));
+  return {mode:'strength',score};
+}
+
 function cardBody(){
-  const freq=muscleUsage();
-  const trained=MGROUPS.filter(g=>freq[g]>0).sort((a,b)=>freq[b]-freq[a]);
-  const untrained=MGROUPS.filter(g=>!freq[g]);
-  const excel=trained.slice(0,2).map(g=>MGNAME[g]);
-  const weak=[...untrained,...[...trained].reverse().filter(g=>!untrained.includes(g))].slice(0,3).map(g=>MGNAME[g]);
-  const max=Math.max(1,...MGROUPS.map(g=>freq[g]));
-  const legend=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">`+MGROUPS.map(g=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:2px;background:${heatColor(freq[g]/max)};display:inline-block"></span>${MGNAME[g]} ${freq[g]}</span>`).join('')+`</div>`;
-  const body=gH().length?bodySimSVG(freq,(gProf()||{}).sex||'male'):'<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Log or import workouts to map your training.</div>';
+  const {mode,score}=musclePerf();
+  const sorted=[...MGROUPS].sort((a,b)=>score[b]-score[a]);
+  const excel=sorted.filter(g=>score[g]>0).slice(0,2).map(g=>MGNAME[g]);
+  const weak=[...sorted].reverse().filter(g=>score[g]<0.34).slice(0,3).map(g=>MGNAME[g]);
+  const legend=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">`+MGROUPS.map(g=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:2px;background:${heatColor(score[g])};display:inline-block"></span>${MGNAME[g]}</span>`).join('')+`</div>`;
+  const body=gH().length?bodySimSVG(score,(gProf()||{}).sex||'male'):'<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Log or import workouts to map your training.</div>';
+  const bwHint=mode==='volume'&&gH().length?`<div style="font-size:11px;color:var(--muted);margin-top:8px">Log your body weight in Profile for strength-based rankings — showing sets logged until then.</div>`:'';
   const insight=gH().length?`<div style="margin-top:8px">
       ${excel.length?`<div style="font-size:13px;padding:8px 10px;background:rgba(77,255,145,.08);border-radius:var(--r);margin-bottom:6px"><span style="color:var(--green);font-weight:700">Excelling:</span> ${excel.join(', ')}</div>`:''}
       ${weak.length?`<div style="font-size:13px;padding:8px 10px;background:rgba(255,77,77,.08);border-radius:var(--r)"><span style="color:var(--red);font-weight:700">Needs work:</span> ${weak.join(', ')}</div>`:''}
-    </div>`:'';
+    </div>${bwHint}`:'';
   return {id:'body',title:'Body Simulation',html:body+legend+insight};
 }
 
 function cardRankings(){
-  const freq=muscleUsage(); const max=Math.max(1,...MGROUPS.map(g=>freq[g]));
-  const sorted=[...MGROUPS].sort((a,b)=>freq[b]-freq[a]);
-  const lab=p=>p<=0?{l:'Untrained',b:'bm'}:p<0.34?{l:'Needs Work',b:'bred'}:p<0.67?{l:'Building',b:'borange'}:p<0.9?{l:'Strong',b:'bblue'}:{l:'Elite',b:'bgreen'};
-  const html=sorted.map((g,i)=>{const p=freq[g]/max,r=lab(p);return `<div class="mr-item">
+  const {mode,score}=musclePerf();
+  const sorted=[...MGROUPS].sort((a,b)=>score[b]-score[a]);
+  const sub=mode==='strength'?'Estimated strength vs. your body weight, per muscle group':'Completed sets per muscle group — log your body weight in Profile for strength-based rankings';
+  const html=sorted.map((g,i)=>{const p=score[g],r=strengthLabel(p);return `<div class="mr-item">
       <div style="width:24px;font-family:var(--fh);font-size:14px;font-weight:700;color:${i<3?'var(--accent)':'var(--muted)'}">#${i+1}</div>
       <div style="flex:1;font-weight:600;font-size:13px">${MGNAME[g]}</div>
       <div class="mr-bar"><div class="mr-fill" style="width:${Math.round(p*100)}%;background:${heatColor(p)}"></div></div>
       <span class="badge ${r.b}" style="min-width:74px;justify-content:center">${r.l}</span>
     </div>`;}).join('');
-  return {id:'rankings',title:'Muscle Group Usage',html:'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Completed sets per muscle group</div>'+html};
+  return {id:'rankings',title:'Muscle Group Usage',html:'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+sub+'</div>'+html};
 }
 
 function cardSummary(){
@@ -3874,7 +3937,25 @@ function openProf() {
   document.getElementById('setRest').value=st.restDefault;
   document.getElementById('setAutoRest').classList.toggle('on', st.autoRest!==false);
   document.getElementById('profVersion').textContent='Jacked '+BUILD;
+  document.getElementById('profBirthday').value=p.birthday||'';
+  renderProfAge();
   om('profModal');
+}
+// Age is derived from the stored birthday, never stored itself, so it stays
+// correct on every birthday without any yearly update logic.
+function ageFromBirthday(iso){
+  if(!iso) return null;
+  const b=new Date(iso+'T00:00:00'); if(isNaN(b)) return null;
+  const t=new Date();
+  let age=t.getFullYear()-b.getFullYear();
+  if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate())) age--;
+  return age>=0&&age<130?age:null;
+}
+function gAge(){ return ageFromBirthday((gProf()||{}).birthday); }
+function renderProfAge(){
+  const iso=document.getElementById('profBirthday').value;
+  const age=ageFromBirthday(iso);
+  document.getElementById('profAgeReadout').textContent = age!=null ? `Age ${age}` : '';
 }
 
 // Sign out = leave this profile. Workout data is local-only, so this also
@@ -3985,15 +4066,16 @@ async function saveProf() {
   metricUnit = unit==='kg' ? 'metric' : 'imperial';
   const bwv=parseFloat(document.getElementById('bwInput').value);
   if(bwv>0) logWeight(unit==='lb' ? bwv/2.20462 : bwv);   // body weight → current + log
+  const birthday=document.getElementById('profBirthday').value||'';
 
   if (newU!==oldU) {
     if (await usernameTaken(newU, oldU)) { toast('That username is already taken','err'); return; }
-    S.s('prof',{...existing,name:n,username:newU,code:newU,sex});
+    S.s('prof',{...existing,name:n,username:newU,code:newU,sex,birthday});
     document.getElementById('profCode').textContent=newU;
     if (supaEnabled() && oldU) { try{ await changeUsernameSupa(oldU,newU); }catch(e){ console.warn('rekey',e); toast('Saved locally; sync issue','err'); } }
     else if (typeof syncMe==='function') syncMe();
   } else {
-    S.s('prof',{...existing,name:n,username:oldU,code:oldU,sex});
+    S.s('prof',{...existing,name:n,username:oldU,code:oldU,sex,birthday});
     if (typeof syncMe==='function') syncMe();
   }
   cm('profModal'); renderHome(); toast('Profile saved ✓','ok');
