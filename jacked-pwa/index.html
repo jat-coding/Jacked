@@ -667,40 +667,54 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="fg"><label>Username (unique handle)</label><input type="text" id="profUser" autocapitalize="none" autocorrect="off" maxlength="20"><div style="font-size:11px;color:var(--muted);margin-top:4px">This is your friend handle and the key for all your data.</div></div>
 
     <div class="sep"></div>
-    <div class="st" style="margin-bottom:10px">Preferences</div>
-    <label>Units</label>
-    <div class="unit-tog" id="setUnitTog">
-      <button type="button" data-v="lb" onclick="segPick(this)">lb / in</button>
-      <button type="button" data-v="kg" onclick="segPick(this)">kg / cm</button>
-    </div>
-    <label>Body</label>
-    <div class="unit-tog" id="setSexTog">
-      <button type="button" data-v="male" onclick="segPick(this)">Male</button>
-      <button type="button" data-v="female" onclick="segPick(this)">Female</button>
-    </div>
-    <div class="fr" style="margin-bottom:4px">
-      <div class="fg"><label id="bwProfLabel">Body Weight (lb)</label><input type="number" id="bwInput" inputmode="decimal" min="0" step="0.5" placeholder="175" onchange="saveBWField()"></div>
-      <div class="fg"><label>Default Rest (sec)</label><input type="number" id="setRest" min="5" max="600" step="5" inputmode="numeric" placeholder="90"></div>
-    </div>
-    <div class="fg" style="margin-bottom:4px">
-      <label>Birthday</label>
-      <input type="date" id="profBirthday" onchange="renderProfAge()">
-      <div style="font-size:11px;color:var(--muted);margin-top:4px" id="profAgeReadout"></div>
-    </div>
-    <div class="tog-row">
-      <div>
-        <div style="font-weight:600;font-size:14px">Auto rest timer</div>
-        <div style="font-size:12px;color:var(--muted)">Start a rest countdown after each completed set</div>
-      </div>
-      <button class="tog" id="setAutoRest" onclick="toggleAutoRest(this)"></button>
+    <!-- Tab switcher: identity/prefs/account vs. the biometric inputs that feed
+         the strength-ranking math (body weight, sex, birthday). Kept as one
+         profile object / one Save button underneath — this is a display split
+         only, not a second save flow. -->
+    <div class="unit-tog" id="profTabTog" style="margin-bottom:16px">
+      <button type="button" data-v="main" onclick="switchProfTab(this)">Profile</button>
+      <button type="button" data-v="body" onclick="switchProfTab(this)">Body Metrics</button>
     </div>
 
-    <div class="sep"></div>
-    <div class="st" style="margin-bottom:8px">Your Username</div>
-    <div class="invite-code">
-      <div style="font-size:11px;color:var(--muted)">Share this so friends can add you</div>
-      <div class="code-display" id="profCode" style="letter-spacing:1px;font-size:26px">—</div>
-      <button class="btn bg sm wf" onclick="copyCode()" style="margin-top:6px">Copy Username</button>
+    <div id="profTab-main">
+      <div class="st" style="margin-bottom:10px">Preferences</div>
+      <label>Units</label>
+      <div class="unit-tog" id="setUnitTog">
+        <button type="button" data-v="lb" onclick="segPick(this)">lb / in</button>
+        <button type="button" data-v="kg" onclick="segPick(this)">kg / cm</button>
+      </div>
+      <div class="fg" style="margin-top:12px"><label>Default Rest (sec)</label><input type="number" id="setRest" min="5" max="600" step="5" inputmode="numeric" placeholder="90"></div>
+      <div class="tog-row">
+        <div>
+          <div style="font-weight:600;font-size:14px">Auto rest timer</div>
+          <div style="font-size:12px;color:var(--muted)">Start a rest countdown after each completed set</div>
+        </div>
+        <button class="tog" id="setAutoRest" onclick="toggleAutoRest(this)"></button>
+      </div>
+
+      <div class="sep"></div>
+      <div class="st" style="margin-bottom:8px">Your Username</div>
+      <div class="invite-code">
+        <div style="font-size:11px;color:var(--muted)">Share this so friends can add you</div>
+        <div class="code-display" id="profCode" style="letter-spacing:1px;font-size:26px">—</div>
+        <button class="btn bg sm wf" onclick="copyCode()" style="margin-top:6px">Copy Username</button>
+      </div>
+    </div>
+
+    <div id="profTab-body" style="display:none">
+      <div class="st" style="margin-bottom:10px">Body Metrics</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Used for strength-based rankings on the Metrics tab and your achievement badges.</div>
+      <label>Body</label>
+      <div class="unit-tog" id="setSexTog">
+        <button type="button" data-v="male" onclick="segPick(this)">Male</button>
+        <button type="button" data-v="female" onclick="segPick(this)">Female</button>
+      </div>
+      <div class="fg" style="margin-top:12px"><label id="bwProfLabel">Body Weight (lb)</label><input type="number" id="bwInput" inputmode="decimal" min="0" step="0.5" placeholder="175" onchange="saveBWField()"></div>
+      <div class="fg" style="margin-bottom:4px">
+        <label>Birthday</label>
+        <input type="date" id="profBirthday" onchange="renderProfAge()">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px" id="profAgeReadout"></div>
+      </div>
     </div>
 
     <button class="btn ba wf" onclick="saveProf()">Save Profile</button>
@@ -3865,6 +3879,12 @@ function saveBWField(){ const v=parseFloat(document.getElementById('bwInput').va
 
 // Segmented button toggle helpers.
 function segPick(btn){ const p=btn.parentElement; p.querySelectorAll('button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+function switchProfTab(btn){
+  segPick(btn);
+  const v=btn.dataset.v;
+  document.getElementById('profTab-main').style.display = v==='main'?'block':'none';
+  document.getElementById('profTab-body').style.display = v==='body'?'block':'none';
+}
 function segSet(id,v){ const p=document.getElementById(id); if(!p)return; p.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.v===v)); }
 function segVal(id){ const a=document.querySelector('#'+id+' button.active'); return a?a.dataset.v:''; }
 
@@ -3939,6 +3959,9 @@ function openProf() {
   document.getElementById('profVersion').textContent='Jacked '+BUILD;
   document.getElementById('profBirthday').value=p.birthday||'';
   renderProfAge();
+  segSet('profTabTog','main');
+  document.getElementById('profTab-main').style.display='block';
+  document.getElementById('profTab-body').style.display='none';
   om('profModal');
 }
 // Age is derived from the stored birthday, never stored itself, so it stays
