@@ -862,6 +862,12 @@ const AVC  = ['#20d3c2','#3ddc97','#5aa9ff','#ff9f4d','#b07cff','#ff5d6c','#4ad9
 const EXCLUDED_CATS = new Set(['stretching','plyometrics','cardio','olympic weightlifting']);
 // Muscles we want to INCLUDE
 const ALLOWED_MUSCLES = new Set(['chest','back','shoulders','biceps','triceps','legs','quadriceps','hamstrings','calves','glutes','core','abdominals','lats','traps','forearms','lower back']);
+// free-exercise-db mis-tags a few bodyweight lifts' equipment as "other" instead
+// of "body only", which silently hides the Bodyweight/+Added/-Assist toggle
+// (isBodyweightEx() below only recognises "body only"/"bodyweight"). Corrects
+// the internal equip value only -- never the raw field passed to prettyDB() for
+// display, so the exercise name/parenthetical is unaffected.
+const EQUIP_FIX = {'Dips_-_Chest_Version':'body only'};
 
 // Curated programs from trusted lifting sources. Exercise entries are fuzzy
 // keywords resolved against the exercise DB at add-time.
@@ -1198,7 +1204,7 @@ function byId(id) {
   if (w) return { ...w, name:exName(id,w.name) };
   // check DB
   const d = allDB.find(e=>e.id===id);
-  if (d) return { id:d.id, name:exName(d.id,prettyDB(d.name,d.equipment)), muscle:mapMuscle(d.primaryMuscles?.[0]||''), equip:d.equipment||'',
+  if (d) return { id:d.id, name:exName(d.id,prettyDB(d.name,d.equipment)), muscle:mapMuscle(d.primaryMuscles?.[0]||''), equip:EQUIP_FIX[d.id]||d.equipment||'',
     images:d.images||[], instructions:d.instructions||[], tracking:'weight_reps', _d:true };
   // fallback: humanise the slug so users see a name not an ID
   return { id, name:exName(id, id.replace(/_/g,' ').replace(/-/g,' ')), muscle:'', equip:'', images:[], tracking:'weight_reps' };
@@ -1208,7 +1214,7 @@ function allEx() {
   const cust = gCEx().map(e=>({...e,name:exName(e.id,e.name),_c:true}));
   const warm = WARMUPS.map(e=>({...e,name:exName(e.id,e.name)}));
   const db   = allDB.map(e=>({ id:e.id, name:exName(e.id,prettyDB(e.name,e.equipment)), muscle:mapMuscle(e.primaryMuscles?.[0]||''),
-    equip:e.equipment||'', images:e.images||[], tracking:'weight_reps', _d:true }));
+    equip:EQUIP_FIX[e.id]||e.equipment||'', images:e.images||[], tracking:'weight_reps', _d:true }));
   // Warm-ups go last so they don't crowd the top of the unfiltered library, but
   // still surface under the Warm-up chip, their muscle chip, and search.
   return [...cust, ...db, ...warm];
