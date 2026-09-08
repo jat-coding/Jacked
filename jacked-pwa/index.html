@@ -525,6 +525,17 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
         <option value="other">Other</option>
       </select>
     </div>
+    <!-- Explicit bodyweight toggle -- independent of the Equipment dropdown above,
+         so any exercise (whatever its listed equipment) can get the same
+         Bodyweight / +Added / -Assist switch the in-workout screen already has
+         for DB exercises tagged "body only". -->
+    <div class="tog-row">
+      <div>
+        <div style="font-weight:600;font-size:14px">Bodyweight exercise</div>
+        <div style="font-size:12px;color:var(--muted)">Adds Bodyweight / +Added weight / -Assisted options during a workout</div>
+      </div>
+      <button class="tog" id="ceBodyweightTog" onclick="this.classList.toggle('on');ceRecompute()"></button>
+    </div>
     <!-- Grip / Variant (shown for bar-based) -->
     <div class="fg" id="gripRow">
       <label>Grip / Variant</label>
@@ -1720,6 +1731,8 @@ function openCE(fromAe) {
   document.getElementById('ceEquip').value='barbell';
   document.getElementById('ceTracking').value='weight_reps';
   document.getElementById('trkWR').textContent=`Weight + Reps (e.g. ${wUnit()==='lb'?'135 lb':'60 kg'} × 8)`;
+  document.getElementById('ceBodyweightTog').classList.remove('on');
+  document.getElementById('bwAssistTog').classList.remove('on');
   updateEquipFields();
   om('ceModal');
 }
@@ -1745,11 +1758,13 @@ function renderGripOptions(eq){
 }
 function ceRecompute(){
   const eq=document.getElementById('ceEquip').value, t=document.getElementById('ceTracking').value;
+  const isBW=document.getElementById('ceBodyweightTog').classList.contains('on');
   const showGrip=['barbell','dumbbell','cable','ez_bar','trap_bar','machine'].includes(eq);
   document.getElementById('gripRow').style.display = showGrip?'block':'none';
   if(showGrip) renderGripOptions(eq);
-  // Assist only makes sense for bodyweight-rep lifts or assisted machines.
-  const assist = (t==='bodyweight_reps') || (eq==='machine');
+  // Assist only makes sense for bodyweight-rep lifts, the explicit Bodyweight
+  // toggle, or assisted machines.
+  const assist = isBW || (t==='bodyweight_reps') || (eq==='machine');
   document.getElementById('bwAssistRow').style.display = assist?'block':'none';
 }
 function updateEquipFields() {
@@ -1779,13 +1794,17 @@ function saveCE() {
   const dispName = grip ? `${n} (${grip.replace(/_/g,' ')})` : n;
   const assistRow=document.getElementById('bwAssistRow');
   const assist=assistRow&&assistRow.style.display!=='none'&&document.getElementById('bwAssistTog').classList.contains('on');
+  const isBW=document.getElementById('ceBodyweightTog').classList.contains('on');
   const newId='cex'+Date.now();
   const c=gCEx();
   c.push({
     id:newId,
     name:dispName,
     muscle:document.getElementById('ceMuscle').value,
-    equip:document.getElementById('ceEquip').value,
+    // The Bodyweight toggle wins over whatever's picked in the Equipment
+    // dropdown -- it's what actually drives the in-workout Bodyweight/
+    // +Added/-Assist switch (see isBodyweightEx()).
+    equip:isBW?'body only':document.getElementById('ceEquip').value,
     tracking:document.getElementById('ceTracking').value,
     category:document.getElementById('ceCategory').value,
     notes:document.getElementById('ceNotes').value.trim(),
