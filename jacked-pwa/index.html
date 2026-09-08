@@ -862,12 +862,48 @@ const AVC  = ['#20d3c2','#3ddc97','#5aa9ff','#ff9f4d','#b07cff','#ff5d6c','#4ad9
 const EXCLUDED_CATS = new Set(['stretching','plyometrics','cardio','olympic weightlifting']);
 // Muscles we want to INCLUDE
 const ALLOWED_MUSCLES = new Set(['chest','back','shoulders','biceps','triceps','legs','quadriceps','hamstrings','calves','glutes','core','abdominals','lats','traps','forearms','lower back']);
-// free-exercise-db mis-tags a few bodyweight lifts' equipment as "other" instead
-// of "body only", which silently hides the Bodyweight/+Added/-Assist toggle
-// (isBodyweightEx() below only recognises "body only"/"bodyweight"). Corrects
-// the internal equip value only -- never the raw field passed to prettyDB() for
-// display, so the exercise name/parenthetical is unaffected.
-const EQUIP_FIX = {'Dips_-_Chest_Version':'body only'};
+// free-exercise-db mis-tags a lot of bodyweight lifts' equipment as "other"/
+// blank instead of "body only", which silently hides the Bodyweight/+Added/
+// -Assist toggle (isBodyweightEx() below only recognises "body only"/
+// "bodyweight"). Corrects the internal equip value only -- never the raw
+// field passed to prettyDB() for display, so exercise names are unaffected.
+// Audited every "strength"-category exercise tagged equipment "other"/blank
+// (2026-09-08) and kept only ones that are genuinely bodyweight-loaded with
+// no required external resistance -- left out anything using an actual plate/
+// band/sled/machine as its resistance (Plate_Pinch, Sled_*, Svend_Press,
+// Trap_Bar_Deadlift, etc.) even though the DB also tags those "other".
+const EQUIP_FIX = {
+  'Dips_-_Chest_Version':'body only',
+  'Ab_Roller':'body only',
+  'Band_Assisted_Pull-Up':'body only',
+  'Bodyweight_Mid_Row':'body only',
+  'Bodyweight_Walking_Lunge':'body only',
+  'Decline_Push-Up':'body only',
+  'Floor_Glute-Ham_Raise':'body only',
+  'Gironda_Sternum_Chins':'body only',
+  'Hyperextensions_Back_Extensions':'body only',
+  'Inverted_Row':'body only',
+  'Inverted_Row_with_Straps':'body only',
+  'Kipping_Muscle_Up':'body only',
+  'Knee_Hip_Raise_On_Parallel_Bars':'body only',
+  'London_Bridges':'body only',
+  'Mixed_Grip_Chin':'body only',
+  'Muscle_Up':'body only',
+  'One_Arm_Chin-Up':'body only',
+  'Parallel_Bar_Dip':'body only',
+  'Platform_Hamstring_Slides':'body only',
+  'Ring_Dips':'body only',
+  'Rocky_Pull-Ups_Pulldowns':'body only',
+  'Rope_Climb':'body only',
+  'Scapular_Pull-Up':'body only',
+  'Side_To_Side_Chins':'body only',
+  'Single-Leg_High_Box_Squat':'body only',
+  'Suspended_Fallout':'body only',
+  'Suspended_Push-Up':'body only',
+  'Suspended_Reverse_Crunch':'body only',
+  'Suspended_Row':'body only',
+  'Suspended_Split_Squat':'body only',
+};
 
 // Curated programs from trusted lifting sources. Exercise entries are fuzzy
 // keywords resolved against the exercise DB at add-time.
