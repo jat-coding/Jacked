@@ -4573,7 +4573,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.8';
+const BUILD = 'v1.8.9';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
@@ -4601,6 +4601,24 @@ subscribeFriends();   // live friend add/accept updates (falls back to the 25s p
 buildMuscleChips('muscleChips', handleMFChip, null);
 buildMuscleChips('aeChips', handleAEChip, null);
 renderCurated();
+// One-time self-heal for devices restored by a pre-v1.8.8 cloud login/import:
+// string-valued keys (jk_lastCloudBackup) were stored bare, S.g() read them as
+// null, and sync-on-change + the daily backup stayed OFF while the "Save your
+// data to the cloud?" prompt nagged on every boot. Re-quoting a bare string is
+// lossless, so a healthy device is untouched; an affected one is repaired
+// silently before checkOnboarding() → maybeCloudBackup() looks at the stamp.
+// NEVER touch jk_appVersion: it is deliberately stored bare and resetIfStale()
+// compares it RAW — re-quoting it would wipe every user's data on the next boot.
+const HEAL_SKIP=new Set(['jk_appVersion']);
+function healBareStrings(){
+  let fixed=0;
+  Object.keys(localStorage).filter(k=>k.startsWith('jk_')&&!HEAL_SKIP.has(k)).forEach(k=>{
+    const raw=localStorage.getItem(k); if(raw==null) return;
+    try{ JSON.parse(raw); }catch(_){ try{ localStorage.setItem(k, JSON.stringify(raw)); fixed++; }catch(__){} }
+  });
+  if(fixed) console.info('healBareStrings: re-quoted',fixed,'key(s)');
+}
+healBareStrings();
 checkOnboarding();
 // Kick off DB load in background so it's ready when the user first opens Library/exercises
 setTimeout(loadDB, 500);
