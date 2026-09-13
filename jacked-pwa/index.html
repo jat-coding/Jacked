@@ -4099,13 +4099,29 @@ function renderProfAge(){
 // Sign out = leave this profile. Workout data is local-only, so this also
 // clears it from this device — we warn hard and push Export first. After the
 // reload the onboarding screen offers "Restore from backup" to load another account.
-function signOut() {
-  showConfirm("Sign out on this device?\n\nYour workouts, PRs and routines are saved ONLY on this device — signing out removes them here. Export a backup first if you want to keep them or move them to another account.",{okText:'Sign out'}).then(ok=>{
-    if(!ok) return;
-    Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
-    toast('Signed out','ok');
-    setTimeout(()=>window.location.reload(), 400);
-  });
+async function signOut() {
+  const p=gProf()||{};
+  // Pre-v1.8 this warned that data was saved ONLY on this device — true when the
+  // blob backup ran once a day, false since sync-on-change. Say what is actually
+  // the case: consult the enrolment + dirty flag, flush first if something is
+  // pending, and only keep the hard warning when the cloud really is behind.
+  const enrolled=!!S.g('lastCloudBackup');
+  let safe=enrolled && !isDirty();
+  if(enrolled && !safe && supaEnabled()){
+    toast('Syncing before sign out…');
+    if(await cloudBackupNow(true)){ clearDirty(); safe=true; }
+  }
+  const msg = safe
+    ? `Sign out on this device?\n\nYour workouts, PRs and routines are backed up to ${p.code||'your account'} in the cloud — log in again any time to get them back.`
+    : enrolled
+      ? "Sign out on this device?\n\nSome recent changes have NOT reached the cloud yet (offline?). Signing out now would lose them. Export a backup first, or try again once you're online."
+      : "Sign out on this device?\n\nYour workouts, PRs and routines are saved ONLY on this device — signing out removes them here. Export a backup first if you want to keep them or move them to another account.";
+  const ok=await showConfirm(msg,{okText:'Sign out'});
+  if(!ok) return;
+  Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
+  clearDirty();   // device state, not account data — don't let it arm a drain for the next login
+  toast('Signed out','ok');
+  setTimeout(()=>window.location.reload(), 400);
 }
 
 // Log in to an existing account: pull its full cloud backup onto this device.
@@ -4133,12 +4149,17 @@ async function cloudLogin() {
     }
     // Replace this device's data with the account's cloud snapshot.
     Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
-    Object.keys(bk).forEach(k=>{ try{ localStorage.setItem(k, typeof bk[k]==='string'?bk[k]:JSON.stringify(bk[k])); }catch(e){} });
+    restoreKeys(bk);
     // Normalize the restored profile: checkOnboarding() gates on jk_prof.username,
     // and a watch-first account (or a hand-merged row) can carry a jk_prof with only
     // {code}. Restoring it as-is bounced the user straight back to onboarding.
     let prof={}; try{ prof=JSON.parse(localStorage.getItem('jk_prof'))||{}; }catch(e){}
     localStorage.setItem('jk_prof', JSON.stringify({...prof, code:data.code, username:data.code, name:prof.name||data.name||data.code.slice(1)}));
+    // This data just came FROM the cloud — it is backed up by definition. Stamp the
+    // enrolment so the first-time prompt stays quiet and sync-on-change is live from
+    // the first edit (watch-first accounts never carry jk_lastCloudBackup at all).
+    localStorage.setItem('jk_lastCloudBackup', JSON.stringify(dayKey(new Date())));
+    clearDirty();
     localStorage.setItem('jk_appVersion', APP_VERSION);
     toast('Welcome back — loading your data…','ok');
     setTimeout(()=>window.location.reload(), 700);
@@ -4247,6 +4268,23 @@ function collectBackup() {
   return out;
 }
 
+// Inverse of collectBackup(): write a bundle back into localStorage in the JSON
+// encoding S.g() expects. Bundle values are PARSED JSON, so a string value is a
+// real string and must be re-quoted — the old `typeof v==='string' ? v : …`
+// shortcut stored `2026-09-12` bare, S.g() then failed to JSON.parse it and read
+// null, so jk_lastCloudBackup vanished on every cloud login: the "Save your data
+// to the cloud?" prompt re-appeared AND drainSync()'s never-enrolled gate turned
+// sync-on-change off until the user answered it. Legacy exports whose string
+// values are already JSON text are stored verbatim.
+function restoreKeys(bundle){
+  Object.keys(bundle).forEach(k=>{
+    const v=bundle[k]; let enc;
+    if(typeof v==='string'){ let legacy=false; try{ JSON.parse(v); legacy=true; }catch(_){} enc=legacy?v:JSON.stringify(v); }
+    else enc=JSON.stringify(v);
+    try{ localStorage.setItem(k,enc); }catch(_){}
+  });
+}
+
 function exportData() {
   const data={_app:'jacked',_version:APP_VERSION,_exported:new Date().toISOString(),data:collectBackup()};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
@@ -4282,7 +4320,8 @@ function importJsonBackup(t) {
   if (!keys.length) { toast('No Jacked data found in file','err'); return; }
   showConfirm('Import will REPLACE all current data on this device. Continue?').then(ok=>{
     if(!ok) return;
-    keys.forEach(k=>{ try{ localStorage.setItem(k, typeof data[k]==='string'?data[k]:JSON.stringify(data[k])); }catch(e){} });
+    const bundle={}; keys.forEach(k=>{ bundle[k]=data[k]; });
+    restoreKeys(bundle);
     localStorage.setItem('jk_appVersion', APP_VERSION);
     toast('Data imported — reloading…','ok');
     setTimeout(()=>window.location.reload(),700);
@@ -4534,7 +4573,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.7';
+const BUILD = 'v1.8.8';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
