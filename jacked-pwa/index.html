@@ -4134,7 +4134,11 @@ async function cloudLogin() {
     // Replace this device's data with the account's cloud snapshot.
     Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
     Object.keys(bk).forEach(k=>{ try{ localStorage.setItem(k, typeof bk[k]==='string'?bk[k]:JSON.stringify(bk[k])); }catch(e){} });
-    if (!localStorage.getItem('jk_prof')) localStorage.setItem('jk_prof', JSON.stringify({name:data.name||'',username:data.code,code:data.code}));
+    // Normalize the restored profile: checkOnboarding() gates on jk_prof.username,
+    // and a watch-first account (or a hand-merged row) can carry a jk_prof with only
+    // {code}. Restoring it as-is bounced the user straight back to onboarding.
+    let prof={}; try{ prof=JSON.parse(localStorage.getItem('jk_prof'))||{}; }catch(e){}
+    localStorage.setItem('jk_prof', JSON.stringify({...prof, code:data.code, username:data.code, name:prof.name||data.name||data.code.slice(1)}));
     localStorage.setItem('jk_appVersion', APP_VERSION);
     toast('Welcome back — loading your data…','ok');
     setTimeout(()=>window.location.reload(), 700);
@@ -4530,7 +4534,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.6';
+const BUILD = 'v1.8.7';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
