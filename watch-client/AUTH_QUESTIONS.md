@@ -116,6 +116,26 @@ it if ever needed.
 
 **Answer:**
 
+## 9. Housekeeping: please delete the stray bare-code row `watchdev`
+
+**Asked by:** Wear (found 2026-09-14 while Phil was looking at the account list).
+**Why:** `profiles` holds three rows for this name — `@watchdev` (the real scratch account,
+claimed), `@watchdev2`, and a **bare `watchdev` without the `@`** (name "Lifter", 1 workout,
+created 2026-08-12 by a pre-`@handle`-fix live test). The bare row is publicly visible
+(leaderboards show it as "Lifter"), can never be claimed — its normalized form is
+`@watchdev`, which exists — and since the lockdown `DELETE` on `profiles` is revoked for
+every API role, so only you can remove it.
+**Action (SQL editor):**
+```sql
+delete from public.profiles where code = 'watchdev';   -- the bare one; NOT '@watchdev'
+```
+`profile_backups`/`friend_requests` cascade; nothing else references it.
+**Question:** while you're there, is it worth a `check (code ~ '^@[a-z0-9_]{3,20}$')` on
+`profiles.code` so a client bug can't create another one? The edge function already
+enforces the format on sign-up, so this would only guard the admin/SQL path.
+
+**Answer:**
+
 ---
 
 ### Already agreed between the two watch clients (FYI, no action)
