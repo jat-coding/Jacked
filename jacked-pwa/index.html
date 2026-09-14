@@ -316,9 +316,13 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="ob-step active" id="ob1">
     <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:8px">Pick your username</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:20px">This is your unique handle — friends add you by it</div>
-    <div class="fg"><input type="text" id="obUser" placeholder="@username" autocapitalize="none" autocorrect="off" maxlength="20"></div>
+    <form onsubmit="event.preventDefault();obNext1()" autocomplete="on">
+    <div class="fg"><input type="text" id="obUser" name="username" placeholder="@username" autocapitalize="none" autocorrect="off" autocomplete="username" maxlength="20"></div>
     <div class="fg"><input type="text" id="obName" placeholder="Display name (shown on leaderboard)" autocomplete="name"></div>
-    <button class="btn ba wf" id="obNext1Btn" onclick="obNext1()">Continue →</button>
+    <div class="fg"><input type="password" id="obPass" name="password" placeholder="Password (8+ characters)" autocomplete="new-password"></div>
+    <div class="fg"><input type="password" id="obPass2" placeholder="Confirm password" autocomplete="new-password"></div>
+    <button type="submit" class="btn ba wf" id="obNext1Btn">Continue →</button>
+    </form>
     <div style="text-align:center;font-size:12px;color:var(--muted);margin:16px 0 8px">Already have an account?</div>
     <button class="btn bg wf" onclick="om('loginModal')">Log in &amp; load my data</button>
     <button class="btn bg wf" style="margin-top:8px" onclick="document.getElementById('importFile').click()">Restore from a backup file</button>
@@ -769,10 +773,30 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo ctr" id="loginModal" style="z-index:600">
   <div class="md">
     <div class="mh"><div class="mt">Log in</div><button class="cb" onclick="cm('loginModal')">✕</button></div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Enter your username to load that account and all of its workouts onto this device.</div>
-    <div class="fg"><label>Username</label><input type="text" id="loginUser" placeholder="@username" autocapitalize="none" autocorrect="off" maxlength="20"></div>
-    <button class="btn ba wf" onclick="cloudLogin()">Log in &amp; load my data</button>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Enter your username and password to load that account and all of its workouts onto this device.</div>
+    <form onsubmit="event.preventDefault();cloudLogin()" autocomplete="on">
+    <div class="fg"><label>Username</label><input type="text" id="loginUser" name="username" placeholder="@username" autocapitalize="none" autocorrect="off" autocomplete="username" maxlength="20"></div>
+    <div class="fg"><label>Password</label><input type="password" id="loginPass" name="password" placeholder="••••••••" autocomplete="current-password"></div>
+    <div id="loginMsg" style="display:none;font-size:12px;color:var(--orange);margin-bottom:10px"></div>
+    <button type="submit" class="btn ba wf">Log in &amp; load my data</button>
+    </form>
     <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">This replaces any data currently on this device.</div>
+  </div>
+</div>
+
+<!-- ACCOUNT GATE: set a password (unclaimed account) or re-enter it (signed out). Not dismissable. -->
+<div class="mo ctr" id="authGate" style="z-index:650">
+  <div class="md">
+    <div class="mh"><div class="mt" id="agTitle">Protect your account</div></div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px" id="agText"></div>
+    <form id="agForm" onsubmit="event.preventDefault();authGateSubmit()" autocomplete="on">
+      <div class="fg"><label>Username</label><input type="text" id="agUser" name="username" autocomplete="username" readonly></div>
+      <div class="fg"><label>Password</label><input type="password" id="agPass" name="password" placeholder="8+ characters"></div>
+      <div class="fg" id="agPass2Wrap"><label>Confirm password</label><input type="password" id="agPass2" autocomplete="new-password"></div>
+      <div id="agMsg" style="display:none;font-size:12px;color:var(--orange);margin-bottom:10px"></div>
+      <button type="submit" class="btn ba wf" id="agBtn">Save password</button>
+    </form>
+    <button class="btn bg wf" style="margin-top:8px" onclick="signOut()">Not you? Sign out of this device</button>
   </div>
 </div>
 
@@ -1002,7 +1026,7 @@ function normU(s){ const h=String(s||'').trim().replace(/^@+/,'').toLowerCase().
 function validU(u){ const h=normU(u).slice(1); if(h.length<3) return 'Username needs at least 3 letters/numbers'; if(h.length>20) return 'Username too long (max 20)'; return null; }
 // Returns true if the username already belongs to someone else on Supabase.
 async function usernameTaken(u, exceptMine){
-  if(!supaEnabled()) return false;          // can't verify offline → allow
+  if(!supaOnline()) return false;          // can't verify offline → allow
   try{
     const { data } = await SUPA.from('profiles').select('code').eq('code',u).maybeSingle();
     if(!data) return false;
@@ -1079,11 +1103,21 @@ async function obNext1() {
   const err = validU(u);
   if (err) { toast(err,'err'); return; }
   const name = document.getElementById('obName').value.trim() || u.slice(1);
+  const pw = document.getElementById('obPass').value;
+  const pwErr = pwProblem(pw, document.getElementById('obPass2').value);
+  if (pwErr) { toast(pwErr,'err'); return; }
   const btn = document.getElementById('obNext1Btn');
-  btn.disabled = true; const prev=btn.textContent; btn.textContent='Checking…';
-  const taken = await usernameTaken(u);
+  btn.disabled = true; const prev=btn.textContent; btn.textContent='Creating account…';
+  // No backend reachable → start locally; the account gate asks for a password once online.
+  if (supaOnline()) {
+    const r = await registerAccount({code:u, password:pw, name});
+    if (r !== 'ok') {
+      btn.disabled = false; btn.textContent=prev;
+      toast(r==='already_claimed'||r==='taken'||r==='proof_failed' ? 'That username is already taken' : 'Could not create account — try again','err');
+      return;
+    }
+  }
   btn.disabled = false; btn.textContent=prev;
-  if (taken) { toast('That username is already taken','err'); return; }
   // The username IS the identity: it's the friend handle and the key for all data.
   S.s('prof', { name, username: u, code: u });
   document.getElementById('obCode').textContent = u;
@@ -1107,7 +1141,7 @@ function finishOnboard() {
   document.querySelector('nav').style.display = 'flex';
   renderHome();
   maybeResumeAW();
-  if (typeof maybeCloudBackup==='function') maybeCloudBackup();  // daily cloud overwrite / first-time backup prompt
+  authBoot();   // signed in → daily cloud sync; otherwise ask for the password
 }
 
 // ============================================================
@@ -3565,7 +3599,7 @@ async function doAF() {
       if (incoming) {
         await SUPA.from('friend_requests').update({status:'accepted'}).eq('id',incoming.id);
       } else {
-        // Casual app, no auth → adding is instant + mutual. Accept right away so the
+        // Adding is instant + mutual. Accept right away so the
         // friend shows up immediately on your side and on theirs (next sync/realtime).
         await SUPA.from('friend_requests').upsert(
           {from_code:myCode,to_code:code,status:'accepted'},{onConflict:'from_code,to_code'});
@@ -3589,20 +3623,123 @@ async function doAF() {
 // SUPABASE SYNC (friends + leaderboard).  Paste your project URL + anon key
 // below, then run the SQL in SUPABASE_SETUP.sql against your project.
 // Identity is the unique username — stored in the `code` primary-key column, so
-// its uniqueness is enforced by the DB. No auth: anyone with the anon key can
-// read/write, which suits this casual app. Leave blank to stay fully local.
+// its uniqueness is enforced by the DB. Each profile is owned by a Supabase Auth
+// user (username + password); RLS lets only the owner write it or read its backup
+// (supabase/migrations/20260913_password_auth.sql).
 // ============================================================
 const SUPABASE_URL = 'https://qehlrwnumrjktujidabz.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_vmf9BELfVFZpKrdMN3Z34g_R9l056gJ';
-let SUPA = null, liveFriends = null;
+let SUPA = null, liveFriends = null, _authUid = null;
 function supaInit() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase) {
-      SUPA = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      // Session lives in this device's storage only; never accept tokens from a URL,
+      // so a copied link can't carry someone's login.
+      SUPA = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY,
+        {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:false}});
+      SUPA.auth.onAuthStateChange((ev, session)=>{ _authUid = session ? session.user.id : null; });
     }
   } catch(e){ console.warn('Supabase init failed',e); }
 }
-function supaEnabled() { return !!SUPA; }
+// Backend reachable at all (public calls: username lookup, login, feedback).
+function supaOnline() { return !!SUPA; }
+// Signed in — required for every read/write of account data.
+function supaEnabled() { return !!SUPA && !!_authUid; }
+
+// ── ACCOUNT AUTH ─────────────────────────────────────────────────────────────
+function pwProblem(pw, confirm){
+  if ((pw||'').length < 8) return 'Password needs at least 8 characters';
+  if (pw.length > 72) return 'Password too long (max 72)';
+  if (confirm !== undefined && pw !== confirm) return "Passwords don't match";
+  return null;
+}
+// Create an account, or set the first password on an existing password-less one.
+// Resolves to the server status; on 'ok' this device is signed in.
+async function registerAccount({code, password, name, proofIds}){
+  try{
+    const { data, error } = await SUPA.functions.invoke('jacked-auth',{body:{code, password, name, proofIds}});
+    if (error || !data) { console.warn('register',error); return 'error'; }
+    if (data.status !== 'ok') return data.status;
+    return await signInAs(data.email, password) ? 'ok' : 'error';
+  }catch(e){ console.warn('register',e); return 'error'; }
+}
+async function signInAs(email, password){
+  const { data, error } = await SUPA.auth.signInWithPassword({email, password});
+  if (error || !data.session) { console.warn('signIn',error); return false; }
+  _authUid = data.session.user.id;
+  return true;
+}
+async function accountStatus(code){
+  const { data, error } = await SUPA.rpc('account_status',{p_code:code});
+  if (error) throw error;
+  return data || {status:'not_found'};
+}
+function clearLocalSession(){
+  _authUid = null;
+  Object.keys(localStorage).filter(k=>/^sb-.*-auth-token/.test(k)).forEach(k=>localStorage.removeItem(k));
+}
+
+let _gate = null;   // {mode:'set'|'login', code, email}
+// Boot/online check: a profile on this device must be signed in before it syncs.
+// Offline or backend down → keep working locally and try again later.
+async function authBoot(){
+  if (!supaOnline()) return;
+  const p = gProf(); if (!p || !p.code) return;
+  try{
+    const { data:{ session } } = await SUPA.auth.getSession();
+    if (session) { _authUid = session.user.id; onAuthed(); return; }
+  }catch(e){ console.warn('getSession',e); }
+  if (!navigator.onLine) return;
+  let st; try{ st = await accountStatus(p.code); }catch(e){ console.warn('account_status',e); return; }
+  showAuthGate(st.status==='claimed' ? 'login' : 'set', p.code, st.email);
+}
+function onAuthed(){
+  cm('authGate'); _gate = null;
+  subscribeFriends();
+  if (typeof maybeCloudBackup==='function') maybeCloudBackup();
+  if (isDirty()) scheduleSync();
+  if (_onLB()) refreshFriends();
+}
+function showAuthGate(mode, code, email){
+  _gate = {mode, code, email};
+  const set = mode === 'set';
+  document.getElementById('agTitle').textContent = set ? 'Protect your account' : 'Enter your password';
+  document.getElementById('agText').textContent = set
+    ? `Jacked accounts now use a password. Choose one for ${code} — you'll use it to log in on any other device.`
+    : `Sign in to ${code} to keep your workouts syncing.`;
+  document.getElementById('agUser').value = code;
+  const pw = document.getElementById('agPass'); pw.value = '';
+  pw.setAttribute('autocomplete', set ? 'new-password' : 'current-password');
+  document.getElementById('agPass2').value = '';
+  document.getElementById('agPass2Wrap').style.display = set ? '' : 'none';
+  document.getElementById('agBtn').textContent = set ? 'Save password' : 'Sign in';
+  gateMsg('');
+  om('authGate');
+}
+function gateMsg(t){ const el=document.getElementById('agMsg'); el.textContent=t; el.style.display=t?'block':'none'; }
+async function authGateSubmit(){
+  if (!_gate) return;
+  const pw = document.getElementById('agPass').value;
+  const btn = document.getElementById('agBtn'), prev = btn.textContent;
+  const err = pwProblem(pw, _gate.mode==='set' ? document.getElementById('agPass2').value : undefined);
+  if (err) { gateMsg(err); return; }
+  btn.disabled = true; btn.textContent = 'Please wait…'; gateMsg('');
+  try{
+    if (_gate.mode === 'login') {
+      if (await signInAs(_gate.email, pw)) { toast('Signed in','ok'); onAuthed(); }
+      else gateMsg('Wrong password — try again.');
+      return;
+    }
+    const p = gProf() || {};
+    const r = await registerAccount({code:_gate.code, password:pw, name:p.name||'', proofIds:gH().map(w=>w&&w.id).filter(id=>id!=null).map(String)});
+    if (r === 'ok') { toast('Password saved — account protected','ok'); onAuthed(); }
+    else if (r === 'already_claimed') { const st = await accountStatus(_gate.code); showAuthGate('login', _gate.code, st.email); gateMsg('This account already has a password. Enter it to continue.'); }
+    else if (r === 'proof_failed') gateMsg(`This device couldn't be verified as ${_gate.code} — its workouts don't match that account's cloud backup. Ask the Jacked admin to reset it.`);
+    else if (r === 'taken') gateMsg('That username was just taken. Sign out and pick another.');
+    else gateMsg('Could not save — check your connection and try again.');
+  } finally { btn.disabled = false; btn.textContent = prev; }
+}
+window.addEventListener('online', ()=>{ if (!_authUid && !_gate && gProf()) authBoot(); });
 
 // Realtime: push friend add/accept/remove to both devices instead of waiting for
 // the 25s poll. Needs the `friend_requests` table added to Supabase's realtime
@@ -3645,8 +3782,9 @@ async function syncMe() {
   // stays a few-KB push.
   const full={...base, badges:s.badges, avatar_url:s.avatarUrl||'', data:{days:act.days, recent:act.recent, wd:act.wd, m:act.m, badgeList:act.badgeList}};
   try {
-    const { error } = await SUPA.from('profiles').upsert(full,{onConflict:'code'});
-    if (error && isMissingColumn(error)) await SUPA.from('profiles').upsert(base,{onConflict:'code'});
+    const { code, ...fullCols } = full, { code:_c, ...baseCols } = base;
+    const { error } = await SUPA.from('profiles').update(fullCols).eq('code',code);
+    if (error && isMissingColumn(error)) await SUPA.from('profiles').update(baseCols).eq('code',code);
     else if (error) console.warn('syncMe',error);   // keep the existing row rather than blanking `data`
   } catch(e){ console.warn('syncMe',e); }
 }
@@ -3748,7 +3886,7 @@ async function syncBackup() {
       //    other read failure (network/timeout) we must NOT write — skip and retry
       //    next cycle, because writing local-only would recreate the data loss we fix.
       let cloud=null, ts0=null, rowExists=false;
-      const { data, error:selErr } = await SUPA.from('profiles')
+      const { data, error:selErr } = await SUPA.from('profile_backups')
         .select('backup,updated_at').eq('code',p.code).maybeSingle();
       if (selErr){
         if(!isMissingColumn(selErr)){ console.warn('syncBackup read',selErr); return false; }
@@ -3769,7 +3907,7 @@ async function syncBackup() {
 
       // 4) Conditional write, guarded by the watermark we just read.
       if (rowExists && ts0){
-        const { data:rows, error } = await SUPA.from('profiles')
+        const { data:rows, error } = await SUPA.from('profile_backups')
           .update({backup:merged, updated_at:new Date().toISOString()})
           .eq('code',p.code).eq('updated_at',ts0).select('code');
         if (error){ console.warn('syncBackup write',error); return false; }
@@ -3779,7 +3917,7 @@ async function syncBackup() {
 
       // 5) First-time enrolment (no row yet) or a legacy missing-column project:
       //    nothing to compare against, so a plain upsert is the only option.
-      const { error } = await SUPA.from('profiles')
+      const { error } = await SUPA.from('profile_backups')
         .upsert({code:p.code, backup:merged, updated_at:new Date().toISOString()},{onConflict:'code'});
       if (error){ console.warn('syncBackup',error); return false; }
       stampBackedUp();
@@ -3798,7 +3936,7 @@ async function cloudPullMerge(){
   if(!supaEnabled()) return false;
   const p=gProf(); if(!p||!p.code) return false;
   try{
-    const { data, error } = await SUPA.from('profiles').select('backup').eq('code',p.code).maybeSingle();
+    const { data, error } = await SUPA.from('profile_backups').select('backup').eq('code',p.code).maybeSingle();
     if(error){ if(!isMissingColumn(error)) console.warn('cloudPullMerge',error); return false; }
     const cloud=(data && data.backup && typeof data.backup==='object') ? data.backup : null;
     if(!cloud) return false;
@@ -4118,49 +4256,54 @@ async function signOut() {
       : "Sign out on this device?\n\nYour workouts, PRs and routines are saved ONLY on this device — signing out removes them here. Export a backup first if you want to keep them or move them to another account.";
   const ok=await showConfirm(msg,{okText:'Sign out'});
   if(!ok) return;
+  if (SUPA) SUPA.auth.signOut({scope:'local'}).catch(()=>{});
+  clearLocalSession();
   Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
   clearDirty();   // device state, not account data — don't let it arm a drain for the next login
   toast('Signed out','ok');
   setTimeout(()=>window.location.reload(), 400);
 }
 
-// Log in to an existing account: pull its full cloud backup onto this device.
-// Username-only (no auth) by design — anyone with the username can load it.
+// Log in to an existing account: sign in, then pull its cloud backup onto this device.
+function loginMsg(t){ const el=document.getElementById('loginMsg'); el.textContent=t; el.style.display=t?'block':'none'; }
 async function cloudLogin() {
-  if (!supaEnabled()) { toast('No connection — cloud login unavailable','err'); return; }
+  if (!supaOnline()) { toast('No connection — cloud login unavailable','err'); return; }
   const u = normU(document.getElementById('loginUser').value);
+  const pw = document.getElementById('loginPass').value;
+  loginMsg('');
   if (validU(u)) { toast('Enter a valid username','err'); return; }
+  if (!pw) { toast('Enter your password','err'); return; }
   toast('Logging in…');
   try {
-    const { data, error } = await SUPA.from('profiles').select('code,name,username,backup').eq('code',u).maybeSingle();
-    if (error) { console.warn('cloudLogin',error); toast('Login failed — try again','err'); return; }
-    if (!data) { toast('No account found with that username','err'); return; }
-    // The account row exists — allow login even if it has no saved data yet
-    // (brand-new accounts have an empty backup). bk may be empty; that's fine.
-    const bk = (data.backup && typeof data.backup==='object') ? data.backup : {};
-    const incomingHist = Array.isArray(bk.jk_hist) ? bk.jk_hist.length : 0;
+    const st = await accountStatus(u);
+    if (st.status === 'not_found') { toast('No account found with that username','err'); return; }
+    if (st.status === 'unclaimed') { loginMsg(`${u} doesn't have a password yet. Open Jacked on a device that's already signed in as ${u} — it will ask you to set one.`); return; }
     const localHist = (S.g('hist')||[]).length;
-    // Only guard when this device has real workouts that would be replaced.
-    if (localHist){
-      const msg = incomingHist
-        ? `Loading "${data.name||u}" (${incomingHist} workout${incomingHist===1?'':'s'}) will REPLACE the ${localHist} workout(s) on this device. Export a backup first if you want to keep them.\n\nContinue?`
-        : `"${data.name||u}" has no saved workouts yet. Logging in will REPLACE the ${localHist} workout(s) on this device with an empty account.\n\nContinue?`;
-      if(!(await showConfirm(msg))) return;
-    }
+    // Confirm BEFORE signing in, so cancelling never swaps this device's session.
+    if (localHist && !(await showConfirm(`Logging in as ${u} will REPLACE the ${localHist} workout(s) on this device. Export a backup first if you want to keep them.\n\nContinue?`))) return;
+    if (!(await signInAs(st.email, pw))) { loginMsg('Wrong username or password.'); return; }
+    const [{ data:bkRow, error:bkErr }, { data:prof }] = await Promise.all([
+      SUPA.from('profile_backups').select('backup').eq('code',u).maybeSingle(),
+      SUPA.from('profiles').select('code,name').eq('code',u).maybeSingle()
+    ]);
+    if (bkErr) { console.warn('cloudLogin',bkErr); toast('Login failed — try again','err'); return; }
+    const bk = (bkRow && bkRow.backup && typeof bkRow.backup==='object') ? bkRow.backup : {};
     // Replace this device's data with the account's cloud snapshot.
     Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
     restoreKeys(bk);
     // Normalize the restored profile: checkOnboarding() gates on jk_prof.username,
     // and a watch-first account (or a hand-merged row) can carry a jk_prof with only
-    // {code}. Restoring it as-is bounced the user straight back to onboarding.
-    let prof={}; try{ prof=JSON.parse(localStorage.getItem('jk_prof'))||{}; }catch(e){}
-    localStorage.setItem('jk_prof', JSON.stringify({...prof, code:data.code, username:data.code, name:prof.name||data.name||data.code.slice(1)}));
+    // {code}. Identity always comes from the account just signed in to.
+    let lp={}; try{ lp=JSON.parse(localStorage.getItem('jk_prof'))||{}; }catch(e){}
+    if (typeof lp!=='object' || Array.isArray(lp)) lp={};
+    localStorage.setItem('jk_prof', JSON.stringify({...lp, code:u, username:u, name:lp.name||(prof&&prof.name)||u.slice(1)}));
     // This data just came FROM the cloud — it is backed up by definition. Stamp the
     // enrolment so the first-time prompt stays quiet and sync-on-change is live from
     // the first edit (watch-first accounts never carry jk_lastCloudBackup at all).
     localStorage.setItem('jk_lastCloudBackup', JSON.stringify(dayKey(new Date())));
     clearDirty();
     localStorage.setItem('jk_appVersion', APP_VERSION);
+    cm('loginModal');
     toast('Welcome back — loading your data…','ok');
     setTimeout(()=>window.location.reload(), 700);
   } catch(e) { console.warn('cloudLogin',e); toast('Login failed — try again','err'); }
@@ -4173,42 +4316,11 @@ function copyCode() {
   else toast(u,'ok');
 }
 
-// Move my Supabase identity from oldU -> newU (re-keys profile + friend links).
-// Re-key a profile from oldU → newU. The old version wrote STATS ONLY to the new
-// row and then deleted the old one, dropping the cloud `backup` blob (entire workout
-// history), `data`, `badges` and `avatar_url` on every username change — and it
-// deleted the old row even if the new-row write had failed. This version carries the
-// heavy columns across (merging the old cloud backup with local so nothing is lost),
-// and only deletes the old row AFTER the new row is confirmed written.
-async function changeUsernameSupa(oldU,newU){
-  const p=gProf(), s=yourStats();
-  const statsOnly={
-    code:newU, name:p.name||'Lifter', username:newU,
-    total_volume:Math.round(s.totalVolume), workouts:s.workouts, prs:s.prs,
-    streak:s.streak, consistency:s.consistency, updated_at:new Date().toISOString()
-  };
-  // Read the old row's heavy columns so the rename preserves them.
-  let oldBackup=null, oldData=null;
-  try{
-    let { data, error } = await SUPA.from('profiles').select('backup,data').eq('code',oldU).maybeSingle();
-    if (error && isMissingColumn(error)) ({ data } = await SUPA.from('profiles').select('backup').eq('code',oldU).maybeSingle());
-    if (data){ oldBackup=data.backup||null; oldData=data.data||null; }
-  }catch(e){ console.warn('rekey read',e); }
-  // Union the old cloud backup with this device's local bundle so neither side's
-  // workouts are lost; if the cloud read failed, fall back to local alone.
-  const act=myActivity();
-  const full={...statsOnly,
-    badges:s.badges, avatar_url:s.avatarUrl||'',
-    backup: oldBackup ? mergeBackup(oldBackup, collectBackup()) : collectBackup(),
-    data: oldData || {days:act.days, recent:act.recent, wd:act.wd, m:act.m, badgeList:act.badgeList}
-  };
-  // Write the new row FIRST and confirm it landed before touching the old one.
-  let { error:wErr } = await SUPA.from('profiles').upsert(full,{onConflict:'code'});
-  if (wErr && isMissingColumn(wErr)) ({ error:wErr } = await SUPA.from('profiles').upsert(statsOnly,{onConflict:'code'}));
-  if (wErr) throw wErr;   // saveProf catches → "Saved locally; sync issue"; old row (with backup) is left intact
-  await SUPA.from('friend_requests').update({from_code:newU}).eq('from_code',oldU);
-  await SUPA.from('friend_requests').update({to_code:newU}).eq('to_code',oldU);
-  await SUPA.from('profiles').delete().eq('code',oldU);
+// Re-key my account to a new username server-side (backups + friend links follow).
+async function changeUsernameSupa(newU){
+  const { data, error } = await SUPA.rpc('rename_profile',{p_new:newU});
+  if (error) throw error;
+  if (!data || data.status !== 'ok') throw new Error((data && data.status) || 'rename_failed');
 }
 
 async function saveProf() {
@@ -4233,10 +4345,14 @@ async function saveProf() {
 
   if (newU!==oldU) {
     if (await usernameTaken(newU, oldU)) { toast('That username is already taken','err'); return; }
+    if (supaOnline() && oldU) {
+      if (!supaEnabled()) { toast('Sign in first to change your username','err'); return; }
+      try{ await changeUsernameSupa(newU); }
+      catch(e){ console.warn('rekey',e); toast(e.message==='taken'?'That username is already taken':'Could not change username — try again','err'); return; }
+    }
     S.s('prof',{...existing,name:n,username:newU,code:newU,sex,birthday});
     document.getElementById('profCode').textContent=newU;
-    if (supaEnabled() && oldU) { try{ await changeUsernameSupa(oldU,newU); }catch(e){ console.warn('rekey',e); toast('Saved locally; sync issue','err'); } }
-    else if (typeof syncMe==='function') syncMe();
+    if (typeof syncMe==='function') syncMe();
   } else {
     S.s('prof',{...existing,name:n,username:oldU,code:oldU,sex,birthday});
     if (typeof syncMe==='function') syncMe();
@@ -4250,7 +4366,7 @@ async function saveProf() {
 async function submitFeedback() {
   const el=document.getElementById('fbText'), t=(el.value||'').trim();
   if(!t){ toast('Type your feedback first','err'); return; }
-  if(typeof supaEnabled!=='function'||!supaEnabled()){ toast('Feedback needs a connection','err'); return; }
+  if(!supaOnline()){ toast('Feedback needs a connection','err'); return; }
   try{
     const u=(gProf()||{}).code||'@anon';
     const { error }=await SUPA.from('feedback').insert({username:u,text:t});
@@ -4595,7 +4711,6 @@ try{ if(screen.orientation&&screen.orientation.lock) screen.orientation.lock('po
 
 // Initialise Supabase (no-op if URL/key are blank).
 supaInit();
-subscribeFriends();   // live friend add/accept updates (falls back to the 25s poll)
 
 // Build static chips immediately so the modal isn't empty before DB loads
 buildMuscleChips('muscleChips', handleMFChip, null);
