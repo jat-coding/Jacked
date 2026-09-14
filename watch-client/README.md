@@ -7,6 +7,7 @@ spec for ports.
 
 | File | What it is |
 |---|---|
+| [AUTH_HANDOFF.md](./AUTH_HANDOFF.md) | **Required update:** password sign-in + owner-only backups (supersedes API.md §0, §2, §4, §6 endpoints) |
 | [API.md](./API.md) | The backend wire contract (PostgREST/Supabase, blob schema, upsert semantics) |
 | [SPEC.md](./SPEC.md) | Product spec of the original Wear OS client — scope, flows, definition of done |
 | [SYNC_PLAYBOOK.md](./SYNC_PLAYBOOK.md) | **Read this before writing any sync code.** Every data-loss lesson from Aug 2026, as platform-agnostic invariants |
