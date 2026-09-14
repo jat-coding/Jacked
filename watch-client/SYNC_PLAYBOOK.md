@@ -36,8 +36,24 @@ total overwrite of someone's entire history — from every other device.
   deleted workouts or delete kept ones.
 - `jk_prs` / cardio PRs: merge per-exercise, **best record wins** (never
   downgrade a heavier/better PR).
-- Everything else (`jk_prof`, `jk_settings`, routines, …): local wins on
-  conflict, but unknown keys are preserved (§5).
+- `jk_exNotes` (per-exercise notes, written by every client since 2026-08-27):
+  **per key, cloud map + this device's PENDING edits overlaid** (a pending key
+  absent locally = delete). Each client keeps a device-local set of exIds it has
+  edited since its last successful write and clears only the ids that landed.
+  Whole-key local-wins here is a data-loss bug, not a simplification: a note typed
+  on a watch survived exactly until the phone's next backup (field report
+  2026-09-14; fixed in PWA v1.8.11). Wear `PendingNotesStore`, watchOS
+  equivalent, PWA `jacked_exNotesPending`.
+- Keys a fresh device auto-initialises EMPTY (`jk_cex`, `jk_routines`,
+  `jk_friends`): **an empty local value never beats a non-empty cloud one** — a
+  device that signed in before the cloud had `jk_cex` would otherwise wipe it on
+  its next backup. (Only casualty: deleting the last routine on one device brings
+  the cloud's copy back; acceptable.)
+- Everything else (`jk_prof`, `jk_settings`, …): local wins on conflict, but
+  unknown keys are preserved (§5).
+- **Rule for any NEW client-written key:** it ships with its own per-element merge
+  rule in the PWA's `mergeBackup()` (and a node test case) in the same change.
+  Without one, the `{...cloud, ...local}` baseline silently reverts it.
 
 ## 3. Concurrency: the `updated_at` watermark
 
