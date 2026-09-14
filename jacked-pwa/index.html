@@ -2478,7 +2478,7 @@ function updateRoutineFromWorkout(rid,idsCsv){
 // Persistent per-exercise notes (remembered across workouts until changed).
 const gExNotes=()=>S.g('exNotes')||{};
 function exNote(exId){ return gExNotes()[exId]||''; }
-function setExNote(exId,v){ const n=gExNotes(); v=(v||'').trim(); if(v) n[exId]=v; else delete n[exId]; S.s('exNotes',n); }
+function setExNote(exId,v){ const n=gExNotes(); v=(v||'').trim(); if(v) n[exId]=v; else delete n[exId]; markExNotePending(exId); S.s('exNotes',n); }
 
 function rmEx(ei) { if(!aw)return; aw.exercises.splice(ei,1); renderWS(); }
 
@@ -3819,10 +3819,64 @@ function mergeCardioPRs(a,b){
 // pushed. Plain settings/prefs are last-write-wins (local); history and PRs UNION
 // so nothing is lost; jk_deleted tombstones are honoured so a deliberate delete
 // isn't resurrected by the union.
-function mergeBackup(cloud, local){
+// Per-exercise notes edited on THIS device since its last successful backup. Device
+// state, deliberately not jk_-prefixed (never rides the blob). Without it, `{...cloud,
+// ...local}` made jk_exNotes whole-key local-wins: a note typed on the watch reached
+// the cloud, the phone's next pull kept its own older map, and the phone's next backup
+// erased the watch's note (field report 2026-09-14). The watch tracks pending note
+// edits the same way and overlays them per key; this is the mirror image.
+const EXNOTES_PENDING_KEY='jacked_exNotesPending';
+const getExNotesPending=()=>{ try{ const a=JSON.parse(localStorage.getItem(EXNOTES_PENDING_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(_){ return []; } };
+const markExNotePending=id=>{ try{ const s=new Set(getExNotesPending()); s.add(id); localStorage.setItem(EXNOTES_PENDING_KEY, JSON.stringify([...s])); }catch(_){} };
+const clearExNotesPending=ids=>{ try{ const drop=new Set(ids||[]); const rest=getExNotesPending().filter(x=>!drop.has(x)); if(rest.length) localStorage.setItem(EXNOTES_PENDING_KEY, JSON.stringify(rest)); else localStorage.removeItem(EXNOTES_PENDING_KEY); }catch(_){} };
+
+const EXNOTES_BOOT_KEY='jacked_exNotesBoot';
+function bootstrapExNotesPending(cloudNotes, localNotes){
+  try{
+    if(localStorage.getItem(EXNOTES_BOOT_KEY)) return [];
+    const c=(cloudNotes&&typeof cloudNotes==='object')?cloudNotes:{};
+    const l=(localNotes&&typeof localNotes==='object')?localNotes:{};
+    const added=Object.keys(l).filter(k=>!(k in c));
+    added.forEach(markExNotePending);
+    localStorage.setItem(EXNOTES_BOOT_KEY,'1');
+    return added;
+  }catch(_){ return []; }
+}
+
+// jk_exNotes: cloud map + this device's pending edits overlaid per key (absent locally
+// = delete). Keys nobody touched here follow the cloud, so another device's note wins.
+function mergeExNotes(cloudNotes, localNotes, pending){
+  const c=(cloudNotes&&typeof cloudNotes==='object')?cloudNotes:null;
+  const l=(localNotes&&typeof localNotes==='object')?localNotes:null;
+  if(!c && !l) return undefined;
+  const out={...(c||{})};
+  (pending||[]).forEach(id=>{ if(l && l[id]) out[id]=l[id]; else delete out[id]; });
+  return out;
+}
+
+// Keys a fresh device auto-initialises EMPTY (initDefaultData) and that the watches may
+// have populated in the cloud: an empty local value must never beat a non-empty cloud one
+// (a device that logged in before the cloud had jk_cex would otherwise wipe it on its
+// next backup). Only casualty: deleting the LAST routine/custom on a device makes the
+// cloud's copy return — tolerable; erasing another device's data is not.
+const EMPTY_LOCAL_YIELDS=['jk_cex','jk_routines','jk_friends'];
+const isEmptyish=v=>v==null || (Array.isArray(v)&&v.length===0) || (typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===0);
+
+function mergeBackup(cloud, local, pendingNotes){
   cloud=(cloud&&typeof cloud==='object')?cloud:{};
   local=(local&&typeof local==='object')?local:{};
   const out={...cloud, ...local};   // last-write-wins baseline (local wins)
+
+  EMPTY_LOCAL_YIELDS.forEach(k=>{ if(isEmptyish(local[k]) && !isEmptyish(cloud[k])) out[k]=cloud[k]; });
+
+  // One-time bootstrap on the first merge after this rule shipped: notes that exist only
+  // on this device (never backed up) become pending so they are not dropped; keys both
+  // sides have follow the cloud (the watch's newer value wins). Ids added here are
+  // unioned into an explicit snapshot too, and stay pending until a later backup clears them.
+  const booted=bootstrapExNotesPending(cloud.jk_exNotes, local.jk_exNotes);
+  const pending=[...(pendingNotes===undefined?getExNotesPending():pendingNotes), ...booted];
+  const notes=mergeExNotes(cloud.jk_exNotes, local.jk_exNotes, pending);
+  if(notes===undefined) delete out.jk_exNotes; else out.jk_exNotes=notes;
 
   // Tombstones: union of both sides' deleted workout ids.
   const delSet=new Set([
@@ -3878,6 +3932,9 @@ async function syncBackup() {
   //
   // `updated_at` is an OPAQUE token: Postgres reformats it (it strips the
   // milliseconds we send), so only ever hand the server-returned string back.
+  // Snapshot the pending note edits ONCE: only these ids are cleared after the write
+  // lands, so a note typed while the upload is in flight stays pending for the next one.
+  const pendingNotes=getExNotesPending();
   for (let attempt=0; attempt<4; attempt++){
     const local=collectBackup();   // re-collected per attempt — local may have moved on
     try {
@@ -3896,14 +3953,14 @@ async function syncBackup() {
         ts0 = data.updated_at || null;
       }
       // 2) Merge (or write local as-is when there's no cloud blob yet).
-      const merged = cloud ? mergeBackup(cloud, local) : local;
+      const merged = cloud ? mergeBackup(cloud, local, pendingNotes) : local;
 
       // 3) Nothing new to say → don't spend a ~190KB write, and don't churn the
       //    watermark (which would make every other client re-merge for nothing).
       //    CANONICAL compare: Postgres jsonb reorders object keys (length, then
       //    bytewise), so plain stringify almost never matches a cloud round trip
       //    and would defeat this check entirely (playbook §5).
-      if (cloud && canonJson(merged)===canonJson(cloud)){ stampBackedUp(); return true; }
+      if (cloud && canonJson(merged)===canonJson(cloud)){ stampBackedUp(); clearExNotesPending(pendingNotes); return true; }
 
       // 4) Conditional write, guarded by the watermark we just read.
       if (rowExists && ts0){
@@ -3911,7 +3968,7 @@ async function syncBackup() {
           .update({backup:merged, updated_at:new Date().toISOString()})
           .eq('code',p.code).eq('updated_at',ts0).select('code');
         if (error){ console.warn('syncBackup write',error); return false; }
-        if (rows && rows.length){ stampBackedUp(); return true; }
+        if (rows && rows.length){ stampBackedUp(); clearExNotesPending(pendingNotes); return true; }
         continue;   // watermark moved under us → re-read, re-merge, retry
       }
 
@@ -3921,6 +3978,7 @@ async function syncBackup() {
         .upsert({code:p.code, backup:merged, updated_at:new Date().toISOString()},{onConflict:'code'});
       if (error){ console.warn('syncBackup',error); return false; }
       stampBackedUp();
+      clearExNotesPending(pendingNotes);
       return true;
     } catch(e){ console.warn('syncBackup',e); return false; }
   }
@@ -4689,7 +4747,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.10';
+const BUILD = 'v1.8.11';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
