@@ -1,6 +1,42 @@
 # Cloud backup of `profiles.backup` — proposal (2026-09-13)
 
-**Status: proposal, not implemented. Dad + Jack to decide.**
+**Status (2026-09-14): option A is folded into the password-auth release —
+`supabase/migrations/20260913_password_auth.sql`. Do NOT paste the SQL below.**
+
+That release moves every blob from `profiles.backup` into the owner-only table
+`profile_backups` and drops the old column. The SQL below triggers on
+`profiles.backup`: pasted before the release, its trigger would make every
+`profiles` update error once the column is gone; pasted after, it fails outright.
+What actually ships:
+
+- `public.profiles_history` (same columns), trigger on **`profile_backups`**
+  (update/delete), newest 30 rolling versions per account.
+- A permanent `op = 'pre_auth_migration'` copy of every legacy blob, taken just
+  before the column drop and never trimmed.
+- Username changes are an in-place re-key now (`rename_profile()`), and history
+  rows follow the new code.
+
+Restore after the release (SQL editor):
+
+```sql
+select id, op, updated_at, archived_at,
+       jsonb_array_length(coalesce(backup->'jk_hist','[]'::jsonb)) as workouts
+  from public.profiles_history where code = '@dad' order by id desc;
+
+update public.profile_backups
+   set backup = (select backup from public.profiles_history where id = 123),
+       updated_at = now()
+ where code = '@dad';
+```
+
+Option B after the release: the public key can no longer read backups, so a
+snapshot job needs the service-role key as a secret. That rules out committing to
+the public repo casually. Use B2 (private repo), or B1 with the key held only as
+an Actions secret.
+
+---
+
+*Original proposal (superseded SQL kept for reference):*
 
 ## The gap
 

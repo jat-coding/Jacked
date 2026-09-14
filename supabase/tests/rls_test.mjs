@@ -55,6 +55,7 @@ await ex('reset role');
 ok((await q(`select count(*)::int c from profile_backups`))[0].c === 2, 'backups copied (2 non-null)');
 ok((await q(`select count(*)::int c from information_schema.columns where table_name='profiles' and column_name='backup'`))[0].c === 0, 'profiles.backup dropped');
 await ex(`update profiles set user_id='${MOM}' where code='@mom'`);  // simulate edge-function claim
+ok((await q(`select count(*)::int c from profiles_history where op='pre_auth_migration'`))[0].c === 2, 'pre-migration snapshot of both legacy blobs');
 
 // anon
 await as('anon');
@@ -69,6 +70,7 @@ ok((await q(`select account_status('@nope') s`))[0].s.status === 'not_found', 'a
 await q(`insert into feedback(username,text) values ('@x','hi')`); ok(true, 'anon can send feedback');
 await expectErr(() => q(`select * from feedback`), 'anon cannot read feedback');
 
+await expectErr(() => q(`select * from profiles_history`), 'anon cannot read history');
 // authenticated as DAD (no profile yet)
 await as('authenticated', DAD);
 ok((await q(`select * from profile_backups`)).length === 0, 'non-owner sees no backups');
@@ -84,6 +86,16 @@ ok((await q(`select backup from profile_backups where code='@mom'`)).length === 
 ok((await q(`select backup from profile_backups`)).length === 1, 'owner sees only own backup');
 const upd = await q(`update profile_backups set backup='{"jk_hist":[]}', updated_at=now() where code='@mom' and updated_at=updated_at returning code`);
 ok(upd.length === 1, 'owner CAS-updates own backup');
+await expectErr(() => q(`select * from profiles_history`), 'owner cannot read history via API');
+await ex('reset role');
+ok((await q(`select count(*)::int c from profiles_history where code='@mom' and op='update'`))[0].c === 1, 'changed backup archived');
+await ex(`update profile_backups set updated_at=now() where code='@mom'`);
+ok((await q(`select count(*)::int c from profiles_history where code='@mom' and op='update'`))[0].c === 1, 'no-op backup write not archived');
+for (let i = 0; i < 35; i++) await ex(`update profile_backups set backup='{"jk_hist":[{"id":"v${i}"}]}' where code='@mom'`);
+ok((await q(`select count(*)::int c from profiles_history where code='@mom' and op='update'`))[0].c === 30, 'rolling history capped at 30');
+ok((await q(`select count(*)::int c from profiles_history where code='@mom' and op='pre_auth_migration'`))[0].c === 1, 'migration snapshot survives trimming');
+ok((await q(`select backup from profiles_history where code='@mom' and op='update' order by id desc limit 1`))[0].backup.jk_hist[0].id === 'v33', 'newest archive is the previous version');
+await as('authenticated', MOM);
 ok((await q(`update profiles set name='Mom B', workouts=3, data='{"days":[]}' where code='@mom' returning code`)).length === 1, 'owner updates own stats');
 await expectErr(() => q(`update profiles set user_id='${DAD}' where code='@mom'`), 'owner cannot reassign user_id');
 await expectErr(() => q(`update profiles set code='@x' where code='@mom'`), 'owner cannot change code directly');
@@ -99,6 +111,9 @@ ok((await q(`select rename_profile('@mommy') r`))[0].r.status === 'ok', 'rename 
 ok((await q(`select code from profile_backups`))[0].code === '@mommy', 'backup followed rename (cascade)');
 ok((await q(`select count(*)::int c from friend_requests where from_code='@mommy'`))[0].c === 2, 'friend requests followed rename');
 ok((await q(`select owns_code('@mommy') o`))[0].o === true, 'owns renamed code');
+await ex('reset role');
+ok((await q(`select count(*)::int c from profiles_history where code='@mom'`))[0].c === 0 && (await q(`select count(*)::int c from profiles_history where code='@mommy'`))[0].c === 31, 'history follows rename');
+await as('authenticated', MOM);
 
 await as('authenticated', DAD);
 ok((await q(`select rename_profile('@dadx') r`))[0].r.status === 'no_profile', 'rename without profile');

@@ -6,6 +6,8 @@
 -- function (service role), which is what enforces the claim proof.
 -- Apply in the same release as the matching PWA build: old clients can no
 -- longer sync once this lands (their writes fail closed, nothing is erased).
+-- Also ships CLOUD_BACKUP_PROPOSAL.md option A (version history), re-targeted from
+-- profiles.backup to profile_backups, plus a permanent pre-migration snapshot.
 
 begin;
 
@@ -30,6 +32,51 @@ create table if not exists public.profile_backups (
 insert into public.profile_backups(code, backup, updated_at)
   select code, backup, updated_at from public.profiles where backup is not null
   on conflict (code) do nothing;
+-- ── backup history (proposal option A) ─────────────────────────────────────
+-- No policies + revoked grants: only the dashboard / service role can read it.
+create table if not exists public.profiles_history (
+  id          bigserial primary key,
+  code        text        not null,
+  op          text        not null,   -- 'update' | 'delete' | 'pre_auth_migration'
+  backup      jsonb,
+  updated_at  timestamptz,            -- the archived row's own watermark
+  archived_at timestamptz not null default now()
+);
+create index if not exists profiles_history_code_idx on public.profiles_history (code, id desc);
+alter table public.profiles_history enable row level security;
+revoke all on public.profiles_history from anon, authenticated;
+revoke all on sequence public.profiles_history_id_seq from anon, authenticated;
+
+-- Permanent copy of every legacy blob, taken before the column is dropped.
+insert into public.profiles_history (code, op, backup, updated_at)
+  select code, 'pre_auth_migration', backup, updated_at from public.profiles where backup is not null;
+
+create or replace function public.archive_profile_backup()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'DELETE' then
+    insert into public.profiles_history (code, op, backup, updated_at)
+      values (old.code, 'delete', old.backup, old.updated_at);
+    return old;
+  end if;
+  if old.backup is distinct from new.backup then
+    insert into public.profiles_history (code, op, backup, updated_at)
+      values (old.code, 'update', old.backup, old.updated_at);
+    -- keep the newest 30 rolling versions per account; the migration snapshot is never trimmed
+    delete from public.profiles_history h
+     where h.code = old.code and h.op in ('update','delete')
+       and h.id not in (select id from public.profiles_history
+                         where code = old.code and op in ('update','delete')
+                         order by id desc limit 30);
+  end if;
+  return new;
+end $$;
+revoke all on function public.archive_profile_backup() from public;
+drop trigger if exists profile_backups_archive on public.profile_backups;
+create trigger profile_backups_archive
+  before update or delete on public.profile_backups
+  for each row execute function public.archive_profile_backup();
+
 alter table public.profiles drop column if exists backup;
 
 alter table public.profile_backups enable row level security;
@@ -116,6 +163,7 @@ begin
   update public.profiles set code = p_new, username = p_new where code = v_old;
   update public.friend_requests set from_code = p_new where from_code = v_old;
   update public.friend_requests set to_code   = p_new where to_code   = v_old;
+  update public.profiles_history set code = p_new where code = v_old;
   return jsonb_build_object('status','ok');
 end $$;
 revoke all on function public.rename_profile(text) from public;
