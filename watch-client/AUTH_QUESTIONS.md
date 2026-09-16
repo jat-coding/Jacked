@@ -24,7 +24,12 @@ updated_at` — never `code`, `user_id`, `name`, `username`, `badges`, `data`, `
 **Question:** does the PWA depend on a watch ever writing `name`/`username`? If not, this
 is the permanent cross-client rule.
 
-**Answer:**
+**Answer:** No. `syncMe()` in the PWA (`index.html` ~L3797) sends `name`/`username` on
+*every* call — every workout, weight log, and leaderboard poll, ~every 25s — using its own
+local `p.name`/`p.username` (falling back to `'Lifter'`/`''` if unset). The PWA is already
+the sole overwriting source for those two columns; a watch never sending them changes
+nothing. Confirmed as the permanent rule: watches never write `code`, `user_id`, `name`,
+`username`, `badges`, `data`, `avatar_url`.
 
 ## 2. First-ever backup race — `POST profile_backups` vs. a row that just appeared
 
@@ -39,7 +44,10 @@ PATCH**. watchOS does the same.
 **Question:** any objection? If you'd rather the server reject duplicate inserts outright,
 say so and we'll expect the `409` only.
 
-**Answer:**
+**Answer:** No objection — keep `ignore-duplicates` + CAS-miss retry. It matches the
+merge-safe write discipline the rest of the app already relies on (GET → union-merge →
+watermark-CAS, per CLOUD_BACKUP_PROPOSAL.md). Rejecting duplicates outright would turn a
+race into a hard failure for no gain, since the retry path already resolves it safely.
 
 ## 3. CAS response shape and encoding
 
@@ -55,7 +63,12 @@ the handoff should state explicitly so the next client doesn't rediscover them:
 **Question:** is that the response shape you want us to rely on, or do you prefer
 `return=headers-only` + a second read? And please add the `%2B` line to the handoff.
 
-**Answer:**
+**Answer:** Stick with `return=representation`, but you don't need `select=updated_at` —
+AUTH_HANDOFF.md already documents `select=code` for this exact reason, and it's what the
+PWA's own CAS write does (`index.html` ~L3992-3994: `.update(...).eq(...).select('code')`,
+checks `rows.length`). The PWA never reads back the new watermark either — every sync
+re-reads at the top of the next attempt, so there's nothing to gain from echoing the blob
+or the timestamp. Added the `%2B` line to AUTH_HANDOFF.md's CAS-write section.
 
 ## 4. Refresh-token reuse interval
 
@@ -68,7 +81,9 @@ dead session immediately (clean password prompt, queues kept), never a crash loo
 **Question:** please **leave `refresh_token_reuse_interval` at the default (10 s)**, or tell
 us the value you set.
 
-**Answer:**
+**Answer:** Leave it at the default (10s) — never touched it. That setting lives in the
+Supabase project's Auth config, not this repo, and nothing in the migrations or edge
+function references it, so there's nothing overriding the platform default.
 
 ## 5. Rate limiting on `rpc/account_status`
 
@@ -79,7 +94,13 @@ enumeration oracle.
 **Question:** is it behind the same per-IP limit as `/auth/v1/token` (~30 / 5 min)? If not,
 worth adding.
 
-**Answer:**
+**Answer:** No. That ~30/5min throttle is GoTrue's own limit on `/auth/v1/token`
+(AUTH_HANDOFF.md §3b); `account_status` is a PostgREST RPC (`/rest/v1/rpc/account_status`),
+a different gateway path, and nothing in the migrations or the edge function puts a limit
+on it — checked `20260913_password_auth.sql` and `20260914_revoke_rpc_execute.sql`, neither
+touches rate limiting. Currently unprotected; flagging it as a real gap rather than fixing
+it here since it needs either a Kong/API-gateway rule or an edge-function wrapper, both
+project-config changes, not something to land in this migration file.
 
 ## 6. Cutover for real accounts (`@dad`, `@mom`)
 
@@ -90,7 +111,11 @@ keeps logging locally; workouts since the flip are queued and upload at first si
 **Question:** does PWA v1.8.10 prompt existing users ("Protect your account") on next
 open, or is it under Profile? Phil will do `@dad` and `@mom` on the phones — which screen?
 
-**Answer:**
+**Answer:** On next open, automatically — not under Profile. `authBoot()` runs at boot,
+calls `account_status`, and shows a blocking full-screen modal (`showAuthGate`, title
+"Protect your account" for an unclaimed code) if there's no live session. This shipped in
+v1.8.10 itself (same commit as password accounts) and is still there in the current build
+(v1.8.12). Tell Phil: just open the app on each phone, the prompt is unavoidable.
 
 ## 7. Test credentials for the scratch accounts
 
@@ -102,7 +127,8 @@ never committed. `@watchdev2` (empty) is claimed via PWA sign-up when needed.
 **Question:** nothing to do unless you'd rather we used a dedicated `@watchtest` account —
 say so and we'll switch.
 
-**Answer:**
+**Answer:** No change — `@watchdev`/`@watchdev2` is fine, no need for a separate
+`@watchtest`.
 
 ## 8. Backup history is live — confirm the restore path
 
@@ -114,7 +140,12 @@ mis-merges during cutover.
 `profile_backups` from a `profiles_history.id`) is the one you'd run, so we point Phil at
 it if ever needed.
 
-**Answer:**
+**Answer:** Confirmed, with one clarification: that file has two SQL blocks — the one under
+the "Status (2026-09-14)" header at the top is current (`update public.profile_backups set
+backup = (select backup from public.profiles_history where id = ...) where code = ...`).
+The block further down under "Original proposal (superseded)" targets `profiles.backup`
+directly, which this migration drops — that one would just error now. Point Phil at the
+top block specifically, not the whole doc.
 
 ## 9. Housekeeping: please delete the stray bare-code row `watchdev`
 
@@ -134,7 +165,16 @@ delete from public.profiles where code = 'watchdev';   -- the bare one; NOT '@wa
 `profiles.code` so a client bug can't create another one? The edge function already
 enforces the format on sign-up, so this would only guard the admin/SQL path.
 
-**Answer:**
+**Answer:** Yes to both — delete the bare `watchdev` row and add the check constraint;
+belt-and-suspenders is right since it only guards the admin/SQL path, not the API. I don't
+have Supabase SQL-editor / service-role access from here (by design — only the dashboard
+owner can run this per the migration's own lockdown), so someone with that access needs to
+actually run:
+```sql
+delete from public.profiles where code = 'watchdev';
+alter table public.profiles add constraint profiles_code_format
+  check (code ~ '^@[a-z0-9_]{3,20}$');
+```
 
 ---
 

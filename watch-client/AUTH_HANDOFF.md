@@ -128,6 +128,10 @@ PATCH /rest/v1/profile_backups?code=eq.%40mom&updated_at=eq.<ts0 exactly as the 
 Prefer: return=representation
 { "backup": { …merged blob… }, "updated_at": "<now ISO>" }
 ```
+- `ts0` goes back **verbatim as the server returned it**, but **percent-encoded** in the
+  query string — the `+` in `+00:00` must travel as `%2B`, or PostgREST reads it as a space
+  and the PATCH never matches (looks like an endless conflict). Use a real query encoder,
+  don't hand-build the string.
 - Response `[ {…} ]` → landed. `[]` → the watermark moved: re-read, re-merge, retry (max
   about 4 tries), exactly as SYNC_PLAYBOOK §3 describes. Use `select=code` / `return=headers-only`
   patterns if you want to avoid echoing the blob back.
