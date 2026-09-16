@@ -174,6 +174,12 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .cab-opt{font-family:var(--fb);font-size:11px;font-weight:600;padding:4px 10px;border-radius:14px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;-webkit-appearance:none}
 .cab-opt.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 
+/* progressive-overload badge: small chip under the exercise card's action
+   buttons, right-aligned, so it never adds a row before the set/rep table */
+.progress-chip{display:inline-flex;align-items:center;gap:4px;font-family:var(--fb);font-size:10.5px;font-weight:700;border-radius:20px;padding:3px 9px 3px 7px;white-space:nowrap;cursor:pointer;-webkit-appearance:none;border:1px solid transparent}
+.progress-chip.up{color:var(--accent-bright);background:rgba(92,233,218,.1);border-color:rgba(92,233,218,.35)}
+.progress-chip.down{color:var(--muted);background:var(--bg3);border-color:var(--border2)}
+
 /* METRICS */
 .metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:18px;margin-bottom:14px}
 .bmi-val{font-family:var(--fh);font-size:56px;font-weight:900;text-align:center;line-height:1}
@@ -2330,7 +2336,6 @@ function renderWS() {
       ?`<img class="ebi" src="${ex.imgUrl}" onerror="this.style.display='none'" loading="lazy">`
       :`<div class="ebi"></div>`;
     const cab=ex.cable||'pulley';
-    const doneSets=ex.sets.filter(s=>s.done).length;
     const tracking=ex.tracking||'weight_reps';
     // Weight-tracked lifts use the user's chosen unit; duration/distance reuse
     // the "weight" field for their own value, so they are NOT unit-converted.
@@ -2360,19 +2365,29 @@ function renderWS() {
     const picking=aw._pairFrom===ei;
     const paired=!!ex.supersetId;
     const linkBtnColor=picking?'var(--accent)':paired?'var(--blue)':'currentColor';
+    // Progressive-overload badge: computed live from saved history (never
+    // today's in-progress numbers) so it's visible on the card throughout
+    // this workout. A PR tonight always wins over a "lighter" suggestion —
+    // contradictory messages on the same exercise, see buildProgressNotes().
+    const progress=progressTrackable(tracking)?evaluateProgress(ex.exId):{up:false,down:false};
+    const showDown=progress.down&&!exGotPR;
     return `<div class="eb" id="eb${ei}" style="${paired?'border-left:3px solid var(--blue)':''}">
       ${paired?`<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--blue);font-weight:700;margin-bottom:6px">${uic('link','var(--blue)',13)} Superset with ${supersetPartnerName(ei)}<button class="btn bg ic xs" style="margin-left:auto" onclick="unlinkSuperset(${ei})" aria-label="Unlink">${uic('unlink',undefined,12)}</button></div>`:''}
       ${picking?`<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:6px">Tap another exercise's link icon to pair</div>`:''}
       <div class="ebh">${ih}
         <div style="flex:1;min-width:0">
           <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${ex.name}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">${cardio?(cprev&&cprev.time?`Best ${fmtPace(pacePerMile(cprev.dist,cprev.time))}${cprev.maxDist?` · Longest ${cprev.maxDist} mi`:''}`:'No cardio PR yet'):(pr?`PR: ${dW(pr.weight)}${uL()} × ${pr.reps}`:'No PR yet')} &nbsp;·&nbsp; ${doneSets}/${ex.sets.length} done</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">${cardio?(cprev&&cprev.time?`Best ${fmtPace(pacePerMile(cprev.dist,cprev.time))}${cprev.maxDist?` · Longest ${cprev.maxDist} mi`:''}`:'No cardio PR yet'):(pr?`PR: ${dW(pr.weight)}${uL()} × ${pr.reps}`:'No PR yet')}</div>
         </div>
-        <div style="display:flex;gap:4px;flex-shrink:0">
-          <button class="btn bg ic xs" onclick="openReorder()" aria-label="Reorder">${uic('sort',undefined,14)}</button>
-          <button class="btn bg ic xs" style="color:${linkBtnColor}" onclick="tapSuperset(${ei})" aria-label="Superset">${uic('link',linkBtnColor,14)}</button>
-          <button class="btn bg ic xs" onclick="switchEx(${ei})" aria-label="Switch exercise">${uic('replace',undefined,14)}</button>
-          <button class="btn bd ic xs" onclick="rmEx(${ei})" aria-label="Remove">${uic('trash',undefined,14)}</button>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+          <div style="display:flex;gap:4px">
+            <button class="btn bg ic xs" onclick="openReorder()" aria-label="Reorder">${uic('sort',undefined,14)}</button>
+            <button class="btn bg ic xs" style="color:${linkBtnColor}" onclick="tapSuperset(${ei})" aria-label="Superset">${uic('link',linkBtnColor,14)}</button>
+            <button class="btn bg ic xs" onclick="switchEx(${ei})" aria-label="Switch exercise">${uic('replace',undefined,14)}</button>
+            <button class="btn bd ic xs" onclick="rmEx(${ei})" aria-label="Remove">${uic('trash',undefined,14)}</button>
+          </div>
+          ${progress.up?`<span class="progress-chip up" onclick="progressInfo('up')">▲ Go up</span>`
+            :showDown?`<span class="progress-chip down" onclick="progressInfo('down')">▼ Lighter</span>`:''}
         </div>
       </div>
       ${isCable?`<div class="cable-row" style="padding-left:2px">
@@ -2585,6 +2600,54 @@ function isWT(ex){ const t=(ex&&ex.tracking)||'weight_reps'; return t==='weight_
 // A PR is when this exceeds the previous PR's estimate.
 function e1rm(w,reps){ w=w||0; reps=reps||0; return reps<=1 ? w : w*(1+reps/30); }
 function prE1rm(pr){ return pr ? e1rm(pr.weight,pr.reps) : 0; }
+
+// ============================================================
+// PROGRESSIVE OVERLOAD SIGNALS ("ready to go up" / "consider lighter")
+// Decided with Mr. Roni 2026-09-13 (PROGRESSIVE_OVERLOAD_PROPOSAL.md),
+// revised 2026-09-16: 3 consecutive same-weight WORKOUTS where EVERY done
+// set clears (up) or misses (down) its threshold -- symmetric rule, both
+// directions. Weight/bodyweight lifts only; plain bodyweight (no added
+// load) is excluded, same reasoning as the original doc: the fix there is
+// "add weight," a different feature.
+// ============================================================
+const PROGRESS_STREAK=3, PROGRESS_UP_REPS=12, PROGRESS_DOWN_REPS=5;
+function progressTrackable(t){ return t==='weight_reps'||t==='bodyweight_reps'; }
+
+// Walk saved WORKOUT history (never the in-progress one) for one exercise,
+// newest -> oldest, and report whether it currently has a live "up" or
+// "down" streak. Pass a history array explicitly to preview what the NEXT
+// workout's badge would say (the finish summary does this once today's
+// workout has been pushed to history) -- omit it to use gH() as-is, which
+// is what the live card sees (history only through last time).
+function evaluateProgress(exId,historyOverride){
+  const h=historyOverride||gH();
+  const occ=[];
+  for(let i=h.length-1;i>=0 && occ.length<PROGRESS_STREAK;i--){
+    const wex=(h[i].exercises||[]).find(e=>e.exId===exId);
+    if(!wex) continue;
+    const t=wex.tracking||'weight_reps';
+    if(!progressTrackable(t)) return {up:false,down:false};
+    if(t==='bodyweight_reps' && bwMode(wex)!=='added') continue;   // plain/assisted bodyweight doesn't count
+    const done=(wex.sets||[]).filter(s=>s.done);
+    if(!done.length) continue;
+    const w=done.reduce((m,s)=>Math.max(m,effWeight(wex,s)),0);
+    occ.push({weight:w, reps:done.map(s=>s.reps||0)});
+  }
+  if(occ.length<PROGRESS_STREAK) return {up:false,down:false};
+  const targetW=occ[0].weight;
+  if(!occ.every(o=>Math.abs(o.weight-targetW)<0.01)) return {up:false,down:false};
+  const up  =occ.every(o=>o.reps.length&&o.reps.every(r=>r>PROGRESS_UP_REPS));
+  const down=occ.every(o=>o.reps.length&&o.reps.every(r=>r<PROGRESS_DOWN_REPS));
+  return {up,down,weight:targetW};
+}
+// Tap-to-explain for the card badge — reuses the confirm modal as a plain
+// info dialog (both buttons just dismiss it, no branch on the result).
+function progressInfo(kind){
+  const msg = kind==='up'
+    ? `Ready to go up: you've cleared ${PROGRESS_UP_REPS} reps on every set, ${PROGRESS_STREAK} workouts in a row, at the same weight.`
+    : `Consider lighter: every set has stayed under ${PROGRESS_DOWN_REPS} reps, ${PROGRESS_STREAK} workouts in a row, at the same weight.`;
+  showConfirm(msg,{okText:'Got it',cancelText:'Close'});
+}
 function removeSet(ei){ if(aw){ const s=aw.exercises[ei].sets; if(s.length>1){ s.pop(); renderWS(); } } }
 
 // Reorder modal — drag (desktop) or arrows (touch-friendly).
@@ -2703,6 +2766,50 @@ function finishW(auto) {
     if(ok) _finishWContinue(auto,ts);
   });
 }
+// Auto-title an untitled workout after whichever exercise had the highest
+// intensity (best estimated 1RM among weight/bodyweight lifts), falling
+// back to a simple reps/duration/distance magnitude for sessions with no
+// weighted exercise at all.
+function autoNameWorkout(exercises){
+  let bestW=null,bestWScore=0,bestOther=null,bestOtherScore=0;
+  (exercises||[]).forEach(ex=>{
+    const done=(ex.sets||[]).filter(s=>s.done); if(!done.length) return;
+    if(isWT(ex)){
+      const top=done.reduce((m,s)=>Math.max(m,e1rm(effWeight(ex,s),s.reps||0)),0);
+      if(top>bestWScore){ bestWScore=top; bestW=ex.name; }
+    } else {
+      const magnitude=done.reduce((a,s)=>a+(s.reps||0)+(s.weight||0),0);
+      if(magnitude>bestOtherScore){ bestOtherScore=magnitude; bestOther=ex.name; }
+    }
+  });
+  const name=bestW||bestOther;
+  return name?`${name} Day`:'Workout';
+}
+
+// Finish-summary progress lines: a congrats note when a prior "go up"
+// suggestion was actually followed (weight increased since), and a
+// "consider lighter" note for any exercise that just completed its own
+// down-streak -- unless it also hit a PR tonight (contradictory messages).
+function buildProgressNotes(rec,preProgress,prList){
+  const prNames=new Set(prList.map(p=>p.name));
+  const notes=[];
+  (rec.exercises||[]).forEach(ex=>{
+    if(!progressTrackable(ex.tracking||'weight_reps')) return;
+    const done=(ex.sets||[]).filter(s=>s.done); if(!done.length) return;
+    const todayW=done.reduce((m,s)=>Math.max(m,effWeight(ex,s)),0);
+    const pre=preProgress[ex.exId];
+    if(pre&&pre.up&&todayW>pre.weight+0.01){
+      notes.push({type:'up',text:`Nice — you moved up on ${ex.name}: ${dW(pre.weight)}${uL()} → ${dW(todayW)}${uL()}.`});
+      return;   // don't also fire a fresh down-check for the exercise that just went up
+    }
+    const post=evaluateProgress(ex.exId);   // gH() already includes tonight by this point
+    if(post.down&&!prNames.has(ex.name)){
+      notes.push({type:'down',text:`${ex.name} — stayed under ${PROGRESS_DOWN_REPS} reps for ${PROGRESS_STREAK} workouts at ${dW(post.weight)}${uL()}, consider lighter.`});
+    }
+  });
+  return notes;
+}
+
 function _finishWContinue(auto,ts) {
   clearInterval(wt); skipRest();   // skipRest also hides the rest bar + clears .resting
   // Auto-finish stops the clock at the LAST logged set (awTouch) so the idle period
@@ -2711,8 +2818,15 @@ function _finishWContinue(auto,ts) {
   ws = Math.max(0, Math.floor((endTs - (awStart||endTs))/1000));
   const vol=aw.exercises.reduce((a,e)=>a+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*s.reps),0):0),0);
   const dur=String(Math.floor(ws/60)).padStart(2,'0')+':'+String(ws%60).padStart(2,'0');
+  // Capture the PRE-workout progress signal (history through last time, not
+  // tonight) for every trackable exercise before tonight's numbers land in
+  // history -- needed to tell whether a prior "go up" suggestion was
+  // actually followed tonight.
+  const preProgress={};
+  aw.exercises.forEach(e=>{ if(progressTrackable(e.tracking||'weight_reps')) preProgress[e.exId]=evaluateProgress(e.exId); });
   const prList=commitPRs(aw);              // PRs committed ONLY now, on finish
   const rec={...aw,duration:dur,sets:ts,totalVolume:Math.round(vol),prCount:prList.length};
+  if(!rec.name || rec.name==='Quick Workout') rec.name=autoNameWorkout(rec.exercises);
   // Detect if the workout's exercises differ from its source routine.
   let rid=null,rname='',ids=aw.exercises.map(e=>e.exId);
   if(aw.routineId){ const r=gR().find(x=>x.id===aw.routineId); if(r){ const o=r.exercises||[]; if(o.length!==ids.length||o.some((id,i)=>id!==ids[i])){ rid=aw.routineId; rname=r.name; } } }
@@ -2724,13 +2838,14 @@ function _finishWContinue(auto,ts) {
   // often now that syncBackup() reads+merges instead of blind-overwriting.
   if (typeof syncBackup==='function') syncBackup();
   const summaryVol=Math.round(vol);
+  const progressNotes=buildProgressNotes(rec,preProgress,prList);
   aw=null;
-  showFinishSummary({name:rec.name,dur,ts,vol:summaryVol,prList,rid,rname,ids});
+  showFinishSummary({name:rec.name,dur,ts,vol:summaryVol,prList,rid,rname,ids,progressNotes});
   sp('home');
 }
 
 function showFinishSummary(o) {
-  const {name,dur,ts,vol,prList}=o;
+  const {name,dur,ts,vol,prList,progressNotes=[]}=o;
   const c=document.getElementById('fsContent');
   c.innerHTML=`
     <div style="text-align:center;margin-bottom:4px">${prList.length?uic('trophy','#ffd700',42):uic('dumbbell','var(--muted)',42)}</div>
@@ -2746,6 +2861,10 @@ function showFinishSummary(o) {
       `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
         <span style="font-size:13px;font-weight:600">★ ${p.name}</span>
         <span style="font-family:var(--fh);font-weight:700;color:var(--accent)">${p.cardio?p.label:dW(p.weight)+uL()+' × '+p.reps}</span>
+      </div>`).join(''):''}
+    ${progressNotes.length?progressNotes.map(n=>
+      `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:var(--r);padding:9px 12px;margin-bottom:6px;font-size:12.5px;color:${n.type==='up'?'var(--accent-bright)':'var(--muted)'}">
+        <span>${n.type==='up'?'▲':'▼'}</span><span>${n.text}</span>
       </div>`).join(''):''}
     ${o.rid?`<button class="btn bg wf" style="margin-top:12px" onclick="updateRoutineFromWorkout('${o.rid}','${o.ids.join(',')}')">Update "${o.rname}" with these exercises</button>`:''}
     <button class="btn bg wf" style="margin-top:8px" onclick="saveAsNewRoutine('${o.ids.join(',')}')">Save as a new routine…</button>`;
