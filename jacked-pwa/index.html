@@ -504,10 +504,11 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="ceModal" style="z-index:250">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div class="mt">Create Exercise</div><button class="cb" onclick="cm('ceModal')">✕</button></div>
+    <div class="mh"><div class="mt" id="ceTitle">Create Exercise</div><button class="cb" onclick="cm('ceModal')">✕</button></div>
+    <div id="ceMuscleLocked" style="display:none;font-size:12px;color:var(--muted);margin:-6px 0 10px">Muscle group is set by the exercise database and can't be changed here.</div>
     <div class="fg"><label>Exercise Name</label><input type="text" id="ceName" placeholder="e.g. EZ Bar Curl"></div>
     <div class="fr">
-      <div class="fg"><label>Muscle Group</label>
+      <div class="fg" id="ceMuscleRow"><label>Muscle Group</label>
         <select id="ceMuscle" onchange="updateMuscleFields()">
           <option>Chest</option><option>Back</option><option>Shoulders</option>
           <option>Biceps</option><option>Triceps</option><option>Legs</option>
@@ -555,13 +556,22 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <select id="ceGrip"><option value="">Standard</option></select>
     </div>
     <!-- Tracking type -->
-    <div class="fg"><label>How is it tracked?</label>
+    <div class="fg" id="ceTrackingRow"><label>How is it tracked?</label>
       <select id="ceTracking" onchange="updateTrackingFields()">
         <option value="weight_reps" id="trkWR">Weight + Reps</option>
         <option value="bodyweight_reps">Bodyweight + Reps (e.g. 3 × 10)</option>
         <option value="duration">Duration (e.g. 3 × 60 sec)</option>
         <option value="distance">Distance + Time (e.g. 5k run in 25:00)</option>
         <option value="reps_only">Reps only (no weight)</option>
+      </select>
+    </div>
+    <!-- Default time unit (duration-tracked exercises only) -->
+    <div class="fg" id="ceDurUnitRow" style="display:none">
+      <label>Default Time Unit</label>
+      <select id="ceDurUnit">
+        <option value="sec">Seconds</option>
+        <option value="min">Minutes</option>
+        <option value="hr">Hours</option>
       </select>
     </div>
     <!-- Bodyweight assist toggle (shown when bodyweight) -->
@@ -577,7 +587,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="fg"><label>Notes / Cues (optional)</label>
       <input type="text" id="ceNotes" placeholder="e.g. Keep elbows tight, full ROM">
     </div>
-    <button class="btn ba wf" onclick="saveCE()">Add Exercise</button>
+    <button class="btn ba wf" id="ceSaveBtn" onclick="saveCE()">Add Exercise</button>
   </div>
 </div>
 
@@ -1234,7 +1244,6 @@ function exRankCmp(a,b){
   return 0;
 }
 function toggleFav(id){ const f=new Set(gFav()); f.has(id)?f.delete(id):f.add(id); S.s('favEx',[...f]); if(document.getElementById('exInfoModal').classList.contains('open')) openExInfo(id); renderEx(); }
-function renameEx(id){ const cur=byId(id).name; showConfirm('Rename exercise:',{isPrompt:true,defaultValue:cur}).then(v=>{ if(v==null) return; const r=gRenameEx(); const t=v.trim(); if(t&&t!==cur) r[id]=t; else delete r[id]; S.s('exRename',r); openExInfo(id); renderEx(); }); }
 // Exercises hidden from browse lists. Built-in DB exercises can't be deleted
 // from the public dataset, so "deleting" one just hides it everywhere it's browsed.
 const gHidden=()=>S.g('hiddenEx')||[];
@@ -1244,6 +1253,7 @@ function deleteEx(id){
     // Clean up favourite + rename overrides for the removed exercise.
     S.s('favEx', gFav().filter(x=>x!==id));
     const rn=gRenameEx(); if(rn[id]){ delete rn[id]; S.s('exRename',rn); }
+    const ov=gExOverride(); if(ov[id]){ delete ov[id]; S.s('exOverride',ov); }
     cm('exInfoModal'); renderEx(); toast('Exercise removed','ok');
   };
   if(isCustomEx(id)){
@@ -1264,6 +1274,12 @@ function deleteEx(id){
   }
 }
 function exName(id,base){ return gRenameEx()[id]||base; }
+// Per-exercise field overrides for built-in DB/warm-up exercises (equip,
+// category, notes, assist) — set via the Library's Edit Exercise form.
+// Never touches muscle group or tracking type; those stay database-driven so
+// filter chips and strength-standard rankings keep their real taxonomy.
+const gExOverride=()=>S.g('exOverride')||{};
+function exOverride(id,base){ const o=gExOverride()[id]; return o?{...base,...o}:base; }
 
 // SAFE byId — never returns undefined
 // Map free-exercise-db equipment to a short parenthetical tag.
@@ -1292,19 +1308,19 @@ function byId(id) {
   if (c) return { ...c, name:exName(id,c.name), _c:true };
   // built-in warm-ups
   const w = WARMUPS.find(e=>e.id===id);
-  if (w) return { ...w, name:exName(id,w.name) };
+  if (w) return exOverride(id, { ...w, name:exName(id,w.name) });
   // check DB
   const d = allDB.find(e=>e.id===id);
-  if (d) return { id:d.id, name:exName(d.id,prettyDB(d.name,d.equipment)), muscle:mapMuscle(d.primaryMuscles?.[0]||''), equip:EQUIP_FIX[d.id]||d.equipment||'',
-    images:d.images||[], instructions:d.instructions||[], tracking:'weight_reps', _d:true };
+  if (d) return exOverride(id, { id:d.id, name:exName(d.id,prettyDB(d.name,d.equipment)), muscle:mapMuscle(d.primaryMuscles?.[0]||''), equip:EQUIP_FIX[d.id]||d.equipment||'',
+    images:d.images||[], instructions:d.instructions||[], tracking:'weight_reps', _d:true });
   // fallback: humanise the slug so users see a name not an ID
   return { id, name:exName(id, id.replace(/_/g,' ').replace(/-/g,' ')), muscle:'', equip:'', images:[], tracking:'weight_reps' };
 }
 
 function allEx() {
   const cust = gCEx().map(e=>({...e,name:exName(e.id,e.name),_c:true}));
-  const warm = WARMUPS.map(e=>({...e,name:exName(e.id,e.name)}));
-  const db   = allDB.map(e=>({ id:e.id, name:exName(e.id,prettyDB(e.name,e.equipment)), muscle:mapMuscle(e.primaryMuscles?.[0]||''),
+  const warm = WARMUPS.map(e=>exOverride(e.id,{...e,name:exName(e.id,e.name)}));
+  const db   = allDB.map(e=>exOverride(e.id,{ id:e.id, name:exName(e.id,prettyDB(e.name,e.equipment)), muscle:mapMuscle(e.primaryMuscles?.[0]||''),
     equip:EQUIP_FIX[e.id]||e.equipment||'', images:e.images||[], tracking:'weight_reps', _d:true }));
   // Warm-ups go last so they don't crowd the top of the unfiltered library, but
   // still surface under the Warm-up chip, their muscle chip, and search.
@@ -1674,7 +1690,7 @@ function openExInfo(exId){
   const meta=`<div style="font-size:12px;color:var(--muted)">${[ex.muscle,ex.equip,ex.category].filter(Boolean).map(capW).join(' · ')}</div>`;
   const actions=`<div style="display:flex;gap:8px;margin:12px 0 8px">
       <button class="btn bg sm" style="flex:1" onclick="toggleFav('${exId}')">${isFav(exId)?'★ Favorited':'☆ Favorite'}</button>
-      <button class="btn bg sm" style="flex:1" onclick="renameEx('${exId}')">Rename</button>
+      <button class="btn bg sm" style="flex:1" onclick="openEditEx('${exId}')">Edit</button>
     </div>
     <button class="btn bd sm wf" style="margin-bottom:4px" onclick="deleteEx('${exId}')">${isCustomEx(exId,ex)?'Delete Exercise':'Hide from Library'}</button>`;
   // Show the demonstration photo(s) at the top. DB exercises ship start/end
@@ -1783,17 +1799,67 @@ async function startCuratedRoutine(pi,ri){
 // CREATE CUSTOM EXERCISE
 // ============================================================
 let _ceReturn = null;   // 'ae' when the create form was opened from inside the exercise picker
+let _ceEditId = null;   // exercise id being edited, or null when creating a new one
+// Fine DB muscle keys (see ALLOWED_MUSCLES) collapsed to the coarse groups this
+// form offers, so editing a DB/warmup exercise can still show its muscle group
+// (read-only — see ceApplyEditMode) without corrupting the finer taxonomy the
+// Library filter chips and strength-standard rankings key off of.
+const MUSCLE_COARSE={chest:'Chest',back:'Back',lats:'Back','lower back':'Back',shoulders:'Shoulders',
+  biceps:'Biceps',triceps:'Triceps',legs:'Legs',quadriceps:'Legs',hamstrings:'Legs',calves:'Legs',
+  glutes:'Glutes',core:'Core',abdominals:'Core',forearms:'Forearms',traps:'Back',cardio:'Cardio','full body':'Full Body'};
 function openCE(fromAe) {
   _ceReturn = fromAe ? 'ae' : null;
+  _ceEditId = null;
+  document.getElementById('ceTitle').textContent='Create Exercise';
+  document.getElementById('ceSaveBtn').textContent='Add Exercise';
   document.getElementById('ceName').value='';
   document.getElementById('ceNotes').value='';
   document.getElementById('ceEquip').value='barbell';
+  document.getElementById('ceMuscle').value='Chest';
   document.getElementById('ceTracking').value='weight_reps';
+  document.getElementById('ceDurUnit').value='sec';
   document.getElementById('trkWR').textContent=`Weight + Reps (e.g. ${wUnit()==='lb'?'135 lb':'60 kg'} × 8)`;
   document.getElementById('ceBodyweightTog').classList.remove('on');
   document.getElementById('bwAssistTog').classList.remove('on');
+  ceApplyEditMode(true);
   updateEquipFields();
   om('ceModal');
+}
+
+// Edit an existing exercise from the Library. Custom exercises (yours) get the
+// full form; built-in DB/warm-up exercises only expose the fields that are
+// actually safe to override (name, equipment, category, bodyweight, notes) —
+// their muscle group and tracking type are read-only, see MUSCLE_COARSE above.
+function openEditEx(id){
+  const ex=byId(id);
+  const custom=isCustomEx(id,ex);
+  _ceReturn=null; _ceEditId=id;
+  document.getElementById('ceTitle').textContent='Edit Exercise';
+  document.getElementById('ceSaveBtn').textContent='Save Changes';
+  document.getElementById('ceName').value=ex.name||'';
+  document.getElementById('ceNotes').value=ex.notes||'';
+  document.getElementById('ceMuscle').value=MUSCLE_COARSE[(ex.muscle||'').toLowerCase()]||'Chest';
+  document.getElementById('ceCategory').value=ex.category||'strength';
+  const isBW=(ex.equip||'')==='body only';
+  document.getElementById('ceEquip').value=isBW?'bodyweight':(['barbell','dumbbell','cable','machine','bodyweight','kettlebell','resistance_band','ez_bar','trap_bar'].includes(ex.equip)?ex.equip:'other');
+  document.getElementById('ceTracking').value=ex.tracking||'weight_reps';
+  document.getElementById('ceDurUnit').value=ex.durUnit||'sec';
+  document.getElementById('ceBodyweightTog').classList.toggle('on',isBW);
+  document.getElementById('bwAssistTog').classList.toggle('on',!!ex.assist);
+  ceApplyEditMode(custom);
+  ceRecompute();
+  cm('exInfoModal');
+  om('ceModal');
+}
+
+// Toggles which fields are editable: full form when creating or editing a
+// custom exercise; a locked-down subset for a built-in DB/warm-up exercise.
+function ceApplyEditMode(fullyEditable){
+  document.getElementById('ceMuscleRow').style.display=fullyEditable?'block':'none';
+  document.getElementById('ceMuscleLocked').style.display=fullyEditable?'none':'block';
+  document.getElementById('ceTrackingRow').style.display=fullyEditable?'block':'none';
+  document.getElementById('gripRow').style.display='none';   // grip is baked into the name at creation; never re-derivable on edit
+  if(!fullyEditable) document.getElementById('ceDurUnitRow').style.display='none';
 }
 
 // Grip / variant options that actually make sense for the chosen equipment.
@@ -1818,13 +1884,16 @@ function renderGripOptions(eq){
 function ceRecompute(){
   const eq=document.getElementById('ceEquip').value, t=document.getElementById('ceTracking').value;
   const isBW=document.getElementById('ceBodyweightTog').classList.contains('on');
-  const showGrip=['barbell','dumbbell','cable','ez_bar','trap_bar','machine'].includes(eq);
+  // Grip is baked into the exercise name at creation and can't be reliably
+  // split back out, so it's create-only — never shown while editing.
+  const showGrip=!_ceEditId && ['barbell','dumbbell','cable','ez_bar','trap_bar','machine'].includes(eq);
   document.getElementById('gripRow').style.display = showGrip?'block':'none';
   if(showGrip) renderGripOptions(eq);
   // Assist only makes sense for bodyweight-rep lifts, the explicit Bodyweight
   // toggle, or assisted machines.
   const assist = isBW || (t==='bodyweight_reps') || (eq==='machine');
   document.getElementById('bwAssistRow').style.display = assist?'block':'none';
+  document.getElementById('ceDurUnitRow').style.display = (t==='duration')?'block':'none';
 }
 function updateEquipFields() {
   // Picking bodyweight equipment defaults to BW+reps — but never clobber a
@@ -1854,6 +1923,35 @@ function saveCE() {
   const assistRow=document.getElementById('bwAssistRow');
   const assist=assistRow&&assistRow.style.display!=='none'&&document.getElementById('bwAssistTog').classList.contains('on');
   const isBW=document.getElementById('ceBodyweightTog').classList.contains('on');
+  const equip=isBW?'body only':document.getElementById('ceEquip').value;
+  const notes=document.getElementById('ceNotes').value.trim();
+  const durUnit=document.getElementById('ceDurUnit').value;
+
+  if (_ceEditId) {
+    const id=_ceEditId; _ceEditId=null;
+    if (isCustomEx(id)) {
+      const c=gCEx(); const ent=c.find(e=>e.id===id);
+      if (ent) {
+        Object.assign(ent, { name:dispName, muscle:document.getElementById('ceMuscle').value,
+          equip, tracking:document.getElementById('ceTracking').value,
+          category:document.getElementById('ceCategory').value, notes, assist:!!assist, durUnit });
+        S.s('cex',c);
+      }
+    } else {
+      // Built-in DB/warm-up exercise: name still rides the existing rename
+      // map, everything else goes in a small override layer (see gExOverride)
+      // merged in by byId()/allEx() — the underlying dataset is never touched.
+      const rn=gRenameEx(); const base=byId(id).name;
+      if (dispName && dispName!==base) rn[id]=dispName; else delete rn[id];
+      S.s('exRename',rn);
+      const ov=gExOverride();
+      ov[id]={ equip, category:document.getElementById('ceCategory').value, notes, assist:!!assist };
+      S.s('exOverride',ov);
+    }
+    cm('ceModal'); renderEx(); toast('Exercise updated ✓','ok');
+    return;
+  }
+
   const newId='cex'+Date.now();
   const c=gCEx();
   c.push({
@@ -1863,11 +1961,12 @@ function saveCE() {
     // The Bodyweight toggle wins over whatever's picked in the Equipment
     // dropdown -- it's what actually drives the in-workout Bodyweight/
     // +Added/-Assist switch (see isBodyweightEx()).
-    equip:isBW?'body only':document.getElementById('ceEquip').value,
+    equip,
     tracking:document.getElementById('ceTracking').value,
     category:document.getElementById('ceCategory').value,
-    notes:document.getElementById('ceNotes').value.trim(),
+    notes,
     assist:!!assist,
+    durUnit,
     images:[],_c:true
   });
   S.s('cex',c);
@@ -2240,9 +2339,11 @@ function renderWS() {
     const mode=bwMode(ex);
     const showBW=bwCap&&mode==='body';   // static bodyweight column (no plates)
     const isCable=(ex.equip||byId(ex.exId).equip||'').toLowerCase().includes('cable');
-    const col3=tracking==='duration'?'Secs':tracking==='distance'?'Miles':tracking==='reps_only'?'—'
+    const isDur=tracking==='duration';
+    const exUnit=isDur?durUnit(ex):'sec';
+    const col3=isDur?DUR_UNIT_LABEL[exUnit]:tracking==='distance'?'Miles':tracking==='reps_only'?'—'
       :bwCap?(mode==='added'?'+ '+uL():mode==='assist'?'− '+uL():'Body'):uL();
-    const col4=tracking==='duration'?'—':tracking==='distance'?'Min':'Reps';
+    const col4=isDur?'—':tracking==='distance'?'Min':'Reps';
     // pr is the PRE-workout record (PRs are only committed on finish), so it's a
     // stable baseline for the "beats PR" star throughout the session.
     const prMax=prE1rm(pr);
@@ -2255,7 +2356,7 @@ function renderWS() {
     let prIdx=-1, prScore=-Infinity;
     ex.sets.forEach((s,i)=>{ if(s.done&&beatsPR(s)){ const sc=score(s); if(sc>prScore){ prScore=sc; prIdx=i; } } });
     const exGotPR=prIdx>=0;
-    const dispW=v=>isW?dW(v):(v||0);
+    const dispW=v=>isW?dW(v):isDur?toDispDur(v,exUnit):(v||0);
     const picking=aw._pairFrom===ei;
     const paired=!!ex.supersetId;
     const linkBtnColor=picking?'var(--accent)':paired?'var(--blue)':'currentColor';
@@ -2285,6 +2386,12 @@ function renderWS() {
         <button class="cab-opt ${mode==='added'?'on':''}" onclick="setBWMode(${ei},'added')">+ Added</button>
         <button class="cab-opt ${mode==='assist'?'on':''}" onclick="setBWMode(${ei},'assist')">− Assist</button>
       </div>`:''}
+      ${isDur?`<div class="cable-row" style="padding-left:2px">
+        <span class="cable-lbl">Unit</span>
+        <button class="cab-opt ${exUnit==='sec'?'on':''}" onclick="setDurUnit(${ei},'sec')">Sec</button>
+        <button class="cab-opt ${exUnit==='min'?'on':''}" onclick="setDurUnit(${ei},'min')">Min</button>
+        <button class="cab-opt ${exUnit==='hr'?'on':''}" onclick="setDurUnit(${ei},'hr')">Hr</button>
+      </div>`:''}
       <input class="ex-note" placeholder="Add note (remembered next time)…" value="${(exNote(ex.exId)||'').replace(/"/g,'&quot;')}" onchange="setExNote('${ex.exId}',this.value)">
       <div class="shr"><span>Set</span><span>Prev</span><span>${col3}</span><span>${col4}</span><span>✓</span></div>
       ${ex.sets.map((set,si)=>{
@@ -2294,15 +2401,16 @@ function renderWS() {
         // carry the previous set's numbers forward), falling back to the PR.
         const sug=setSuggestion(ex,si);
         const sugW=sug.w, sugR=sug.r;
-        const wPlace=isW?(sugW>0?dW(sugW):'—'):(sugW>0?sugW:'—');
+        const wPlace=isW?(sugW>0?dW(sugW):'—'):isDur?(sugW>0?toDispDur(sugW,exUnit):'—'):(sugW>0?sugW:'—');
         const rPlace=sugR>0?sugR:'—';
-        const wVal=set.weight>0?(isW?dW(set.weight):set.weight):'';
+        const wVal=set.weight>0?(isW?dW(set.weight):isDur?toDispDur(set.weight,exUnit):set.weight):'';
         const rVal=set.reps>0?set.reps:'';
         const isPR=(si===prIdx);
         const sc=set.done?' sidone':'';
+        const wConv=isDur?"'dur'":isW;
         const inp3=tracking==='reps_only'?`<div class="ps">—</div>`
           :showBW?`<div class="ps" style="font-weight:600">${gBW()?dW(gBW())+uL():'set BW'}</div>`
-          :`<input class="si${sc}" type="number" inputmode="decimal" min="0" step="0.5" value="${wVal}" placeholder="${wPlace}" oninput="uSet(${ei},${si},'weight',this.value,${isW})">`;
+          :`<input class="si${sc}" type="number" inputmode="decimal" min="0" step="0.5" value="${wVal}" placeholder="${wPlace}" oninput="uSet(${ei},${si},'weight',this.value,${wConv})">`;
         const inp4=tracking==='duration'?`<div class="ps">—</div>`:`<input class="si${sc}" type="number" inputmode="numeric" min="0" value="${rVal}" placeholder="${rPlace}" oninput="uSet(${ei},${si},'reps',this.value)">`;
         return `<div class="sr">
           <div class="sn">${si+1}${isPR?'<span style="color:#ffd700"> ★</span>':''}</div>
@@ -2391,7 +2499,13 @@ function moveEx(ei,dir) {
   const a=aw.exercises; [a[ei],a[j]]=[a[j],a[ei]]; renderWS();
 }
 
-function uSet(ei,si,f,v,conv) { if(aw){ aw.exercises[ei].sets[si][f]= conv?fromDisp(v):(parseFloat(v)||0); saveAW(); if(isCardio(aw.exercises[ei])) updPaceLine(ei,si); } }
+function uSet(ei,si,f,v,conv) {
+  if(!aw) return;
+  const ex=aw.exercises[ei];
+  ex.sets[si][f] = conv==='dur' ? fromDispDur(v,durUnit(ex)) : conv ? fromDisp(v) : (parseFloat(v)||0);
+  saveAW();
+  if(isCardio(ex)) updPaceLine(ei,si);
+}
 // Live min/mile pace under a cardio set as the user types miles + minutes.
 function updPaceLine(ei,si){ const s=aw.exercises[ei].sets[si], el=document.getElementById(`pace-${ei}-${si}`); if(el) el.textContent=(s.weight>0&&s.reps>0)?'Pace '+fmtPace(pacePerMile(s.weight,s.reps)):''; }
 
@@ -2509,6 +2623,22 @@ function rmEx(ei) { if(!aw)return; aw.exercises.splice(ei,1); renderWS(); }
 
 const gCardioPR=()=>S.g('cardioPR')||{};   // {exId:{dist,time,date, maxDist,maxDate}} — best effort + longest
 function isCardio(ex){ return ((ex&&ex.tracking)||'')==='distance'; }
+
+// ── Duration time units ──────────────────────────────────────────────────
+// A duration set's value is always stored canonically in SECONDS (in the
+// "weight" field, same as before this existed) — everything below is display
+// and input conversion only, so history, PRs, exports and friend summaries
+// never need to know or care which unit the user typed in.
+const DUR_UNIT_SEC={sec:1,min:60,hr:3600};
+const DUR_UNIT_LABEL={sec:'Secs',min:'Mins',hr:'Hrs'};
+// Resolve the display unit for a WorkoutExercise (aw.exercises[i] or a saved
+// WorkoutExercise): session-local override first, else the exercise's own
+// saved default (set via Edit Exercise), else seconds.
+function durUnit(ex){ return (ex&&ex.durUnit) || (ex&&ex.exId&&byId(ex.exId).durUnit) || 'sec'; }
+function toDispDur(sec,u){ return sec>0 ? Math.round((sec/DUR_UNIT_SEC[u])*100)/100 : 0; }
+function fromDispDur(v,u){ return Math.round((parseFloat(v)||0)*DUR_UNIT_SEC[u]); }
+function setDurUnit(ei,u){ if(aw&&aw.exercises[ei]){ aw.exercises[ei].durUnit=u; renderWS(); } }
+function setDurUnitWE(ei,u){ if(weDraft&&weDraft.exercises[ei]){ weDraft.exercises[ei].durUnit=u; renderWE(); } }
 // Total distance (miles) logged across a saved workout's cardio exercises.
 function workoutDistance(w){ return (w&&w.exercises||[]).reduce((a,e)=> a + (((e.tracking||'')==='distance')?(e.sets||[]).reduce((b,s)=>b+(s.weight||0),0):0), 0); }
 function setPace(d,t){ return t>0 ? d/t : 0; }   // distance per minute (legacy)
@@ -2708,8 +2838,9 @@ function openWD(id) {
     const done=all.filter(s=>s.done);
     const shown=done.length?done:all;   // fall back to all logged sets
     const tr=ex.tracking||'weight_reps';
+    const duU=tr==='duration'?durUnit(ex):'sec';
     const setStr=s=> tr==='distance' ? `${s.weight} mi · ${fmtClock(s.reps)} · ${fmtPace(pacePerMile(s.weight,s.reps))}`
-      : tr==='duration' ? `${s.weight}s`
+      : tr==='duration' ? `${toDispDur(s.weight,duU)}${duU==='sec'?'s':duU==='min'?' min':' hr'}`
       : tr==='reps_only' ? `${s.reps} reps`
       : `${dW(s.weight)}${uL()} × ${s.reps} reps`;
     // Cardio summary: total distance + best pace for the exercise.
@@ -2762,19 +2893,28 @@ function renderWE(){
   el.innerHTML=(weDraft.exercises||[]).map((ex,ei)=>{
     const tr=ex.tracking||'weight_reps';
     const isW=tr==='weight_reps'||tr==='bodyweight_reps';
-    const c3=tr==='distance'?'Miles':tr==='duration'?'Secs':tr==='reps_only'?'—':uL();
-    const c4=tr==='distance'?'Min':tr==='duration'?'—':'Reps';
+    const isDur=tr==='duration';
+    const exUnit=isDur?durUnit(ex):'sec';
+    const c3=tr==='distance'?'Miles':isDur?DUR_UNIT_LABEL[exUnit]:tr==='reps_only'?'—':uL();
+    const c4=tr==='distance'?'Min':isDur?'—':'Reps';
     return `<div class="card-dark" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-family:var(--fh);font-size:16px;font-weight:700;color:var(--accent);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</div>
         <button class="btn bd ic xs" onclick="weRemoveEx(${ei})" aria-label="Remove exercise" style="flex-shrink:0">${uic('trash',undefined,14)}</button>
       </div>
+      ${isDur?`<div class="cable-row" style="padding-left:2px">
+        <span class="cable-lbl">Unit</span>
+        <button class="cab-opt ${exUnit==='sec'?'on':''}" onclick="setDurUnitWE(${ei},'sec')">Sec</button>
+        <button class="cab-opt ${exUnit==='min'?'on':''}" onclick="setDurUnitWE(${ei},'min')">Min</button>
+        <button class="cab-opt ${exUnit==='hr'?'on':''}" onclick="setDurUnitWE(${ei},'hr')">Hr</button>
+      </div>`:''}
       <div style="${gcol};font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:0 2px 4px"><span>Set</span><span>${c3}</span><span>${c4}</span><span>✓</span></div>
       ${(ex.sets||[]).map((s,si)=>{
-        const wVal=s.weight>0?(isW?dW(s.weight):s.weight):'';
+        const wVal=s.weight>0?(isW?dW(s.weight):isDur?toDispDur(s.weight,exUnit):s.weight):'';
         const rVal=s.reps>0?s.reps:'';
-        const inp3=tr==='reps_only'?`<div class="ps">—</div>`:`<input class="si" type="number" inputmode="decimal" min="0" step="0.5" value="${wVal}" oninput="weUpd(${ei},${si},'weight',this.value,${isW})">`;
-        const inp4=tr==='duration'?`<div class="ps">—</div>`:`<input class="si" type="number" inputmode="numeric" min="0" value="${rVal}" oninput="weUpd(${ei},${si},'reps',this.value)">`;
+        const wConv=isDur?"'dur'":isW;
+        const inp3=tr==='reps_only'?`<div class="ps">—</div>`:`<input class="si" type="number" inputmode="decimal" min="0" step="0.5" value="${wVal}" oninput="weUpd(${ei},${si},'weight',this.value,${wConv})">`;
+        const inp4=isDur?`<div class="ps">—</div>`:`<input class="si" type="number" inputmode="numeric" min="0" value="${rVal}" oninput="weUpd(${ei},${si},'reps',this.value)">`;
         return `<div style="${gcol};margin-bottom:4px">
           <div class="sn">${si+1}</div>${inp3}${inp4}
           <button class="sd ${s.done?'done':''}" onclick="weTogDone(${ei},${si})">${weCheck(s.done)}</button>
@@ -2787,7 +2927,10 @@ function renderWE(){
     </div>`;
   }).join('')||'<div style="font-size:12px;color:var(--muted);padding:8px 2px">No exercises left — saving will keep an empty workout, or delete it instead.</div>';
 }
-function weUpd(ei,si,f,v,conv){ const s=weDraft.exercises[ei].sets[si]; if(s) s[f]=conv?fromDisp(v):(parseFloat(v)||0); }
+function weUpd(ei,si,f,v,conv){
+  const ex=weDraft.exercises[ei], s=ex.sets[si]; if(!s) return;
+  s[f] = conv==='dur' ? fromDispDur(v,durUnit(ex)) : conv ? fromDisp(v) : (parseFloat(v)||0);
+}
 function weTogDone(ei,si){ const s=weDraft.exercises[ei].sets[si]; if(s){ s.done=!s.done; renderWE(); } }
 function weAddSet(ei){ const e=weDraft.exercises[ei]; (e.sets=e.sets||[]).push({weight:0,reps:0,done:true}); renderWE(); }
 function weRemoveSet(ei){ const e=weDraft.exercises[ei]; if((e.sets||[]).length>1){ e.sets.pop(); renderWE(); } }
@@ -3285,7 +3428,7 @@ function friendWorkoutSummary(w){
     const e={id:ex.exId||'', n:ex.name, t};
     e.sets=(ex.sets||[]).filter(s=>s.done||s.weight>0||s.reps>0).map(s=>{
       if(t==='distance')  return {mi:r2(s.weight), min:r2(s.reps)};
-      if(t==='duration')  return {sec:Math.round(s.reps||0)};
+      if(t==='duration')  return {sec:Math.round(s.weight||0)};   // duration stores its seconds in "weight", not "reps" -- see uSet()
       if(t==='reps_only') return {r:Math.round(s.reps||0)};
       return {w:r2(s.weight), r:Math.round(s.reps||0)};   // weight_reps / bodyweight_reps
     });
