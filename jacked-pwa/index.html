@@ -852,6 +852,20 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   </div>
 </div>
 
+<!-- Achievement popup: a metric-tier badge earned live during a workout -->
+<div class="mo ctr" id="achModal" style="z-index:710">
+  <div class="md" style="position:relative;text-align:center">
+    <button class="cb" style="position:absolute;top:0;right:0" onclick="cm('achModal')">✕</button>
+    <div id="achIcon" style="margin:4px 0 12px"></div>
+    <div id="achTier" style="font-family:var(--fh);font-size:14px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase"></div>
+    <div id="achName" style="font-family:var(--fh);font-size:27px;font-weight:800;margin:2px 0 6px;text-wrap:balance"></div>
+    <div id="achFor" style="font-size:12.5px;color:var(--muted)"></div>
+    <div class="sep" style="margin:18px 0 16px"></div>
+    <div id="achDesc" style="font-size:13px;color:var(--text2);line-height:1.65;text-align:left"></div>
+    <button class="btn ba wf" style="margin-top:22px" onclick="cm('achModal')">Nice!</button>
+  </div>
+</div>
+
 <!-- Add Friend -->
 <div class="mo ctr" id="afModal">
   <div class="md">
@@ -2397,7 +2411,7 @@ function renderWS() {
             <button class="btn bd ic xs" onclick="rmEx(${ei})" aria-label="Remove">${uic('trash',undefined,14)}</button>
           </div>
           <div style="display:flex;gap:6px">
-            ${mTierBadge?`<span class="progress-chip" style="color:${TIERC[mTierBadge.tier]};background:${TIERC[mTierBadge.tier]}22;border-color:${TIERC[mTierBadge.tier]}66" onclick="metricBadgeInfo('${mTierBadge.key}','${mTierBadge.tier}',${mTierBadge.value})">${uic('trophy',TIERC[mTierBadge.tier],11)} ${capW(mTierBadge.tier)}</span>`:''}
+            ${mTierBadge?`<span class="progress-chip" style="color:${TIERC[mTierBadge.tier]};background:${TIERC[mTierBadge.tier]}22;border-color:${TIERC[mTierBadge.tier]}66" onclick="metricBadgeInfo('${mTierBadge.key}','${mTierBadge.tier}',${mTierBadge.value},'${(ex.name||'').replace(/'/g,"\\'")}')">${uic('trophy',TIERC[mTierBadge.tier],11)} ${capW(mTierBadge.tier)}</span>`:''}
             ${progress.up?`<span class="progress-chip up" onclick="progressInfo('up')">▲ Go up</span>`
               :showDown?`<span class="progress-chip down" onclick="progressInfo('down')">▼ Lighter</span>`:''}
           </div>
@@ -2692,8 +2706,9 @@ const BADGE_TIER_THRESH={
   pullup:[10,15,20], pushup:[30,50,80], cardio:[9,8,6.5]   // cardio: mile-equiv ceilings, lower=better
 };
 const BADGE_META={
-  bench:{name:'Bench-Maxing'}, ohp:{name:'Shoulder-Maxing'}, squat:{name:'Leg-Maxing'},
-  pullup:{name:'Pull-up-Maxing'}, pushup:{name:'Push-up-Maxing'}, cardio:{name:'Cardio-Maxing'},
+  bench:{name:'Bench-Maxing',icon:'dumbbell',color:MCOL.chest}, ohp:{name:'Shoulder-Maxing',icon:'dumbbell',color:MCOL.shoulders},
+  squat:{name:'Leg-Maxing',icon:'dumbbell',color:MCOL.legs}, pullup:{name:'Pull-up-Maxing',icon:'dumbbell',color:MCOL.back},
+  pushup:{name:'Push-up-Maxing',icon:'dumbbell',color:MCOL.triceps}, cardio:{name:'Cardio-Maxing',icon:'heart',color:MCOL.cardio},
 };
 const TIER_RANK={bronze:1,silver:2,gold:3};   // undefined/null keys read as 0
 function tierOfLive(v,thr){ return v>=thr[2]?'gold':v>=thr[1]?'silver':v>=thr[0]?'bronze':null; }
@@ -2732,20 +2747,29 @@ function badgeTierForKey(key,h){
   }
   return {tier:null,value:0};
 }
-// Tap popup: says exactly what was hit AND the rule, not just the rule.
-function metricBadgeInfo(key,tier,value){
+// Tap popup: icon + tier + which exercise it's for, then the specific stat
+// that earned it and the full threshold ladder underneath.
+function metricBadgeInfo(key,tier,value,exName){
+  const meta=BADGE_META[key];
   const achieved = key==='pullup'||key==='pushup' ? `${Math.round(value)} reps`
     : key==='cardio' ? `${fmtClock(value)}/mi`
     : `${Math.round(value)} lb`;
-  const lines={
-    bench:`1-rep bench: ${BADGE_TIER_THRESH.bench.join(' / ')} lb (bronze / silver / gold).`,
-    ohp:`Overhead press ×5: ${BADGE_TIER_THRESH.ohpFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
-    squat:`Squat ×5: ${BADGE_TIER_THRESH.squatFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
-    pullup:`Best pull-up set: ${BADGE_TIER_THRESH.pullup.join(' / ')} reps.`,
-    pushup:`Best push-up set: ${BADGE_TIER_THRESH.pushup.join(' / ')} reps.`,
-    cardio:`Best mile pace: ${BADGE_TIER_THRESH.cardio.slice().reverse().map(fmtClock).join(' / ')} /mi (gold / silver / bronze).`,
+  const rules={
+    bench:`Bronze / Silver / Gold — 1-rep bench: ${BADGE_TIER_THRESH.bench.join(' / ')} lb.`,
+    ohp:`Bronze / Silver / Gold — overhead press ×5: ${BADGE_TIER_THRESH.ohpFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
+    squat:`Bronze / Silver / Gold — squat ×5: ${BADGE_TIER_THRESH.squatFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
+    pullup:`Bronze / Silver / Gold — best set: ${BADGE_TIER_THRESH.pullup.join(' / ')} reps.`,
+    pushup:`Bronze / Silver / Gold — best set: ${BADGE_TIER_THRESH.pushup.join(' / ')} reps.`,
+    cardio:`Gold / Silver / Bronze — best mile pace: ${BADGE_TIER_THRESH.cardio.slice().reverse().map(fmtClock).join(' / ')} /mi.`,
   };
-  showConfirm(`${BADGE_META[key].name} — you just hit ${achieved}, that's ${capW(tier)}! ${lines[key]}`,{okText:'Got it',cancelText:'Close'});
+  document.getElementById('achIcon').innerHTML=uic(meta.icon,meta.color,48);
+  document.getElementById('achTier').innerHTML=`<span style="color:${TIERC[tier]}">${capW(tier)}</span>`;
+  document.getElementById('achName').textContent=meta.name;
+  document.getElementById('achFor').textContent=exName?`For ${exName}`:'';
+  document.getElementById('achDesc').innerHTML=
+    `<div style="margin-bottom:10px"><b style="color:${TIERC[tier]}">${achieved}</b> — that's what just crossed the ${capW(tier)} line.</div>`+
+    `<div style="color:var(--muted)">${rules[key]}</div>`;
+  om('achModal');
 }
 
 function removeSet(ei){ if(aw){ const s=aw.exercises[ei].sets; if(s.length>1){ s.pop(); renderWS(); } } }
