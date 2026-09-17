@@ -2371,6 +2371,16 @@ function renderWS() {
     // contradictory messages on the same exercise, see buildProgressNotes().
     const progress=progressTrackable(tracking)?evaluateProgress(ex.exId):{up:false,down:false};
     const showDown=progress.down&&!exGotPR;
+    // Live metric-tier badge (Bench/Shoulder/Leg/Pull-up/Push-up/Cardio-Maxing):
+    // did finishing THIS exercise's logged sets just push its tier up? Only
+    // fires the moment the tier actually changes, not on every render.
+    const mKey=exerciseBadgeKey(ex);
+    let mTierBadge=null;
+    if(mKey){
+      const preT=badgeTierForKey(mKey,gH());
+      const liveT=badgeTierForKey(mKey,[...gH(),{exercises:[ex]}]);
+      if((TIER_RANK[liveT]||0)>(TIER_RANK[preT]||0)) mTierBadge={key:mKey,tier:liveT};
+    }
     return `<div class="eb" id="eb${ei}" style="${paired?'border-left:3px solid var(--blue)':''}">
       ${paired?`<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--blue);font-weight:700;margin-bottom:6px">${uic('link','var(--blue)',13)} Superset with ${supersetPartnerName(ei)}<button class="btn bg ic xs" style="margin-left:auto" onclick="unlinkSuperset(${ei})" aria-label="Unlink">${uic('unlink',undefined,12)}</button></div>`:''}
       ${picking?`<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:6px">Tap another exercise's link icon to pair</div>`:''}
@@ -2386,8 +2396,11 @@ function renderWS() {
             <button class="btn bg ic xs" onclick="switchEx(${ei})" aria-label="Switch exercise">${uic('replace',undefined,14)}</button>
             <button class="btn bd ic xs" onclick="rmEx(${ei})" aria-label="Remove">${uic('trash',undefined,14)}</button>
           </div>
-          ${progress.up?`<span class="progress-chip up" onclick="progressInfo('up')">▲ Go up</span>`
-            :showDown?`<span class="progress-chip down" onclick="progressInfo('down')">▼ Lighter</span>`:''}
+          <div style="display:flex;gap:6px">
+            ${mTierBadge?`<span class="progress-chip" style="color:${TIERC[mTierBadge.tier]};background:${TIERC[mTierBadge.tier]}22;border-color:${TIERC[mTierBadge.tier]}66" onclick="metricBadgeInfo('${mTierBadge.key}','${mTierBadge.tier}')">${uic('trophy',TIERC[mTierBadge.tier],11)} ${capW(mTierBadge.tier)}</span>`:''}
+            ${progress.up?`<span class="progress-chip up" onclick="progressInfo('up')">▲ Go up</span>`
+              :showDown?`<span class="progress-chip down" onclick="progressInfo('down')">▼ Lighter</span>`:''}
+          </div>
         </div>
       </div>
       ${isCable?`<div class="cable-row" style="padding-left:2px">
@@ -2648,6 +2661,86 @@ function progressInfo(kind){
     : `Consider lighter: every set has stayed under ${PROGRESS_DOWN_REPS} reps, ${PROGRESS_STREAK} workouts in a row, at the same weight.`;
   showConfirm(msg,{okText:'Got it',cancelText:'Close'});
 }
+
+// ============================================================
+// LIVE METRIC-TIER BADGES (Bench/Shoulder/Leg/Pull-up/Push-up/Cardio-Maxing)
+// Placed next to the progression chip per Mr. Roni's request 2026-09-17.
+// Only these six can be scoped to ONE exercise -- 1000lb Club, Variety, the
+// 7-day PR streak and Coward-Maxing all need the whole account/workout and
+// can't be tied to finishing a single lift (the limit flagged when he first
+// asked if this was possible).
+//
+// Formulas are duplicated from computeBadges(), not shared -- that function
+// scans ALL of history for ALL ten badges on every Metrics-page render;
+// this needs one badge for one exercise, cheaply, on every set checked off.
+// Keep the two in sync if the tier thresholds ever change.
+// ============================================================
+const flatNm=s=>(s||'').toLowerCase().replace(/[^a-z]/g,'');
+function exerciseBadgeKey(ex){
+  const nm=(ex.name||'').toLowerCase();
+  if((ex.tracking||'')==='distance') return 'cardio';
+  if(nm.includes('barbell')&&nm.includes('bench press')) return 'bench';
+  if(nm.includes('barbell')&&(nm.includes('overhead press')||nm.includes('military press'))) return 'ohp';
+  if(nm.includes('barbell')&&nm.includes('squat')) return 'squat';
+  const f=flatNm(ex.name);
+  if(f.includes('pullup')||f.includes('chinup')) return 'pullup';
+  if(f.includes('pushup')) return 'pushup';
+  return null;
+}
+const BADGE_TIER_THRESH={
+  bench:[135,225,315], ohpFrac:[0.25,0.5,1.0], squatFrac:[1.0,1.5,2.0],
+  pullup:[10,15,20], pushup:[30,50,80], cardio:[9,8,6.5]   // cardio: mile-equiv ceilings, lower=better
+};
+const BADGE_META={
+  bench:{name:'Bench-Maxing'}, ohp:{name:'Shoulder-Maxing'}, squat:{name:'Leg-Maxing'},
+  pullup:{name:'Pull-up-Maxing'}, pushup:{name:'Push-up-Maxing'}, cardio:{name:'Cardio-Maxing'},
+};
+const TIER_RANK={bronze:1,silver:2,gold:3};   // undefined/null keys read as 0
+function tierOfLive(v,thr){ return v>=thr[2]?'gold':v>=thr[1]?'silver':v>=thr[0]?'bronze':null; }
+// One badge's tier from a given history array -- pass gH() for "as of last
+// time", or gH() plus today's in-progress exercise appended as one extra
+// pseudo-workout for "as of right now, mid-set."
+function badgeTierForKey(key,h){
+  if(key==='bench'||key==='ohp'||key==='squat'){
+    const pred = key==='bench' ? nm=>nm.includes('barbell')&&nm.includes('bench press')
+      : key==='ohp' ? nm=>nm.includes('barbell')&&(nm.includes('overhead press')||nm.includes('military press'))
+      : nm=>nm.includes('barbell')&&nm.includes('squat');
+    const minReps = key==='bench' ? 1 : 5;
+    let best=0;
+    h.forEach(w=>(w.exercises||[]).forEach(ex=>{ const nm=(ex.name||'').toLowerCase(); if(!pred(nm))return;
+      (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); }));
+    if(key==='bench') return tierOfLive(best,BADGE_TIER_THRESH.bench);
+    const bwLb=gBW()*2.20462; if(!(bwLb>0)) return null;
+    const frac=key==='ohp'?BADGE_TIER_THRESH.ohpFrac:BADGE_TIER_THRESH.squatFrac;
+    return tierOfLive(best,frac.map(f=>f*bwLb));
+  }
+  if(key==='pullup'||key==='pushup'){
+    const f = key==='pullup' ? n=>n.includes('pullup')||n.includes('chinup') : n=>n.includes('pushup');
+    let best=0;
+    h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!f(flatNm(ex.name)))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>best)best=s.reps||0; }); }));
+    return tierOfLive(best,BADGE_TIER_THRESH[key]);
+  }
+  if(key==='cardio'){
+    let best=Infinity;
+    h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if((ex.tracking||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<best)best=me; } }); }));
+    if(!isFinite(best)) return null;
+    const [b,s,g]=BADGE_TIER_THRESH.cardio;
+    return best<=g?'gold':best<=s?'silver':best<=b?'bronze':null;
+  }
+  return null;
+}
+function metricBadgeInfo(key,tier){
+  const lines={
+    bench:`1-rep bench: ${BADGE_TIER_THRESH.bench.join(' / ')} lb (bronze / silver / gold).`,
+    ohp:`Overhead press ×5: ${BADGE_TIER_THRESH.ohpFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
+    squat:`Squat ×5: ${BADGE_TIER_THRESH.squatFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
+    pullup:`Best pull-up set: ${BADGE_TIER_THRESH.pullup.join(' / ')} reps.`,
+    pushup:`Best push-up set: ${BADGE_TIER_THRESH.pushup.join(' / ')} reps.`,
+    cardio:`Best mile pace: ${BADGE_TIER_THRESH.cardio.slice().reverse().map(fmtClock).join(' / ')} /mi (gold / silver / bronze).`,
+  };
+  showConfirm(`${BADGE_META[key].name} — just hit ${capW(tier)}! ${lines[key]}`,{okText:'Got it',cancelText:'Close'});
+}
+
 function removeSet(ei){ if(aw){ const s=aw.exercises[ei].sets; if(s.length>1){ s.pop(); renderWS(); } } }
 
 // Reorder modal — drag (desktop) or arrows (touch-friendly).
