@@ -2377,9 +2377,9 @@ function renderWS() {
     const mKey=exerciseBadgeKey(ex);
     let mTierBadge=null;
     if(mKey){
-      const preT=badgeTierForKey(mKey,gH());
-      const liveT=badgeTierForKey(mKey,[...gH(),{exercises:[ex]}]);
-      if((TIER_RANK[liveT]||0)>(TIER_RANK[preT]||0)) mTierBadge={key:mKey,tier:liveT};
+      const pre=badgeTierForKey(mKey,gH());
+      const live=badgeTierForKey(mKey,[...gH(),{exercises:[ex]}]);
+      if((TIER_RANK[live.tier]||0)>(TIER_RANK[pre.tier]||0)) mTierBadge={key:mKey,tier:live.tier,value:live.value};
     }
     return `<div class="eb" id="eb${ei}" style="${paired?'border-left:3px solid var(--blue)':''}">
       ${paired?`<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--blue);font-weight:700;margin-bottom:6px">${uic('link','var(--blue)',13)} Superset with ${supersetPartnerName(ei)}<button class="btn bg ic xs" style="margin-left:auto" onclick="unlinkSuperset(${ei})" aria-label="Unlink">${uic('unlink',undefined,12)}</button></div>`:''}
@@ -2397,7 +2397,7 @@ function renderWS() {
             <button class="btn bd ic xs" onclick="rmEx(${ei})" aria-label="Remove">${uic('trash',undefined,14)}</button>
           </div>
           <div style="display:flex;gap:6px">
-            ${mTierBadge?`<span class="progress-chip" style="color:${TIERC[mTierBadge.tier]};background:${TIERC[mTierBadge.tier]}22;border-color:${TIERC[mTierBadge.tier]}66" onclick="metricBadgeInfo('${mTierBadge.key}','${mTierBadge.tier}')">${uic('trophy',TIERC[mTierBadge.tier],11)} ${capW(mTierBadge.tier)}</span>`:''}
+            ${mTierBadge?`<span class="progress-chip" style="color:${TIERC[mTierBadge.tier]};background:${TIERC[mTierBadge.tier]}22;border-color:${TIERC[mTierBadge.tier]}66" onclick="metricBadgeInfo('${mTierBadge.key}','${mTierBadge.tier}',${mTierBadge.value})">${uic('trophy',TIERC[mTierBadge.tier],11)} ${capW(mTierBadge.tier)}</span>`:''}
             ${progress.up?`<span class="progress-chip up" onclick="progressInfo('up')">▲ Go up</span>`
               :showDown?`<span class="progress-chip down" onclick="progressInfo('down')">▼ Lighter</span>`:''}
           </div>
@@ -2697,9 +2697,12 @@ const BADGE_META={
 };
 const TIER_RANK={bronze:1,silver:2,gold:3};   // undefined/null keys read as 0
 function tierOfLive(v,thr){ return v>=thr[2]?'gold':v>=thr[1]?'silver':v>=thr[0]?'bronze':null; }
-// One badge's tier from a given history array -- pass gH() for "as of last
-// time", or gH() plus today's in-progress exercise appended as one extra
-// pseudo-workout for "as of right now, mid-set."
+// One badge's tier AND the raw stat that earned it, from a given history
+// array -- pass gH() for "as of last time", or gH() plus today's in-progress
+// exercise appended as one extra pseudo-workout for "as of right now,
+// mid-set." Returns {tier, value} -- value is lb for bench/ohp/squat, reps
+// for pull/push-ups, minutes/mile for cardio (lower = better) -- so the tap
+// popup can say exactly what was hit, not just the rule.
 function badgeTierForKey(key,h){
   if(key==='bench'||key==='ohp'||key==='squat'){
     const pred = key==='bench' ? nm=>nm.includes('barbell')&&nm.includes('bench press')
@@ -2709,27 +2712,31 @@ function badgeTierForKey(key,h){
     let best=0;
     h.forEach(w=>(w.exercises||[]).forEach(ex=>{ const nm=(ex.name||'').toLowerCase(); if(!pred(nm))return;
       (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); }));
-    if(key==='bench') return tierOfLive(best,BADGE_TIER_THRESH.bench);
-    const bwLb=gBW()*2.20462; if(!(bwLb>0)) return null;
+    if(key==='bench') return {tier:tierOfLive(best,BADGE_TIER_THRESH.bench), value:best};
+    const bwLb=gBW()*2.20462; if(!(bwLb>0)) return {tier:null,value:best};
     const frac=key==='ohp'?BADGE_TIER_THRESH.ohpFrac:BADGE_TIER_THRESH.squatFrac;
-    return tierOfLive(best,frac.map(f=>f*bwLb));
+    return {tier:tierOfLive(best,frac.map(f=>f*bwLb)), value:best};
   }
   if(key==='pullup'||key==='pushup'){
     const f = key==='pullup' ? n=>n.includes('pullup')||n.includes('chinup') : n=>n.includes('pushup');
     let best=0;
     h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!f(flatNm(ex.name)))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>best)best=s.reps||0; }); }));
-    return tierOfLive(best,BADGE_TIER_THRESH[key]);
+    return {tier:tierOfLive(best,BADGE_TIER_THRESH[key]), value:best};
   }
   if(key==='cardio'){
     let best=Infinity;
     h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if((ex.tracking||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<best)best=me; } }); }));
-    if(!isFinite(best)) return null;
+    if(!isFinite(best)) return {tier:null,value:0};
     const [b,s,g]=BADGE_TIER_THRESH.cardio;
-    return best<=g?'gold':best<=s?'silver':best<=b?'bronze':null;
+    return {tier: best<=g?'gold':best<=s?'silver':best<=b?'bronze':null, value:best};
   }
-  return null;
+  return {tier:null,value:0};
 }
-function metricBadgeInfo(key,tier){
+// Tap popup: says exactly what was hit AND the rule, not just the rule.
+function metricBadgeInfo(key,tier,value){
+  const achieved = key==='pullup'||key==='pushup' ? `${Math.round(value)} reps`
+    : key==='cardio' ? `${fmtClock(value)}/mi`
+    : `${Math.round(value)} lb`;
   const lines={
     bench:`1-rep bench: ${BADGE_TIER_THRESH.bench.join(' / ')} lb (bronze / silver / gold).`,
     ohp:`Overhead press ×5: ${BADGE_TIER_THRESH.ohpFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
@@ -2738,7 +2745,7 @@ function metricBadgeInfo(key,tier){
     pushup:`Best push-up set: ${BADGE_TIER_THRESH.pushup.join(' / ')} reps.`,
     cardio:`Best mile pace: ${BADGE_TIER_THRESH.cardio.slice().reverse().map(fmtClock).join(' / ')} /mi (gold / silver / bronze).`,
   };
-  showConfirm(`${BADGE_META[key].name} — just hit ${capW(tier)}! ${lines[key]}`,{okText:'Got it',cancelText:'Close'});
+  showConfirm(`${BADGE_META[key].name} — you just hit ${achieved}, that's ${capW(tier)}! ${lines[key]}`,{okText:'Got it',cancelText:'Close'});
 }
 
 function removeSet(ei){ if(aw){ const s=aw.exercises[ei].sets; if(s.length>1){ s.pop(); renderWS(); } } }
