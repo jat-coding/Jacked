@@ -2434,7 +2434,7 @@ function renderWS() {
         <button class="cab-opt ${exUnit==='min'?'on':''}" onclick="setDurUnit(${ei},'min')">Min</button>
         <button class="cab-opt ${exUnit==='hr'?'on':''}" onclick="setDurUnit(${ei},'hr')">Hr</button>
       </div>`:''}
-      <input class="ex-note" placeholder="Add note (remembered next time)…" value="${(exNote(ex.exId)||'').replace(/"/g,'&quot;')}" onchange="setExNote('${ex.exId}',this.value)">
+      <input class="ex-note" placeholder="${(exNote(ex.exId)||'Add note (remembered next time)…').replace(/"/g,'&quot;')}" value="" onchange="if(this.value.trim()) setExNote('${ex.exId}',this.value)">
       <div class="shr"><span>Set</span><span>Prev</span><span>${col3}</span><span>${col4}</span><span>✓</span></div>
       ${ex.sets.map((set,si)=>{
         const seedW=set.pw||0, seedR=set.pr||0;
