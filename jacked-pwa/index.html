@@ -2892,16 +2892,26 @@ function gpsCommit(ei,done){
 }
 // Plots the raw lat/lon points into a 280x130 box (10px margin in a 300x150
 // viewBox), scaled to whatever area this run actually covers -- not a real
-// map, just the shape of the route.
-function gpsPathPoints(st){
+// map, just the shape of the route. Real GPS fixes land maybe once every
+// 1-3 seconds (the phone's own chip/OS sets that pace, not this page), which
+// draws a jagged line with few points -- this quadratic-through-midpoints
+// smoothing rounds the CORNERS between real points so the route reads
+// cleanly without inventing any positions that weren't actually reported.
+function gpsPathD(st){
   if(st.points.length<2) return '';
   const lats=st.points.map(pt=>pt.lat), lons=st.points.map(pt=>pt.lon);
   const minLat=Math.min(...lats), maxLat=Math.max(...lats), minLon=Math.min(...lons), maxLon=Math.max(...lons);
   const spanLat=Math.max(maxLat-minLat,1e-6), spanLon=Math.max(maxLon-minLon,1e-6);
-  return st.points.map(pt=>{
-    const x=10+((pt.lon-minLon)/spanLon)*280, y=140-((pt.lat-minLat)/spanLat)*130;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+  const pts=st.points.map(pt=>[10+((pt.lon-minLon)/spanLon)*280, 140-((pt.lat-minLat)/spanLat)*130]);
+  if(pts.length===2) return `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)} L${pts[1][0].toFixed(1)},${pts[1][1].toFixed(1)}`;
+  let d=`M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for(let i=1;i<pts.length-1;i++){
+    const mx=(pts[i][0]+pts[i+1][0])/2, my=(pts[i][1]+pts[i+1][1])/2;
+    d+=` Q${pts[i][0].toFixed(1)},${pts[i][1].toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`;
+  }
+  const last=pts[pts.length-1];
+  d+=` L${last[0].toFixed(1)},${last[1].toFixed(1)}`;
+  return d;
 }
 function gpsUpdateDOM(ei){
   const ex=aw&&aw.exercises[ei]; if(!ex) return;
@@ -2911,7 +2921,7 @@ function gpsUpdateDOM(ei){
   const p=document.getElementById(`gpsPace-${ei}`); if(p) p.textContent=gpsPaceStr(st);
   const svg=document.getElementById(`gpsPath-${ei}`);
   if(svg && st.points.length>1){
-    svg.setAttribute('points', gpsPathPoints(st));
+    svg.setAttribute('d', gpsPathD(st));
   }
 }
 function gpsOnPosition(ei,pos){
@@ -2940,7 +2950,11 @@ async function gpsStart(ei){
     // Toasting every transient TIMEOUT/POSITION_UNAVAILABLE would spam the
     // screen throughout a normal run.
     err=>{ console.warn('gps',err); if(err.code===1) toast('Location permission denied — can\'t track this run','err'); },
-    {enableHighAccuracy:true, maximumAge:2000, timeout:15000}
+    // maximumAge:0 forces a fresh fix on every callback instead of letting the
+    // browser hand back a cached one up to 2s stale -- the one real lever this
+    // API gives us. The GPS chip's own update rate (~1-3s on a phone) is set
+    // by the hardware/OS, not something a web page can speed up further.
+    {enableHighAccuracy:true, maximumAge:0, timeout:15000}
   );
   st.tickId=setInterval(()=>gpsUpdateDOM(ei),1000);
   renderWS();
@@ -2974,7 +2988,7 @@ function renderGpsTracker(ex,ei){
   return `<div style="background:var(--bg3);border-radius:12px;padding:12px;margin-top:8px">
       <div style="font-size:10px;color:${st.running?'#ff5d6c':'var(--muted)'};text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:8px">${status}</div>
       <svg viewBox="0 0 300 150" width="100%" height="140" style="background:var(--bg4);border-radius:8px;display:block">
-        <polyline id="gpsPath-${ei}" points="${gpsPathPoints(st)}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path id="gpsPath-${ei}" d="${gpsPathD(st)}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
         <div style="text-align:center"><div id="gpsDist-${ei}" style="font-family:var(--fh);font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">${st.distanceMi.toFixed(2)}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">Miles</div></div>
