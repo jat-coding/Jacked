@@ -2950,6 +2950,10 @@ function _finishWContinue(auto,ts) {
   aw.exercises.forEach(e=>{ if(progressTrackable(e.tracking||'weight_reps')) preProgress[e.exId]=evaluateProgress(e.exId); });
   const prList=commitPRs(aw);              // PRs committed ONLY now, on finish
   const rec={...aw,duration:dur,sets:ts,totalVolume:Math.round(vol),prCount:prList.length};
+  // Snapshot the note that was actually in effect for each exercise tonight
+  // onto the saved record -- history should show what note applied to THAT
+  // workout, not just whatever the note happens to say today.
+  rec.exercises=rec.exercises.map(e=>{ const n=exNote(e.exId); return n?{...e,note:n}:e; });
   if(!rec.name || rec.name==='Quick Workout') rec.name=autoNameWorkout(rec.exercises);
   // Detect if the workout's exercises differ from its source routine.
   let rid=null,rname='',ids=aw.exercises.map(e=>e.exId);
@@ -3098,6 +3102,7 @@ function openWD(id) {
         ${ex.imgUrl?`<img src="${ex.imgUrl}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'" loading="lazy">`:`<div style="width:44px;height:44px;border-radius:8px;background:var(--bg4);flex-shrink:0"></div>`}
         <div><div style="font-family:var(--fh);font-size:17px;font-weight:700;color:var(--accent)">${ex.name}${ex.cable?` <span style="font-size:11px;color:var(--muted);font-weight:500">· ${ex.cable}</span>`:''}</div>${sub}</div>
       </div>
+      ${ex.note?`<div style="font-size:12px;color:var(--text2);background:var(--bg3);border-radius:7px;padding:7px 9px;margin-bottom:8px">${ex.note.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`:''}
       ${shown.map((s,i)=>`<div style="display:flex;justify-content:space-between;padding:5px 2px;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--muted)">Set ${i+1}</span><span style="font-weight:600">${setStr(s)}</span></div>`).join('')||'<div style="font-size:12px;color:var(--muted)">No sets logged</div>'}
     </div>`;
   });
