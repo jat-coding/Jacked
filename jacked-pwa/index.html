@@ -179,6 +179,11 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .progress-chip{display:inline-flex;align-items:center;gap:4px;font-family:var(--fb);font-size:10.5px;font-weight:700;border-radius:20px;padding:3px 9px 3px 7px;white-space:nowrap;cursor:pointer;-webkit-appearance:none;border:1px solid transparent}
 .progress-chip.up{color:var(--accent-bright);background:rgba(92,233,218,.1);border-color:rgba(92,233,218,.35)}
 .progress-chip.down{color:var(--muted);background:var(--bg3);border-color:var(--border2)}
+/* When both a metric-tier badge and a progression badge land on the same
+   exercise at once, they scroll horizontally within the action-buttons'
+   own width instead of forcing the header/exercise-name column wider. */
+.badge-row{display:flex;gap:6px;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.badge-row::-webkit-scrollbar{display:none}
 
 /* METRICS */
 .metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:18px;margin-bottom:14px}
@@ -2406,14 +2411,14 @@ function renderWS() {
           <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${ex.name}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:3px">${cardio?(cprev&&cprev.time?`Best ${fmtPace(pacePerMile(cprev.dist,cprev.time))}${cprev.maxDist?` · Longest ${cprev.maxDist} mi`:''}`:'No cardio PR yet'):(pr?`PR: ${dW(pr.weight)}${uL()} × ${pr.reps}`:'No PR yet')}</div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;max-width:150px">
           <div style="display:flex;gap:4px">
             <button class="btn bg ic xs" onclick="openReorder()" aria-label="Reorder">${uic('sort',undefined,14)}</button>
             <button class="btn bg ic xs" style="color:${linkBtnColor}" onclick="tapSuperset(${ei})" aria-label="Superset">${uic('link',linkBtnColor,14)}</button>
             <button class="btn bg ic xs" onclick="switchEx(${ei})" aria-label="Switch exercise">${uic('replace',undefined,14)}</button>
             <button class="btn bd ic xs" onclick="rmEx(${ei})" aria-label="Remove">${uic('trash',undefined,14)}</button>
           </div>
-          <div style="display:flex;gap:6px">
+          <div class="badge-row">
             ${mTierBadge?`<span class="progress-chip" style="color:${TIERC[mTierBadge.tier]};background:${TIERC[mTierBadge.tier]}22;border-color:${TIERC[mTierBadge.tier]}66" onclick="metricBadgeInfo('${mTierBadge.key}','${mTierBadge.tier}',${mTierBadge.value},'${(ex.name||'').replace(/'/g,"\\'")}')">${uic('trophy',TIERC[mTierBadge.tier],11)} ${capW(mTierBadge.tier)}</span>`:''}
             ${progress.up?`<span class="progress-chip up" onclick="progressInfo('up')">▲ Go up</span>`
               :showDown?`<span class="progress-chip down" onclick="progressInfo('down')">▼ Lighter</span>`:''}
@@ -2533,6 +2538,11 @@ function switchEx(ei) { if(aw&&aw.exercises[ei]) openAEModal('workoutReplace',ei
 function replaceExAt(ei,id) {
   if (!aw||!aw.exercises[ei]) return;
   if (aw.exercises.some((e,i)=>i!==ei&&e.exId===id)) { toast('Already in workout','err'); return; }
+  // Stop a live GPS watch/wake-lock on the outgoing exercise -- swapping it out
+  // must not leave tracking running in the background for an exercise no
+  // longer even shown.
+  const outgoing=aw.exercises[ei];
+  if(outgoing&&outgoing.tracking==='distance') gpsStop(gpsState(outgoing.exId));
   const ex=byId(id);
   aw.exercises[ei]={exId:id, name:ex.name, muscle:ex.muscle||'', equip:ex.equip||'', assist:ex.assist||false,
     tracking:ex.tracking||'weight_reps', imgUrl:imgUrl(ex)||null,
@@ -2696,8 +2706,17 @@ function progressInfo(kind){
 // ============================================================
 const flatNm=s=>(s||'').toLowerCase().replace(/[^a-z]/g,'');
 function exerciseBadgeKey(ex){
+  const t=ex.tracking||'weight_reps';
   const nm=(ex.name||'').toLowerCase();
-  if((ex.tracking||'')==='distance') return 'cardio';
+  if(t==='distance') return 'cardio';
+  // A duration exercise's "reps" field is unused (always 0 -- its value lives
+  // in "weight" as seconds, see the duration-unit section above), so none of
+  // the rep-based badges below can ever legitimately fire for one. Without
+  // this guard, a custom duration exercise named e.g. "Push-up Hold" would
+  // silently match the pushup pattern and just never earn it (reps stuck at
+  // 0) -- not wrong data, but a dead badge slot. Bail out before the name
+  // match instead of leaving that footgun in place.
+  if(t==='duration') return null;
   if(nm.includes('barbell')&&nm.includes('bench press')) return 'bench';
   if(nm.includes('barbell')&&(nm.includes('overhead press')||nm.includes('military press'))) return 'ohp';
   if(nm.includes('barbell')&&nm.includes('squat')) return 'squat';
@@ -2913,9 +2932,17 @@ function gpsPathD(st){
   d+=` L${last[0].toFixed(1)},${last[1].toFixed(1)}`;
   return d;
 }
-function gpsUpdateDOM(ei){
-  const ex=aw&&aw.exercises[ei]; if(!ex) return;
-  const st=gpsState(ex.exId);
+// Resolves an exId's CURRENT card index -- never trust a closed-over `ei`
+// inside a long-lived callback (watchPosition, setInterval): reordering
+// exercises mid-run would leave that index pointing at whatever exercise
+// now sits there instead of the one actually being tracked. gpsStart/Pause/
+// Finish are fine to take `ei` since they only ever run from a fresh click
+// on a just-rendered button, but the position/tick callbacks live far
+// longer than any single render and must resolve fresh each time.
+function gpsCurrentIndex(exId){ return aw ? aw.exercises.findIndex(e=>e.exId===exId) : -1; }
+function gpsUpdateDOM(exId){
+  const ei=gpsCurrentIndex(exId); if(ei<0) return;
+  const st=gpsState(exId);
   const d=document.getElementById(`gpsDist-${ei}`); if(d) d.textContent=st.distanceMi.toFixed(2);
   const t=document.getElementById(`gpsTime-${ei}`); if(t) t.textContent=gpsTimeStr(st);
   const p=document.getElementById(`gpsPace-${ei}`); if(p) p.textContent=gpsPaceStr(st);
@@ -2924,9 +2951,9 @@ function gpsUpdateDOM(ei){
     svg.setAttribute('d', gpsPathD(st));
   }
 }
-function gpsOnPosition(ei,pos){
-  const ex=aw&&aw.exercises[ei]; if(!ex) return;
-  const st=gpsState(ex.exId);
+function gpsOnPosition(exId,pos){
+  if(!aw) return;
+  const st=gpsState(exId);
   const {latitude,longitude}=pos.coords;
   const last=st.points[st.points.length-1];
   if(last){
@@ -2934,17 +2961,19 @@ function gpsOnPosition(ei,pos){
     if(segMi>0.0005) st.distanceMi+=segMi;   // ignore GPS jitter under ~2.5 ft between fixes
   }
   st.points.push({lat:latitude,lon:longitude,t:Date.now()});
-  gpsCommit(ei,false);
-  gpsUpdateDOM(ei);
+  const ei=gpsCurrentIndex(exId);
+  if(ei>=0) gpsCommit(ei,false);
+  gpsUpdateDOM(exId);
 }
 async function gpsStart(ei){
   const ex=aw&&aw.exercises[ei]; if(!ex) return;
   if(!('geolocation' in navigator)){ toast('Location not available on this device','err'); return; }
-  const st=gpsState(ex.exId);
+  const exId=ex.exId;
+  const st=gpsState(exId);
   st.running=true; st.lastResumeAt=Date.now();
   try{ if('wakeLock' in navigator) st.wakeLock=await navigator.wakeLock.request('screen'); }catch(e){ /* best-effort */ }
   st.watchId=navigator.geolocation.watchPosition(
-    pos=>gpsOnPosition(ei,pos),
+    pos=>gpsOnPosition(exId,pos),
     // GPS naturally drops out for a moment (tree cover, a tunnel, a building) --
     // only PERMISSION_DENIED (code 1) is something the user can actually act on.
     // Toasting every transient TIMEOUT/POSITION_UNAVAILABLE would spam the
@@ -2956,29 +2985,33 @@ async function gpsStart(ei){
     // by the hardware/OS, not something a web page can speed up further.
     {enableHighAccuracy:true, maximumAge:0, timeout:15000}
   );
-  st.tickId=setInterval(()=>gpsUpdateDOM(ei),1000);
+  st.tickId=setInterval(()=>gpsUpdateDOM(exId),1000);
   renderWS();
 }
 function gpsPause(ei){
   const ex=aw&&aw.exercises[ei]; if(!ex) return;
   const st=gpsState(ex.exId);
+  st.elapsedMs=gpsElapsedMs(st);   // freeze elapsed BEFORE gpsStop clears lastResumeAt
   gpsStop(st);
-  st.elapsedMs=gpsElapsedMs(st); st.lastResumeAt=null; st.running=false;
   gpsCommit(ei,false);
   renderWS();
 }
-// Releases the watch/wake-lock/timer without touching the accumulated totals
-// -- shared by pause, exercise removal, and workout cancel/finish.
+// Releases the watch/wake-lock/timer AND marks the state not-running -- shared
+// by pause, exercise removal/switch, and workout cancel/finish, so none of
+// those paths can leave a stale running:true with no actual watch behind it
+// (a real bug an earlier version of this had: removing/switching a tracked
+// exercise cleared the watch/timer but left `running` true).
 function gpsStop(st){
   if(st.watchId!=null){ try{ navigator.geolocation.clearWatch(st.watchId); }catch(e){} st.watchId=null; }
   if(st.tickId){ clearInterval(st.tickId); st.tickId=null; }
   if(st.wakeLock){ st.wakeLock.release().catch(()=>{}); st.wakeLock=null; }
+  st.running=false; st.lastResumeAt=null;
 }
 function gpsFinish(ei){
   const ex=aw&&aw.exercises[ei]; if(!ex) return;
   const st=gpsState(ex.exId);
+  st.elapsedMs=gpsElapsedMs(st);   // freeze elapsed BEFORE gpsStop clears lastResumeAt
   gpsStop(st);
-  st.elapsedMs=gpsElapsedMs(st); st.lastResumeAt=null; st.running=false;
   gpsCommit(ei,true);
   finishW();
 }
