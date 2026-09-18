@@ -2246,10 +2246,7 @@ const STALE_MS = 90*60*1000;   // auto-finish after 1.5h with no activity
 
 // Persist the in-progress workout so a reload/crash/screen-lock doesn't lose it.
 function saveAW() { if(aw){ awTouch=Date.now(); S.s('activeWorkout',{aw,awStart,awTouch}); } }
-function clearAW() {
-  Object.values(_gps).forEach(st=>{ if(st.running) gpsStop(st); });
-  try{ localStorage.removeItem('jk_activeWorkout'); }catch(e){}
-}
+function clearAW() { try{ localStorage.removeItem('jk_activeWorkout'); }catch(e){} }
 
 // Stop a forgotten session: publish it if anything was logged, else discard.
 function autoFinishStale() {
@@ -2425,7 +2422,6 @@ function renderWS() {
           </div>
         </div>
       </div>
-      ${tracking==='distance' ? renderGpsTracker(ex,ei) : `
       ${isCable?`<div class="cable-row" style="padding-left:2px">
         <span class="cable-lbl">Cable</span>
         <button class="cab-opt ${cab==='pulley'?'on':''}" onclick="setCable(${ei},'pulley')">Pulley</button>
@@ -2470,13 +2466,12 @@ function renderWS() {
           <button class="sd ${set.done?'done':''}" onclick="togSet(${ei},${si})">
             ${set.done?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4dff91" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`}
           </button>
-        </div>`;
+        </div>${tracking==='distance'?`<div class="cardio-pace" id="pace-${ei}-${si}" style="font-size:11px;color:var(--accent);text-align:right;padding:0 34px 6px 0">${(set.weight>0&&set.reps>0)?'Pace '+fmtPace(pacePerMile(set.weight,set.reps)):''}</div>`:''}`;
       }).join('')}
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn bg sm" style="flex:1" onclick="addSet(${ei})">+ Add Set</button>
         ${ex.sets.length>1?`<button class="btn bg sm" onclick="removeSet(${ei})" aria-label="Remove last set">− Set</button>`:''}
       </div>
-      `}
     </div>`;
   }).join('');
   h+=`<div style="display:flex;gap:8px;justify-content:center;padding:16px 0 8px">
@@ -2538,11 +2533,6 @@ function switchEx(ei) { if(aw&&aw.exercises[ei]) openAEModal('workoutReplace',ei
 function replaceExAt(ei,id) {
   if (!aw||!aw.exercises[ei]) return;
   if (aw.exercises.some((e,i)=>i!==ei&&e.exId===id)) { toast('Already in workout','err'); return; }
-  // Stop a live GPS watch/wake-lock on the outgoing exercise -- swapping it out
-  // must not leave tracking running in the background for an exercise no
-  // longer even shown.
-  const outgoing=aw.exercises[ei];
-  if(outgoing&&outgoing.tracking==='distance') gpsStop(gpsState(outgoing.exId));
   const ex=byId(id);
   aw.exercises[ei]={exId:id, name:ex.name, muscle:ex.muscle||'', equip:ex.equip||'', assist:ex.assist||false,
     tracking:ex.tracking||'weight_reps', imgUrl:imgUrl(ex)||null,
@@ -2830,7 +2820,7 @@ const gExNotes=()=>S.g('exNotes')||{};
 function exNote(exId){ return gExNotes()[exId]||''; }
 function setExNote(exId,v){ const n=gExNotes(); v=(v||'').trim(); if(v) n[exId]=v; else delete n[exId]; markExNotePending(exId); S.s('exNotes',n); }
 
-function rmEx(ei) { if(!aw)return; const ex=aw.exercises[ei]; if(ex&&ex.tracking==='distance') gpsStop(gpsState(ex.exId)); aw.exercises.splice(ei,1); renderWS(); }
+function rmEx(ei) { if(!aw)return; aw.exercises.splice(ei,1); renderWS(); }
 
 const gCardioPR=()=>S.g('cardioPR')||{};   // {exId:{dist,time,date, maxDist,maxDate}} — best effort + longest
 function isCardio(ex){ return ((ex&&ex.tracking)||'')==='distance'; }
@@ -2867,175 +2857,6 @@ function fmtClock(min){ if(!isFinite(min)||min<=0) return '—'; const m=Math.fl
 // Endurance-adjusted mile-equivalent time (Riegel, exp 1.06) — LOWER is better.
 // Sustaining a pace over a longer distance yields a faster equivalent, so distance counts.
 function mileEquiv(d,t){ return (d>0&&t>0) ? t/Math.pow(d,1.06) : Infinity; }
-
-// ============================================================
-// GPS RUN TRACKER — a distance-tracked exercise gets a live tracker screen
-// instead of the manual set table, per Mr. Roni 2026-09-17.
-//
-// Live state (watch handle, wake lock, raw GPS points) lives here, keyed by
-// exId, deliberately NOT inside `aw`: it can't survive a reload or the tab
-// backgrounding anyway (iOS Safari kills geolocation the moment the screen
-// locks — see the earlier feasibility answer), so there's nothing to gain
-// by persisting it. Only the resulting distance/time get written into
-// aw.exercises[ei].sets on every update (same weight=miles/reps=minutes
-// convention every other distance exercise already uses), so a crash/reload
-// at least keeps the last-saved numbers even though live tracking itself
-// would need restarting.
-// ============================================================
-const _gps = {};   // exId -> live tracking state
-function gpsState(exId){
-  if(!_gps[exId]) _gps[exId] = {running:false, points:[], distanceMi:0, elapsedMs:0, lastResumeAt:null, watchId:null, wakeLock:null, tickId:null};
-  return _gps[exId];
-}
-function haversineMi(lat1,lon1,lat2,lon2){
-  const R=3958.8, toRad=d=>d*Math.PI/180;
-  const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
-  const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-function gpsElapsedMs(st){ return st.elapsedMs + (st.running && st.lastResumeAt ? Date.now()-st.lastResumeAt : 0); }
-function gpsTimeStr(st){ const s=Math.floor(gpsElapsedMs(st)/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
-function gpsPaceStr(st){
-  if(!(st.distanceMi>0)) return '—';
-  const p=(gpsElapsedMs(st)/60000)/st.distanceMi, m=Math.floor(p), s=Math.round((p-m)*60);
-  return `${s===60?m+1:m}:${String(s===60?0:s).padStart(2,'0')}/mi`;
-}
-// One continuous set per run — weight=miles, reps=minutes, the same fields
-// every other distance exercise already stores, so the existing cardio PR/
-// badge machinery (isCardio, mileEquiv, commitPRs) needs no changes at all.
-function gpsCommit(ei,done){
-  const ex=aw&&aw.exercises[ei]; if(!ex) return;
-  const st=gpsState(ex.exId);
-  ex.sets=[{ weight: Math.round(st.distanceMi*100)/100, reps: Math.round(gpsElapsedMs(st)/60000*100)/100, done:!!done }];
-  saveAW();
-}
-// Plots the raw lat/lon points into a 280x130 box (10px margin in a 300x150
-// viewBox), scaled to whatever area this run actually covers -- not a real
-// map, just the shape of the route. Real GPS fixes land maybe once every
-// 1-3 seconds (the phone's own chip/OS sets that pace, not this page), which
-// draws a jagged line with few points -- this quadratic-through-midpoints
-// smoothing rounds the CORNERS between real points so the route reads
-// cleanly without inventing any positions that weren't actually reported.
-function gpsPathD(st){
-  if(st.points.length<2) return '';
-  const lats=st.points.map(pt=>pt.lat), lons=st.points.map(pt=>pt.lon);
-  const minLat=Math.min(...lats), maxLat=Math.max(...lats), minLon=Math.min(...lons), maxLon=Math.max(...lons);
-  const spanLat=Math.max(maxLat-minLat,1e-6), spanLon=Math.max(maxLon-minLon,1e-6);
-  const pts=st.points.map(pt=>[10+((pt.lon-minLon)/spanLon)*280, 140-((pt.lat-minLat)/spanLat)*130]);
-  if(pts.length===2) return `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)} L${pts[1][0].toFixed(1)},${pts[1][1].toFixed(1)}`;
-  let d=`M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
-  for(let i=1;i<pts.length-1;i++){
-    const mx=(pts[i][0]+pts[i+1][0])/2, my=(pts[i][1]+pts[i+1][1])/2;
-    d+=` Q${pts[i][0].toFixed(1)},${pts[i][1].toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`;
-  }
-  const last=pts[pts.length-1];
-  d+=` L${last[0].toFixed(1)},${last[1].toFixed(1)}`;
-  return d;
-}
-// Resolves an exId's CURRENT card index -- never trust a closed-over `ei`
-// inside a long-lived callback (watchPosition, setInterval): reordering
-// exercises mid-run would leave that index pointing at whatever exercise
-// now sits there instead of the one actually being tracked. gpsStart/Pause/
-// Finish are fine to take `ei` since they only ever run from a fresh click
-// on a just-rendered button, but the position/tick callbacks live far
-// longer than any single render and must resolve fresh each time.
-function gpsCurrentIndex(exId){ return aw ? aw.exercises.findIndex(e=>e.exId===exId) : -1; }
-function gpsUpdateDOM(exId){
-  const ei=gpsCurrentIndex(exId); if(ei<0) return;
-  const st=gpsState(exId);
-  const d=document.getElementById(`gpsDist-${ei}`); if(d) d.textContent=st.distanceMi.toFixed(2);
-  const t=document.getElementById(`gpsTime-${ei}`); if(t) t.textContent=gpsTimeStr(st);
-  const p=document.getElementById(`gpsPace-${ei}`); if(p) p.textContent=gpsPaceStr(st);
-  const svg=document.getElementById(`gpsPath-${ei}`);
-  if(svg && st.points.length>1){
-    svg.setAttribute('d', gpsPathD(st));
-  }
-}
-function gpsOnPosition(exId,pos){
-  if(!aw) return;
-  const st=gpsState(exId);
-  const {latitude,longitude}=pos.coords;
-  const last=st.points[st.points.length-1];
-  if(last){
-    const segMi=haversineMi(last.lat,last.lon,latitude,longitude);
-    if(segMi>0.0005) st.distanceMi+=segMi;   // ignore GPS jitter under ~2.5 ft between fixes
-  }
-  st.points.push({lat:latitude,lon:longitude,t:Date.now()});
-  const ei=gpsCurrentIndex(exId);
-  if(ei>=0) gpsCommit(ei,false);
-  gpsUpdateDOM(exId);
-}
-async function gpsStart(ei){
-  const ex=aw&&aw.exercises[ei]; if(!ex) return;
-  if(!('geolocation' in navigator)){ toast('Location not available on this device','err'); return; }
-  const exId=ex.exId;
-  const st=gpsState(exId);
-  st.running=true; st.lastResumeAt=Date.now();
-  try{ if('wakeLock' in navigator) st.wakeLock=await navigator.wakeLock.request('screen'); }catch(e){ /* best-effort */ }
-  st.watchId=navigator.geolocation.watchPosition(
-    pos=>gpsOnPosition(exId,pos),
-    // GPS naturally drops out for a moment (tree cover, a tunnel, a building) --
-    // only PERMISSION_DENIED (code 1) is something the user can actually act on.
-    // Toasting every transient TIMEOUT/POSITION_UNAVAILABLE would spam the
-    // screen throughout a normal run.
-    err=>{ console.warn('gps',err); if(err.code===1) toast('Location permission denied — can\'t track this run','err'); },
-    // maximumAge:0 forces a fresh fix on every callback instead of letting the
-    // browser hand back a cached one up to 2s stale -- the one real lever this
-    // API gives us. The GPS chip's own update rate (~1-3s on a phone) is set
-    // by the hardware/OS, not something a web page can speed up further.
-    {enableHighAccuracy:true, maximumAge:0, timeout:15000}
-  );
-  st.tickId=setInterval(()=>gpsUpdateDOM(exId),1000);
-  renderWS();
-}
-function gpsPause(ei){
-  const ex=aw&&aw.exercises[ei]; if(!ex) return;
-  const st=gpsState(ex.exId);
-  st.elapsedMs=gpsElapsedMs(st);   // freeze elapsed BEFORE gpsStop clears lastResumeAt
-  gpsStop(st);
-  gpsCommit(ei,false);
-  renderWS();
-}
-// Releases the watch/wake-lock/timer AND marks the state not-running -- shared
-// by pause, exercise removal/switch, and workout cancel/finish, so none of
-// those paths can leave a stale running:true with no actual watch behind it
-// (a real bug an earlier version of this had: removing/switching a tracked
-// exercise cleared the watch/timer but left `running` true).
-function gpsStop(st){
-  if(st.watchId!=null){ try{ navigator.geolocation.clearWatch(st.watchId); }catch(e){} st.watchId=null; }
-  if(st.tickId){ clearInterval(st.tickId); st.tickId=null; }
-  if(st.wakeLock){ st.wakeLock.release().catch(()=>{}); st.wakeLock=null; }
-  st.running=false; st.lastResumeAt=null;
-}
-function gpsFinish(ei){
-  const ex=aw&&aw.exercises[ei]; if(!ex) return;
-  const st=gpsState(ex.exId);
-  st.elapsedMs=gpsElapsedMs(st);   // freeze elapsed BEFORE gpsStop clears lastResumeAt
-  gpsStop(st);
-  gpsCommit(ei,true);
-  finishW();
-}
-function renderGpsTracker(ex,ei){
-  const st=gpsState(ex.exId);
-  const status=st.running?'● Recording':st.points.length?'Paused':'Not started';
-  return `<div style="background:var(--bg3);border-radius:12px;padding:12px;margin-top:8px">
-      <div style="font-size:10px;color:${st.running?'#ff5d6c':'var(--muted)'};text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:8px">${status}</div>
-      <svg viewBox="0 0 300 150" width="100%" height="140" style="background:var(--bg4);border-radius:8px;display:block">
-        <path id="gpsPath-${ei}" d="${gpsPathD(st)}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
-        <div style="text-align:center"><div id="gpsDist-${ei}" style="font-family:var(--fh);font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">${st.distanceMi.toFixed(2)}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">Miles</div></div>
-        <div style="text-align:center"><div id="gpsTime-${ei}" style="font-family:var(--fh);font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">${gpsTimeStr(st)}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">Time</div></div>
-        <div style="text-align:center"><div id="gpsPace-${ei}" style="font-family:var(--fh);font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">${gpsPaceStr(st)}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">Pace /mi</div></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        ${st.running
-          ? `<button class="btn bg wf" onclick="gpsPause(${ei})">Pause</button>`
-          : `<button class="btn ba wf" onclick="gpsStart(${ei})">${st.points.length?'Resume':'Start'}</button>`}
-        ${(!st.running && st.points.length>0) ? `<button class="btn wf" style="background:var(--accent-bright);color:var(--on-accent)" onclick="gpsFinish(${ei})">Finish</button>` : ''}
-      </div>
-    </div>`;
-}
 
 // Commit PRs from a finished workout.
 //  • Weight lifts: PR = a higher estimated 1RM (weight × reps). No lb PRs for cardio.
