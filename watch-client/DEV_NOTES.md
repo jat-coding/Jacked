@@ -45,5 +45,28 @@ should already be filtered to Legs.
 **Acceptance test:** on a leg press, tap change: the filter reads Legs, a favourited leg
 exercise is at the top, then recently used leg exercises, then the rest of Legs.
 
+## 3. Dial edits the wrong field after touching another one — OPEN
+Source: Mr. Roni, 2026-09-19 3:15pm MDT (adds to item 1).
+
+**Where:** the set row on the active workout, fields Sets and Reps (SPEC §4.2, bezel scrubs "the focused field").
+
+**Observed (his words):** with Reps selected, touching the Sets value and changing it works,
+but Sets does not become the selected field, so the dial keeps editing Reps.
+
+**Required behavior:**
+1. Touching a field (tap, or touch-drag/scroll on it) makes it the focused field immediately,
+   before any dial input. The dial then edits that field.
+2. Exactly one field is focused at a time, and it shows a visible focus state, so it is clear
+   what the dial will change.
+3. Applies to every editable field in the row (Sets, Reps, Weight, and the duration/distance
+   variants), not only Sets and Reps.
+4. Changing a value by touch and then turning the dial edits that same field, with no extra tap.
+
+**Acceptance test:** focus Reps. Touch Sets and change it by touch. Turn the dial: Sets
+changes and Reps stays put. Touch Reps: the dial now edits Reps.
+
+**First thing to look at:** the touch handler on the value changes the value but never sets
+the focused-field state that the dial handler reads. Verify in the watch code.
+
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
