@@ -97,5 +97,34 @@ which is the search bar, which is the filter, and which group each exercise is i
 **Note:** no mockup exists yet. Before building, produce one for Mr. Roni and get his
 approval; do not choose the final look alone.
 
+## 5. Focus mode: one exercise fills the whole screen — OPEN
+Source: Mr. Roni, 2026-09-19 3:28pm MDT.
+
+**Where:** the active workout list (SPEC §4.2, the vertical list of exercise cards).
+
+**Observed (his words):** scrolling down the workout and lining things up is fiddly. He wants
+to tap an exercise, have it become the whole screen, finish it, then move to the next, so he
+can "lock in" on one exercise at a time.
+
+**Required behavior:**
+1. Tapping an exercise card in the workout list opens that exercise full screen (focus view).
+2. The focus view shows only that exercise: name, PR line, all its set rows (with the
+   field focus and dial behavior from items 1 and 3), + Set, and the rest timer.
+   No other exercises are visible, so nothing needs scrolling or lining up.
+3. Leaving the focus view returns to the workout list, with the exercise's sets and
+   done state saved exactly as entered.
+4. A "next exercise" control in the focus view goes straight to the next exercise in workout
+   order, without returning to the list. On the last exercise it becomes the path to Finish.
+5. Optional but wanted: a way to go back to the previous exercise the same way.
+6. The list stays the home view. Focus view is opened by the user, never forced.
+
+**Acceptance test:** from a 4-exercise workout, tap exercise 2, log all sets, tap next, land on
+exercise 3 full screen, back out to the list: exercise 2 shows its logged sets.
+
+**Open (ask Mr. Roni before building, do not choose):**
+- Does "done with the exercise" advance automatically once every set is checked, or only when
+  he taps next? Default to tap-only until he says otherwise.
+- Which control leaves the focus view: back swipe, a button, or both.
+
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
