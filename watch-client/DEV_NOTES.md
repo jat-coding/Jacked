@@ -1,5 +1,8 @@
 # Watch app dev notes (Mr. Roni, running list)
 
+Read `WATCH_BRIDGE.md` (same folder) first: it lists which phone-app changes the watch must mirror.
+This file is the watch-only to-do list.
+
 Each item is written as a spec so the bot working it does not have to decide what was meant.
 Source: Mr. Roni, Jacked room, 2026-09-19 3:13pm MDT. Status column: open until he says done.
 

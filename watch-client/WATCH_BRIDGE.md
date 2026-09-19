@@ -1,10 +1,10 @@
 # WATCH_BRIDGE — keeping the phone app and the watch app aligned
 
-Top level of the Jacked repo so the watch dev reads it every week. It is a running change log,
+Lives in `watch-client/` so the watch dev reads it every week. It is a running change log,
 newest first inside each section, that says which changes are **watch-only** and which change
 the **function of the whole app** (so the watch must match). Owner of edits: the desktop
-session that works on Jacked. Phone app source: `jacked-pwa/index.html`. Watch specs:
-`watch-client/` (`SPEC.md`, `API.md`, `DESIGN.md`, `DEV_NOTES.md`).
+session that works on Jacked. Phone app source: `jacked-pwa/index.html`. Sibling files: `SPEC.md`, `API.md`,
+`DESIGN.md`, `DEV_NOTES.md` (the watch-only to-do list).
 
 ## How to read this
 | Tag | Meaning | Watch dev action |
@@ -13,10 +13,8 @@ session that works on Jacked. Phone app source: `jacked-pwa/index.html`. Watch s
 | **WATCH-ONLY** | Only the watch needs it (dial, watch layout, watch input). The phone does not change. | Build it; the phone is not affected. |
 | **PHONE-ONLY** | Phone UI detail with no watch equivalent. | None. Listed so nobody wonders if it was missed. |
 
-Each entry: what changed · the exact rule or data field · phone commit · status (`shipped-local` = on the desktop repo, not pushed/deployed yet; `pushed` = on origin/main).
-
-Nothing below is pushed yet. `origin/main` is `38407d1`; everything since is `shipped-local`.
-The phone app's live deploy therefore does not have these changes.
+Each entry: what changed · the exact rule or data field · phone commit. Everything below is
+pushed to `origin/main` and live on the phone app (the full dated list is the CHANGELOG at the bottom).
 
 ---
 
@@ -49,7 +47,7 @@ Tiers per badge (1–3): Bench-Maxing 135/225/315 lb; Shoulder-Maxing 0.25/0.5/1
 Leg-Maxing 1.0/1.5/2.0 x bodyweight; Pull-up-Maxing 10/15/20 reps; Push-up-Maxing 30/50/80 reps;
 Cardio-Maxing 9/8/6.5 min per mile (lower is better). Shows live on the exercise when a set crosses
 a tier; tapping opens a popup naming the exact stat that earned it and the thresholds. Applies to
-those six exercise types only. Definitions: `BADGE_TIER_THRESH` / `BADGE_META` in `index.html`.
+those six exercise types only. Duration-tracked exercises never earn a tier badge (a "Push-up Hold" does not count as push-ups). Definitions: `BADGE_TIER_THRESH` / `BADGE_META` in `index.html`.
 
 ### A2. Progressive-overload badges — `3fe5987`
 - **Go up:** the last 3 consecutive workouts of the exercise used the same weight and every set
@@ -65,7 +63,7 @@ Custom exercises: full edit. Built-in library exercises: name, equipment, catego
 flag, notes only; muscle group is locked. Stored as overrides in `jk_exOverride`.
 
 ## WATCH-ONLY (phone unchanged)
-Full specs in `watch-client/DEV_NOTES.md`. Status of all: open (no watch code in this repo).
+Full specs in `watch-client/DEV_NOTES.md`. Status of all: open (the watch source is not in this repo).
 - **W1. Rotary dial precision + haptics** — one detent = ±1, no skipped numbers, a tick per value. (DEV_NOTES 1)
 - **W2. Touching a field focuses it** so the dial edits that field. (DEV_NOTES 3)
 - **W3. Picker screen layout** — title hierarchy, distinct search bar, filter pills, grouped cards; mockup first. (DEV_NOTES 4)
@@ -86,4 +84,29 @@ Full specs in `watch-client/DEV_NOTES.md`. Status of all: open (no watch code in
 2. If a phone change needs a watch match, put the behavior in `APP-WIDE`, and add a line in
    `watch-client/DEV_NOTES.md` only if the watch needs extra work.
 3. State the exact rule and data fields, not a description of the screen.
-4. Record the commit and status. When pushed, change `shipped-local` to `pushed`.
+4. Record the commit, and add a dated line to the CHANGELOG below in the same edit.
+5. Update this file in the same push as the app change, so the two never drift.
+
+---
+
+## CHANGELOG (phone app, newest first, every change since `38407d1`, 2026-09-15)
+Dates are 2026 local (MDT). Tag = which section above holds the rule.
+
+| Date | Commit | Change | Tag |
+|---|---|---|---|
+| 09-19 | `7db214d` | Switch Exercise opens pre-filtered to the replaced exercise's muscle group | APP-WIDE A7 |
+| 09-18 | `0608651` | Exercise header wraps on phones under 360px wide | PHONE-ONLY |
+| 09-18 | `51963dd` | GPS run tracker removed from the live app (parked for App Store work) | PHONE-ONLY |
+| 09-18 | `add4de6` | Stress-test fixes: duration exercises excluded from tier badges; badge row scrolls sideways when crowded; 4 GPS bugs fixed (moot, GPS later removed) | APP-WIDE A3 / PHONE-ONLY |
+| 09-17 | `9cc0a28` | GPS tracker smoothing (later removed) | PHONE-ONLY |
+| 09-17 | `d1e4a66` | GPS run tracker built (later removed, see `51963dd`) | PHONE-ONLY |
+| 09-17 | `f9da482` | Note snapshotted onto each saved workout exercise at finish (shown escaped, so typed `<` cannot break the page) | APP-WIDE A5 |
+| 09-17 | `984dacb` | Notes carry over as a greyed placeholder; blank never deletes | APP-WIDE A5 |
+| 09-17 | `7b64503` | Tier popup redesigned as a real modal | APP-WIDE A3 |
+| 09-17 | `fdb61e5` | Tier popup names the exact stat that earned it | APP-WIDE A3 |
+| 09-17 | `d490d6b` | Live tier badge next to the progression chip | APP-WIDE A3 |
+| 09-16 | `3fe5987` | Progressive-overload badges (go up / lighter) + auto-name untitled workouts; "0/3 done" removed from PR line | APP-WIDE A2, A4 / PHONE-ONLY |
+| 09-16 | `37ef4e6` | Library exercise editing + sec/min/hr units for duration exercises (stored in seconds) | APP-WIDE A1, A6 |
+
+Docs-only commits (no app change): `20bba21`, `1fd34cc`, `59ef1eb`, `b5d8e2c`, `bed2cf2` (`DEV_NOTES.md`),
+and this file.
