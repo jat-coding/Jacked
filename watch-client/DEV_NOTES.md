@@ -121,10 +121,11 @@ can "lock in" on one exercise at a time.
 **Acceptance test:** from a 4-exercise workout, tap exercise 2, log all sets, tap next, land on
 exercise 3 full screen, back out to the list: exercise 2 shows its logged sets.
 
-**Open (ask Mr. Roni before building, do not choose):**
-- Does "done with the exercise" advance automatically once every set is checked, or only when
-  he taps next? Default to tap-only until he says otherwise.
-- Which control leaves the focus view: back swipe, a button, or both.
+**Decided by Mr. Roni (2026-09-19 3:40pm MDT):**
+- Advance is tap-only. Tapping next goes to the next exercise's focus view. It never
+  auto-advances when the last set is checked.
+- The user can always go back to the full workout list from the focus view.
+- Leaving the focus view: a close button AND a back swipe. Both return to the full list.
 
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
