@@ -2116,6 +2116,13 @@ function openAEModal(target, idx) {
   _aeReplaceIdx = (idx==null?-1:idx);
   _aeSelected = new Set();
   aeFlt = null;
+  // Switching an exercise: open pre-filtered to its own muscle group (Warm-up/Cardio included).
+  if (target==='workoutReplace'||target==='routineReplace') {
+    const curId = target==='workoutReplace' ? aw?.exercises[_aeReplaceIdx]?.exId : rExs[_aeReplaceIdx];
+    const cur = curId ? byId(curId) : null;
+    if (cur) aeFlt = (cur.category||'').toLowerCase()==='warmup' ? 'warmup'
+      : isCardioCat(cur) ? 'cardio' : ((cur.muscle||'').toLowerCase()||null);
+  }
   // pre-select already-in-routine exercises
   if (target==='routine') rExs.forEach(id=>_aeSelected.add(id));
   document.getElementById('aeSearch').value='';
@@ -2125,7 +2132,7 @@ function openAEModal(target, idx) {
     : 'Add Exercise';
   // Pre-populate immediately with everything (no search needed)
   renderAEList();
-  buildMuscleChips('aeChips', handleAEChip, null);
+  buildMuscleChips('aeChips', handleAEChip, aeFlt);
   om('aeModal');
 }
 
