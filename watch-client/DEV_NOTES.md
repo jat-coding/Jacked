@@ -68,5 +68,34 @@ changes and Reps stays put. Touch Reps: the dial now edits Reps.
 **First thing to look at:** the touch handler on the value changes the value but never sets
 the focused-field state that the dial handler reads. Verify in the watch code.
 
+## 4. Change-exercise / search screen is visually muddled — OPEN
+Source: Mr. Roni, 2026-09-19 3:18pm MDT (same screen as item 2).
+
+**Where:** the picker opened by changing an exercise (and "+ Exercise", same screen).
+
+**Observed (his words):** the search interface is "muddled together", hard to tell where
+things are, "a bunch of text together". He wants: a clear hierarchy of titles, a search bar
+that stands out, and sections that look cohesive and clearly sectioned off. More digestible.
+
+**Required behavior (use DESIGN.md tokens, no new colors or fonts):**
+1. **Title hierarchy:** three distinct levels. Screen title (Barlow Condensed bold, white),
+   section headers (uppercase, letter-spaced, muted, small, per DESIGN.md §2 label style),
+   exercise rows (DM Sans, name white bold, one muted line under it for muscle/equipment).
+2. **Search bar:** its own inset box (`bg4` on `bg2`, 18px radius per DESIGN.md §3), search
+   icon, placeholder text, teal outline when focused. Clearly separate from the list below,
+   with spacing above and below. It is the first thing under the title.
+3. **Muscle filter:** shown as its own row of pills under the search bar. The selected pill
+   is teal filled, the rest are `bg4` (this is where item 2's pre-selected filter shows).
+4. **Sections:** the list is grouped under muted uppercase headers in the order from item 2:
+   FAVOURITES, RECENT, then ALL (label the last one by the active muscle filter). Each group
+   is a card (`bg2` on black) with a small gap between cards. No header when a group is empty.
+5. Rows keep 48dp tap targets. One primary teal element only (the selected filter pill).
+
+**Acceptance test:** a person can tell at a glance, without reading, which part is the title,
+which is the search bar, which is the filter, and which group each exercise is in.
+
+**Note:** no mockup exists yet. Before building, produce one for Mr. Roni and get his
+approval; do not choose the final look alone.
+
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
