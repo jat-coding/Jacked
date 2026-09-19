@@ -184,6 +184,14 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
    own width instead of forcing the header/exercise-name column wider. */
 .badge-row{display:flex;gap:6px;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .badge-row::-webkit-scrollbar{display:none}
+/* Very narrow phones (<360px): the name column was squeezed to a few
+   characters and ran underneath the action buttons. Let the header wrap so
+   the buttons + badges drop below the name instead of beside it. Widths
+   360px and up keep the exact layout they had. */
+@media (max-width:359px){
+  .ebh{flex-wrap:wrap}
+  .ebh .eb-actions{width:100%!important;max-width:none!important;align-items:flex-start!important}
+}
 
 /* METRICS */
 .metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:18px;margin-bottom:14px}
@@ -2408,7 +2416,7 @@ function renderWS() {
           <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${ex.name}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:3px">${cardio?(cprev&&cprev.time?`Best ${fmtPace(pacePerMile(cprev.dist,cprev.time))}${cprev.maxDist?` · Longest ${cprev.maxDist} mi`:''}`:'No cardio PR yet'):(pr?`PR: ${dW(pr.weight)}${uL()} × ${pr.reps}`:'No PR yet')}</div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;max-width:150px">
+        <div class="eb-actions" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;max-width:150px">
           <div style="display:flex;gap:4px">
             <button class="btn bg ic xs" onclick="openReorder()" aria-label="Reorder">${uic('sort',undefined,14)}</button>
             <button class="btn bg ic xs" style="color:${linkBtnColor}" onclick="tapSuperset(${ei})" aria-label="Superset">${uic('link',linkBtnColor,14)}</button>
