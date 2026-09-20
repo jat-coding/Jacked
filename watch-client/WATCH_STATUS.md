@@ -35,7 +35,15 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   finish → summary (volume, duration, PRs).
 - **Sensors (Wear):** live HR + calories during the session; `hrAvg`/`hrMax`/`kcal`/`hrSeries`
   are written onto the workout as extra fields the PWA carries through untouched.
-- **Progressive-overload nudges:** both watches, target-based — see "Deliberate differences".
+- **Progressive-overload nudges:** both watches, target-based — see "Agreed cross-device rules".
+- **Focus view (Wear, v0.15; `DEV_NOTES` item 5):** tapping an exercise **name** in the
+  workout list opens that exercise alone — sets, − Set / + Set, then **‹ Prev · All · Next ›**
+  (Next → Finish on the last exercise). Tap-only, never auto-advances; *All* returns to the
+  list, which stays the home view. The focused exercise is remembered, so *Resume workout*
+  reopens it after a relaunch. Replace/remove/reorder stay on the list.
+- **Set editor bezel (Wear, v0.15; `DEV_NOTES` item 1):** reps move exactly ±1 per detent
+  with a light tick per change; weight keeps velocity tiers (2.5 / 5 / 10) but needs a
+  deliberate spin (≥4 detents/s) to accelerate.
 - **Exercise picker:** muscle chips are **regions** (back / legs / core / cardio + one chip per
   remaining muscle), because the bundled library has no `back` muscle, only `lats`,
   `middle back`, `lower back`, `traps`. Stored `muscle` values on exercises are untouched.
@@ -54,7 +62,9 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   `jk_settings.targetSets`/`repMin`/`repMax`. **Go up** = all sets **≥ max** for 3
   consecutive workouts at the same weight. **Go down** = no set reaches **min** in a
   **single** workout, immediately. Suppressed when the exercise sets a PR that session.
-  Wear implements this as of v0.15; the phone is asked to match (see `BOARD.md`).
+  Wear implements this as of v0.15; the phone matches from build v1.8.17 (A10). Known
+  residue: the watches also require **≥ `targetSets` (default 3) done sets** per qualifying
+  workout; the phone has no `targetSets`.
 - **Duration sets** store seconds in the set's `weight` field (A6). Wear wrote `reps`
   until 2026-09-20; it now writes `weight` and falls back to `reps` when reading older
   sessions.
