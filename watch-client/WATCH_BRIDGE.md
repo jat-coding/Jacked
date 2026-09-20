@@ -16,6 +16,7 @@ auto-builds are off; a deploy needs Mr. Roni's separate go). Check the live site
 
 | BUILD | What it contains (cumulative) | Pushed commit |
 |---|---|---|
+| v1.8.18 | A1-A10, plus the frosted-glass bottom tab bar (phone-only) | not pushed yet |
 | v1.8.17 | A1-A10, **A10 amended: go-up at or above Max; lighter after a single workout (both match the watches)** | `c4ee8c5`, `4754bd0` |
 | v1.8.16 | A1-A9, **A10 user-defined rep range for the overload badges** | `e513de7` |
 | v1.8.15 | A1-A7, A8 Signal colors, **A9 muscle-group tier rebuild** | `5832e21` |
@@ -148,6 +149,7 @@ Full specs in `watch-client/DEV_NOTES.md`. Status of all: open (the watch source
 - **W4. Focus mode** — tap an exercise to make it the whole screen; tap-only next; close button + back swipe. (DEV_NOTES 5)
 
 ## PHONE-ONLY (no watch action)
+- Bottom tab bar is now frosted glass and sits low above the home line (build v1.8.18): translucent blur, teal pill on the active tab. Layout offsets for the resume/rest bars and page padding follow it.
 - Removed the "0/3 done" progress text from the PR line.
 - Exercise header wraps below 360px wide — `0608651`.
 - Badge row scrolls sideways when several badges show (added with the stress-test fixes, `add4de6`).
@@ -195,6 +197,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 |---|---|---|---|
 | 09-19 | `5832e21` | Muscle-group tier rebuild: 90-day window, rep cap 10, per-exercise scaling, top-3 average, tier lines at the standards | APP-WIDE A9 |
 | 09-19 | `0e23fee` | Tier colors switched to the Signal scheme (grey/red/green/blue/gold), one color per tier, shared by body, bars and badges | APP-WIDE A8 |
+| 09-20 | local | Tab bar: frosted glass, moved low to the bottom | PHONE-ONLY |
 | 09-19 | `c4ee8c5`, `4754bd0` | Go-up fires at or above Max; lighter fires after a single workout with no set reaching Min. Both match the watches | APP-WIDE A10 |
 | 09-19 | `e513de7` | Overload-badge rep range: default 5-12, user-defined Min/Max in Profile (`jk_settings.repMin/repMax`) | APP-WIDE A10 |
 | 09-19 | `7db214d` | Switch Exercise opens pre-filtered to the replaced exercise's muscle group | APP-WIDE A7 |
