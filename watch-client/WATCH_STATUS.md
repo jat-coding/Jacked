@@ -41,9 +41,13 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   (Next → Finish on the last exercise). Tap-only, never auto-advances; *All* returns to the
   list, which stays the home view. The focused exercise is remembered, so *Resume workout*
   reopens it after a relaunch. Replace/remove/reorder stay on the list.
-- **Set editor bezel (Wear, v0.15; `DEV_NOTES` item 1):** reps move exactly ±1 per detent
-  with a light tick per change; weight keeps velocity tiers (2.5 / 5 / 10) but needs a
-  deliberate spin (≥4 detents/s) to accelerate.
+- **Set editor bezel (Wear, v0.15; `DEV_NOTES` items 1 and 3):** reps move exactly ±1 per
+  detent with a light tick per change; weight keeps velocity tiers (2.5 / 5 / 10) but needs
+  a deliberate spin (≥4 detents/s) to accelerate. Touch-scrolling a wheel makes it the
+  bezel's target — one focused column at a time, shown by the teal outline.
+- **Change exercise (Wear, v0.15; `DEV_NOTES` item 2 / A7):** the ⇄ picker opens
+  pre-filtered to the outgoing exercise's region chip, ranked favourites → used → rest,
+  without the outgoing exercise itself.
 - **Exercise picker:** muscle chips are **regions** (back / legs / core / cardio + one chip per
   remaining muscle), because the bundled library has no `back` muscle, only `lats`,
   `middle back`, `lower back`, `traps`. Stored `muscle` values on exercises are untouched.
