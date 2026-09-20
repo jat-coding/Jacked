@@ -74,7 +74,8 @@ Cardio-Maxing 9/8/6.5 min per mile (lower is better). Shows live on the exercise
 a tier; tapping opens a popup naming the exact stat that earned it and the thresholds. Applies to
 those six exercise types only. Duration-tracked exercises never earn a tier badge (a "Push-up Hold" does not count as push-ups). Definitions: `BADGE_TIER_THRESH` / `BADGE_META` in `index.html`.
 
-### A2. Progressive-overload badges — `3fe5987`
+### A2. Progressive-overload badges — `3fe5987` (rule confirmed for the watches by Mr. Roni, 2026-09-19)
+**One rule on every device.** Phone and watches all use the rule below. The watches' target-based rule (sets x rep range) does not drive the badge.
 - **Go up:** the last 3 consecutive workouts of the exercise used the same weight and every set
   in each was more than 12 reps.
 - **Consider lighter:** same, but every set under 5 reps.
@@ -83,9 +84,19 @@ those six exercise types only. Duration-tracked exercises never earn a tier badg
 - Shows on the exercise card live and in the finish summary. If the user then goes up in weight
   after a "go up", the summary adds a congratulatory note. Computed from `jk_hist` + `jk_prs`.
 
-### A1. Library exercise editing — `37ef4e6`
-Custom exercises: full edit. Built-in library exercises: name, equipment, category, bodyweight
-flag, notes only; muscle group is locked. Stored as overrides in `jk_exOverride`.
+### A1. Library exercise editing — `37ef4e6` (corrected 2026-09-19 to match `saveCE()`)
+What is written, exactly (source: `saveCE()` in `jacked-pwa/index.html`):
+- **Built-in library exercise:** the muscle group is locked. Editing writes two things:
+  - the **name** goes in `jk_exRename` (`{exId: "new name"}`); it is removed again if the name is set back to the original;
+  - everything else goes in `jk_exOverride[exId] = { equip, category, notes, assist }`. Nothing else is stored there.
+- **Custom exercise (`jk_cex`):** full edit. The entry is `{ name, muscle, equip, tracking, category, notes, assist, durUnit }`.
+- **There is no separate "bodyweight" field.** The bodyweight flag is stored as `equip: "body only"`.
+- **`assist` is a boolean**: `true` means assisted (the load is **subtracted** from bodyweight, e.g. assisted pull-up);
+  `false` or absent means added weight (bodyweight **plus** load). Dropping `assist` flips the math, so clients
+  must read it wherever bodyweight lifts are computed.
+- `byId()` and `allEx()` merge the override over the library entry at read time; the library data is never edited.
+- `EQUIP_FIX` (in `index.html`) re-tags about 30 library ids whose equipment is wrong; apply it before reading `equip`.
+- Delete/hide uses `jk_hiddenEx`; favourites use `jk_favEx`.
 
 ## WATCH-ONLY (phone unchanged)
 Full specs in `watch-client/DEV_NOTES.md`. Status of all: open (the watch source is not in this repo).
