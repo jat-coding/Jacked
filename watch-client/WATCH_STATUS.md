@@ -38,13 +38,15 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
 - **Progressive-overload nudges:** both watches, target-based — see "Agreed cross-device rules".
 - **Focus view (Wear, v0.15; `DEV_NOTES` item 5):** tapping an exercise **name** in the
   workout list opens that exercise alone — sets, − Set / + Set, then **‹ Prev · All · Next ›**
-  (Next → Finish on the last exercise). Tap-only, never auto-advances; *All* returns to the
-  list, which stays the home view. The focused exercise is remembered, so *Resume workout*
-  reopens it after a relaunch. Replace/remove/reorder stay on the list.
-- **Set editor bezel (Wear, v0.15; `DEV_NOTES` items 1 and 3):** reps move exactly ±1 per
-  detent with a light tick per change; weight keeps velocity tiers (2.5 / 5 / 10) but needs
-  a deliberate spin (≥4 detents/s) to accelerate. Touch-scrolling a wheel makes it the
-  bezel's target — one focused column at a time, shown by the teal outline.
+  and a full-width **✓ Finish** pill. Tap-only, never auto-advances; Prev/Next grey out at the
+  ends (never change function); *All* returns to the list, which stays the home view; Discard
+  is on the list only. The focused exercise is remembered, so *Resume workout* reopens it
+  after a relaunch. Replace/remove/reorder stay on the list.
+- **Set editor bezel (Wear, v0.15; `DEV_NOTES` items 1 and 3 / W1, W2):** reps move exactly
+  ±1 per detent; weight keeps velocity tiers (2.5 / 5 / 10) but needs a deliberate spin
+  (≥4 detents/s) to accelerate; a light tick on every value change, both columns. Touch-
+  scrolling a wheel makes it the bezel's target — one focused column at a time, shown by
+  the teal outline. Checking a set off gives a stronger haptic.
 - **Change exercise (Wear, v0.15; `DEV_NOTES` item 2 / A7):** the ⇄ picker opens
   pre-filtered to the outgoing exercise's region chip, ranked favourites → used → rest,
   without the outgoing exercise itself.
