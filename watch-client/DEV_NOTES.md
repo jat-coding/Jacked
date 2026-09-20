@@ -151,5 +151,36 @@ record the screen you land on, for swipe AND button. Put the table in `WATCH_STA
 **Acceptance test:** routine -> change exercise -> muscle filter -> back lands on change exercise;
 back again lands on the routine. Same for every other pair in the audit table.
 
+## 7. Confirm before Finish and before Discard — OPEN
+Source: Mr. Roni, 2026-09-20 3:35pm MDT.
+
+**Why:** misclicks. Today one tap on Finish or Discard ends the workout.
+
+**Required behavior:**
+1. Tapping **Finish** or **Discard** (workout list, and the focus view's tail from item 5) opens a
+   confirmation first. Nothing is saved or deleted until it is confirmed. Cancel returns to the workout unchanged.
+2. Match the phone's wording (`jacked-pwa/index.html`: `showConfirm`): Finish = "Finish and save this workout?"
+   (with 0 sets logged: "No sets logged — finish anyway?"); Discard = "Cancel workout? All progress will be lost."
+3. The confirm's destructive/confirm button must not sit where the tap that opened it lands (the
+   point is to stop a stray double-tap). Default: cancel is the pre-focused/first option.
+4. Applies to every route to finish/discard on both watches, including item 8's long-press discard.
+
+**Acceptance test:** tap Finish then Cancel: workout intact, sets intact. Tap Discard then Cancel: same. Confirm: it finishes/discards.
+
+## 8. Long-press the Resume button to discard — OPEN
+Source: Mr. Roni, 2026-09-20 3:35pm MDT.
+
+**Where:** the main page while a workout is in progress shows a **Resume workout** button.
+
+**Required behavior:**
+1. **Do not change the Resume button's look or tap behavior.** Tap still resumes.
+2. **Press and hold** it opens a **Discard** option (a small menu or sheet with Discard and Cancel).
+3. Choosing Discard goes through item 7's confirmation, then deletes the in-progress workout and the
+   main page returns to its no-workout state.
+4. Add a discoverability hint only if it costs no layout change (his instruction is no interface change). Default: none.
+
+**Acceptance test:** start a workout, go to main: tap Resume resumes. Hold Resume: Discard option appears. Discard -> confirm ->
+main page shows no Resume button and the workout is gone from the watch.
+
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
