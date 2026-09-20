@@ -738,6 +738,13 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
         <button type="button" data-v="kg" onclick="segPick(this)">kg / cm</button>
       </div>
       <div class="fg" style="margin-top:12px"><label>Default Rest (sec)</label><input type="number" id="setRest" min="5" max="600" step="5" inputmode="numeric" placeholder="90"></div>
+      <div class="fg" style="margin-top:12px"><label>Progress badge rep range</label>
+        <div style="display:flex;gap:10px;align-items:center">
+          <div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Min</div><input type="number" id="setRepMin" min="1" max="30" step="1" inputmode="numeric" placeholder="5"></div>
+          <div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Max</div><input type="number" id="setRepMax" min="2" max="50" step="1" inputmode="numeric" placeholder="12"></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">Every set above Max for 3 workouts in a row shows "Ready to go up"; every set below Min shows "Consider lighter". Default 5 to 12.</div>
+      </div>
       <div class="tog-row">
         <div>
           <div style="font-weight:600;font-size:14px">Auto rest timer</div>
@@ -1101,7 +1108,7 @@ const gPR     = () => S.g('prs')      || {};
 const gProf   = () => S.g('prof')     || null;
 const gFr     = () => S.g('friends')  || [];
 const gMetrics= () => S.g('metrics')  || {};
-const gSet    = () => Object.assign({wUnit:'lb',restDefault:90,autoRest:true}, S.g('settings')||{});
+const gSet    = () => Object.assign({wUnit:'lb',restDefault:90,autoRest:true,repMin:5,repMax:12}, S.g('settings')||{});
 // Weight unit helpers — all weights are stored canonically in kg.
 function wUnit()      { return gSet().wUnit||'kg'; }
 function toDisp(kg)   { return wUnit()==='lb' ? (kg||0)*2.20462 : (kg||0); }
@@ -2658,7 +2665,13 @@ function prE1rm(pr){ return pr ? e1rm(pr.weight,pr.reps) : 0; }
 // load) is excluded, same reasoning as the original doc: the fix there is
 // "add weight," a different feature.
 // ============================================================
-const PROGRESS_STREAK=3, PROGRESS_UP_REPS=12, PROGRESS_DOWN_REPS=5;
+const PROGRESS_STREAK=3;
+// Rep range that drives the go-up / consider-lighter badges. Defaults 5-12; the user can set their
+// own Min and Max in Profile > Preferences (jk_settings.repMin / repMax). Go up = every set ABOVE
+// Max; consider lighter = every set BELOW Min.
+const REP_MIN_DEFAULT=5, REP_MAX_DEFAULT=12;
+function progMin(){ const v=parseInt(gSet().repMin,10); return v>=1?v:REP_MIN_DEFAULT; }
+function progMax(){ const v=parseInt(gSet().repMax,10); return v>progMin()?v:Math.max(REP_MAX_DEFAULT,progMin()+1); }
 function progressTrackable(t){ return t==='weight_reps'||t==='bodyweight_reps'; }
 
 // Walk saved WORKOUT history (never the in-progress one) for one exercise,
@@ -2684,16 +2697,16 @@ function evaluateProgress(exId,historyOverride){
   if(occ.length<PROGRESS_STREAK) return {up:false,down:false};
   const targetW=occ[0].weight;
   if(!occ.every(o=>Math.abs(o.weight-targetW)<0.01)) return {up:false,down:false};
-  const up  =occ.every(o=>o.reps.length&&o.reps.every(r=>r>PROGRESS_UP_REPS));
-  const down=occ.every(o=>o.reps.length&&o.reps.every(r=>r<PROGRESS_DOWN_REPS));
+  const up  =occ.every(o=>o.reps.length&&o.reps.every(r=>r>progMax()));
+  const down=occ.every(o=>o.reps.length&&o.reps.every(r=>r<progMin()));
   return {up,down,weight:targetW};
 }
 // Tap-to-explain for the card badge — reuses the confirm modal as a plain
 // info dialog (both buttons just dismiss it, no branch on the result).
 function progressInfo(kind){
   const msg = kind==='up'
-    ? `Ready to go up: you've cleared ${PROGRESS_UP_REPS} reps on every set, ${PROGRESS_STREAK} workouts in a row, at the same weight.`
-    : `Consider lighter: every set has stayed under ${PROGRESS_DOWN_REPS} reps, ${PROGRESS_STREAK} workouts in a row, at the same weight.`;
+    ? `Ready to go up: you've gone above ${progMax()} reps on every set, ${PROGRESS_STREAK} workouts in a row, at the same weight.`
+    : `Consider lighter: every set has stayed under ${progMin()} reps, ${PROGRESS_STREAK} workouts in a row, at the same weight.`;
   showConfirm(msg,{okText:'Got it',cancelText:'Close'});
 }
 
@@ -2958,7 +2971,7 @@ function buildProgressNotes(rec,preProgress,prList){
     }
     const post=evaluateProgress(ex.exId);   // gH() already includes tonight by this point
     if(post.down&&!prNames.has(ex.name)){
-      notes.push({type:'down',text:`${ex.name} — stayed under ${PROGRESS_DOWN_REPS} reps for ${PROGRESS_STREAK} workouts at ${dW(post.weight)}${uL()}, consider lighter.`});
+      notes.push({type:'down',text:`${ex.name} — stayed under ${progMin()} reps for ${PROGRESS_STREAK} workouts at ${dW(post.weight)}${uL()}, consider lighter.`});
     }
   });
   return notes;
@@ -4727,6 +4740,7 @@ function openProf() {
   document.getElementById('bwProfLabel').textContent='Body Weight ('+uL()+')';
   const bw=gBW(); document.getElementById('bwInput').value = bw?dW(bw):'';
   document.getElementById('setRest').value=st.restDefault;
+  document.getElementById('setRepMin').value=st.repMin; document.getElementById('setRepMax').value=st.repMax;
   document.getElementById('setAutoRest').classList.toggle('on', st.autoRest!==false);
   document.getElementById('profVersion').textContent='Jacked '+BUILD;
   document.getElementById('profBirthday').value=p.birthday||'';
@@ -4856,7 +4870,10 @@ async function saveProf() {
   const sex=segVal('setSexTog')||'male';
   const rest=Math.min(600,Math.max(5,parseInt(document.getElementById('setRest').value,10)||90));
   const autoRest=document.getElementById('setAutoRest').classList.contains('on');
-  S.s('settings',{...gSet(),wUnit:unit,restDefault:rest,autoRest});
+  const repMin=parseInt(document.getElementById('setRepMin').value,10)||REP_MIN_DEFAULT;
+  const repMax=parseInt(document.getElementById('setRepMax').value,10)||REP_MAX_DEFAULT;
+  if(repMin<1||repMin>30||repMax>50||repMax<=repMin){ toast('Rep range: Min must be lower than Max (Min 1-30, Max up to 50)','err'); return; }
+  S.s('settings',{...gSet(),wUnit:unit,restDefault:rest,autoRest,repMin,repMax});
   metricUnit = unit==='kg' ? 'metric' : 'imperial';
   const bwv=parseFloat(document.getElementById('bwInput').value);
   if(bwv>0) logWeight(unit==='lb' ? bwv/2.20462 : bwv);   // body weight → current + log
@@ -5208,7 +5225,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.15';
+const BUILD = 'v1.8.16';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

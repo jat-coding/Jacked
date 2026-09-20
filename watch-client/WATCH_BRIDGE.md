@@ -16,6 +16,7 @@ auto-builds are off; a deploy needs Mr. Roni's separate go). Check the live site
 
 | BUILD | What it contains (cumulative) | Pushed commit |
 |---|---|---|
+| v1.8.16 | A1-A9, **A10 user-defined rep range for the overload badges** | not pushed yet |
 | v1.8.15 | A1-A7, A8 Signal colors, **A9 muscle-group tier rebuild** | `5832e21` |
 | v1.8.14 | A1-A7, **A8 Signal colors** | `1ef9a39` |
 | v1.8.13 | A1-A7 (A7 = Switch Exercise muscle filter) | `e3adda2` |
@@ -40,6 +41,19 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 ---
 
 ## APP-WIDE (watch must mirror)
+
+### A10. Overload-badge rep range is user-defined (default 5 to 12) — build v1.8.16
+Amends A2. The go-up / consider-lighter thresholds are no longer fixed at 12 and 5.
+- Defaults: **Min 5, Max 12** (same behavior as before until the user changes it).
+- User setting: Profile > Preferences > "Progress badge rep range" (Min, Max). Stored in
+  `jk_settings.repMin` and `jk_settings.repMax` (integers). Rules: Min 1-30, Max up to 50, Min must be
+  lower than Max, otherwise the save is refused. Blank or invalid values fall back to 5 and 12.
+- Go up = the last 3 consecutive workouts, same weight, **every set above Max**.
+  Consider lighter = same, **every set below Min**. (Above and below, not "at or above".)
+- The badge text, its tap-to-explain popup and the finish-summary note all show the user's own
+  numbers. Changing the range re-evaluates badges from history immediately.
+- Watch note: the watches' editable rep range (sets x repMin-repMax) is the same idea. To keep one
+  rule on every device the watches can read `jk_settings.repMin` / `repMax` (read-only there).
 
 ### A9. Muscle-group tiers rebuilt (how a group's rank is calculated) — `5832e21`
 Applies to Body Simulation, Muscle Group Usage and any watch equivalent. Four tiers (Needs Work,
@@ -172,6 +186,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 |---|---|---|---|
 | 09-19 | `5832e21` | Muscle-group tier rebuild: 90-day window, rep cap 10, per-exercise scaling, top-3 average, tier lines at the standards | APP-WIDE A9 |
 | 09-19 | `0e23fee` | Tier colors switched to the Signal scheme (grey/red/green/blue/gold), one color per tier, shared by body, bars and badges | APP-WIDE A8 |
+| 09-19 | local | Overload-badge rep range: default 5-12, user-defined Min/Max in Profile (`jk_settings.repMin/repMax`) | APP-WIDE A10 |
 | 09-19 | `7db214d` | Switch Exercise opens pre-filtered to the replaced exercise's muscle group | APP-WIDE A7 |
 | 09-18 | `0608651` | Exercise header wraps on phones under 360px wide | PHONE-ONLY |
 | 09-18 | `51963dd` | GPS run tracker removed from the live app (parked for App Store work) | PHONE-ONLY |
