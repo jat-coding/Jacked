@@ -743,7 +743,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
           <div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Min</div><input type="number" id="setRepMin" min="1" max="30" step="1" inputmode="numeric" placeholder="5"></div>
           <div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Max</div><input type="number" id="setRepMax" min="2" max="50" step="1" inputmode="numeric" placeholder="12"></div>
         </div>
-        <div style="font-size:12px;color:var(--muted);margin-top:6px">Every set above Max for 3 workouts in a row shows "Ready to go up"; every set below Min shows "Consider lighter". Default 5 to 12.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">Every set at or above Max for 3 workouts in a row shows "Ready to go up"; every set below Min shows "Consider lighter". Default 5 to 12.</div>
       </div>
       <div class="tog-row">
         <div>
@@ -2667,8 +2667,8 @@ function prE1rm(pr){ return pr ? e1rm(pr.weight,pr.reps) : 0; }
 // ============================================================
 const PROGRESS_STREAK=3;
 // Rep range that drives the go-up / consider-lighter badges. Defaults 5-12; the user can set their
-// own Min and Max in Profile > Preferences (jk_settings.repMin / repMax). Go up = every set ABOVE
-// Max; consider lighter = every set BELOW Min.
+// own Min and Max in Profile > Preferences (jk_settings.repMin / repMax). Go up = every set AT OR
+// ABOVE Max (target reached; Mr. Roni 2026-09-19); consider lighter = every set BELOW Min.
 const REP_MIN_DEFAULT=5, REP_MAX_DEFAULT=12;
 function progMin(){ const v=parseInt(gSet().repMin,10); return v>=1?v:REP_MIN_DEFAULT; }
 function progMax(){ const v=parseInt(gSet().repMax,10); return v>progMin()?v:Math.max(REP_MAX_DEFAULT,progMin()+1); }
@@ -2697,7 +2697,7 @@ function evaluateProgress(exId,historyOverride){
   if(occ.length<PROGRESS_STREAK) return {up:false,down:false};
   const targetW=occ[0].weight;
   if(!occ.every(o=>Math.abs(o.weight-targetW)<0.01)) return {up:false,down:false};
-  const up  =occ.every(o=>o.reps.length&&o.reps.every(r=>r>progMax()));
+  const up  =occ.every(o=>o.reps.length&&o.reps.every(r=>r>=progMax()));
   const down=occ.every(o=>o.reps.length&&o.reps.every(r=>r<progMin()));
   return {up,down,weight:targetW};
 }
@@ -2705,7 +2705,7 @@ function evaluateProgress(exId,historyOverride){
 // info dialog (both buttons just dismiss it, no branch on the result).
 function progressInfo(kind){
   const msg = kind==='up'
-    ? `Ready to go up: you've gone above ${progMax()} reps on every set, ${PROGRESS_STREAK} workouts in a row, at the same weight.`
+    ? `Ready to go up: you've hit ${progMax()}+ reps on every set, ${PROGRESS_STREAK} workouts in a row, at the same weight.`
     : `Consider lighter: every set has stayed under ${progMin()} reps, ${PROGRESS_STREAK} workouts in a row, at the same weight.`;
   showConfirm(msg,{okText:'Got it',cancelText:'Close'});
 }
@@ -5225,7 +5225,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.16';
+const BUILD = 'v1.8.17';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
