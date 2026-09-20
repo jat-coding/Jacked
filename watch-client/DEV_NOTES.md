@@ -130,5 +130,26 @@ exercise 3 full screen, back out to the list: exercise 2 shows its logged sets.
 - The user can always go back to the full workout list from the focus view.
 - Leaving the focus view: a close button AND a back swipe. Both return to the full list.
 
+## 6. Back / swipe-out must never skip a page — OPEN
+Source: Mr. Roni, 2026-09-20 3:31pm MDT.
+
+**Observed (his words):** in the change-exercise menu on a routine, he opens the muscle-group
+filter page. Backing out or swiping out of it goes to the *routine*, not back to the change-exercise
+page. It skips a page. He wants this checked for **all** instances: no skipped pages when backing out.
+
+**Required behavior:**
+1. Every screen's back action (the platform back / right-swipe on Wear; the back gesture and back
+   button on watchOS) returns to the screen that opened it, one step at a time.
+2. Applies to every screen and every flow, not just the filter page. Both watches.
+3. The focus view keeps its decided behavior (item 5): close button and back swipe both return to the list.
+4. Do not guess the cause. Reproduce on the emulator first, then read the navigation code
+   (a pop-up-to / replace / reset of the stack on the filter route is one candidate, unverified).
+
+**Audit deliverable:** list every screen and what opens it, then for each open-then-back pair
+record the screen you land on, for swipe AND button. Put the table in `WATCH_STATUS.md`. Every row lands on the opener.
+
+**Acceptance test:** routine -> change exercise -> muscle filter -> back lands on change exercise;
+back again lands on the routine. Same for every other pair in the audit table.
+
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
