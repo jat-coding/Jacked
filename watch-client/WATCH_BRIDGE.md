@@ -176,7 +176,7 @@ Add a row in the same commit as every push. A change is live for real users only
 
 | Pushed | origin/main | BUILD | What went out |
 |---|---|---|---|
-| 2026-09-20 12:13 | (this push) | v1.8.18 | Phone-only: frosted-glass tab bar, moved low above the home line |
+| 2026-09-20 12:13 | `537beca` | v1.8.18 | Phone-only: frosted-glass tab bar, moved low above the home line |
 | 2026-09-19 23:46 | `4754bd0` | v1.8.17 | A10 amended: go-up at or above Max, lighter after a single workout (phone now matches the watches); board note |
 | 2026-09-19 23:35 | `0f43eb7` | v1.8.16 | A10 overload-badge rep range (default 5-12, user-defined Min/Max in Profile); board note |
 | 2026-09-19 22:35 | `e3022d4` | v1.8.15 (unchanged) | Docs only: table of what is live replaced by a BUILD lookup plus the live-version command; board note updated |
