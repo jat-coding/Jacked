@@ -91,6 +91,6 @@ custom-exercise creation, GPS/route tracking, body-weight logging.
 | Item | Status on the watches |
 |---|---|
 | A3 metric-tier badges, A8 tier colours, A9 muscle-group tiers | Not mirrored, and **no watch equivalent is planned** — there is no Body Simulation or Muscle Group Usage screen on a watch. Nothing is waiting on you here. |
-| A4 auto-name untitled workouts | Not mirrored. A watch workout is named from its routine, or "Workout". |
-| A5 notes carry forward + `exercises[].note` at finish | Partly: the watch reads and writes `jk_exNotes`, but does not yet copy the note onto the saved workout exercise or show the previous note as a placeholder. |
+| A4 auto-name untitled workouts | **Mirrored on Wear (v0.15):** an untitled workout (`""`, `"Workout"`, `"Quick Workout"`) becomes "`<top-e1RM exercise> Day`" at finish, same `autoNameWorkout` logic incl. the reps+weight fallback. Routine names untouched. |
+| A5 notes carry forward + `exercises[].note` at finish | **Mirrored on Wear (v0.15):** the note in effect is snapshotted onto `exercises[].note` at finish (omitted when blank) and shown in workout detail. "Placeholder" on the watch = the persistent note shown on the card, tap to edit with prefill; blank never deletes. |
 | A6 duration `durUnit` | Not mirrored; the watch stores and displays seconds. |
