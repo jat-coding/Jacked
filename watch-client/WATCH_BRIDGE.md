@@ -101,7 +101,7 @@ Add a row in the same commit as every push. A change is live for real users only
 
 | Pushed | origin/main | BUILD | What went out |
 |---|---|---|---|
-| 2026-09-19 20:18 | (this push) | v1.8.14 (unchanged) | Docs only: PUSH LOG added to this file. Strong tier removed then restored locally; net app code identical to `1ef9a39` |
+| 2026-09-19 20:18 | `92b4994` | v1.8.14 (unchanged) | Docs only: PUSH LOG added to this file (plus a follow-up commit filling in this hash). Strong tier removed then restored locally; net app code identical to `1ef9a39` |
 | 2026-09-19 18:50 | `1ef9a39` | v1.8.14 | A8 Signal tier colors (grey/red/green/blue/gold) |
 | 2026-09-19 16:12 | `e3adda2` | v1.8.13 | A7 Switch Exercise muscle filter; `WATCH_BRIDGE.md` moved into `watch-client/`; `DEV_NOTES.md` items 1-5 |
 | 2026-09-19 00:30 | `0608651` | not recorded | A1-A6 (library editing, duration units, overload badges, tier badges, notes carry-over, auto-naming), GPS added then removed, stress-test fixes, narrow-phone header fix |
