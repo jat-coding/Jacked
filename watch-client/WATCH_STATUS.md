@@ -37,11 +37,12 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   are written onto the workout as extra fields the PWA carries through untouched.
 - **Progressive-overload nudges:** both watches, target-based — see "Agreed cross-device rules".
 - **Focus view (Wear, v0.15; `DEV_NOTES` item 5):** tapping an exercise **name** in the
-  workout list opens that exercise alone — sets, − Set / + Set, then **‹ Prev · All · Next ›**
-  and a full-width **✓ Finish** pill. Tap-only, never auto-advances; Prev/Next grey out at the
-  ends (never change function); *All* returns to the list, which stays the home view; Discard
-  is on the list only. The focused exercise is remembered, so *Resume workout* reopens it
-  after a relaunch. Replace/remove/reorder stay on the list.
+  workout list opens that exercise alone — sets, − Set / + Set, then **‹ Prev · All · Next ›**.
+  Tap-only, never auto-advances; Prev/Next grey out at the ends (never change function);
+  *All*, a right-swipe or Back returns to the list, which stays the home view. On the **last**
+  exercise the list's tail appears under the row — green **✓ Finish** pill, red **Discard** —
+  exactly as on the list, and nowhere else. The focused exercise is remembered, so *Resume
+  workout* reopens it after a relaunch. Replace/remove/reorder stay on the list.
 - **Set editor bezel (Wear, v0.15; `DEV_NOTES` items 1 and 3 / W1, W2):** reps move exactly
   ±1 per detent; weight keeps velocity tiers (2.5 / 5 / 10) but needs a deliberate spin
   (≥4 detents/s) to accelerate; a light tick on every value change, both columns. Touch-
