@@ -182,5 +182,28 @@ Source: Mr. Roni, 2026-09-20 3:35pm MDT.
 **Acceptance test:** start a workout, go to main: tap Resume resumes. Hold Resume: Discard option appears. Discard -> confirm ->
 main page shows no Resume button and the workout is gone from the watch.
 
+## 9. Haptics on every value scroller, and the number drifts while scrolling — OPEN
+Source: Mr. Roni, 2026-09-20 3:40pm MDT.
+
+**Observed (his words):** in Settings, the **Min, Max and Target sets** scrollers have no vibration
+like the set-entry dial (item 1 / W1). He wants **every** scroll/dial value control to have it.
+Also, changing those values, the number moves slightly **up** when scrolling up and slightly
+**down** when scrolling down, i.e. it drifts off its resting position while scrolling.
+
+**Required behavior:**
+1. Every control that changes a value by scroll, bezel or dial gets the same feelable tick per
+   value change as the set-entry wheels (CLICK class, per the v0.17 note: TICK is not felt on a wrist).
+   Audit them all, not just those three: settings (Min, Max, Target sets, duration unit, anything else),
+   set entry (weight, reps, distance, time, seconds), and any other picker. List each control and its
+   haptic in `WATCH_STATUS.md`. Use one shared implementation so a new scroller cannot miss it.
+2. The drift: the value should stay centred in place while it changes. Reproduce first, then find
+   the cause (not guessed); check whether set entry has it too. If it is the wheel's scroll offset
+   or animation, fix it in the shared wheel, so every scroller gets the fix.
+3. **Needs one answer from Mr. Roni if the repro is unclear:** is the moving "set number" the
+   number inside the scroller, or a different label near it? Default: the number inside the scroller.
+
+**Acceptance test:** each control in the audit table ticks on every step, both directions. In
+Settings, spin Min up and down: the number stays put (no visible up/down shift) while the value changes.
+
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
