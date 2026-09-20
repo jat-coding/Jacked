@@ -22,9 +22,8 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ### A8. Strength-tier colors ("Signal" scheme) — `0e23fee`
 Body Simulation, the Muscle Group Usage bars and the tier badges use one color per tier:
-Untrained grey `#6b6b7a`, Needs Work red `#ff5d6c`, Building green `#3ddc97`, Elite gold `#ffd24d`.
-**There is no Strong tier** (removed 2026-09-19 by Mr. Roni; Strong's range now counts as Building).
-Cutoffs on the 0-1 score: Needs Work below 0.34, Building 0.34 to 0.9, Elite 0.9 and up, held in
+Untrained grey `#6b6b7a`, Needs Work red `#ff5d6c`, Building green `#3ddc97`, Strong blue `#4da3ff`,
+Elite gold `#ffd24d`. Tier cutoffs are unchanged for now (score <0.34 / <0.67 / <0.9 / above), held in
 one place (`TIER_CUT`). The scoring rules themselves are being redesigned; expect this entry to change.
 
 ### A7. Switch Exercise opens pre-filtered to the same muscle group — `7db214d`
