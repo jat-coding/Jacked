@@ -9,9 +9,9 @@ each editing only its own rows. Updated in the same push as the change it descri
 
 | Client | Version | Delivery | Verified |
 |---|---|---|---|
-| Wear OS (Galaxy Watch 8 Classic) | **v0.14** (wear vc113) | Play internal testing | on the real watch, 2026-09-16 |
-| watchOS (Apple Watch) | **0.2.0 (24)** | TestFlight | build 22 field-tested; 24 adds overload nudges |
-| Phone companion "Jacked Sync" (Android) | **v0.14** (phone vc13) | Play internal testing | on the S23, 2026-09-15 |
+| Wear OS (Galaxy Watch 8 Classic) | **v0.16** (wear vc115) | Play internal testing | tagged 2026-09-20 evening (v0.15 + Discard-from-focus fix); v0.15 installed and owner-checked the same evening |
+| watchOS (Apple Watch) | **0.2.0 (24)** | TestFlight | build 22 field-tested; 24 adds overload nudges; Wear v0.15 parity items handed off 2026-09-20 |
+| Phone companion "Jacked Sync" (Android) | **v0.16** (phone vc15) | Play internal testing | no functional change since v0.14 |
 
 The companion is not a watch client: it reads the cloud blob and writes finished workouts into
 Android Health Connect, which is the only path into Samsung Health. It signs in like a watch.
@@ -35,7 +35,22 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   finish → summary (volume, duration, PRs).
 - **Sensors (Wear):** live HR + calories during the session; `hrAvg`/`hrMax`/`kcal`/`hrSeries`
   are written onto the workout as extra fields the PWA carries through untouched.
-- **Progressive-overload nudges:** both watches, target-based — see "Deliberate differences".
+- **Progressive-overload nudges:** both watches, target-based — see "Agreed cross-device rules".
+- **Focus view (Wear, v0.15; `DEV_NOTES` item 5):** tapping an exercise **name** in the
+  workout list opens that exercise alone — sets, − Set / + Set, then **‹ Prev · All · Next ›**.
+  Tap-only, never auto-advances; Prev/Next grey out at the ends (never change function);
+  *All*, a right-swipe or Back returns to the list, which stays the home view. On the **last**
+  exercise the list's tail appears under the row — green **✓ Finish** pill, red **Discard** —
+  exactly as on the list, and nowhere else. The focused exercise is remembered, so *Resume
+  workout* reopens it after a relaunch. Replace/remove/reorder stay on the list.
+- **Set editor bezel (Wear, v0.15; `DEV_NOTES` items 1 and 3 / W1, W2):** reps move exactly
+  ±1 per detent; weight keeps velocity tiers (2.5 / 5 / 10) but needs a deliberate spin
+  (≥4 detents/s) to accelerate; a light tick on every value change, both columns. Touch-
+  scrolling a wheel makes it the bezel's target — one focused column at a time, shown by
+  the teal outline. Checking a set off gives a stronger haptic.
+- **Change exercise (Wear, v0.15; `DEV_NOTES` item 2 / A7):** the ⇄ picker opens
+  pre-filtered to the outgoing exercise's region chip, ranked favourites → used → rest,
+  without the outgoing exercise itself.
 - **Exercise picker:** muscle chips are **regions** (back / legs / core / cardio + one chip per
   remaining muscle), because the bundled library has no `back` muscle, only `lats`,
   `middle back`, `lower back`, `traps`. Stored `muscle` values on exercises are untouched.
@@ -54,7 +69,9 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   `jk_settings.targetSets`/`repMin`/`repMax`. **Go up** = all sets **≥ max** for 3
   consecutive workouts at the same weight. **Go down** = no set reaches **min** in a
   **single** workout, immediately. Suppressed when the exercise sets a PR that session.
-  Wear implements this as of v0.15; the phone is asked to match (see `BOARD.md`).
+  Wear implements this as of v0.15; the phone matches from build v1.8.17 (A10). Known
+  residue: the watches also require **≥ `targetSets` (default 3) done sets** per qualifying
+  workout; the phone has no `targetSets`.
 - **Duration sets** store seconds in the set's `weight` field (A6). Wear wrote `reps`
   until 2026-09-20; it now writes `weight` and falls back to `reps` when reading older
   sessions.
@@ -77,6 +94,6 @@ custom-exercise creation, GPS/route tracking, body-weight logging.
 | Item | Status on the watches |
 |---|---|
 | A3 metric-tier badges, A8 tier colours, A9 muscle-group tiers | Not mirrored, and **no watch equivalent is planned** — there is no Body Simulation or Muscle Group Usage screen on a watch. Nothing is waiting on you here. |
-| A4 auto-name untitled workouts | Not mirrored. A watch workout is named from its routine, or "Workout". |
-| A5 notes carry forward + `exercises[].note` at finish | Partly: the watch reads and writes `jk_exNotes`, but does not yet copy the note onto the saved workout exercise or show the previous note as a placeholder. |
+| A4 auto-name untitled workouts | **Mirrored on Wear (v0.15):** an untitled workout (`""`, `"Workout"`, `"Quick Workout"`) becomes "`<top-e1RM exercise> Day`" at finish, same `autoNameWorkout` logic incl. the reps+weight fallback. Routine names untouched. |
+| A5 notes carry forward + `exercises[].note` at finish | **Mirrored on Wear (v0.15):** the note in effect is snapshotted onto `exercises[].note` at finish (omitted when blank) and shown in workout detail. "Placeholder" on the watch = the persistent note shown on the card, tap to edit with prefill; blank never deletes. |
 | A6 duration `durUnit` | Not mirrored; the watch stores and displays seconds. |
