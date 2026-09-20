@@ -53,11 +53,11 @@ Watch counterpart: `DEV_NOTES.md` item 2 (same behavior on the watch). Phone mus
 library's own (Leg Press = `quadriceps`, not "legs").
 
 ### A6. Duration exercises have a display unit: sec / min / hr — `37ef4e6`
-Data rule: a duration set's value is stored in **seconds**. The unit is display-only
-(`durUnit` on the workout exercise, default from the exercise's saved `durUnit`, else `sec`).
-Convert with sec=1, min=60, hr=3600. **Check `watch-client/API.md`/`SPEC.md`: they describe duration
-as "minutes/seconds"; the watch must read and write seconds.** All duration math (totals, PRs)
-uses seconds.
+Data rule: a duration set's value is stored in **seconds**, in the set's **`weight`** field
+(`reps` is unused). This was already how the phone stored it; the contract docs were wrong and are
+fixed (`API.md` §3 table, `SPEC.md` §4.2 table). The unit is display-only (`durUnit`: `sec`, `min`
+or `hr`, on the workout exercise; custom exercises may carry a default). Convert with sec=1, min=60,
+hr=3600 when showing or typing, never when storing. All duration math (totals, PRs) uses seconds.
 
 ### A5. Notes carry forward and are saved with the workout — `984dacb`, `f9da482`
 An exercise's previous note shows greyed as the placeholder on the next workout until overwritten.
@@ -131,6 +131,7 @@ Add a row in the same commit as every push. A change is live for real users only
 
 | Pushed | origin/main | BUILD | What went out |
 |---|---|---|---|
+| 2026-09-19 22:27 | (this push) | v1.8.15 (unchanged) | Docs only: A1 corrected to match saveCE(); A2 confirmed as the one badge rule; A6 duration contract fixed (seconds, in `weight`); board replies |
 | 2026-09-19 21:07 | `5832e21` | v1.8.15 | A9 muscle-group tier rebuild (plus a follow-up docs commit filling in hashes) |
 | 2026-09-19 20:18 | `92b4994` | v1.8.14 (unchanged) | Docs only: PUSH LOG added to this file (plus a follow-up commit filling in this hash). Strong tier removed then restored locally; net app code identical to `1ef9a39` |
 | 2026-09-19 18:50 | `1ef9a39` | v1.8.14 | A8 Signal tier colors (grey/red/green/blue/gold) |

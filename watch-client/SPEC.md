@@ -122,7 +122,7 @@ Vertical list of exercises; each exercise is a card:
 |---|---|---|
 | `weight_reps` | Weight (kg/lb) × Reps | `weight` kg, `reps` |
 | `bodyweight_reps` | ± Added/Assist × Reps | `weight` added-kg, `reps`, `bwMode` |
-| `duration` | Time | `reps` = minutes/seconds |
+| `duration` | Time, shown in seconds, minutes or hours per `durUnit` | `weight` = **seconds** (stored unit never changes); `reps` unused |
 | `reps_only` | Reps | `reps` |
 | `distance` (cardio) | **Distance (mi)** × **Time (min)**, live pace readout | `weight`=miles, `reps`=minutes |
 

@@ -149,12 +149,13 @@ missing keys as their empty default. The ones the watch cares about:
 
 - `pw`/`pr` are "previous session" placeholder hints — optional, safe to omit on new sets.
 - **The meaning of `weight` and `reps` depends on `tracking`:**
+- **Duration sets are stored in seconds, in the `weight` field.** The unit the user picks (`durUnit`: `sec`, `min` or `hr`, on the workout exercise or custom exercise) only changes how the value is shown and typed: 1 min = 60, 1 hr = 3600. Convert on input, never on storage. Custom exercises may also carry `durUnit` as their default unit.
 
 | `tracking` | `weight` field holds | `reps` field holds | Counts as lifting volume? | PR type |
 |---|---|---|---|---|
 | `weight_reps` | kilograms | reps | **yes** | weight (est. 1RM) |
 | `bodyweight_reps` | added/assist kg | reps | **yes** (uses body weight) | weight (est. 1RM) |
-| `duration` | — | seconds/minutes | no | none |
+| `duration` | **seconds** (always seconds, whatever unit the user sees) | unused (0) | no | none |
 | `reps_only` | — | reps | no | none |
 | `distance` (cardio) | **miles** | **minutes** | no | cardio (pace) |
 
