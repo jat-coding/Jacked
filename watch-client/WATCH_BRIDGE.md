@@ -16,7 +16,7 @@ auto-builds are off; a deploy needs Mr. Roni's separate go). Check the live site
 
 | BUILD | What it contains (cumulative) | Pushed commit |
 |---|---|---|
-| v1.8.17 | A1-A10, **A10 amended: go-up is now at or above Max** | not pushed yet |
+| v1.8.17 | A1-A10, **A10 amended: go-up at or above Max; lighter after a single workout (both match the watches)** | `c4ee8c5`, `7903618` |
 | v1.8.16 | A1-A9, **A10 user-defined rep range for the overload badges** | `e513de7` |
 | v1.8.15 | A1-A7, A8 Signal colors, **A9 muscle-group tier rebuild** | `5832e21` |
 | v1.8.14 | A1-A7, **A8 Signal colors** | `1ef9a39` |
@@ -51,13 +51,13 @@ Amends A2. The go-up / consider-lighter thresholds are no longer fixed at 12 and
   lower than Max, otherwise the save is refused. Blank or invalid values fall back to 5 and 12.
 - Go up = the last 3 consecutive workouts, same weight, **every set at or above Max** (changed from
   strictly above in build v1.8.17, Mr. Roni 2026-09-19 11:39pm, to match the watches).
-  Consider lighter = the last 3 consecutive workouts, same weight, **every set below Min** (unchanged;
-  the watches use a single workout, see the open item below).
+  Consider lighter = the **most recent workout alone**: **no set reached Min** (every set below Min),
+  immediately, no streak needed (changed in v1.8.17, Mr. Roni 2026-09-19 11:45pm, to match the watches).
 - The badge text, its tap-to-explain popup and the finish-summary note all show the user's own
   numbers. Changing the range re-evaluates badges from history immediately.
-- **Cross-device rule, partly settled (2026-09-19):** go-up now matches the watches (at or above Max,
-  3 workouts, same weight). **Still open: consider lighter.** The watches (Phil's decision) fire after a
-  SINGLE workout where no set reaches Min; the phone waits for 3 workouts. Awaiting Mr. Roni's decision.
+- **Cross-device rule settled (2026-09-19):** phone and watches now agree: go-up = every set at or above
+  Max for 3 workouts at the same weight; lighter = no set reached Min in the latest workout. `targetSets`
+  (the watches' sets target, default 3) is not on the phone.
 - Watch note: the watches' editable rep range (sets x repMin-repMax) is the same idea. To keep one
   rule on every device the watches can read `jk_settings.repMin` / `repMax` (read-only there).
 
@@ -119,7 +119,8 @@ those six exercise types only. Duration-tracked exercises never earn a tier badg
 **One rule on every device (see A10 for the current thresholds).** Phone and watches all use the rule below. The watches' target-based rule (sets x rep range) does not drive the badge.
 - **Go up:** the last 3 consecutive workouts of the exercise used the same weight and every set
   in each was at or above Max reps (default 12; was strictly more than 12 until v1.8.17).
-- **Consider lighter:** same, but every set under 5 reps.
+- **Consider lighter:** no set reached Min (default 5) in the latest workout, shown immediately (was
+  3 workouts in a row until v1.8.17).
 - Constants `PROGRESS_STREAK=3`, `PROGRESS_UP_REPS=12`, `PROGRESS_DOWN_REPS=5`.
 - Suppressed for an exercise that sets a PR that session.
 - Shows on the exercise card live and in the finish summary. If the user then goes up in weight
@@ -173,7 +174,8 @@ Add a row in the same commit as every push. A change is live for real users only
 
 | Pushed | origin/main | BUILD | What went out |
 |---|---|---|---|
-| 2026-09-19 23:23 | `cb4862b` | v1.8.16 | A10 overload-badge rep range (default 5-12, user-defined Min/Max in Profile); board note |
+| 2026-09-19 23:46 | `7903618` | v1.8.17 | A10 amended: go-up at or above Max, lighter after a single workout (phone now matches the watches); board note |
+| 2026-09-19 23:35 | `0f43eb7` | v1.8.16 | A10 overload-badge rep range (default 5-12, user-defined Min/Max in Profile); board note |
 | 2026-09-19 22:35 | `e3022d4` | v1.8.15 (unchanged) | Docs only: table of what is live replaced by a BUILD lookup plus the live-version command; board note updated |
 | 2026-09-19 22:30 | `e55324a` | v1.8.15 (unchanged) | Docs only: PHONE RIGHT NOW table added to this file; board note |
 | 2026-09-19 22:27 | `116f61b` | v1.8.15 (unchanged) | Docs only: A1 corrected to match saveCE(); A2 confirmed as the one badge rule; A6 duration contract fixed (seconds, in `weight`); board replies |
@@ -193,7 +195,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 |---|---|---|---|
 | 09-19 | `5832e21` | Muscle-group tier rebuild: 90-day window, rep cap 10, per-exercise scaling, top-3 average, tier lines at the standards | APP-WIDE A9 |
 | 09-19 | `0e23fee` | Tier colors switched to the Signal scheme (grey/red/green/blue/gold), one color per tier, shared by body, bars and badges | APP-WIDE A8 |
-| 09-19 | local | Go-up fires at or above Max (was strictly above), matching the watches | APP-WIDE A10 |
+| 09-19 | `c4ee8c5`, `7903618` | Go-up fires at or above Max; lighter fires after a single workout with no set reaching Min. Both match the watches | APP-WIDE A10 |
 | 09-19 | `e513de7` | Overload-badge rep range: default 5-12, user-defined Min/Max in Profile (`jk_settings.repMin/repMax`) | APP-WIDE A10 |
 | 09-19 | `7db214d` | Switch Exercise opens pre-filtered to the replaced exercise's muscle group | APP-WIDE A7 |
 | 09-18 | `0608651` | Exercise header wraps on phones under 360px wide | PHONE-ONLY |
