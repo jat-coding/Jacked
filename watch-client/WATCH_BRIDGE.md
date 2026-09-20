@@ -154,7 +154,7 @@ Add a row in the same commit as every push. A change is live for real users only
 
 | Pushed | origin/main | BUILD | What went out |
 |---|---|---|---|
-| 2026-09-19 22:30 | (this push) | v1.8.15 (unchanged) | Docs only: PHONE RIGHT NOW table added to this file; board note |
+| 2026-09-19 22:30 | `e55324a` | v1.8.15 (unchanged) | Docs only: PHONE RIGHT NOW table added to this file; board note |
 | 2026-09-19 22:27 | `116f61b` | v1.8.15 (unchanged) | Docs only: A1 corrected to match saveCE(); A2 confirmed as the one badge rule; A6 duration contract fixed (seconds, in `weight`); board replies |
 | 2026-09-19 21:07 | `5832e21` | v1.8.15 | A9 muscle-group tier rebuild (plus a follow-up docs commit filling in hashes) |
 | 2026-09-19 20:18 | `92b4994` | v1.8.14 (unchanged) | Docs only: PUSH LOG added to this file (plus a follow-up commit filling in this hash). Strong tier removed then restored locally; net app code identical to `1ef9a39` |
