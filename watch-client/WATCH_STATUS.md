@@ -9,9 +9,9 @@ each editing only its own rows. Updated in the same push as the change it descri
 
 | Client | Version | Delivery | Verified |
 |---|---|---|---|
-| Wear OS (Galaxy Watch 8 Classic) | **v0.14** (wear vc113) | Play internal testing | on the real watch, 2026-09-16 |
-| watchOS (Apple Watch) | **0.2.0 (24)** | TestFlight | build 22 field-tested; 24 adds overload nudges |
-| Phone companion "Jacked Sync" (Android) | **v0.14** (phone vc13) | Play internal testing | on the S23, 2026-09-15 |
+| Wear OS (Galaxy Watch 8 Classic) | **v0.15** (wear vc114) | Play internal testing | tagged 2026-09-20, rolling out; v0.14 was the last owner-verified build |
+| watchOS (Apple Watch) | **0.2.0 (24)** | TestFlight | build 22 field-tested; 24 adds overload nudges; Wear v0.15 parity items handed off 2026-09-20 |
+| Phone companion "Jacked Sync" (Android) | **v0.15** (phone vc14) | Play internal testing | no functional change from v0.14 |
 
 The companion is not a watch client: it reads the cloud blob and writes finished workouts into
 Android Health Connect, which is the only path into Samsung Health. It signs in like a watch.
