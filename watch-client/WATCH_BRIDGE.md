@@ -167,7 +167,7 @@ Add a row in the same commit as every push. A change is live for real users only
 
 | Pushed | origin/main | BUILD | What went out |
 |---|---|---|---|
-| 2026-09-19 23:23 | (this push) | v1.8.16 | A10 overload-badge rep range (default 5-12, user-defined Min/Max in Profile); board note |
+| 2026-09-19 23:23 | `cb4862b` | v1.8.16 | A10 overload-badge rep range (default 5-12, user-defined Min/Max in Profile); board note |
 | 2026-09-19 22:35 | `e3022d4` | v1.8.15 (unchanged) | Docs only: table of what is live replaced by a BUILD lookup plus the live-version command; board note updated |
 | 2026-09-19 22:30 | `e55324a` | v1.8.15 (unchanged) | Docs only: PHONE RIGHT NOW table added to this file; board note |
 | 2026-09-19 22:27 | `116f61b` | v1.8.15 (unchanged) | Docs only: A1 corrected to match saveCE(); A2 confirmed as the one badge rule; A6 duration contract fixed (seconds, in `weight`); board replies |
