@@ -20,7 +20,7 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ## APP-WIDE (watch must mirror)
 
-### A9. Muscle-group tiers rebuilt (how a group's rank is calculated) — this push
+### A9. Muscle-group tiers rebuilt (how a group's rank is calculated) — `5832e21`
 Applies to Body Simulation, Muscle Group Usage and any watch equivalent. Four tiers (Needs Work,
 Building, Strong, Elite) plus Untrained (no data in the window). Rules, all in `index.html`
 (`STRENGTH_STD`, `muscleStrengthRatio`, `strengthScore`, `exStrengthFactor`):
@@ -120,7 +120,7 @@ Add a row in the same commit as every push. A change is live for real users only
 
 | Pushed | origin/main | BUILD | What went out |
 |---|---|---|---|
-| 2026-09-19 21:07 | this push | v1.8.15 | A9 muscle-group tier rebuild |
+| 2026-09-19 21:07 | `5832e21` | v1.8.15 | A9 muscle-group tier rebuild (plus a follow-up docs commit filling in hashes) |
 | 2026-09-19 20:18 | `92b4994` | v1.8.14 (unchanged) | Docs only: PUSH LOG added to this file (plus a follow-up commit filling in this hash). Strong tier removed then restored locally; net app code identical to `1ef9a39` |
 | 2026-09-19 18:50 | `1ef9a39` | v1.8.14 | A8 Signal tier colors (grey/red/green/blue/gold) |
 | 2026-09-19 16:12 | `e3adda2` | v1.8.13 | A7 Switch Exercise muscle filter; `WATCH_BRIDGE.md` moved into `watch-client/`; `DEV_NOTES.md` items 1-5 |
@@ -134,7 +134,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
-| 09-19 | this push | Muscle-group tier rebuild: 90-day window, rep cap 10, per-exercise scaling, top-3 average, tier lines at the standards | APP-WIDE A9 |
+| 09-19 | `5832e21` | Muscle-group tier rebuild: 90-day window, rep cap 10, per-exercise scaling, top-3 average, tier lines at the standards | APP-WIDE A9 |
 | 09-19 | `0e23fee` | Tier colors switched to the Signal scheme (grey/red/green/blue/gold), one color per tier, shared by body, bars and badges | APP-WIDE A8 |
 | 09-19 | `7db214d` | Switch Exercise opens pre-filtered to the replaced exercise's muscle group | APP-WIDE A7 |
 | 09-18 | `0608651` | Exercise header wraps on phones under 360px wide | PHONE-ONLY |
