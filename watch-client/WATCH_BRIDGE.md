@@ -52,6 +52,7 @@ Amends A2. The go-up / consider-lighter thresholds are no longer fixed at 12 and
   Consider lighter = same, **every set below Min**. (Above and below, not "at or above".)
 - The badge text, its tap-to-explain popup and the finish-summary note all show the user's own
   numbers. Changing the range re-evaluates badges from history immediately.
+- **Open conflict (2026-09-19):** Phil's board decision for the watches is up = every set >= Max for 3 workouts, and lighter after a SINGLE workout with no set reaching Min (stored also as `jk_settings.targetSets`, default 3). This entry (Mr. Roni's stated phone rule) is strict > Max and < Min, 3 workouts both ways. Awaiting Mr. Roni's decision; the phone stays as written here until then.
 - Watch note: the watches' editable rep range (sets x repMin-repMax) is the same idea. To keep one
   rule on every device the watches can read `jk_settings.repMin` / `repMax` (read-only there).
 
