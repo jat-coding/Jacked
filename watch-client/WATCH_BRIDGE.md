@@ -6,25 +6,24 @@ the **function of the whole app** (so the watch must match). Owner of edits: the
 session that works on Jacked. Phone app source: `jacked-pwa/index.html`. Sibling files: `SPEC.md`, `API.md`,
 `DESIGN.md`, `DEV_NOTES.md` (the watch-only to-do list).
 
-## PHONE RIGHT NOW (snapshot; refreshed on every push)
-Checked with `scripts/jacked-state.sh` on 2026-09-19 22:40 MDT. GitHub `main` = `dee2e76` or later.
-**Live phone app = commit `e3adda2` (BUILD v1.8.13).** Pushed to GitHub is not the same as live: a push
-never deploys (Netlify auto-builds are off; a deploy needs Mr. Roni's separate go).
+## WHAT IS LIVE ON THE PHONE (read the live version, then look it up here)
+Ask the live site for its version. No login, and it cannot go stale:
 
-| Item | What | On GitHub | Live on the phone |
-|---|---|---|---|
-| A9 | Muscle-group tier rebuild (90-day window, top-3 average, tier lines at the standards) | yes (`5832e21`) | **no** |
-| A8 | Signal tier colors (grey/red/green/blue/gold) | yes (`0e23fee`) | **no** |
-| A7 | Switch Exercise opens filtered to the same muscle group | yes (`7db214d`) | yes |
-| A6 | Duration display unit (sec/min/hr); stored in seconds, in `weight` | yes (`37ef4e6`) | yes |
-| A5 | Notes carry forward and save with the workout | yes (`984dacb`, `f9da482`) | yes |
-| A4 | Auto-name untitled workouts | yes (`3fe5987`) | yes |
-| A3 | Metric-tier badges | yes (`d490d6b`) | yes |
-| A2 | Overload badges (one rule, all devices) | yes (`3fe5987`) | yes |
-| A1 | Library exercise editing | yes (`37ef4e6`) | yes |
+    curl -s https://jacked-trainer.netlify.app/ | grep "const BUILD"
 
-Watch relevance: A1, A2, A4-A7 apply to the watches. A3, A8, A9 are phone-only (no body or
-group screen on a wrist); see `BOARD.md`.
+Then find that build below. Pushed is not the same as live: a push never deploys (Netlify
+auto-builds are off; a deploy needs Mr. Roni's separate go). Check the live site, not this file.
+
+| BUILD | What it contains (cumulative) | Pushed commit |
+|---|---|---|
+| v1.8.15 | A1-A7, A8 Signal colors, **A9 muscle-group tier rebuild** | `5832e21` |
+| v1.8.14 | A1-A7, **A8 Signal colors** | `1ef9a39` |
+| v1.8.13 | A1-A7 (A7 = Switch Exercise muscle filter) | `e3adda2` |
+| v1.8.12 | The old baseline, and also A1-A6: the 2026-09-19 00:30 push (`0608651`) went out without a bump, so this number covers both. A phone still showing v1.8.12 predates that push or is on it; it never shows A7 or later. | `38407d1`, `0608651` |
+
+Rule: every push that changes `jacked-pwa/` bumps `BUILD` by one patch. Docs-only pushes do not
+bump it, because users see nothing different. Watch relevance: A1, A2, A4-A7 apply to the watches;
+A3, A8, A9 are phone-only (no body or group screen on a wrist); see `BOARD.md`.
 
 ---
 
@@ -145,7 +144,7 @@ Full specs in `watch-client/DEV_NOTES.md`. Status of all: open (the watch source
 4. Record the commit, and add a dated line to the CHANGELOG below in the same edit.
 5. Update this file in the same push as the app change, so the two never drift.
 6. Add a PUSH LOG row (date, time, commit, BUILD, contents) with every push.
-7. Refresh the PHONE RIGHT NOW table with every push, and again after every deploy. Get the live commit from `scripts/jacked-state.sh`; never from memory.
+7. Add a row to the BUILD table (top of this file) with every push that bumps `BUILD`. Never write "live" by hand: the live version comes from the curl command.
 
 ---
 
@@ -154,6 +153,7 @@ Add a row in the same commit as every push. A change is live for real users only
 
 | Pushed | origin/main | BUILD | What went out |
 |---|---|---|---|
+| 2026-09-19 22:35 | (this push) | v1.8.15 (unchanged) | Docs only: table of what is live replaced by a BUILD lookup plus the live-version command; board note updated |
 | 2026-09-19 22:30 | `e55324a` | v1.8.15 (unchanged) | Docs only: PHONE RIGHT NOW table added to this file; board note |
 | 2026-09-19 22:27 | `116f61b` | v1.8.15 (unchanged) | Docs only: A1 corrected to match saveCE(); A2 confirmed as the one badge rule; A6 duration contract fixed (seconds, in `weight`); board replies |
 | 2026-09-19 21:07 | `5832e21` | v1.8.15 | A9 muscle-group tier rebuild (plus a follow-up docs commit filling in hashes) |
