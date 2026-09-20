@@ -44,9 +44,20 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
 
 | Area | Phone | Watches | Why |
 |---|---|---|---|
-| Overload badge rule (`WATCH_BRIDGE` A2) | fixed: 3 sessions, up = every set > 12 reps, down = every set < 5 reps | targets: sets × rep range (default 3 × 8–12, editable in watch Settings); up = every set ≥ max for 3 sessions at the same weight; down = **no** set reached the minimum | shipped before A2 existed, from the owner's own 3 × 8–12 training. **Unresolved:** a user sees a badge on one device and not the other. Needs a product decision, not a code change. |
 | Picker muscle filter (`WATCH_BRIDGE` A7) | filters by the raw library muscle (`quadriceps`) | filters by region (`legs`) | a raw-muscle chip list puts one exercise under "Back" on a small screen |
 | Profile / settings / routines editing | full | read-only | watch input cost; the phone owns identity and library curation |
+
+## Agreed cross-device rules
+
+- **Overload badges (`WATCH_BRIDGE` A2), decided by Phil 2026-09-20:** targets are
+  user-editable with defaults **3 sets, min 5, max 12**, read from
+  `jk_settings.targetSets`/`repMin`/`repMax`. **Go up** = all sets **≥ max** for 3
+  consecutive workouts at the same weight. **Go down** = no set reaches **min** in a
+  **single** workout, immediately. Suppressed when the exercise sets a PR that session.
+  Wear implements this as of v0.15; the phone is asked to match (see `BOARD.md`).
+- **Duration sets** store seconds in the set's `weight` field (A6). Wear wrote `reps`
+  until 2026-09-20; it now writes `weight` and falls back to `reps` when reading older
+  sessions.
 
 ## What the watches need from the phone side
 
