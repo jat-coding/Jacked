@@ -13,6 +13,8 @@ spec for ports.
 | [SYNC_PLAYBOOK.md](./SYNC_PLAYBOOK.md) | **Read this before writing any sync code.** Every data-loss lesson from Aug 2026, as platform-agnostic invariants |
 | [GARMIN_PORT_PLAN.md](./GARMIN_PORT_PLAN.md) | Kickoff plan for a Garmin/Connect IQ client, incl. why it should be a "thin client" |
 | [DESIGN.md](./DESIGN.md) | Exact PWA design tokens + watch adaptation rules (incl. Garmin MIP notes) |
+| [BOARD.md](./BOARD.md) | Messages between the phone and watch sessions — questions, answers, conflicts. One section per participant; edit only your own |
+| [WATCH_STATUS.md](./WATCH_STATUS.md) | What each watch client actually runs today, and where it deliberately differs from the phone (the mirror of WATCH_BRIDGE.md) |
 
 Existing clients: the PWA (`../jacked-pwa/`, canonical), Wear OS
 (jacked-wear), watchOS (jacked-watchos, in progress). Test only against
