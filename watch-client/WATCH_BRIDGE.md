@@ -20,7 +20,7 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ## APP-WIDE (watch must mirror)
 
-### A8. Strength-tier colors ("Signal" scheme) — `local, not pushed`
+### A8. Strength-tier colors ("Signal" scheme) — `0e23fee`
 Body Simulation, the Muscle Group Usage bars and the tier badges use one color per tier:
 Untrained grey `#6b6b7a`, Needs Work red `#ff5d6c`, Building green `#3ddc97`, Strong blue `#4da3ff`,
 Elite gold `#ffd24d`. Tier cutoffs are unchanged for now (score <0.34 / <0.67 / <0.9 / above), held in
@@ -100,7 +100,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
-| 09-19 | local | Tier colors switched to the Signal scheme (grey/red/green/blue/gold), one color per tier, shared by body, bars and badges | APP-WIDE A8 |
+| 09-19 | `0e23fee` | Tier colors switched to the Signal scheme (grey/red/green/blue/gold), one color per tier, shared by body, bars and badges | APP-WIDE A8 |
 | 09-19 | `7db214d` | Switch Exercise opens pre-filtered to the replaced exercise's muscle group | APP-WIDE A7 |
 | 09-18 | `0608651` | Exercise header wraps on phones under 360px wide | PHONE-ONLY |
 | 09-18 | `51963dd` | GPS run tracker removed from the live app (parked for App Store work) | PHONE-ONLY |
