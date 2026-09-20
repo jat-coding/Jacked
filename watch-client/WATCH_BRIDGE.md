@@ -6,6 +6,28 @@ the **function of the whole app** (so the watch must match). Owner of edits: the
 session that works on Jacked. Phone app source: `jacked-pwa/index.html`. Sibling files: `SPEC.md`, `API.md`,
 `DESIGN.md`, `DEV_NOTES.md` (the watch-only to-do list).
 
+## PHONE RIGHT NOW (snapshot; refreshed on every push)
+Checked with `scripts/jacked-state.sh` on 2026-09-19 22:40 MDT. GitHub `main` = `dee2e76` or later.
+**Live phone app = commit `e3adda2` (BUILD v1.8.13).** Pushed to GitHub is not the same as live: a push
+never deploys (Netlify auto-builds are off; a deploy needs Mr. Roni's separate go).
+
+| Item | What | On GitHub | Live on the phone |
+|---|---|---|---|
+| A9 | Muscle-group tier rebuild (90-day window, top-3 average, tier lines at the standards) | yes (`5832e21`) | **no** |
+| A8 | Signal tier colors (grey/red/green/blue/gold) | yes (`0e23fee`) | **no** |
+| A7 | Switch Exercise opens filtered to the same muscle group | yes (`7db214d`) | yes |
+| A6 | Duration display unit (sec/min/hr); stored in seconds, in `weight` | yes (`37ef4e6`) | yes |
+| A5 | Notes carry forward and save with the workout | yes (`984dacb`, `f9da482`) | yes |
+| A4 | Auto-name untitled workouts | yes (`3fe5987`) | yes |
+| A3 | Metric-tier badges | yes (`d490d6b`) | yes |
+| A2 | Overload badges (one rule, all devices) | yes (`3fe5987`) | yes |
+| A1 | Library exercise editing | yes (`37ef4e6`) | yes |
+
+Watch relevance: A1, A2, A4-A7 apply to the watches. A3, A8, A9 are phone-only (no body or
+group screen on a wrist); see `BOARD.md`.
+
+---
+
 ## How to read this
 | Tag | Meaning | Watch dev action |
 |---|---|---|
@@ -123,6 +145,7 @@ Full specs in `watch-client/DEV_NOTES.md`. Status of all: open (the watch source
 4. Record the commit, and add a dated line to the CHANGELOG below in the same edit.
 5. Update this file in the same push as the app change, so the two never drift.
 6. Add a PUSH LOG row (date, time, commit, BUILD, contents) with every push.
+7. Refresh the PHONE RIGHT NOW table with every push, and again after every deploy. Get the live commit from `scripts/jacked-state.sh`; never from memory.
 
 ---
 
@@ -131,6 +154,7 @@ Add a row in the same commit as every push. A change is live for real users only
 
 | Pushed | origin/main | BUILD | What went out |
 |---|---|---|---|
+| 2026-09-19 22:30 | (this push) | v1.8.15 (unchanged) | Docs only: PHONE RIGHT NOW table added to this file; board note |
 | 2026-09-19 22:27 | `116f61b` | v1.8.15 (unchanged) | Docs only: A1 corrected to match saveCE(); A2 confirmed as the one badge rule; A6 duration contract fixed (seconds, in `weight`); board replies |
 | 2026-09-19 21:07 | `5832e21` | v1.8.15 | A9 muscle-group tier rebuild (plus a follow-up docs commit filling in hashes) |
 | 2026-09-19 20:18 | `92b4994` | v1.8.14 (unchanged) | Docs only: PUSH LOG added to this file (plus a follow-up commit filling in this hash). Strong tier removed then restored locally; net app code identical to `1ef9a39` |
