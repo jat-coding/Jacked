@@ -92,6 +92,19 @@ Full specs in `watch-client/DEV_NOTES.md`. Status of all: open (the watch source
 3. State the exact rule and data fields, not a description of the screen.
 4. Record the commit, and add a dated line to the CHANGELOG below in the same edit.
 5. Update this file in the same push as the app change, so the two never drift.
+6. Add a PUSH LOG row (date, time, commit, BUILD, contents) with every push.
+
+---
+
+## PUSH LOG (when each batch went live; times MDT, from the git remote log)
+Add a row in the same commit as every push. A change is live for real users only once its push is listed here.
+
+| Pushed | origin/main | BUILD | What went out |
+|---|---|---|---|
+| 2026-09-19 18:50 | `1ef9a39` | v1.8.14 | A8 Signal tier colors (grey/red/green/blue/gold) |
+| 2026-09-19 16:12 | `e3adda2` | v1.8.13 | A7 Switch Exercise muscle filter; `WATCH_BRIDGE.md` moved into `watch-client/`; `DEV_NOTES.md` items 1-5 |
+| 2026-09-19 00:30 | `0608651` | not recorded | A1-A6 (library editing, duration units, overload badges, tier badges, notes carry-over, auto-naming), GPS added then removed, stress-test fixes, narrow-phone header fix |
+| 2026-09-15 18:39 | `38407d1` | not recorded | Baseline: watch-client auth handoff answers |
 
 ---
 
