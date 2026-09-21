@@ -257,6 +257,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .sw-ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px;pointer-events:none}
 .chips{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:14px;padding-bottom:2px;-ms-overflow-style:none;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
+.cdrag{touch-action:none;cursor:grab;color:var(--muted);padding:6px 4px;display:flex;align-items:center;-webkit-user-select:none;user-select:none}
 .chip{padding:6px 13px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--fb);transition:all .2s;white-space:nowrap;flex-shrink:0;-webkit-appearance:none}
 .chip.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .cur-card{flex:0 0 auto;width:200px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);padding:14px;white-space:normal}
@@ -3784,18 +3785,45 @@ function cardBadges(){
 }
 
 // Saved section order (settings.cardOrder = array of card ids). Unknown/new ids sort last in default order.
-function moveCard(id,dir){
-  const s=gSet(); const ids=metricsOrdered().map(c=>c.id).filter(i=>!metricsHidden().has(i));
-  const i=ids.indexOf(id), j=i+dir; if(i<0||j<0||j>=ids.length) return;
-  [ids[i],ids[j]]=[ids[j],ids[i]];
-  const rest=(s.cardOrder||[]).filter(x=>!ids.includes(x));
-  S.s('settings',{...s,cardOrder:[...ids,...rest]}); renderMetricsPage();
-}
 function metricsOrdered(){
   const cards=[cardWeight(),cardBody(),cardRankings(),cardSummary(),cardLifetime(),cardBadges()];
   const ord=gSet().cardOrder||[];
   const rank=c=>{const i=ord.indexOf(c.id); return i<0?999:i;};
   return cards.map((c,i)=>[c,i]).sort((a,b)=>rank(a[0])-rank(b[0])||a[1]-b[1]).map(x=>x[0]);
+}
+// Drag-to-reorder: grab the grip, card follows the finger, others shuffle live; order saved on release.
+function cardDragStart(e){
+  const el=e.currentTarget.closest('.metric-card'), cont=el&&el.parentElement; if(!el) return;
+  e.preventDefault();
+  const handle=e.currentTarget; try{handle.setPointerCapture(e.pointerId);}catch(_){}
+  cont.style.position='relative';
+  const grab=e.clientY-el.getBoundingClientRect().top;
+  let y=e.clientY, raf=0;
+  el.style.zIndex=5; el.style.boxShadow='0 10px 30px rgba(0,0,0,.45)'; el.style.opacity='.95'; el.style.transition='none';
+  const sp=(()=>{let n=cont;while(n&&n!==document.body){const o=getComputedStyle(n).overflowY;if(o==='auto'||o==='scroll')return n;n=n.parentElement;}return null;})();
+  function place(){
+    const top=y-grab-cont.getBoundingClientRect().top, c=top+el.offsetHeight/2;
+    let p=el.previousElementSibling, n=el.nextElementSibling;
+    if(p&&c<p.offsetTop+p.offsetHeight/2) cont.insertBefore(el,p);
+    else if(n&&c>n.offsetTop+n.offsetHeight/2) cont.insertBefore(n,el);
+    el.style.transform=`translateY(${top-el.offsetTop}px)`;
+  }
+  function tick(){
+    const h=sp?sp.getBoundingClientRect():{top:0,bottom:innerHeight};
+    const d=y<h.top+70?-9:(y>h.bottom-70?9:0);
+    if(d){ (sp||window).scrollBy(0,d); place(); }
+    raf=requestAnimationFrame(tick);
+  }
+  const mv=ev=>{ y=ev.clientY; place(); };
+  const end=()=>{
+    cancelAnimationFrame(raf);
+    handle.removeEventListener('pointermove',mv); handle.removeEventListener('pointerup',end); handle.removeEventListener('pointercancel',end);
+    const ids=[...cont.children].map(x=>x.dataset.id), s=gSet();
+    S.s('settings',{...s,cardOrder:[...ids,...(s.cardOrder||[]).filter(x=>!ids.includes(x))]});
+    renderMetricsPage();
+  };
+  handle.addEventListener('pointermove',mv); handle.addEventListener('pointerup',end); handle.addEventListener('pointercancel',end);
+  raf=requestAnimationFrame(tick); place();
 }
 function renderMetricsPage(){
   const hidden=metricsHidden();
@@ -3803,14 +3831,14 @@ function renderMetricsPage(){
   const cont=document.getElementById('metricsCards');
   const vis=cards.filter(c=>!hidden.has(c.id));
   cont.innerHTML=vis.map((c,i)=>`
-    <div class="metric-card">
+    <div class="metric-card" data-id="${c.id}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div class="st" style="margin:0">${c.title}</div>
-        <div style="display:flex;gap:4px">
-          ${i>0?`<button class="btn bg ic xs" aria-label="Move up" onclick="moveCard('${c.id}',-1)">${uic('arrowUp',undefined,14)}</button>`:''}
-          ${i<vis.length-1?`<button class="btn bg ic xs" aria-label="Move down" onclick="moveCard('${c.id}',1)">${uic('arrowDown',undefined,14)}</button>`:''}
+        <div style="display:flex;gap:4px;align-items:center">
           <button class="btn bg ic xs" title="Hide card" onclick="toggleCard('${c.id}')">✕</button>
+          <div class="cdrag" aria-label="Drag to reorder" onpointerdown="cardDragStart(event)"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg></div>
         </div>
+      </div>
       </div>
       ${c.html}
     </div>`).join('');
