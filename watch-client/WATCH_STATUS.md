@@ -52,8 +52,9 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   except the Discard question, which reads **"Discard workout? All progress will be lost."**
   (Phil 2026-09-21: "Cancel workout?" next to a Cancel button that means *don't* discard was
   confusing — a deliberate, watch-only difference). Press-and-hold on Home's *Resume workout*
-  card opens "Discard workout…" → the same Discard confirm; tap still resumes, the card is
-  unchanged.
+  card goes **straight to the Discard confirm** (Phil 2026-09-21: the hold is the intent —
+  no intermediate menu, a deliberate simplification of item 8's two-step wording); tap
+  still resumes, the card is unchanged.
 - **Value wheels (`DEV_NOTES` items 1, 3, 9 / W1, W2):** one shared composable,
   `ui/components/ValueWheel.kt`, is the ONLY place a value-change haptic fires — a CLICK per
   change of the selected option, whether the bezel, a finger drag or a fling moved it. Reps
@@ -99,8 +100,7 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   | Set editor, Note editor | Workout list or Focus view | its opener |
   | Exercise picker (+ Exercise or ⇄) | Workout list or Focus view | its opener |
   | Muscle-group chooser | Exercise picker | Exercise picker (fixed 2026-09-21) |
-  | Confirm Finish / Confirm Discard | Workout list (or Resume menu) | its opener |
-  | Resume menu (long-press) | Home | Home |
+  | Confirm Finish / Confirm Discard | Workout list, or Home (long-press Resume) | its opener |
   | Summary | Confirm Finish | Home (the finished workout has no list to return to) |
 - **Change exercise (Wear, v0.15; `DEV_NOTES` item 2 / A7):** the ⇄ picker opens
   pre-filtered to the outgoing exercise's region chip, ranked favourites → used → rest,
