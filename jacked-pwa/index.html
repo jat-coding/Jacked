@@ -3783,15 +3783,34 @@ function cardBadges(){
   return {id:'badges',title:'Achievements',html};
 }
 
+// Saved section order (settings.cardOrder = array of card ids). Unknown/new ids sort last in default order.
+function moveCard(id,dir){
+  const s=gSet(); const ids=metricsOrdered().map(c=>c.id).filter(i=>!metricsHidden().has(i));
+  const i=ids.indexOf(id), j=i+dir; if(i<0||j<0||j>=ids.length) return;
+  [ids[i],ids[j]]=[ids[j],ids[i]];
+  const rest=(s.cardOrder||[]).filter(x=>!ids.includes(x));
+  S.s('settings',{...s,cardOrder:[...ids,...rest]}); renderMetricsPage();
+}
+function metricsOrdered(){
+  const cards=[cardWeight(),cardBody(),cardRankings(),cardSummary(),cardLifetime(),cardBadges()];
+  const ord=gSet().cardOrder||[];
+  const rank=c=>{const i=ord.indexOf(c.id); return i<0?999:i;};
+  return cards.map((c,i)=>[c,i]).sort((a,b)=>rank(a[0])-rank(b[0])||a[1]-b[1]).map(x=>x[0]);
+}
 function renderMetricsPage(){
   const hidden=metricsHidden();
-  const cards=[cardWeight(),cardBody(),cardRankings(),cardSummary(),cardLifetime(),cardBadges()];
+  const cards=metricsOrdered();
   const cont=document.getElementById('metricsCards');
-  cont.innerHTML=cards.filter(c=>!hidden.has(c.id)).map(c=>`
+  const vis=cards.filter(c=>!hidden.has(c.id));
+  cont.innerHTML=vis.map((c,i)=>`
     <div class="metric-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div class="st" style="margin:0">${c.title}</div>
-        <button class="btn bg ic xs" title="Hide card" onclick="toggleCard('${c.id}')">✕</button>
+        <div style="display:flex;gap:4px">
+          ${i>0?`<button class="btn bg ic xs" aria-label="Move up" onclick="moveCard('${c.id}',-1)">${uic('arrowUp',undefined,14)}</button>`:''}
+          ${i<vis.length-1?`<button class="btn bg ic xs" aria-label="Move down" onclick="moveCard('${c.id}',1)">${uic('arrowDown',undefined,14)}</button>`:''}
+          <button class="btn bg ic xs" title="Hide card" onclick="toggleCard('${c.id}')">✕</button>
+        </div>
       </div>
       ${c.html}
     </div>`).join('');
