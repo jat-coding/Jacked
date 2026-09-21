@@ -455,7 +455,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 
 <!-- ROUTINES -->
 <div class="page" id="page-routines">
-  <div class="ph"><div class="pt">Routines</div><button class="btn ba sm" onclick="openCR()">+ New</button></div>
+  <div class="ph"><div class="pt">Routines</div><button class="btn bg sm" onclick="openCR()">+ New</button></div>
   <button class="btn bg wf" onclick="startEmpty()" style="margin-bottom:16px">Start Empty Workout</button>
   <div id="curatedWrap" style="margin-bottom:18px">
     <div class="st" style="margin-bottom:8px"><svg viewBox='0 0 24 24' width='14' height='14' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
@@ -467,7 +467,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 
 <!-- EXERCISES / LIBRARY -->
 <div class="page" id="page-exercises">
-  <div class="ph"><div class="pt">Library</div><button class="btn ba sm" onclick="openCE()">+ Custom</button></div>
+  <div class="ph"><div class="pt">Library</div><button class="btn bg sm" onclick="openCE()">+ Custom</button></div>
   <div class="sticky-sub" style="padding-bottom:6px">
     <div class="sw"><span class="sw-ic"><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0'/><path d='M21 21l-6 -6'/></svg></span><input type="text" id="exSearch" placeholder="Search exercises..." oninput="renderEx()"></div>
     <div class="chips" id="muscleChips"></div>
@@ -694,7 +694,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="md">
     <div class="drag-handle"></div>
     <div class="mh"><div class="mt">Reorder Exercises</div><button class="cb" onclick="cm('reorderModal')">✕</button></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Use the arrows to set the order.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Drag the grip to set the order.</div>
     <div id="reorderList"></div>
     <button class="btn ba wf" onclick="cm('reorderModal')" style="margin-top:10px">Done</button>
   </div>
@@ -2940,11 +2940,11 @@ function removeSet(ei){ if(aw){ const s=aw.exercises[ei].sets; if(s.length>1){ s
 function openReorder(){ if(!aw||!aw.exercises.length) return; renderReorder(); om('reorderModal'); }
 function renderReorder(){
   const el=document.getElementById('reorderList'); if(!el) return;
-  el.innerHTML=aw.exercises.map((ex,i)=>`<div class="ro-row">
+  el.style.position='relative';
+  el.innerHTML=aw.exercises.map((ex,i)=>`<div class="ro-row" data-id="${i}">
     <span style="font-family:var(--fh);font-weight:700;color:var(--muted);width:18px">${i+1}</span>
     <span style="flex:1;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ex.name)}</span>
-    <button class="btn bg ic" onclick="moveReorder(${i},-1)" aria-label="Up">${uic('arrowUp',undefined,16)}</button>
-    <button class="btn bg ic" onclick="moveReorder(${i},1)" aria-label="Down">${uic('arrowDown',undefined,16)}</button>
+    <div class="cdrag" aria-label="Drag to reorder" onpointerdown="cardDragStart(event)"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg></div>
   </div>`).join('');
 }
 function moveReorder(i,dir){ reorderMove(i,i+dir); }
@@ -3834,7 +3834,13 @@ function cardDragStart(e){
     if(done||(ev&&ev.pointerId!==e.pointerId)) return; done=true;
     cancelAnimationFrame(raf);
     window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
-    const ids=[...cont.children].map(x=>x.dataset.id), s=gSet();
+    const ids=[...cont.children].map(x=>x.dataset.id);
+    if(cont.id==='reorderList'){
+      // Workout exercises: ids are the old indices in their new order.
+      const old=aw.exercises; aw.exercises=ids.map(i=>old[+i]).filter(Boolean);
+      renderReorder(); renderWS(); saveAW(); return;
+    }
+    const s=gSet();
     S.s('settings',{...s,cardOrder:[...ids,...(s.cardOrder||[]).filter(x=>!ids.includes(x))]});
     renderMetricsPage(); renderCardOrderList();
   };
