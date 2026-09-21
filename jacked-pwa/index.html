@@ -3928,7 +3928,7 @@ function toggleCB(code){ const cb=new Set(gCB()); cb.has(code)?cb.delete(code):c
 const CMP=[
   {k:'volume',      ic:'dumbbell',col:'#5aa9ff',label:'Weight',      all:p=>p.totalVolume||0, mon:p=>p.mVol||0,      fmt:v=>fmtW(v)+' '+uL()},
   {k:'prs',         ic:'trophy',col:'#ffd700',label:'PRs',          all:p=>p.prs||0,         mon:p=>p.mPRs||0,      fmt:v=>v},
-  {k:'workouts',    ic:'calendar',col:'#3ddc97',label:'Sessions',     all:p=>p.workouts||0,    mon:p=>p.mWorkouts||0, fmt:v=>v},
+  {k:'workouts',    ic:'calendar',col:'#4b3fd6',label:'Sessions',     all:p=>p.workouts||0,    mon:p=>p.mWorkouts||0, fmt:v=>v},
   {k:'streak',      ic:'flame',col:'var(--orange)',label:'Streak',       all:p=>p.streak||0,      mon:p=>p.streak||0,    fmt:v=>v+'d'},
   {k:'consistency', ic:'barchart',col:'#b07cff',label:'Consistency',  all:p=>p.consistency||0, mon:p=>p.consistency||0, fmt:v=>v+'%'},
   {k:'badges',      ic:'medal',col:'#ffca4d',label:'Badges',       all:p=>p.badges||0,      mon:p=>p.badges||0,    fmt:v=>v+' '+uic('medal')},
@@ -5542,7 +5542,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.33';
+const BUILD = 'v1.8.34';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
