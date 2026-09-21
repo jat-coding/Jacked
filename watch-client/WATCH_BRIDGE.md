@@ -16,7 +16,7 @@ auto-builds are off; a deploy needs Mr. Roni's separate go). Check the live site
 
 | BUILD | What it contains (cumulative) | Pushed commit |
 |---|---|---|
-| v1.8.19 | A1-A11, plus quarterly Cardio-Maxing reset and the full-screen achievement popup | not pushed yet |
+| v1.8.19 | A1-A11, plus quarterly Cardio-Maxing reset and the full-screen achievement popup | `b5555fa` (on the `test` branch preview only, not `main`) |
 | v1.8.18 | A1-A10, plus the frosted-glass bottom tab bar (phone-only) | `631dd85` |
 | v1.8.17 | A1-A10, **A10 amended: go-up at or above Max; lighter after a single workout (both match the watches)** | `c4ee8c5`, `4754bd0` |
 | v1.8.16 | A1-A9, **A10 user-defined rep range for the overload badges** | `e513de7` |
@@ -28,6 +28,15 @@ auto-builds are off; a deploy needs Mr. Roni's separate go). Check the live site
 Rule: every push that changes `jacked-pwa/` bumps `BUILD` by one patch. Docs-only pushes do not
 bump it, because users see nothing different. Watch relevance: A1, A2, A4-A7 apply to the watches;
 A3, A8, A9 are phone-only (no body or group screen on a wrist); see `BOARD.md`.
+
+---
+
+## Test previews ("push for test")
+Mr. Roni's term for pushing a build to the GitHub **`test` branch**: Netlify builds it as a free branch
+preview at `https://test--jacked-trainer.netlify.app` (0 credits), separate from production. A push to
+`main` builds the live app automatically (15 credits per deploy) and needs his explicit go. The build table
+below marks builds that exist only on `test`. Check `curl -s https://jacked-trainer.netlify.app/ | grep BUILD`
+for production; the preview may need a Netlify sign-in.
 
 ---
 
@@ -210,7 +219,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 |---|---|---|---|
 | 09-19 | `5832e21` | Muscle-group tier rebuild: 90-day window, rep cap 10, per-exercise scaling, top-3 average, tier lines at the standards | APP-WIDE A9 |
 | 09-19 | `0e23fee` | Tier colors switched to the Signal scheme (grey/red/green/blue/gold), one color per tier, shared by body, bars and badges | APP-WIDE A8 |
-| 09-21 | local | Achievements: 1000lb Club rename, Cardio-Maxing quarterly reset, full-screen detail popup | APP-WIDE A11 |
+| 09-21 | `b5555fa` (test branch) | Achievements: 1000lb Club rename, Cardio-Maxing quarterly reset, full-screen detail popup | APP-WIDE A11 |
 | 09-20 | `631dd85` | Tab bar: frosted glass, moved low to the bottom | PHONE-ONLY |
 | 09-19 | `c4ee8c5`, `4754bd0` | Go-up fires at or above Max; lighter fires after a single workout with no set reaching Min. Both match the watches | APP-WIDE A10 |
 | 09-19 | `e513de7` | Overload-badge rep range: default 5-12, user-defined Min/Max in Profile (`jk_settings.repMin/repMax`) | APP-WIDE A10 |
