@@ -3908,7 +3908,6 @@ function renderMetricsPage(){
         <div class="mc-title">${c.title}</div>
         <button class="btn bg ic xs" title="Hide card" onclick="toggleCard('${c.id}')">✕</button>
       </div>
-      </div>
       ${c.html}
     </div>`).join('');
   const hb=document.getElementById('hiddenCardsBar');
@@ -5542,7 +5541,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.34';
+const BUILD = 'v1.8.35';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
