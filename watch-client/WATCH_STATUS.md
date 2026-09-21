@@ -9,9 +9,9 @@ each editing only its own rows. Updated in the same push as the change it descri
 
 | Client | Version | Delivery | Verified |
 |---|---|---|---|
-| Wear OS (Galaxy Watch 8 Classic) | **v0.18** (wear vc117) | Play internal testing | tagged 2026-09-21: DEV_NOTES 6–10 (Lock in, confirms, long-press Resume, back audit, shared wheel + drift fix); v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
+| Wear OS (Galaxy Watch 8 Classic) | **v0.19** (wear vc118) | Play internal testing | tagged 2026-09-21: one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
 | watchOS (Apple Watch) | **0.2.0 (24)** | TestFlight | build 22 field-tested; 24 adds overload nudges; Wear v0.15 parity items handed off 2026-09-20 |
-| Phone companion "Jacked Sync" (Android) | **v0.18** (phone vc17) | Play internal testing | no functional change since v0.14 |
+| Phone companion "Jacked Sync" (Android) | **v0.19** (phone vc18) | Play internal testing | no functional change since v0.14 |
 
 The companion is not a watch client: it reads the cloud blob and writes finished workouts into
 Android Health Connect, which is the only path into Samsung Health. It signs in like a watch.
