@@ -47,8 +47,11 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   **No Finish or Discard in the focus view** — list only. The focused exercise is remembered,
   so *Resume workout* reopens it after a relaunch. Replace/remove/reorder stay on the list.
 - **Confirms (`DEV_NOTES` item 7) and long-press Resume (item 8):** Finish and Discard both
-  confirm first, phone wording (`showConfirm`), **Cancel listed first** so the destructive
-  button never sits under the tap that opened it. Press-and-hold on Home's *Resume workout*
+  confirm first. Cancel and the action sit **side by side on one line, Cancel on the left**,
+  so neither is under the full-width tap that opened the screen. Wording follows the phone
+  except the Discard question, which reads **"Discard workout? All progress will be lost."**
+  (Phil 2026-09-21: "Cancel workout?" next to a Cancel button that means *don't* discard was
+  confusing — a deliberate, watch-only difference). Press-and-hold on Home's *Resume workout*
   card opens "Discard workout…" → the same Discard confirm; tap still resumes, the card is
   unchanged.
 - **Value wheels (`DEV_NOTES` items 1, 3, 9 / W1, W2):** one shared composable,
