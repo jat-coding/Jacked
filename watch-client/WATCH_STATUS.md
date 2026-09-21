@@ -36,18 +36,69 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
 - **Sensors (Wear):** live HR + calories during the session; `hrAvg`/`hrMax`/`kcal`/`hrSeries`
   are written onto the workout as extra fields the PWA carries through untouched.
 - **Progressive-overload nudges:** both watches, target-based — see "Agreed cross-device rules".
-- **Focus view (Wear, v0.15; `DEV_NOTES` item 5):** tapping an exercise **name** in the
-  workout list opens that exercise alone — sets, − Set / + Set, then **‹ Prev · All · Next ›**.
-  Tap-only, never auto-advances; Prev/Next grey out at the ends (never change function);
-  *All*, a right-swipe or Back returns to the list, which stays the home view. On the **last**
-  exercise the list's tail appears under the row — green **✓ Finish** pill, red **Discard** —
-  exactly as on the list, and nowhere else. The focused exercise is remembered, so *Resume
-  workout* reopens it after a relaunch. Replace/remove/reorder stay on the list.
-- **Set editor bezel (Wear, v0.15; `DEV_NOTES` items 1 and 3 / W1, W2):** reps move exactly
-  ±1 per detent; weight keeps velocity tiers (2.5 / 5 / 10) but needs a deliberate spin
-  (≥4 detents/s) to accelerate; a light tick on every value change, both columns. Touch-
-  scrolling a wheel makes it the bezel's target — one focused column at a time, shown by
-  the teal outline. Checking a set off gives a stronger haptic.
+- **Focus view (Wear; `DEV_NOTES` items 5 and 10, as decided by Phil 2026-09-21):** tapping
+  an exercise **name** in the workout list opens that exercise alone — sets, − Set / + Set,
+  a full-width **Lock in** pill, **‹ Prev · All · Next ›**, and on the last exercise a
+  **+ Exercise** pill at the end (same label as the list; opens the same picker). **Lock in**
+  checks off that exercise's sets that have values and aren't already done — a blank set is
+  left alone — then opens the next exercise, or the full list after the last; no confirm;
+  focus view only; a manual ✓ is unchanged. Prev/Next grey out at the ends (never change
+  function). *All*, a right-swipe or Back returns to the list, which stays the home view.
+  **No Finish or Discard in the focus view** — list only. The focused exercise is remembered,
+  so *Resume workout* reopens it after a relaunch. Replace/remove/reorder stay on the list.
+- **Confirms (`DEV_NOTES` item 7) and long-press Resume (item 8):** Finish and Discard both
+  confirm first, phone wording (`showConfirm`), **Cancel listed first** so the destructive
+  button never sits under the tap that opened it. Press-and-hold on Home's *Resume workout*
+  card opens "Discard workout…" → the same Discard confirm; tap still resumes, the card is
+  unchanged.
+- **Value wheels (`DEV_NOTES` items 1, 3, 9 / W1, W2):** one shared composable,
+  `ui/components/ValueWheel.kt`, is the ONLY place a value-change haptic fires — a CLICK per
+  change of the selected option, whether the bezel, a finger drag or a fling moved it. Reps
+  move exactly ±1 per detent; weight keeps velocity tiers (2.5 / 5 / 10) but needs a
+  deliberate spin (≥4 detents/s). Touch-scrolling a wheel makes it the bezel's target.
+  Checking a set, and Lock in, give a HEAVY_CLICK. The **number drift** (item 9b) was real
+  and is fixed: the selected option was drawn in a bigger style than its neighbours, so the
+  option heights changed under the snapping list and an upward fling rested ~19 px high;
+  every option now has a fixed-height slot.
+
+  Haptics audit (every value control, all routed through `ValueWheel`):
+
+  | Control | Screen | Haptic |
+  |---|---|---|
+  | Weight wheel (Lbs/Kg) | Set entry | CLICK per change |
+  | Reps wheel | Set entry | CLICK per change |
+  | Miles / Min wheels (cardio) | Set entry | CLICK per change |
+  | Secs wheel (duration) | Set entry | CLICK per change |
+  | Pause length | Settings | CLICK per change |
+  | Target sets | Settings | CLICK per change |
+  | Min reps | Settings | CLICK per change |
+  | Max reps | Settings | CLICK per change |
+  | Set ✓ / Lock in | Workout list / focus | HEAVY_CLICK on completion |
+
+  `grep` for other haptic calls on value changes: none (the set ✓ and Lock in are the only
+  other haptic call sites, both HEAVY_CLICK actions, not value changes).
+- **Back / swipe-out audit (`DEV_NOTES` item 6):** every screen is its own navigation entry
+  and back (bezel/side button or right-swipe — same action on Wear) pops exactly one. The
+  muscle-region chooser used to be a state inside the picker screen, so back popped the whole
+  picker and landed on the workout — it is now its own entry (`picker/{replace}/muscle`).
+
+  | Screen | Opened from | Back lands on |
+  |---|---|---|
+  | Sign-in (username / password / unclaimed) | app start | watch face |
+  | Home | sign-in / app start | watch face |
+  | Settings, Routines, History | Home | Home |
+  | Pause length / Target sets / Min reps / Max reps | Settings | Settings |
+  | Workout detail | Home (recent) or History | its opener |
+  | Exercise detail | Workout detail | Workout detail |
+  | Exercise note (from history) | Exercise detail | Exercise detail |
+  | Workout list | Home (Resume / Start Workout) or Routines | Home (Routines is popped on start, by design) |
+  | Focus view | Workout list | Workout list — also after any number of Prev/Next (they replace, not stack) |
+  | Set editor, Note editor | Workout list or Focus view | its opener |
+  | Exercise picker (+ Exercise or ⇄) | Workout list or Focus view | its opener |
+  | Muscle-group chooser | Exercise picker | Exercise picker (fixed 2026-09-21) |
+  | Confirm Finish / Confirm Discard | Workout list (or Resume menu) | its opener |
+  | Resume menu (long-press) | Home | Home |
+  | Summary | Confirm Finish | Home (the finished workout has no list to return to) |
 - **Change exercise (Wear, v0.15; `DEV_NOTES` item 2 / A7):** the ⇄ picker opens
   pre-filtered to the outgoing exercise's region chip, ranked favourites → used → rest,
   without the outgoing exercise itself.
