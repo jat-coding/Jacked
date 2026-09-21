@@ -4375,6 +4375,8 @@ async function doAF() {
 const SUPABASE_URL = 'https://qehlrwnumrjktujidabz.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_vmf9BELfVFZpKrdMN3Z34g_R9l056gJ';
 let SUPA = null, liveFriends = null, _authUid = null;
+// Warm start: last fetched friends list, so the Friends tab paints instantly and refreshes behind it.
+try{ const c=JSON.parse(localStorage.getItem('jk_friendsCache')||'null'); if(Array.isArray(c)&&c.length) liveFriends=c; }catch(_){}
 function supaInit() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase) {
@@ -4443,7 +4445,7 @@ function onAuthed(){
   subscribeFriends();
   if (typeof maybeCloudBackup==='function') maybeCloudBackup();
   if (isDirty()) scheduleSync();
-  if (_onLB()) refreshFriends();
+  refreshFriends();   // preload so the Friends tab is warm before it's opened
 }
 function showAuthGate(mode, code, email){
   _gate = {mode, code, email};
@@ -4764,7 +4766,7 @@ async function cloudPullMerge(){
 async function refreshFriends() {
   if (!supaEnabled()) { liveFriends=null; renderLB(); return; }
   const p=gProf(); if(!p||!p.code){ renderLB(); return; }
-  await syncMe();
+  syncMe().catch(e=>console.warn('syncMe',e));   // own-profile upload doesn't gate the friends fetch
   try {
     const my=p.code;
     const { data: reqs } = await SUPA.from('friend_requests').select('*')
@@ -4796,6 +4798,7 @@ async function refreshFriends() {
       ...[...accepted].filter(cleanCode).map(c=>({...mk(c),pending:false})),
       ...pendingIn.filter(cleanCode).map(c=>({...mk(c),pending:true}))
     ].map(cleanPerson).filter(Boolean);
+    try{ localStorage.setItem('jk_friendsCache',JSON.stringify(liveFriends)); }catch(_){}
   } catch(e){ console.warn('refreshFriends',e); }
   renderLB();
 }
@@ -5043,6 +5046,7 @@ function renderProfAge(){
 // reload the onboarding screen offers "Restore from backup" to load another account.
 async function signOut() {
   const p=gProf()||{};
+  try{ localStorage.removeItem('jk_friendsCache'); }catch(_){}
   // Pre-v1.8 this warned that data was saved ONLY on this device — true when the
   // blob backup ran once a day, false since sync-on-change. Say what is actually
   // the case: consult the enrolment + dirty flag, flush first if something is
