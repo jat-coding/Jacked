@@ -351,6 +351,16 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   #rotateGuard .rg-s{font-size:14px;color:var(--muted);max-width:280px}
 }
 @keyframes rgspin{0%,60%,100%{transform:rotate(0)}30%{transform:rotate(-90deg)}}
+
+/* ===== Hybrid layout (2026-09-21 test): big titles, one soft card per section, dark stat wells, hairline rows ===== */
+.sec,.metric-card,.cw{background:linear-gradient(180deg,#1a1a21,#131318);border:0;border-radius:20px;padding:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 12px 30px -14px rgba(0,0,0,.8);margin:0 0 22px}
+.sec-t,.mc-title{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text);line-height:1;margin:0 0 12px;padding:0;border:0}
+#metricsCards{gap:22px}
+.sec .stats-g,.sec .stats-g2{margin-bottom:0}
+.sc{background:#0d0d11;border:0;border-radius:14px;text-align:left;padding:12px 12px}
+.sec .wli,.sec .eli,.sec .rc,.sec .fc{background:none;border:0;border-top:1px solid #23232b;border-radius:0;padding:12px 0;margin:0;box-shadow:none}
+.sec .wli:first-child,.sec .eli:first-child,.sec .rc:first-child,.sec .fc:first-child{border-top:0}
+#curatedWrap .st{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;color:var(--text);line-height:1;margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -436,8 +446,8 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <button class="btn bg sm ic" onclick="openProf()"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0'/><path d='M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2'/></svg></button>
     </div>
   </div>
-  <div class="stats-g" id="homeStats"></div>
-  <div id="streakBanner" style="display:none;align-items:center;gap:14px;background:var(--bg2);border:1px solid rgba(32,211,194,.25);border-radius:var(--rl);padding:14px 16px;margin-bottom:20px"></div>
+  <div class="sec"><div class="sec-t">Overview</div><div class="stats-g" id="homeStats"></div></div>
+  <div id="streakBanner" class="sec" style="display:none"></div>
   <div class="cw">
     <div class="ch">
       <button class="cn" onclick="calPrev()">&#8249;</button>
@@ -448,8 +458,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   </div>
   <button class="btn ba wf" onclick="openQS()" style="margin:2px 0 12px;font-size:16px;padding:14px"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" style="vertical-align:-2px;margin-right:6px"><path d="M8 5v14l11-7z"/></svg>Start Workout</button>
   <div id="suggestCard" style="display:none;align-items:flex-start;gap:12px;background:var(--bg2);border:1px solid rgba(77,158,255,.3);border-radius:var(--rl);padding:14px 16px;margin-bottom:20px"></div>
-  <div class="st">Recent Workouts</div>
-  <div id="recentW"></div>
+  <div class="sec"><div class="sec-t">Recent workouts</div><div id="recentW"></div></div>
   <div id="homeVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:22px 0 6px"></div>
 </div>
 
@@ -457,12 +466,11 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="page" id="page-routines">
   <div class="ph"><div class="pt">Routines</div><button class="btn bg sm" onclick="openCR()">+ New</button></div>
   <button class="btn bg wf" onclick="startEmpty()" style="margin-bottom:16px">Start Empty Workout</button>
-  <div id="curatedWrap" style="margin-bottom:18px">
+  <div id="curatedWrap" class="sec">
     <div class="st" style="margin-bottom:8px"><svg viewBox='0 0 24 24' width='14' height='14' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
     <div class="chips" id="curatedList" style="gap:10px"></div>
   </div>
-  <div class="st" style="margin-bottom:8px">My Routines</div>
-  <div id="routinesList"></div>
+  <div class="sec"><div class="sec-t">My routines</div><div id="routinesList"></div></div>
 </div>
 
 <!-- EXERCISES / LIBRARY -->
@@ -473,7 +481,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="chips" id="muscleChips"></div>
   </div>
   <div id="exLoadState" style="text-align:center;padding:20px;color:var(--muted);font-size:13px"></div>
-  <div id="exList"></div>
+  <div class="sec"><div class="sec-t">Exercises</div><div id="exList"></div></div>
 </div>
 
 <!-- METRICS -->
@@ -487,11 +495,9 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="page" id="page-leaderboard">
   <div class="ph"><div class="pt">Friends</div><button class="btn bg sm" onclick="openAF()">+ Friend</button></div>
   <div id="compareBoard"></div>
-  <div class="st" style="margin-bottom:8px">You</div>
-  <div id="lbYou"></div>
+  <div class="sec"><div class="sec-t">You</div><div id="lbYou"></div></div>
   <div id="lbBuddiesWrap" style="display:none"><div class="st" style="margin:16px 0 8px"><svg viewBox='0 0 24 24' width='14' height='14' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Close Buddies</div><div id="lbBuddies"></div></div>
-  <div class="st" style="margin:16px 0 8px">Friends</div>
-  <div id="lbFriends"></div>
+  <div class="sec"><div class="sec-t">Friends</div><div id="lbFriends"></div></div>
   <div id="pendingWrap" style="display:none">
     <div class="st" style="margin-top:16px;color:var(--orange)"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M6.5 7h11'/><path d='M6.5 17h11'/><path d='M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1'/><path d='M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1'/></svg> Pending</div>
     <div id="pendingList"></div>
@@ -1678,12 +1684,17 @@ function renderHome() {
     <div class="sc"><div class="sv">${mw.length}</div><div class="sl">This Month</div></div>
     <div class="sc"><div class="sv">${h.length}</div><div class="sl">All Time</div></div>
     <div class="sc"><div class="sv">${Object.keys(prs).length}</div><div class="sl">PRs Set</div></div>`;
-  const sb=document.getElementById('streakBanner');
-  if (streak>0) {
-    sb.style.display='flex';
-    sb.innerHTML=`<div>${uic('flame','var(--orange)',26)}</div>
-      <div><div style="font-family:var(--fh);font-size:26px;font-weight:900;color:var(--accent);line-height:1">${streak} day${streak!==1?'s':''}</div>
-      <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Current streak — keep it alive</div></div>`;
+  const sb=document.getElementById('streakBanner'), best=Math.max(bestStreak(h),streak);
+  if (best>0) {
+    sb.style.display='block';
+    sb.innerHTML=`<div class="sec-t">Streak</div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div>${uic('flame',streak>0?'var(--orange)':'var(--muted)',30)}</div>
+        <div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:30px;font-weight:900;line-height:1;color:${streak>0?'var(--text)':'var(--muted)'}">${streak} day${streak!==1?'s':''}</div>
+          <div class="sl" style="margin-top:4px">Current${streak>0?' — keep it alive':''}</div></div>
+        <div style="text-align:right"><div style="font-family:var(--fh);font-size:30px;font-weight:900;line-height:1;color:var(--accent)">${best} day${best!==1?'s':''}</div>
+          <div class="sl" style="margin-top:4px">Best</div></div>
+      </div>`;
   } else {
     sb.style.display='none';
   }
@@ -3898,6 +3909,17 @@ function cmpSw(k){ cmpM=k; renderLB(); }
 function cmpRangeSet(r){ cmpRange=r; renderLB(); }
 
 // Consecutive-day workout streak (today optional — grace until you train).
+// Longest run of consecutive training days across all history.
+function bestStreak(h){
+  const days=[...new Set(h.map(w=>dayKey(w.date)))].sort();
+  let best=0,run=0,prev=null;
+  for(const d of days){
+    const t=+new Date(d+'T12:00:00');
+    run=(prev!==null&&Math.round((t-prev)/864e5)===1)?run+1:1;
+    if(run>best) best=run; prev=t;
+  }
+  return best;
+}
 function calcStreak(h) {
   let streak=0;
   const sdates=new Set(h.map(w=>dayKey(w.date)));
@@ -5490,7 +5512,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.21';
+const BUILD = 'v1.8.22';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
