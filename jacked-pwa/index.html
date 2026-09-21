@@ -354,6 +354,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 
 /* ===== Hybrid layout (2026-09-21 test): big titles, one soft card per section, dark stat wells, hairline rows ===== */
 .sec,.metric-card,.cw{background:linear-gradient(180deg,#1a1a21,#131318);border:0;border-radius:20px;padding:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 12px 30px -14px rgba(0,0,0,.8);margin:0 0 22px}
+.sub-t{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin:2px 0 6px}
 .sec-t,.mc-title{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text);line-height:1;margin:0 0 12px;padding:0;border:0}
 #metricsCards{gap:22px}
 .sec .stats-g,.sec .stats-g2{margin-bottom:0}
@@ -443,7 +444,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="ph">
     <div class="pt">JACKED<span>.</span></div>
     <div style="display:flex;gap:8px">
-      <button class="btn bg sm ic" onclick="openProf()"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0'/><path d='M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2'/></svg></button>
+      <button class="btn bg sm ic" id="homeProfBtn" onclick="openProf()" style="padding:4px 5px"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0'/><path d='M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2'/></svg></button>
     </div>
   </div>
   <div class="sec"><div class="sec-t">Overview</div><div class="stats-g" id="homeStats"></div></div>
@@ -495,10 +496,11 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="page" id="page-leaderboard">
   <div class="ph"><div class="pt">Friends</div><button class="btn bg sm" onclick="openAF()">+ Friend</button></div>
   <div id="compareBoard"></div>
-  <div class="sec"><div class="sec-t">You</div><div id="lbYou"></div></div>
-  <div id="lbBuddiesWrap" style="display:none"><div class="st" style="margin:16px 0 8px"><svg viewBox='0 0 24 24' width='14' height='14' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Close Buddies</div><div id="lbBuddies"></div></div>
-  <div class="sec"><div class="sec-t">Friends</div><div id="lbFriends"></div></div>
-  <div id="pendingWrap" style="display:none">
+  <div class="sec" id="friendsSec"><div class="sec-t">Friends</div>
+    <div id="lbBuddiesWrap" style="display:none"><div class="sub-t"><svg viewBox='0 0 24 24' width='13' height='13' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Close buddies</div><div id="lbBuddies"></div></div>
+    <div id="lbFriendsWrap"><div class="sub-t" id="lbFriendsT" style="display:none">Buddies</div><div id="lbFriends"></div></div>
+  </div>
+  <div id="pendingWrap" class="sec" style="display:none">
     <div class="st" style="margin-top:16px;color:var(--orange)"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M6.5 7h11'/><path d='M6.5 17h11'/><path d='M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1'/><path d='M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1'/></svg> Pending</div>
     <div id="pendingList"></div>
   </div>
@@ -1673,7 +1675,14 @@ function renderSuggest(){
     <button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss" style="align-self:flex-start">✕</button>`;
 }
 
+// Home header profile button shows the same avatar as the friends list (photo, else initials).
+function setHomeAv(){
+  const b=document.getElementById('homeProfBtn'); if(!b) return;
+  const p=gProf()||{};
+  b.innerHTML=avHTML({name:p.name||p.username||'You',avatarUrl:p.avatarUrl||'',code:p.code},30);
+}
 function renderHome() {
+  setHomeAv();
   const hv=document.getElementById('homeVersion'); if(hv) hv.textContent='Jacked '+BUILD;
   renderSuggest();
   const h=gH(), prs=gPR(), now=new Date();
@@ -4247,9 +4256,10 @@ function renderLB() {
       ${board}
     </div>`;
 
-  document.getElementById('lbYou').innerHTML=lbRow(you);
   if(buddies.length){ document.getElementById('lbBuddiesWrap').style.display='block'; document.getElementById('lbBuddies').innerHTML=buddies.map(f=>lbRow(f,{star:true,canRemove:true})).join(''); }
   else document.getElementById('lbBuddiesWrap').style.display='none';
+  document.getElementById('lbFriendsT').style.display=(buddies.length&&others.length)?'block':'none';
+  document.getElementById('lbFriendsWrap').style.display=(!others.length&&buddies.length)?'none':'block';
   document.getElementById('lbFriends').innerHTML=others.length?others.map(f=>lbRow(f,{star:true,canRemove:true})).join('')
     :(accepted.length?`<div style="color:var(--muted);font-size:13px;padding:6px 0">All friends are close buddies ${uic('star','#ffd700')}</div>`:'<div style="color:var(--muted);font-size:13px;padding:6px 0">No friends yet. Tap + Friend to add by username.</div>');
 
@@ -4953,9 +4963,9 @@ async function uploadAvatar(input){
     if(error) throw error;
     const { data } = SUPA.storage.from('avatars').getPublicUrl(path);
     // Same path on every change, so bust the CDN/browser cache explicitly.
-    S.s('prof',{...p,avatarUrl:data.publicUrl+'?v='+Date.now()});
+    S.s('prof',{...p,avatarUrl:data.publicUrl+'?v='+Date.now()}); setHomeAv();
     await syncMe();
-    renderAvPrev(); if(typeof renderLB==='function') renderLB();
+    renderAvPrev(); setHomeAv(); if(typeof renderLB==='function') renderLB();
     toast('Photo updated ✓','ok');
   }catch(e){ console.warn('uploadAvatar',e); toast('Upload failed — try again','err'); }
 }
@@ -4963,7 +4973,7 @@ async function uploadAvatar(input){
 async function removeAvatar(){
   const p=gProf(); if(!p||!p.avatarUrl) return;
   S.s('prof',{...p,avatarUrl:''});
-  renderAvPrev(); if(typeof renderLB==='function') renderLB();
+  renderAvPrev(); setHomeAv(); if(typeof renderLB==='function') renderLB();
   try{ if(supaEnabled()){ await SUPA.storage.from('avatars').remove([p.code+'.jpg']); await syncMe(); } }
   catch(e){ console.warn('removeAvatar',e); }
   toast('Photo removed','ok');
@@ -5511,7 +5521,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.23';
+const BUILD = 'v1.8.24';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
