@@ -938,7 +938,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="fpModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div><div class="mt" id="fpName"></div><div style="font-size:12px;color:var(--muted)" id="fpUser"></div></div><button class="cb" onclick="cm('fpModal')">✕</button></div>
+    <div class="mh"><div style="display:flex;align-items:center;gap:12px;min-width:0"><span id="fpAv" style="flex-shrink:0"></span><div style="min-width:0"><div class="mt" id="fpName"></div><div style="font-size:12px;color:var(--muted)" id="fpUser"></div></div></div><button class="cb" onclick="cm('fpModal')">✕</button></div>
     <div id="fpContent"></div>
   </div>
 </div>
@@ -3949,6 +3949,7 @@ function openFriend(code){
   const p=personByCode(code); if(!p){ toast('No data for that person','err'); return; }
   document.getElementById('fpName').textContent=p.name+(p.isYou?' (You)':'');
   document.getElementById('fpUser').textContent=p.username||'';
+  document.getElementById('fpAv').innerHTML=avHTML(p,48);
   const days=new Set(p.days||[]);
   let h=`<div class="stats-g" style="margin-bottom:10px">
       <div class="sc"><div class="sv">${p.workouts||0}</div><div class="sl">Workouts</div></div>
