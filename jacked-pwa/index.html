@@ -3817,7 +3817,8 @@ function cardDragStart(e){
   function place(){
     const top=y-grab-cont.getBoundingClientRect().top, c=top+el.offsetHeight/2;
     let p=el.previousElementSibling, n=el.nextElementSibling;
-    if(p&&c<p.offsetTop+p.offsetHeight/2) cont.insertBefore(el,p);
+    // Move the NEIGHBOUR, never the dragged node: re-parenting it would drop pointer capture and lose pointerup.
+    if(p&&c<p.offsetTop+p.offsetHeight/2) cont.insertBefore(p,el.nextSibling);
     else if(n&&c>n.offsetTop+n.offsetHeight/2) cont.insertBefore(n,el);
     el.style.transform=`translateY(${top-el.offsetTop}px)`;
   }
@@ -3827,15 +3828,17 @@ function cardDragStart(e){
     if(d){ (sp||window).scrollBy(0,d); place(); }
     raf=requestAnimationFrame(tick);
   }
-  const mv=ev=>{ y=ev.clientY; place(); };
-  const end=()=>{
+  const mv=ev=>{ if(ev.pointerId!==e.pointerId) return; y=ev.clientY; place(); };
+  let done=false;
+  const end=ev=>{
+    if(done||(ev&&ev.pointerId!==e.pointerId)) return; done=true;
     cancelAnimationFrame(raf);
-    handle.removeEventListener('pointermove',mv); handle.removeEventListener('pointerup',end); handle.removeEventListener('pointercancel',end);
+    window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
     const ids=[...cont.children].map(x=>x.dataset.id), s=gSet();
     S.s('settings',{...s,cardOrder:[...ids,...(s.cardOrder||[]).filter(x=>!ids.includes(x))]});
     renderMetricsPage(); renderCardOrderList();
   };
-  handle.addEventListener('pointermove',mv); handle.addEventListener('pointerup',end); handle.addEventListener('pointercancel',end);
+  window.addEventListener('pointermove',mv); window.addEventListener('pointerup',end); window.addEventListener('pointercancel',end);
   raf=requestAnimationFrame(tick); place();
 }
 function openCardOrder(){ renderCardOrderList(); om('cardOrderModal'); }
