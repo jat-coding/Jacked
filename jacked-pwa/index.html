@@ -447,8 +447,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <button class="btn bg sm ic" id="homeProfBtn" onclick="openProf()" style="padding:4px 5px"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0'/><path d='M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2'/></svg></button>
     </div>
   </div>
-  <div class="sec"><div class="sec-t">Overview</div><div class="stats-g" id="homeStats"></div></div>
-  <div id="streakBanner" class="sec" style="display:none"></div>
+    <div id="streakBanner" class="sec" style="display:none"></div>
   <div class="cw">
     <div class="ch">
       <button class="cn" onclick="calPrev()">&#8249;</button>
@@ -1689,10 +1688,6 @@ function renderHome() {
   const ms=new Date(now.getFullYear(),now.getMonth(),1);
   const mw=h.filter(w=>new Date(w.date)>=ms);
   const streak=calcStreak(h);
-  document.getElementById('homeStats').innerHTML=`
-    <div class="sc"><div class="sv">${mw.length}</div><div class="sl">This Month</div></div>
-    <div class="sc"><div class="sv">${h.length}</div><div class="sl">All Time</div></div>
-    <div class="sc"><div class="sv">${Object.keys(prs).length}</div><div class="sl">PRs Set</div></div>`;
   const sb=document.getElementById('streakBanner'), best=Math.max(bestStreak(h),streak);
   if (best>0) {
     sb.style.display='block';
@@ -3752,6 +3747,15 @@ function cardRankings(){
   return {id:'rankings',title:'Muscle Group Usage',html:'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+sub+'</div>'+html};
 }
 
+function cardOverview(){
+  const h=gH(), prs=gPR(), now=new Date(), ms=new Date(now.getFullYear(),now.getMonth(),1);
+  const html=`<div class="stats-g">
+      <div class="sc"><div class="sv">${h.filter(w=>new Date(w.date)>=ms).length}</div><div class="sl">This Month</div></div>
+      <div class="sc"><div class="sv">${h.length}</div><div class="sl">All Time</div></div>
+      <div class="sc"><div class="sv">${Object.keys(prs).length}</div><div class="sl">PRs Set</div></div>
+    </div>`;
+  return {id:'overview',title:'Overview',html};
+}
 function cardSummary(){
   const h=gH(), prs=gPR();
   if(!h.length) return {id:'summary',title:'Workout Summary',html:'<div style="color:var(--muted);font-size:13px">Log workouts to see a summary.</div>'};
@@ -3837,9 +3841,9 @@ function cardBadges(){
 
 // Saved section order (settings.cardOrder = array of card ids). Unknown/new ids sort last in default order.
 function metricsOrdered(){
-  const cards=[cardWeight(),cardBody(),cardRankings(),cardSummary(),cardLifetime(),cardBadges()];
+  const cards=[cardOverview(),cardWeight(),cardBody(),cardRankings(),cardSummary(),cardLifetime(),cardBadges()];
   const ord=gSet().cardOrder||[];
-  const rank=c=>{const i=ord.indexOf(c.id); return i<0?999:i;};
+  const rank=c=>{const i=ord.indexOf(c.id); return i<0?(c.id==='overview'?-1:999):i;};
   return cards.map((c,i)=>[c,i]).sort((a,b)=>rank(a[0])-rank(b[0])||a[1]-b[1]).map(x=>x[0]);
 }
 // Drag-to-reorder: grab the grip, card follows the finger, others shuffle live; order saved on release.
@@ -5540,7 +5544,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.27';
+const BUILD = 'v1.8.28';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
