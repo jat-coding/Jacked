@@ -351,6 +351,26 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   #rotateGuard .rg-s{font-size:14px;color:var(--muted);max-width:280px}
 }
 @keyframes rgspin{0%,60%,100%{transform:rotate(0)}30%{transform:rotate(-90deg)}}
+
+/* ===== Hybrid layout (2026-09-21 test): big titles, one soft card per section, dark stat wells, hairline rows ===== */
+.sec,.metric-card,.cw{background:linear-gradient(180deg,#1a1a21,#131318);border:0;border-radius:20px;padding:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 12px 30px -14px rgba(0,0,0,.8);margin:0 0 22px}
+.sub-t{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin:2px 0 6px}
+.sec-t,.mc-title{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text);line-height:1;margin:0 0 12px;padding:0;border:0}
+#metricsCards{gap:22px}
+.sec .stats-g,.sec .stats-g2{margin-bottom:0}
+.sc{background:#0d0d11;border:0;border-radius:14px;text-align:left;padding:12px 12px}
+.sec .wli,.sec .eli,.sec .rc,.sec .fc{background:none;border:0;border-top:1px solid #23232b;border-radius:0;padding:12px 0;margin:0;box-shadow:none}
+.sec .wli:first-child,.sec .eli:first-child,.sec .rc:first-child,.sec .fc:first-child{border-top:0}
+#curatedWrap .st{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;color:var(--text);line-height:1;margin-bottom:12px}
+.page .st,#compareBoard .st,#profModal .st{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text);line-height:1}
+#hiddenCardsBar .st{font-size:14px;color:var(--text2);letter-spacing:.8px}
+.mc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:32px;margin-bottom:14px}
+.mc-head .mc-title,#compareBoard .st{margin:0}
+#compareBoard .st{margin-bottom:14px}
+.metric-card>.mc-head+*{margin-top:0!important}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
+.sec-head .sec-t{margin:0}
+#exLoadState{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -433,11 +453,10 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="ph">
     <div class="pt">JACKED<span>.</span></div>
     <div style="display:flex;gap:8px">
-      <button class="btn bg sm ic" onclick="openProf()"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0'/><path d='M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2'/></svg></button>
+      <button class="btn bg sm ic" id="homeProfBtn" onclick="openProf()" style="padding:0;border:0;background:none;border-radius:50%;width:auto;height:auto"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0'/><path d='M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2'/></svg></button>
     </div>
   </div>
-  <div class="stats-g" id="homeStats"></div>
-  <div id="streakBanner" style="display:none;align-items:center;gap:14px;background:var(--bg2);border:1px solid rgba(32,211,194,.25);border-radius:var(--rl);padding:14px 16px;margin-bottom:20px"></div>
+    <div id="streakBanner" class="sec" style="display:none"></div>
   <div class="cw">
     <div class="ch">
       <button class="cn" onclick="calPrev()">&#8249;</button>
@@ -448,8 +467,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   </div>
   <button class="btn ba wf" onclick="openQS()" style="margin:2px 0 12px;font-size:16px;padding:14px"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" style="vertical-align:-2px;margin-right:6px"><path d="M8 5v14l11-7z"/></svg>Start Workout</button>
   <div id="suggestCard" style="display:none;align-items:flex-start;gap:12px;background:var(--bg2);border:1px solid rgba(77,158,255,.3);border-radius:var(--rl);padding:14px 16px;margin-bottom:20px"></div>
-  <div class="st">Recent Workouts</div>
-  <div id="recentW"></div>
+  <div class="sec"><div class="sec-t">Recent workouts</div><div id="recentW"></div></div>
   <div id="homeVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:22px 0 6px"></div>
 </div>
 
@@ -457,12 +475,11 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="page" id="page-routines">
   <div class="ph"><div class="pt">Routines</div><button class="btn bg sm" onclick="openCR()">+ New</button></div>
   <button class="btn bg wf" onclick="startEmpty()" style="margin-bottom:16px">Start Empty Workout</button>
-  <div id="curatedWrap" style="margin-bottom:18px">
-    <div class="st" style="margin-bottom:8px"><svg viewBox='0 0 24 24' width='14' height='14' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
+  <div id="curatedWrap" class="sec">
+    <div class="st" style="margin-bottom:12px"><svg viewBox='0 0 24 24' width='18' height='18' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
     <div class="chips" id="curatedList" style="gap:10px"></div>
   </div>
-  <div class="st" style="margin-bottom:8px">My Routines</div>
-  <div id="routinesList"></div>
+  <div class="sec"><div class="sec-t">My routines</div><div id="routinesList"></div></div>
 </div>
 
 <!-- EXERCISES / LIBRARY -->
@@ -472,8 +489,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="sw"><span class="sw-ic"><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0'/><path d='M21 21l-6 -6'/></svg></span><input type="text" id="exSearch" placeholder="Search exercises..." oninput="renderEx()"></div>
     <div class="chips" id="muscleChips"></div>
   </div>
-  <div id="exLoadState" style="text-align:center;padding:20px;color:var(--muted);font-size:13px"></div>
-  <div id="exList"></div>
+  <div class="sec"><div class="sec-head"><div class="sec-t">Exercises</div><span id="exLoadState"></span></div><div id="exList"></div></div>
 </div>
 
 <!-- METRICS -->
@@ -487,13 +503,12 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="page" id="page-leaderboard">
   <div class="ph"><div class="pt">Friends</div><button class="btn bg sm" onclick="openAF()">+ Friend</button></div>
   <div id="compareBoard"></div>
-  <div class="st" style="margin-bottom:8px">You</div>
-  <div id="lbYou"></div>
-  <div id="lbBuddiesWrap" style="display:none"><div class="st" style="margin:16px 0 8px"><svg viewBox='0 0 24 24' width='14' height='14' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Close Buddies</div><div id="lbBuddies"></div></div>
-  <div class="st" style="margin:16px 0 8px">Friends</div>
-  <div id="lbFriends"></div>
-  <div id="pendingWrap" style="display:none">
-    <div class="st" style="margin-top:16px;color:var(--orange)"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M6.5 7h11'/><path d='M6.5 17h11'/><path d='M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1'/><path d='M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1'/></svg> Pending</div>
+  <div class="sec" id="friendsSec"><div class="sec-t">Friends</div>
+    <div id="lbBuddiesWrap" style="display:none"><div class="sub-t"><svg viewBox='0 0 24 24' width='13' height='13' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Close buddies</div><div id="lbBuddies"></div></div>
+    <div id="lbFriendsWrap"><div class="sub-t" id="lbFriendsT" style="display:none">Buddies</div><div id="lbFriends"></div></div>
+  </div>
+  <div id="pendingWrap" class="sec" style="display:none">
+    <div class="st" style="margin-bottom:12px"><svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M6.5 7h11'/><path d='M6.5 17h11'/><path d='M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1'/><path d='M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1'/></svg> Pending</div>
     <div id="pendingList"></div>
   </div>
 </div>
@@ -1357,7 +1372,7 @@ async function loadDB() {
   if (dbLoaded || dbLoading) return;
   dbLoading = true;
   const el = document.getElementById('exLoadState');
-  if (el) el.innerHTML = '<span class="spin"></span><span style="margin-left:8px;vertical-align:middle">Loading exercise library…</span>';
+  if (el) el.innerHTML = '<span class="spin"></span><span style="margin-left:8px;vertical-align:middle">Loading…</span>';
   try {
     const r = await fetch(DB_URL);
     const raw = await r.json();
@@ -1369,14 +1384,14 @@ async function loadDB() {
       return true; // keep everything that isn't explicitly excluded
     });
     dbLoaded = true; dbLoading = false;
-    if (el) el.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 0">${allDB.length} exercises loaded ✓</div>`;
+    if (el) el.innerHTML = `${allDB.length} loaded ✓`;
     renderEx();
     // rebuild chips everywhere now that we have data
     buildMuscleChips('muscleChips', handleMFChip, null);
     buildMuscleChips('aeChips', handleAEChip, null);
   } catch(e) {
     dbLoading = false;
-    if (el) el.innerHTML = `<span style="color:var(--muted);font-size:12px">${uic('warning')} Could not load library. Add custom exercises below.</span>`;
+    if (el) el.innerHTML = `<span style="color:var(--muted);font-size:12px">${uic('warning')} Couldn’t load</span>`;
     renderEx();
   }
 }
@@ -1667,23 +1682,30 @@ function renderSuggest(){
     <button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss" style="align-self:flex-start">✕</button>`;
 }
 
+// Home header profile button shows the same avatar as the friends list (photo, else initials).
+function setHomeAv(){
+  const b=document.getElementById('homeProfBtn'); if(!b) return;
+  const p=gProf()||{};
+  b.innerHTML=avHTML({name:p.name||p.username||'You',avatarUrl:p.avatarUrl||'',code:p.code},30);
+}
 function renderHome() {
+  setHomeAv();
   const hv=document.getElementById('homeVersion'); if(hv) hv.textContent='Jacked '+BUILD;
   renderSuggest();
   const h=gH(), prs=gPR(), now=new Date();
   const ms=new Date(now.getFullYear(),now.getMonth(),1);
   const mw=h.filter(w=>new Date(w.date)>=ms);
   const streak=calcStreak(h);
-  document.getElementById('homeStats').innerHTML=`
-    <div class="sc"><div class="sv">${mw.length}</div><div class="sl">This Month</div></div>
-    <div class="sc"><div class="sv">${h.length}</div><div class="sl">All Time</div></div>
-    <div class="sc"><div class="sv">${Object.keys(prs).length}</div><div class="sl">PRs Set</div></div>`;
-  const sb=document.getElementById('streakBanner');
-  if (streak>0) {
-    sb.style.display='flex';
-    sb.innerHTML=`<div>${uic('flame','var(--orange)',26)}</div>
-      <div><div style="font-family:var(--fh);font-size:26px;font-weight:900;color:var(--accent);line-height:1">${streak} day${streak!==1?'s':''}</div>
-      <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Current streak — keep it alive</div></div>`;
+  const sb=document.getElementById('streakBanner'), best=Math.max(bestStreak(h),streak);
+  if (best>0) {
+    sb.style.display='block';
+    sb.innerHTML=`<div class="sec-t">Streak</div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div>${uic('flame',streak>0?'var(--orange)':'var(--muted)',30)}</div>
+        <div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:30px;font-weight:900;line-height:1;color:${streak>0?'var(--text)':'var(--muted)'}">${streak} day${streak!==1?'s':''}</div>
+          <div class="sl" style="margin-top:4px">Current${streak>0?' — keep it alive':''}</div></div>
+        <span style="align-self:flex-start;font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--border2);border-radius:20px;padding:3px 9px;white-space:nowrap">Best ${best}d</span>
+      </div>`;
   } else {
     sb.style.display='none';
   }
@@ -1814,7 +1836,7 @@ function renderEx() {
       </div>
       ${pr?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${dW(pr.weight)}${uL()}<div style="font-size:9px;color:var(--muted);font-weight:400">${pr.reps}r PR</div></div>`:''}
     </div>`;
-  }).join('')+(all.length>80?`<div style="text-align:center;color:var(--muted);font-size:11px;padding:10px">Showing 80 of ${all.length} — search to narrow</div>`:'');
+  }).join('');
 }
 
 // Exercise info popup: how-to instructions (from the exercise DB) + a bar chart
@@ -3048,9 +3070,28 @@ function finishW(auto) {
   const ts=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   // Verify finish so an accidental tap doesn't end the session (skipped on auto-finish — no one's there).
   if (auto) { _finishWContinue(auto,ts); return; }
-  showConfirm(ts===0 ? 'No sets logged — finish anyway?' : 'Finish and save this workout?').then(ok=>{
-    if(ok) _finishWContinue(auto,ts);
+  showConfirm(ts===0 ? 'No sets logged — finish anyway?' : 'Finish and save this workout?').then(async ok=>{
+    if(!ok) return;
+    await maybeUpdateRoutine();
+    _finishWContinue(auto,ts);
   });
+}
+// If this workout was started from a routine and its exercises were changed (added, removed
+// or reordered), ask whether to write those changes back to the routine.
+async function maybeUpdateRoutine(){
+  if(!aw||!aw.routineId) return;
+  const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return;
+  const before=(r.exercises||[]).slice();
+  const after=[...new Set(aw.exercises.map(e=>e.exId).filter(x=>x&&x!=='?'))];
+  if(before.length===after.length&&before.every((id,i)=>id===after[i])) return;
+  const nm=id=>{ const e=byId(id); return e?e.name:'exercise'; };
+  const added=after.filter(id=>!before.includes(id)).map(nm), removed=before.filter(id=>!after.includes(id)).map(nm);
+  const parts=[];
+  if(added.length) parts.push('added '+added.join(', '));
+  if(removed.length) parts.push('removed '+removed.join(', '));
+  if(!parts.length) parts.push('changed the order');
+  const yes=await showConfirm('You '+parts.join('; ')+'. Update the routine "'+r.name+'" with these changes?',{okText:'Update routine',cancelText:'Keep original'});
+  if(yes){ r.exercises=after; S.s('routines',rs); toast('Routine updated','ok'); }
 }
 // Auto-title an untitled workout after whichever exercise had the highest
 // intensity (best estimated 1RM among weight/bodyweight lifts), falling
@@ -3686,34 +3727,33 @@ function musclePerf(){
   return {mode:'strength',score};
 }
 
+// One card: body map + tier key + per-muscle-group ranking (was two cards, Body Simulation and Muscle Group Usage,
+// with a duplicate per-group colour legend and an Excelling/Needs-work summary the ranking already shows).
 function cardBody(){
   const {mode,score}=musclePerf();
   const sorted=[...MGROUPS].sort((a,b)=>score[b]-score[a]);
-  const excel=sorted.filter(g=>score[g]>0).slice(0,2).map(g=>MGNAME[g]);
-  const weak=[...sorted].reverse().filter(g=>score[g]<0.34).slice(0,3).map(g=>MGNAME[g]);
-  const legend=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">`+MGROUPS.map(g=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:2px;background:${heatColor(score[g])};display:inline-block"></span>${MGNAME[g]}</span>`).join('')+`</div>`+`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--muted)">`+[['Needs Work',TIER_COL.need],['Building',TIER_COL.build],['Strong',TIER_COL.strong],['Elite',TIER_COL.elite]].map(([n,c])=>`<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:${c}"></span>${n}</span>`).join('')+`</div>`;
-  const body=gH().length?bodySimSVG(score,(gProf()||{}).sex||'male'):'<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Log or import workouts to map your training.</div>';
-  const bwHint=mode==='volume'&&gH().length?`<div style="font-size:11px;color:var(--muted);margin-top:8px">Log your body weight in Profile for strength-based rankings — showing sets logged until then.</div>`:'';
-  const insight=gH().length?`<div style="margin-top:8px">
-      ${excel.length?`<div style="font-size:13px;padding:8px 10px;background:rgba(77,255,145,.08);border-radius:var(--r);margin-bottom:6px"><span style="color:var(--green);font-weight:700">Excelling:</span> ${excel.join(', ')}</div>`:''}
-      ${weak.length?`<div style="font-size:13px;padding:8px 10px;background:rgba(255,77,77,.08);border-radius:var(--r)"><span style="color:var(--red);font-weight:700">Needs work:</span> ${weak.join(', ')}</div>`:''}
-    </div>${bwHint}`:'';
-  return {id:'body',title:'Body Simulation',html:body+legend+insight};
-}
-
-function cardRankings(){
-  const {mode,score}=musclePerf();
-  const sorted=[...MGROUPS].sort((a,b)=>score[b]-score[a]);
+  const has=gH().length>0;
+  const body=has?bodySimSVG(score,(gProf()||{}).sex||'male'):'<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Log or import workouts to map your training.</div>';
+  const tier=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--muted)">`+[['Needs Work',TIER_COL.need],['Building',TIER_COL.build],['Strong',TIER_COL.strong],['Elite',TIER_COL.elite]].map(([n,c])=>`<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:${c}"></span>${n}</span>`).join('')+`</div>`;
   const sub=mode==='strength'?'Estimated strength vs. your body weight, per muscle group':'Completed sets per muscle group — log your body weight in Profile for strength-based rankings';
-  const html=sorted.map((g,i)=>{const p=score[g],r=strengthLabel(p);return `<div class="mr-item">
+  const rows=sorted.map((g,i)=>{const p=score[g],r=strengthLabel(p);return `<div class="mr-item">
       <div style="width:24px;font-family:var(--fh);font-size:14px;font-weight:700;color:${i<3?'var(--accent)':'var(--muted)'}">#${i+1}</div>
       <div style="flex:1;font-weight:600;font-size:13px">${MGNAME[g]}</div>
       <div class="mr-bar"><div class="mr-fill" style="width:${Math.round(p*100)}%;background:${heatColor(p)}"></div></div>
       <span class="badge ${r.b}" style="min-width:74px;justify-content:center">${r.l}</span>
     </div>`;}).join('');
-  return {id:'rankings',title:'Muscle Group Usage',html:'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+sub+'</div>'+html};
+  return {id:'body',title:'Muscle Map',html:body+(has?tier:'')+'<div style="font-size:12px;color:var(--muted);margin:14px 0 10px">'+sub+'</div>'+rows};
 }
 
+function cardOverview(){
+  const h=gH(), prs=gPR(), now=new Date(), ms=new Date(now.getFullYear(),now.getMonth(),1);
+  const html=`<div class="stats-g">
+      <div class="sc"><div class="sv">${h.filter(w=>new Date(w.date)>=ms).length}</div><div class="sl">This Month</div></div>
+      <div class="sc"><div class="sv">${h.length}</div><div class="sl">All Time</div></div>
+      <div class="sc"><div class="sv">${Object.keys(prs).length}</div><div class="sl">PRs Set</div></div>
+    </div>`;
+  return {id:'overview',title:'Overview',html};
+}
 function cardSummary(){
   const h=gH(), prs=gPR();
   if(!h.length) return {id:'summary',title:'Workout Summary',html:'<div style="color:var(--muted);font-size:13px">Log workouts to see a summary.</div>'};
@@ -3799,9 +3839,9 @@ function cardBadges(){
 
 // Saved section order (settings.cardOrder = array of card ids). Unknown/new ids sort last in default order.
 function metricsOrdered(){
-  const cards=[cardWeight(),cardBody(),cardRankings(),cardSummary(),cardLifetime(),cardBadges()];
+  const cards=[cardOverview(),cardWeight(),cardBody(),cardSummary(),cardLifetime(),cardBadges()];
   const ord=gSet().cardOrder||[];
-  const rank=c=>{const i=ord.indexOf(c.id); return i<0?999:i;};
+  const rank=c=>{const i=ord.indexOf(c.id); return i<0?(c.id==='overview'?-1:999):i;};
   return cards.map((c,i)=>[c,i]).sort((a,b)=>rank(a[0])-rank(b[0])||a[1]-b[1]).map(x=>x[0]);
 }
 // Drag-to-reorder: grab the grip, card follows the finger, others shuffle live; order saved on release.
@@ -3864,10 +3904,9 @@ function renderMetricsPage(){
   const vis=cards.filter(c=>!hidden.has(c.id));
   cont.innerHTML=vis.map((c,i)=>`
     <div class="metric-card" data-id="${c.id}">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="mc-head">
         <div class="mc-title">${c.title}</div>
         <button class="btn bg ic xs" title="Hide card" onclick="toggleCard('${c.id}')">✕</button>
-      </div>
       </div>
       ${c.html}
     </div>`).join('');
@@ -3888,7 +3927,7 @@ function toggleCB(code){ const cb=new Set(gCB()); cb.has(code)?cb.delete(code):c
 const CMP=[
   {k:'volume',      ic:'dumbbell',col:'#5aa9ff',label:'Weight',      all:p=>p.totalVolume||0, mon:p=>p.mVol||0,      fmt:v=>fmtW(v)+' '+uL()},
   {k:'prs',         ic:'trophy',col:'#ffd700',label:'PRs',          all:p=>p.prs||0,         mon:p=>p.mPRs||0,      fmt:v=>v},
-  {k:'workouts',    ic:'calendar',col:'#3ddc97',label:'Sessions',     all:p=>p.workouts||0,    mon:p=>p.mWorkouts||0, fmt:v=>v},
+  {k:'workouts',    ic:'calendar',col:'#4b3fd6',label:'Sessions',     all:p=>p.workouts||0,    mon:p=>p.mWorkouts||0, fmt:v=>v},
   {k:'streak',      ic:'flame',col:'var(--orange)',label:'Streak',       all:p=>p.streak||0,      mon:p=>p.streak||0,    fmt:v=>v+'d'},
   {k:'consistency', ic:'barchart',col:'#b07cff',label:'Consistency',  all:p=>p.consistency||0, mon:p=>p.consistency||0, fmt:v=>v+'%'},
   {k:'badges',      ic:'medal',col:'#ffca4d',label:'Badges',       all:p=>p.badges||0,      mon:p=>p.badges||0,    fmt:v=>v+' '+uic('medal')},
@@ -3898,6 +3937,17 @@ function cmpSw(k){ cmpM=k; renderLB(); }
 function cmpRangeSet(r){ cmpRange=r; renderLB(); }
 
 // Consecutive-day workout streak (today optional — grace until you train).
+// Longest run of consecutive training days across all history.
+function bestStreak(h){
+  const days=[...new Set(h.map(w=>dayKey(w.date)))].sort();
+  let best=0,run=0,prev=null;
+  for(const d of days){
+    const t=+new Date(d+'T12:00:00');
+    run=(prev!==null&&Math.round((t-prev)/864e5)===1)?run+1:1;
+    if(run>best) best=run; prev=t;
+  }
+  return best;
+}
 function calcStreak(h) {
   let streak=0;
   const sdates=new Set(h.map(w=>dayKey(w.date)));
@@ -4220,15 +4270,16 @@ function renderLB() {
   }
   document.getElementById('compareBoard').innerHTML=`
     <div class="metric-card" style="margin-bottom:16px">
-      <div class="st" style="margin-bottom:10px">Compare Close Buddies</div>
+      <div class="st" style="margin-bottom:10px">Leaderboards</div>
       ${rangeTog}
       <div class="chips" style="flex-wrap:wrap;margin-bottom:10px">${chips}</div>
       ${board}
     </div>`;
 
-  document.getElementById('lbYou').innerHTML=lbRow(you);
   if(buddies.length){ document.getElementById('lbBuddiesWrap').style.display='block'; document.getElementById('lbBuddies').innerHTML=buddies.map(f=>lbRow(f,{star:true,canRemove:true})).join(''); }
   else document.getElementById('lbBuddiesWrap').style.display='none';
+  document.getElementById('lbFriendsT').style.display=(buddies.length&&others.length)?'block':'none';
+  document.getElementById('lbFriendsWrap').style.display=(!others.length&&buddies.length)?'none':'block';
   document.getElementById('lbFriends').innerHTML=others.length?others.map(f=>lbRow(f,{star:true,canRemove:true})).join('')
     :(accepted.length?`<div style="color:var(--muted);font-size:13px;padding:6px 0">All friends are close buddies ${uic('star','#ffd700')}</div>`:'<div style="color:var(--muted);font-size:13px;padding:6px 0">No friends yet. Tap + Friend to add by username.</div>');
 
@@ -4914,7 +4965,7 @@ function resizeAvatar(file){
 function renderAvPrev(){
   const p=gProf()||{};
   const el=document.getElementById('profAvPrev'); if(!el) return;
-  el.innerHTML=avHTML({name:p.name||'You',avatarUrl:p.avatarUrl||''},64);
+  el.innerHTML=avHTML({name:p.name||'You',avatarUrl:p.avatarUrl||'',code:p.code},64);
   const rm=document.getElementById('avRmBtn'); if(rm) rm.style.display=p.avatarUrl?'':'none';
 }
 
@@ -4932,9 +4983,9 @@ async function uploadAvatar(input){
     if(error) throw error;
     const { data } = SUPA.storage.from('avatars').getPublicUrl(path);
     // Same path on every change, so bust the CDN/browser cache explicitly.
-    S.s('prof',{...p,avatarUrl:data.publicUrl+'?v='+Date.now()});
+    S.s('prof',{...p,avatarUrl:data.publicUrl+'?v='+Date.now()}); setHomeAv();
     await syncMe();
-    renderAvPrev(); if(typeof renderLB==='function') renderLB();
+    renderAvPrev(); setHomeAv(); if(typeof renderLB==='function') renderLB();
     toast('Photo updated ✓','ok');
   }catch(e){ console.warn('uploadAvatar',e); toast('Upload failed — try again','err'); }
 }
@@ -4942,7 +4993,7 @@ async function uploadAvatar(input){
 async function removeAvatar(){
   const p=gProf(); if(!p||!p.avatarUrl) return;
   S.s('prof',{...p,avatarUrl:''});
-  renderAvPrev(); if(typeof renderLB==='function') renderLB();
+  renderAvPrev(); setHomeAv(); if(typeof renderLB==='function') renderLB();
   try{ if(supaEnabled()){ await SUPA.storage.from('avatars').remove([p.code+'.jpg']); await syncMe(); } }
   catch(e){ console.warn('removeAvatar',e); }
   toast('Photo removed','ok');
@@ -5490,7 +5541,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.21';
+const BUILD = 'v1.9.0';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
