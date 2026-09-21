@@ -3719,32 +3719,22 @@ function musclePerf(){
   return {mode:'strength',score};
 }
 
+// One card: body map + tier key + per-muscle-group ranking (was two cards, Body Simulation and Muscle Group Usage,
+// with a duplicate per-group colour legend and an Excelling/Needs-work summary the ranking already shows).
 function cardBody(){
   const {mode,score}=musclePerf();
   const sorted=[...MGROUPS].sort((a,b)=>score[b]-score[a]);
-  const excel=sorted.filter(g=>score[g]>0).slice(0,2).map(g=>MGNAME[g]);
-  const weak=[...sorted].reverse().filter(g=>score[g]<0.34).slice(0,3).map(g=>MGNAME[g]);
-  const legend=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">`+MGROUPS.map(g=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:2px;background:${heatColor(score[g])};display:inline-block"></span>${MGNAME[g]}</span>`).join('')+`</div>`+`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--muted)">`+[['Needs Work',TIER_COL.need],['Building',TIER_COL.build],['Strong',TIER_COL.strong],['Elite',TIER_COL.elite]].map(([n,c])=>`<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:${c}"></span>${n}</span>`).join('')+`</div>`;
-  const body=gH().length?bodySimSVG(score,(gProf()||{}).sex||'male'):'<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Log or import workouts to map your training.</div>';
-  const bwHint=mode==='volume'&&gH().length?`<div style="font-size:11px;color:var(--muted);margin-top:8px">Log your body weight in Profile for strength-based rankings — showing sets logged until then.</div>`:'';
-  const insight=gH().length?`<div style="margin-top:8px">
-      ${excel.length?`<div style="font-size:13px;padding:8px 10px;background:rgba(77,255,145,.08);border-radius:var(--r);margin-bottom:6px"><span style="color:var(--green);font-weight:700">Excelling:</span> ${excel.join(', ')}</div>`:''}
-      ${weak.length?`<div style="font-size:13px;padding:8px 10px;background:rgba(255,77,77,.08);border-radius:var(--r)"><span style="color:var(--red);font-weight:700">Needs work:</span> ${weak.join(', ')}</div>`:''}
-    </div>${bwHint}`:'';
-  return {id:'body',title:'Body Simulation',html:body+legend+insight};
-}
-
-function cardRankings(){
-  const {mode,score}=musclePerf();
-  const sorted=[...MGROUPS].sort((a,b)=>score[b]-score[a]);
+  const has=gH().length>0;
+  const body=has?bodySimSVG(score,(gProf()||{}).sex||'male'):'<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Log or import workouts to map your training.</div>';
+  const tier=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--muted)">`+[['Needs Work',TIER_COL.need],['Building',TIER_COL.build],['Strong',TIER_COL.strong],['Elite',TIER_COL.elite]].map(([n,c])=>`<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:${c}"></span>${n}</span>`).join('')+`</div>`;
   const sub=mode==='strength'?'Estimated strength vs. your body weight, per muscle group':'Completed sets per muscle group — log your body weight in Profile for strength-based rankings';
-  const html=sorted.map((g,i)=>{const p=score[g],r=strengthLabel(p);return `<div class="mr-item">
+  const rows=sorted.map((g,i)=>{const p=score[g],r=strengthLabel(p);return `<div class="mr-item">
       <div style="width:24px;font-family:var(--fh);font-size:14px;font-weight:700;color:${i<3?'var(--accent)':'var(--muted)'}">#${i+1}</div>
       <div style="flex:1;font-weight:600;font-size:13px">${MGNAME[g]}</div>
       <div class="mr-bar"><div class="mr-fill" style="width:${Math.round(p*100)}%;background:${heatColor(p)}"></div></div>
       <span class="badge ${r.b}" style="min-width:74px;justify-content:center">${r.l}</span>
     </div>`;}).join('');
-  return {id:'rankings',title:'Muscle Group Usage',html:'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+sub+'</div>'+html};
+  return {id:'body',title:'Muscle Map',html:body+(has?tier:'')+'<div style="font-size:12px;color:var(--muted);margin:14px 0 10px">'+sub+'</div>'+rows};
 }
 
 function cardOverview(){
@@ -3841,7 +3831,7 @@ function cardBadges(){
 
 // Saved section order (settings.cardOrder = array of card ids). Unknown/new ids sort last in default order.
 function metricsOrdered(){
-  const cards=[cardOverview(),cardWeight(),cardBody(),cardRankings(),cardSummary(),cardLifetime(),cardBadges()];
+  const cards=[cardOverview(),cardWeight(),cardBody(),cardSummary(),cardLifetime(),cardBadges()];
   const ord=gSet().cardOrder||[];
   const rank=c=>{const i=ord.indexOf(c.id); return i<0?(c.id==='overview'?-1:999):i;};
   return cards.map((c,i)=>[c,i]).sort((a,b)=>rank(a[0])-rank(b[0])||a[1]-b[1]).map(x=>x[0]);
@@ -5544,7 +5534,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.28';
+const BUILD = 'v1.8.29';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
