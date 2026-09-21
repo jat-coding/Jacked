@@ -3810,12 +3810,12 @@ function toggleCB(code){ const cb=new Set(gCB()); cb.has(code)?cb.delete(code):c
 // Categories for the close-buddy comparison filter. Each has an all-time getter
 // and a past-month getter (streak/consistency/badges are inherently current).
 const CMP=[
-  {k:'volume',      label:`${uic('dumbbell')} Weight`,      all:p=>p.totalVolume||0, mon:p=>p.mVol||0,      fmt:v=>fmtW(v)+' '+uL()},
-  {k:'prs',         label:`${uic('trophy','#ffd700')} PRs`,          all:p=>p.prs||0,         mon:p=>p.mPRs||0,      fmt:v=>v},
-  {k:'workouts',    label:`${uic('calendar')} Sessions`,     all:p=>p.workouts||0,    mon:p=>p.mWorkouts||0, fmt:v=>v},
-  {k:'streak',      label:`${uic('flame','var(--orange)')} Streak`,       all:p=>p.streak||0,      mon:p=>p.streak||0,    fmt:v=>v+'d'},
-  {k:'consistency', label:`${uic('barchart')} Consistency`,  all:p=>p.consistency||0, mon:p=>p.consistency||0, fmt:v=>v+'%'},
-  {k:'badges',      label:`${uic('medal')} Badges`,       all:p=>p.badges||0,      mon:p=>p.badges||0,    fmt:v=>v+' '+uic('medal')},
+  {k:'volume',      ic:'dumbbell',col:'#5aa9ff',label:'Weight',      all:p=>p.totalVolume||0, mon:p=>p.mVol||0,      fmt:v=>fmtW(v)+' '+uL()},
+  {k:'prs',         ic:'trophy',col:'#ffd700',label:'PRs',          all:p=>p.prs||0,         mon:p=>p.mPRs||0,      fmt:v=>v},
+  {k:'workouts',    ic:'calendar',col:'#3ddc97',label:'Sessions',     all:p=>p.workouts||0,    mon:p=>p.mWorkouts||0, fmt:v=>v},
+  {k:'streak',      ic:'flame',col:'var(--orange)',label:'Streak',       all:p=>p.streak||0,      mon:p=>p.streak||0,    fmt:v=>v+'d'},
+  {k:'consistency', ic:'barchart',col:'#b07cff',label:'Consistency',  all:p=>p.consistency||0, mon:p=>p.consistency||0, fmt:v=>v+'%'},
+  {k:'badges',      ic:'medal',col:'#ffca4d',label:'Badges',       all:p=>p.badges||0,      mon:p=>p.badges||0,    fmt:v=>v+' '+uic('medal')},
 ];
 let cmpM='volume', cmpRange='month';   // 'all' | 'month' (default: this month)
 function cmpSw(k){ cmpM=k; renderLB(); }
@@ -4124,7 +4124,7 @@ function renderLB() {
   const def=CMP.find(c=>c.k===cmpM)||CMP[0];
   const getv = cmpRange==='month' ? def.mon : def.all;
   const medal=i=>i<3?uic('medal',[TIERC.gold,TIERC.silver,TIERC.bronze][i],16):'#'+(i+1);
-  const chips=CMP.map(c=>`<button class="chip ${c.k===cmpM?'on':''}" onclick="cmpSw('${c.k}')">${c.label}</button>`).join('');
+  const chips=CMP.map(c=>`<button class="chip ${c.k===cmpM?'on':''}" onclick="cmpSw('${c.k}')">${uic(c.ic,c.k===cmpM?c.col:'var(--muted)')} ${c.label}</button>`).join('');
   const rangeTog=`<div class="unit-tog" style="margin-bottom:10px">
       <button type="button" class="${cmpRange==='month'?'active':''}" onclick="cmpRangeSet('month')">Past Month</button>
       <button type="button" class="${cmpRange==='all'?'active':''}" onclick="cmpRangeSet('all')">All Time</button>
