@@ -205,24 +205,25 @@ Also, changing those values, the number moves slightly **up** when scrolling up 
 **Acceptance test:** each control in the audit table ticks on every step, both directions. In
 Settings, spin Min up and down: the number stays put (no visible up/down shift) while the value changes.
 
-## 10. Focus view: no Finish/Discard; add a Done button — OPEN
-Source: Mr. Roni, 2026-09-20 6:01pm MDT. **Changes item 5** (its "last exercise shows the list's Finish/Discard tail").
+## 10. Focus view: no Finish/Discard; add a Lock in button — OPEN
+Source: Mr. Roni, 2026-09-20 6:07pm MDT (first asked 6:01pm as "Done", renamed and tightened). **Changes item 5** (its "last exercise shows the list's Finish/Discard tail").
 
 **Required behavior:**
 1. **Remove Finish and Discard from the focus view**, on every exercise including the last. They
-   live only on the full workout list.
-2. **Add a Done button at the end of the focus view** (below the set rows and the − Set / + Set row).
-   Tapping it **locks in all the sets** entered for that exercise and **goes to the next exercise's
-   focus view**. Tap-only, as decided in item 5: it never fires by itself.
-3. Defaults (he did not specify; say if you disagree): "lock in" = every set that has values is
-   marked done, as if each had been checked; a set with no values is left as it is, not logged. On the
-   **last** exercise, Done locks in the sets and returns to the full list, where Finish is. The
-   ‹ Prev · All · Next › chips stay as built.
-4. Done is not destructive, so it needs no confirm (item 7 covers Finish/Discard, which now live only on the list).
-5. Back/swipe from the focus view still returns to the list (item 5 / item 6).
+   live only on the full workout list. Confirmed twice by Mr. Roni.
+2. **Add a "Lock in" button at the end of the focus view** (below the set rows and the − Set / + Set row).
+   It exists **only** on the focus screen. Tapping it **checks off the sets in that exercise**, then
+   opens the **next exercise in line** in the focus view. If there is no next exercise it goes to the
+   **full workout list**. Tap-only: it never fires by itself.
+3. **Nothing else changes.** Exercises, sets, checking a set by hand, the list, and everything else work exactly
+   as they did before; "lock in" is a function of this button alone and must not alter existing behavior.
+4. Default (not specified): sets with no values are left as they are; Mr. Roni's wording is only "checks the sets".
+5. No confirm on Lock in (approved by Mr. Roni). The item 7 confirms still apply to Finish and Discard on the list.
+6. Back/swipe from the focus view still returns to the list (item 5 / item 6). The ‹ Prev · All · Next › chips stay as built.
 
-**Acceptance test:** focus view of exercise 2 has no Finish or Discard. Enter sets, tap Done: sets show as
-done in the list and exercise 3 opens. On the last exercise, Done lands on the list, and Finish is there.
+**Acceptance test:** focus view of exercise 2 has no Finish or Discard. Enter sets, tap Lock in: the sets are
+checked and exercise 3 opens. On the last exercise, Lock in lands on the full list. The button appears nowhere
+else, and set checking outside it behaves as before.
 
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
