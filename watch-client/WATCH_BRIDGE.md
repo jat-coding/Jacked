@@ -16,6 +16,7 @@ auto-builds are off; a deploy needs Mr. Roni's separate go). Check the live site
 
 | BUILD | What it contains (cumulative) | Pushed commit |
 |---|---|---|
+| v1.8.19 | A1-A11, plus quarterly Cardio-Maxing reset and the full-screen achievement popup | not pushed yet |
 | v1.8.18 | A1-A10, plus the frosted-glass bottom tab bar (phone-only) | `631dd85` |
 | v1.8.17 | A1-A10, **A10 amended: go-up at or above Max; lighter after a single workout (both match the watches)** | `c4ee8c5`, `4754bd0` |
 | v1.8.16 | A1-A9, **A10 user-defined rep range for the overload badges** | `e513de7` |
@@ -43,6 +44,17 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 ---
 
 ## APP-WIDE (watch must mirror)
+
+### A11. Achievements: 1000lb Club renamed, Cardio-Maxing resets quarterly, full-screen detail — build v1.8.19
+- **Rename:** the badge `1000lb Club-Maxing` is now `1000lb Club` (the `-Maxing` suffix is dropped for it only).
+  The name string is what goes into a profile's `badgeList` (friends' view), so older stored lists still say
+  `1000lb Club-Maxing`; the phone shows the new name for both.
+- **Cardio-Maxing resets every 3 months:** only runs from the current **calendar quarter** count (Jan-Mar,
+  Apr-Jun, Jul-Sep, Oct-Dec), the same window as Coward-Maxing. Best mile pace, tier, and the live in-workout
+  cardio badge all use that window. The list title does not mention the reset; the detail popup does.
+- **Detail popup (phone-only UI):** tapping an achievement opens a full-screen popup (badge icon, status, title,
+  best stat, "How to earn it", tiers with the current one marked, and a "Resets" note where it applies). It
+  replaces the small toast that used to appear.
 
 ### A10. Overload-badge rep range is user-defined (default 5 to 12) — builds v1.8.16 and v1.8.17
 Amends A2. The go-up / consider-lighter thresholds are no longer fixed at 12 and 5.
@@ -198,6 +210,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 |---|---|---|---|
 | 09-19 | `5832e21` | Muscle-group tier rebuild: 90-day window, rep cap 10, per-exercise scaling, top-3 average, tier lines at the standards | APP-WIDE A9 |
 | 09-19 | `0e23fee` | Tier colors switched to the Signal scheme (grey/red/green/blue/gold), one color per tier, shared by body, bars and badges | APP-WIDE A8 |
+| 09-21 | local | Achievements: 1000lb Club rename, Cardio-Maxing quarterly reset, full-screen detail popup | APP-WIDE A11 |
 | 09-20 | `631dd85` | Tab bar: frosted glass, moved low to the bottom | PHONE-ONLY |
 | 09-19 | `c4ee8c5`, `4754bd0` | Go-up fires at or above Max; lighter fires after a single workout with no set reaching Min. Both match the watches | APP-WIDE A10 |
 | 09-19 | `e513de7` | Overload-badge rep range: default 5-12, user-defined Min/Max in Profile (`jk_settings.repMin/repMax`) | APP-WIDE A10 |

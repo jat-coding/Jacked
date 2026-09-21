@@ -66,7 +66,23 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 
 /* MODAL */
 .mo{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:200;display:none;align-items:flex-end;justify-content:center}
-.mo.open{display:flex}.mo.ctr{align-items:center;padding-top:calc(env(safe-area-inset-top) + 8px)}
+.mo.open{display:flex}
+#badgeFull{position:fixed;inset:0;z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + env(safe-area-inset-top)) 22px calc(20px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
+#badgeFull.open{display:flex;animation:pageIn .2s ease-out}
+.bf-x{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;width:38px;height:38px;font-size:18px}
+.bf-wrap{max-width:460px;width:100%;margin:0 auto;padding-top:34px;text-align:center;flex:1}
+.bf-icon{width:132px;height:132px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+.bf-status{font-size:13px;font-weight:800;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px}
+.bf-title{font-family:var(--fh);font-size:38px;font-weight:800;line-height:1.05;margin-bottom:8px;text-wrap:balance}
+.bf-stat{font-size:15px;font-weight:600;color:var(--text2);line-height:1.4}
+.bf-sep{height:1px;background:var(--border);margin:26px 0 22px}
+.bf-h{font-family:var(--fh);font-size:14px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);text-align:left;margin:0 0 8px}
+.bf-body{font-size:16px;line-height:1.6;color:var(--text);text-align:left;margin-bottom:24px}
+.bf-tiers{display:flex;flex-direction:column;gap:8px;margin-bottom:24px}
+.bf-tier{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 14px;border:1px solid var(--border);border-radius:14px;font-size:15px;text-align:left}
+.bf-tier.on{border-width:1.5px}
+.bf-you{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text2);background:var(--bg4);border-radius:10px;padding:2px 8px}
+.bf-foot{max-width:460px;width:100%;margin:8px auto 0}.mo.ctr{align-items:center;padding-top:calc(env(safe-area-inset-top) + 8px)}
 .md{background:var(--bg2);border:1px solid var(--border2);border-radius:24px 24px 0 0;width:100%;max-width:640px;max-height:92vh;overflow-y:auto;padding:6px 20px 40px;overscroll-behavior:contain}
 .mo.ctr .md{border-radius:20px;max-width:400px;padding:24px;max-height:calc(92vh - env(safe-area-inset-top))}
 .drag-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 16px;flex-shrink:0}
@@ -872,6 +888,13 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <button class="btn ba" id="cfOk" onclick="_cfSubmit()">OK</button>
     </div>
   </div>
+</div>
+
+<!-- Full-screen achievement detail (Metrics > Achievements) -->
+<div id="badgeFull" role="dialog" aria-modal="true">
+  <button class="cb bf-x" onclick="closeBadgeFull()" aria-label="Close">✕</button>
+  <div id="badgeFullBody" class="bf-wrap"></div>
+  <div class="bf-foot"><button class="btn bg wf" onclick="closeBadgeFull()">Close</button></div>
 </div>
 
 <!-- Achievement popup: a metric-tier badge earned live during a workout -->
@@ -2857,8 +2880,10 @@ function badgeTierForKey(key,h){
     return {tier:tierOfLive(best,BADGE_TIER_THRESH[key]), value:best};
   }
   if(key==='cardio'){
+    // Cardio-Maxing resets every 3 months: current calendar quarter only (matches computeBadges).
+    const qS=+new Date(new Date().getFullYear(), Math.floor(new Date().getMonth()/3)*3, 1);
     let best=Infinity;
-    h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if((ex.tracking||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<best)best=me; } }); }));
+    h.forEach(w=>{ if(!(+new Date(w.date)>=qS)) return; (w.exercises||[]).forEach(ex=>{ if((ex.tracking||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<best)best=me; } }); }); });
     if(!isFinite(best)) return {tier:null,value:0};
     const [b,s,g]=BADGE_TIER_THRESH.cardio;
     return {tier: best<=g?'gold':best<=s?'silver':best<=b?'bronze':null, value:best};
@@ -3398,8 +3423,9 @@ function computeBadges() {
   const pushBest=bestSetReps(f=>f.includes('pushup'));
   const pushT=tierOf(pushBest,[30,50,80]);
   // Cardio: lowest endurance-adjusted mile-equivalent (Riegel) across all logged runs.
+  // Resets every 3 months: only runs from the CURRENT calendar quarter count (same window as Coward-Maxing).
   let cardioBest=Infinity;
-  h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(((ex.tracking)||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<cardioBest)cardioBest=me; } }); }));
+  h.forEach(w=>{ if(!(+new Date(w.date)>=qStart)) return; (w.exercises||[]).forEach(ex=>{ if(((ex.tracking)||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<cardioBest)cardioBest=me; } }); }); });
   const cardioT = cardioBest<=6.5?'gold':cardioBest<=8?'silver':cardioBest<=9?'bronze':null;
 
   // Variety: distinct exercises actually logged. Imported history can lack exId,
@@ -3419,7 +3445,7 @@ function computeBadges() {
       desc: !haveBW?'Enter body weight in Profile to unlock':`OHP ×5 (lb): ${tline(ohp,[0.25*bwLb,0.5*bwLb,1.0*bwLb])}`},
     {icon:'dumbbell',color:MCOL.legs,name:'Leg-Maxing',tier:sqT,earned:!!sqT,needsWeight:!haveBW,
       desc: !haveBW?'Enter body weight in Profile to unlock':`Squat ×5 (lb): ${tline(sq,[1.0*bwLb,1.5*bwLb,2.0*bwLb])}`},
-    {icon:'trophy',color:'#ffd700',name:'1000lb Club-Maxing',desc: bestSingle>0?`Best single-session Big-3: ${r0(bestSingle)} lb / 1000`:'Bench + Squat + Deadlift ≥ 1000 lb in one workout',earned:club},
+    {icon:'trophy',color:'#ffd700',name:'1000lb Club',desc: bestSingle>0?`Best single-session Big-3: ${r0(bestSingle)} lb / 1000`:'Bench + Squat + Deadlift ≥ 1000 lb in one workout',earned:club},
     {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tier:pullT,earned:!!pullT,
       desc:`Best set: ${pullBest} reps — ${tline(pullBest,[10,15,20])}`},
     {icon:'dumbbell',color:MCOL.triceps,name:'Push-up-Maxing',tier:pushT,earned:!!pushT,
@@ -3438,15 +3464,49 @@ const BADGE_HOW={
   'Bench-Maxing':'Barbell bench press, 1 rep. Bronze 135 lb, Silver 225 lb, Gold 315 lb.',
   'Shoulder-Maxing':'Barbell overhead press for 5 reps. Bronze 25%, Silver 50%, Gold 100% of your body weight. Set your weight in Profile.',
   'Leg-Maxing':'Barbell squat for 5 reps. Bronze 100%, Silver 150%, Gold 200% of your body weight. Set your weight in Profile.',
-  '1000lb Club-Maxing':'In a single workout, your best bench + squat + deadlift add up to 1000 lb or more.',
+  '1000lb Club':'In a single workout, your best bench + squat + deadlift add up to 1000 lb or more.',
   'PR-Maxing':'Hit at least one personal record on 7 days in a row.',
   'Coward-Maxing':'Given after 7+ days off in a row. Resets every 3 months — train consistently this quarter to clear it.',
   'Pull-up-Maxing':'Most reps in a single pull-up/chin-up set. Bronze 10, Silver 15, Gold 20.',
   'Push-up-Maxing':'Most reps in a single push-up set (one exercise, not summed). Bronze 30, Silver 50, Gold 80.',
-  'Cardio-Maxing':'Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze 9:00, Silver 8:00, Gold 6:30 per mile.',
+  'Cardio-Maxing':'Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze 9:00, Silver 8:00, Gold 6:30 per mile. Resets every 3 months: only runs from the current quarter count.',
   'Variety-Maxing':'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'
 };
-function badgeInfo(name){ toast(BADGE_HOW[name]||name); }
+// Name shown for a badge; older builds stored '1000lb Club-Maxing' in friends' badge lists.
+function badgeShownName(n){ return n==='1000lb Club-Maxing' ? '1000lb Club' : n; }
+// Full-screen achievement popup: same icon as the list, title, then the summary in a text hierarchy.
+const BADGE_DETAIL={
+  'Bench-Maxing':{how:'Barbell bench press, 1 rep.',tiers:[['Bronze','135 lb'],['Silver','225 lb'],['Gold','315 lb']]},
+  'Shoulder-Maxing':{how:'Barbell overhead press for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','25% of body weight'],['Silver','50% of body weight'],['Gold','100% of body weight']]},
+  'Leg-Maxing':{how:'Barbell squat for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','100% of body weight'],['Silver','150% of body weight'],['Gold','200% of body weight']]},
+  '1000lb Club':{how:'In a single workout, your best bench + squat + deadlift add up to 1000 lb or more.'},
+  'Pull-up-Maxing':{how:'Most reps in a single pull-up or chin-up set.',tiers:[['Bronze','10 reps'],['Silver','15 reps'],['Gold','20 reps']]},
+  'Push-up-Maxing':{how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze','30 reps'],['Silver','50 reps'],['Gold','80 reps']]},
+  'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Resets every 3 months. Only runs from the current quarter count, and the badge starts fresh each quarter.'},
+  'Variety-Maxing':{how:'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'},
+  'PR-Maxing':{how:'Hit at least one personal record on 7 days in a row.'},
+  'Coward-Maxing':{how:'Given after 7+ days off in a row.',note:'Resets every 3 months. Train consistently this quarter to clear it.'}
+};
+function badgeInfo(name){
+  const b=computeBadges().find(x=>x.name===name); if(!b) return;
+  const d=BADGE_DETAIL[name]||{how:BADGE_HOW[name]||''};
+  const col=b.tier?TIERC[b.tier]:(b.earned?'var(--green)':'var(--muted)');
+  const status=b.tier?b.tier:(b.earned?'earned':'locked');
+  const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v])=>{const k=t.toLowerCase(),on=b.tier===k;return `<div class="bf-tier${on?' on':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span></div>`;}).join('')}</div>`:'';
+  const note=d.note?`<div class="bf-h">Resets</div><div class="bf-body">${d.note}</div>`:'';
+  document.getElementById('badgeFullBody').innerHTML=`
+    <div class="bf-icon" style="filter:${b.earned?'none':'grayscale(1)'};box-shadow:0 0 0 1px ${col}55,0 0 60px -6px ${col}66">${uic(b.icon,b.color,84)}</div>
+    <div class="bf-status" style="color:${col}">${status}</div>
+    <div class="bf-title">${esc(b.name)}</div>
+    <div class="bf-stat">${b.desc}</div>
+    <div class="bf-sep"></div>
+    <div class="bf-h">How to earn it</div><div class="bf-body">${d.how}</div>
+    ${tiers}${note}`;
+  document.getElementById('badgeFull').classList.add('open');
+  document.getElementById('badgeFull').scrollTop=0;
+}
+function closeBadgeFull(){ document.getElementById('badgeFull').classList.remove('open'); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeBadgeFull(); });
 
 // Count how many badges are currently earned (used by the leaderboard too).
 function earnedBadgeCount(){ return computeBadges().filter(b=>b.earned).length; }
@@ -4039,7 +4099,7 @@ function showFriendBadges(code){
       const [bIcon,bColor]=(b.e||'medal|var(--muted)').split('|');
       return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
         <div>${uic(bIcon,bColor,28)}</div>
-        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${esc(b.n)}</div><div style="font-size:12px;color:var(--muted)">${esc(BADGE_HOW[b.n]||'')}</div></div>
+        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${esc(badgeShownName(b.n))}</div><div style="font-size:12px;color:var(--muted)">${esc(BADGE_HOW[badgeShownName(b.n)]||'')}</div></div>
         ${status}</div>`;
     }).join('');
   }
@@ -5348,7 +5408,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.18';
+const BUILD = 'v1.8.19';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
