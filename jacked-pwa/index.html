@@ -3067,9 +3067,28 @@ function finishW(auto) {
   const ts=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   // Verify finish so an accidental tap doesn't end the session (skipped on auto-finish — no one's there).
   if (auto) { _finishWContinue(auto,ts); return; }
-  showConfirm(ts===0 ? 'No sets logged — finish anyway?' : 'Finish and save this workout?').then(ok=>{
-    if(ok) _finishWContinue(auto,ts);
+  showConfirm(ts===0 ? 'No sets logged — finish anyway?' : 'Finish and save this workout?').then(async ok=>{
+    if(!ok) return;
+    await maybeUpdateRoutine();
+    _finishWContinue(auto,ts);
   });
+}
+// If this workout was started from a routine and its exercises were changed (added, removed
+// or reordered), ask whether to write those changes back to the routine.
+async function maybeUpdateRoutine(){
+  if(!aw||!aw.routineId) return;
+  const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return;
+  const before=(r.exercises||[]).slice();
+  const after=[...new Set(aw.exercises.map(e=>e.exId).filter(x=>x&&x!=='?'))];
+  if(before.length===after.length&&before.every((id,i)=>id===after[i])) return;
+  const nm=id=>{ const e=byId(id); return e?e.name:'exercise'; };
+  const added=after.filter(id=>!before.includes(id)).map(nm), removed=before.filter(id=>!after.includes(id)).map(nm);
+  const parts=[];
+  if(added.length) parts.push('added '+added.join(', '));
+  if(removed.length) parts.push('removed '+removed.join(', '));
+  if(!parts.length) parts.push('changed the order');
+  const yes=await showConfirm('You '+parts.join('; ')+'. Update the routine "'+r.name+'" with these changes?',{okText:'Update routine',cancelText:'Keep original'});
+  if(yes){ r.exercises=after; S.s('routines',rs); toast('Routine updated','ok'); }
 }
 // Auto-title an untitled workout after whichever exercise had the highest
 // intensity (best estimated 1RM among weight/bodyweight lifts), falling
@@ -5521,7 +5540,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.26';
+const BUILD = 'v1.8.27';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
