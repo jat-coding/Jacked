@@ -190,12 +190,16 @@ like the set-entry dial (item 1 / W1). He wants **every** scroll/dial value cont
 Also, changing those values, the number moves slightly **up** when scrolling up and slightly
 **down** when scrolling down, i.e. it drifts off its resting position while scrolling.
 
+**Mr. Roni, 2026-09-20 6:32pm MDT, driving this home:** the vibration is still not working on all
+instances. There must be **one set piece of code, used by every value scroller and applied to each
+instance**, so no scroller can be built without it. Per-screen haptic code is what caused the gaps.
+
 **Required behavior:**
 1. Every control that changes a value by scroll, bezel or dial gets the same feelable tick per
    value change as the set-entry wheels (CLICK class, per the v0.17 note: TICK is not felt on a wrist).
    Audit them all, not just those three: settings (Min, Max, Target sets, duration unit, anything else),
    set entry (weight, reps, distance, time, seconds), and any other picker. List each control and its
-   haptic in `WATCH_STATUS.md`. Use one shared implementation so a new scroller cannot miss it.
+   haptic in `WATCH_STATUS.md`. Use one shared implementation (single component/modifier, the only place haptics are triggered for value changes) so a new scroller cannot miss it. Done = the audit table shows every control routed through it, and a grep for other haptic calls on value changes finds none.
 2. The drift: the value should stay centred in place while it changes. Reproduce first, then find
    the cause (not guessed); check whether set entry has it too. If it is the wheel's scroll offset
    or animation, fix it in the shared wheel, so every scroller gets the fix.
@@ -219,9 +223,12 @@ Source: Mr. Roni, 2026-09-20 6:07pm MDT (first asked 6:01pm as "Done", renamed a
    as they did before; "lock in" is a function of this button alone and must not alter existing behavior.
 4. Default (not specified): sets with no values are left as they are; Mr. Roni's wording is only "checks the sets".
 5. No confirm on Lock in (approved by Mr. Roni). The item 7 confirms still apply to Finish and Discard on the list.
-6. Back/swipe from the focus view still returns to the list (item 5 / item 6). The ‹ Prev · All · Next › chips stay as built.
+6. **On the last exercise (no next in line), the Next chip reads "Add another exercise"** and opens the add-exercise
+   picker (item 4), instead of greying out as built in item 5. Mr. Roni, 6:32pm. If he does not add one, he taps Lock in,
+   lands on the full list, and finishes from there.
+7. Back/swipe from the focus view still returns to the list (item 5 / item 6). The ‹ Prev · All · Next › chips stay as built.
 
-**Acceptance test:** focus view of exercise 2 has no Finish or Discard. Enter sets, tap Lock in: the sets are
+**Acceptance test:** last exercise's Next chip says "Add another exercise" and opens the picker; the added exercise then appears in focus order. Focus view of exercise 2 has no Finish or Discard. Enter sets, tap Lock in: the sets are
 checked and exercise 3 opens. On the last exercise, Lock in lands on the full list. The button appears nowhere
 else, and set checking outside it behaves as before.
 
