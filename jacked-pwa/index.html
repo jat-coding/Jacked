@@ -368,6 +368,9 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 .mc-head .mc-title,#compareBoard .st{margin:0}
 #compareBoard .st{margin-bottom:14px}
 .metric-card>.mc-head+*{margin-top:0!important}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
+.sec-head .sec-t{margin:0}
+#exLoadState{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -486,8 +489,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="sw"><span class="sw-ic"><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0'/><path d='M21 21l-6 -6'/></svg></span><input type="text" id="exSearch" placeholder="Search exercises..." oninput="renderEx()"></div>
     <div class="chips" id="muscleChips"></div>
   </div>
-  <div id="exLoadState" style="text-align:center;padding:20px;color:var(--muted);font-size:13px"></div>
-  <div class="sec"><div class="sec-t">Exercises</div><div id="exList"></div></div>
+  <div class="sec"><div class="sec-head"><div class="sec-t">Exercises</div><span id="exLoadState"></span></div><div id="exList"></div></div>
 </div>
 
 <!-- METRICS -->
@@ -1370,7 +1372,7 @@ async function loadDB() {
   if (dbLoaded || dbLoading) return;
   dbLoading = true;
   const el = document.getElementById('exLoadState');
-  if (el) el.innerHTML = '<span class="spin"></span><span style="margin-left:8px;vertical-align:middle">Loading exercise library…</span>';
+  if (el) el.innerHTML = '<span class="spin"></span><span style="margin-left:8px;vertical-align:middle">Loading…</span>';
   try {
     const r = await fetch(DB_URL);
     const raw = await r.json();
@@ -1382,14 +1384,14 @@ async function loadDB() {
       return true; // keep everything that isn't explicitly excluded
     });
     dbLoaded = true; dbLoading = false;
-    if (el) el.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 0">${allDB.length} exercises loaded ✓</div>`;
+    if (el) el.innerHTML = `${allDB.length} loaded ✓`;
     renderEx();
     // rebuild chips everywhere now that we have data
     buildMuscleChips('muscleChips', handleMFChip, null);
     buildMuscleChips('aeChips', handleAEChip, null);
   } catch(e) {
     dbLoading = false;
-    if (el) el.innerHTML = `<span style="color:var(--muted);font-size:12px">${uic('warning')} Could not load library. Add custom exercises below.</span>`;
+    if (el) el.innerHTML = `<span style="color:var(--muted);font-size:12px">${uic('warning')} Couldn’t load</span>`;
     renderEx();
   }
 }
@@ -1834,7 +1836,7 @@ function renderEx() {
       </div>
       ${pr?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${dW(pr.weight)}${uL()}<div style="font-size:9px;color:var(--muted);font-weight:400">${pr.reps}r PR</div></div>`:''}
     </div>`;
-  }).join('')+(all.length>80?`<div style="text-align:center;color:var(--muted);font-size:11px;padding:10px">Showing 80 of ${all.length} — search to narrow</div>`:'');
+  }).join('');
 }
 
 // Exercise info popup: how-to instructions (from the exercise DB) + a bar chart
@@ -5540,7 +5542,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.31';
+const BUILD = 'v1.8.32';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
