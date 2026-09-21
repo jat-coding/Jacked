@@ -453,7 +453,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="ph">
     <div class="pt">JACKED<span>.</span></div>
     <div style="display:flex;gap:8px">
-      <button class="btn bg sm ic" id="homeProfBtn" onclick="openProf()" style="padding:4px 5px"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0'/><path d='M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2'/></svg></button>
+      <button class="btn bg sm ic" id="homeProfBtn" onclick="openProf()" style="padding:0;border:0;background:none;border-radius:50%;width:auto;height:auto"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0'/><path d='M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2'/></svg></button>
     </div>
   </div>
     <div id="streakBanner" class="sec" style="display:none"></div>
@@ -5542,7 +5542,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.32';
+const BUILD = 'v1.8.33';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
