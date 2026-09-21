@@ -212,7 +212,9 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 }
 
 /* METRICS */
-.metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:18px;margin-bottom:22px}
+.metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:20px;margin-bottom:0}
+#metricsCards{display:flex;flex-direction:column;gap:26px;padding-bottom:6px}
+.mc-title{font-family:var(--fh);font-size:22px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text);margin:0;padding-left:12px;border-left:4px solid var(--accent);line-height:1.15}
 .bmi-val{font-family:var(--fh);font-size:56px;font-weight:900;text-align:center;line-height:1}
 .bmi-cat{text-align:center;font-size:13px;font-weight:600;margin-top:6px}
 .mr-item{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border)}
@@ -3854,7 +3856,7 @@ function renderMetricsPage(){
   cont.innerHTML=vis.map((c,i)=>`
     <div class="metric-card" data-id="${c.id}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="st" style="margin:0">${c.title}</div>
+        <div class="mc-title">${c.title}</div>
         <button class="btn bg ic xs" title="Hide card" onclick="toggleCard('${c.id}')">✕</button>
       </div>
       </div>
