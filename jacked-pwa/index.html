@@ -212,7 +212,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 }
 
 /* METRICS */
-.metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:18px;margin-bottom:14px}
+.metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:18px;margin-bottom:22px}
 .bmi-val{font-family:var(--fh);font-size:56px;font-weight:900;text-align:center;line-height:1}
 .bmi-cat{text-align:center;font-size:13px;font-weight:600;margin-top:6px}
 .mr-item{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border)}
@@ -476,7 +476,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 
 <!-- METRICS -->
 <div class="page" id="page-metrics">
-  <div class="ph"><div class="pt">Metrics</div></div>
+  <div class="ph"><div class="pt">Metrics</div><button class="btn bg sm" onclick="openCardOrder()">Reorder</button></div>
   <div id="metricsCards"></div>
   <div id="hiddenCardsBar"></div>
 </div>
@@ -932,6 +932,17 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     </div>
     <button class="btn ba wf" onclick="doAF()" style="margin-bottom:12px">Send Request</button>
 
+  </div>
+</div>
+
+<!-- Metrics section order -->
+<div class="mo" id="cardOrderModal">
+  <div class="md">
+    <div class="drag-handle"></div>
+    <div class="mh"><div class="mt">Reorder Sections</div><button class="cb" onclick="cm('cardOrderModal')">✕</button></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Drag the grip to set the order.</div>
+    <div id="cardOrderList" style="position:relative"></div>
+    <button class="btn ba wf" onclick="cm('cardOrderModal')" style="margin-top:10px">Done</button>
   </div>
 </div>
 
@@ -3793,7 +3804,7 @@ function metricsOrdered(){
 }
 // Drag-to-reorder: grab the grip, card follows the finger, others shuffle live; order saved on release.
 function cardDragStart(e){
-  const el=e.currentTarget.closest('.metric-card'), cont=el&&el.parentElement; if(!el) return;
+  const el=e.currentTarget.closest('[data-id]'), cont=el&&el.parentElement; if(!el) return;
   e.preventDefault();
   const handle=e.currentTarget; try{handle.setPointerCapture(e.pointerId);}catch(_){}
   cont.style.position='relative';
@@ -3820,10 +3831,20 @@ function cardDragStart(e){
     handle.removeEventListener('pointermove',mv); handle.removeEventListener('pointerup',end); handle.removeEventListener('pointercancel',end);
     const ids=[...cont.children].map(x=>x.dataset.id), s=gSet();
     S.s('settings',{...s,cardOrder:[...ids,...(s.cardOrder||[]).filter(x=>!ids.includes(x))]});
-    renderMetricsPage();
+    renderMetricsPage(); renderCardOrderList();
   };
   handle.addEventListener('pointermove',mv); handle.addEventListener('pointerup',end); handle.addEventListener('pointercancel',end);
   raf=requestAnimationFrame(tick); place();
+}
+function openCardOrder(){ renderCardOrderList(); om('cardOrderModal'); }
+function renderCardOrderList(){
+  const el=document.getElementById('cardOrderList'); if(!el) return;
+  const hidden=metricsHidden();
+  el.innerHTML=metricsOrdered().filter(c=>!hidden.has(c.id)).map(c=>`
+    <div data-id="${c.id}" style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;background-clip:padding-box">
+      <div style="font-weight:600;font-size:14px">${c.title}</div>
+      <div class="cdrag" aria-label="Drag to reorder" onpointerdown="cardDragStart(event)"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg></div>
+    </div>`).join('');
 }
 function renderMetricsPage(){
   const hidden=metricsHidden();
@@ -3834,10 +3855,7 @@ function renderMetricsPage(){
     <div class="metric-card" data-id="${c.id}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div class="st" style="margin:0">${c.title}</div>
-        <div style="display:flex;gap:4px;align-items:center">
-          <button class="btn bg ic xs" title="Hide card" onclick="toggleCard('${c.id}')">✕</button>
-          <div class="cdrag" aria-label="Drag to reorder" onpointerdown="cardDragStart(event)"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg></div>
-        </div>
+        <button class="btn bg ic xs" title="Hide card" onclick="toggleCard('${c.id}')">✕</button>
       </div>
       </div>
       ${c.html}
