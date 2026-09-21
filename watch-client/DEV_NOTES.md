@@ -205,5 +205,24 @@ Also, changing those values, the number moves slightly **up** when scrolling up 
 **Acceptance test:** each control in the audit table ticks on every step, both directions. In
 Settings, spin Min up and down: the number stays put (no visible up/down shift) while the value changes.
 
+## 10. Focus view: no Finish/Discard; add a Done button — OPEN
+Source: Mr. Roni, 2026-09-20 6:01pm MDT. **Changes item 5** (its "last exercise shows the list's Finish/Discard tail").
+
+**Required behavior:**
+1. **Remove Finish and Discard from the focus view**, on every exercise including the last. They
+   live only on the full workout list.
+2. **Add a Done button at the end of the focus view** (below the set rows and the − Set / + Set row).
+   Tapping it **locks in all the sets** entered for that exercise and **goes to the next exercise's
+   focus view**. Tap-only, as decided in item 5: it never fires by itself.
+3. Defaults (he did not specify; say if you disagree): "lock in" = every set that has values is
+   marked done, as if each had been checked; a set with no values is left as it is, not logged. On the
+   **last** exercise, Done locks in the sets and returns to the full list, where Finish is. The
+   ‹ Prev · All · Next › chips stay as built.
+4. Done is not destructive, so it needs no confirm (item 7 covers Finish/Discard, which now live only on the list).
+5. Back/swipe from the focus view still returns to the list (item 5 / item 6).
+
+**Acceptance test:** focus view of exercise 2 has no Finish or Discard. Enter sets, tap Done: sets show as
+done in the list and exercise 3 opens. On the last exercise, Done lands on the list, and Finish is there.
+
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
