@@ -362,6 +362,12 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 .sec .wli,.sec .eli,.sec .rc,.sec .fc{background:none;border:0;border-top:1px solid #23232b;border-radius:0;padding:12px 0;margin:0;box-shadow:none}
 .sec .wli:first-child,.sec .eli:first-child,.sec .rc:first-child,.sec .fc:first-child{border-top:0}
 #curatedWrap .st{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;color:var(--text);line-height:1;margin-bottom:12px}
+.page .st,#compareBoard .st,#profModal .st{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text);line-height:1}
+#hiddenCardsBar .st{font-size:14px;color:var(--text2);letter-spacing:.8px}
+.mc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:32px;margin-bottom:14px}
+.mc-head .mc-title,#compareBoard .st{margin:0}
+#compareBoard .st{margin-bottom:14px}
+.metric-card>.mc-head+*{margin-top:0!important}
 </style>
 </head>
 <body>
@@ -467,7 +473,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="ph"><div class="pt">Routines</div><button class="btn bg sm" onclick="openCR()">+ New</button></div>
   <button class="btn bg wf" onclick="startEmpty()" style="margin-bottom:16px">Start Empty Workout</button>
   <div id="curatedWrap" class="sec">
-    <div class="st" style="margin-bottom:8px"><svg viewBox='0 0 24 24' width='14' height='14' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
+    <div class="st" style="margin-bottom:12px"><svg viewBox='0 0 24 24' width='18' height='18' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
     <div class="chips" id="curatedList" style="gap:10px"></div>
   </div>
   <div class="sec"><div class="sec-t">My routines</div><div id="routinesList"></div></div>
@@ -500,7 +506,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div id="lbFriendsWrap"><div class="sub-t" id="lbFriendsT" style="display:none">Buddies</div><div id="lbFriends"></div></div>
   </div>
   <div id="pendingWrap" class="sec" style="display:none">
-    <div class="st" style="margin-top:16px;color:var(--orange)"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M6.5 7h11'/><path d='M6.5 17h11'/><path d='M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1'/><path d='M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1'/></svg> Pending</div>
+    <div class="st" style="margin-bottom:12px"><svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M6.5 7h11'/><path d='M6.5 17h11'/><path d='M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1'/><path d='M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1'/></svg> Pending</div>
     <div id="pendingList"></div>
   </div>
 </div>
@@ -3896,7 +3902,7 @@ function renderMetricsPage(){
   const vis=cards.filter(c=>!hidden.has(c.id));
   cont.innerHTML=vis.map((c,i)=>`
     <div class="metric-card" data-id="${c.id}">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="mc-head">
         <div class="mc-title">${c.title}</div>
         <button class="btn bg ic xs" title="Hide card" onclick="toggleCard('${c.id}')">✕</button>
       </div>
@@ -5534,7 +5540,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.29';
+const BUILD = 'v1.8.31';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
