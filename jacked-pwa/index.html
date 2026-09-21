@@ -1067,6 +1067,51 @@ function uic(name,color='currentColor',size=18){
 }
 function mc(m)  { return MCOL[(m||'').toLowerCase()] || '#a0a0b0'; }
 function avc(n) { let h=0; for(let c of(n||'?')) h=c.charCodeAt(0)+((h<<5)-h); return AVC[Math.abs(h)%AVC.length]; }
+// ------------------------------------------------------------------
+// UNTRUSTED TEXT. Every UI here is built by string-templating into innerHTML, and
+// friends' profile rows / shared workouts are written by OTHER users. Two rules,
+// both required, because they cover different holes:
+//   1. Data from another user is normalised ONCE, where it enters the app
+//      (cleanPerson, called from refreshFriends and the personByCode/renderLB
+//      fallbacks): numbers become finite numbers, ids/codes/URLs are pattern-
+//      checked, strings are length-capped. After that the rest of the app can't
+//      be handed markup through a numeric field, an onclick argument or a URL.
+//   2. Any remaining free text (names, exercise names, badge names) is passed
+//      through esc() at the point it is templated into HTML.
+// Escaping alone isn't enough for onclick="fn('${code}')": the browser decodes
+// entities before the JS runs, so ids must be pattern-checked, not escaped.
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+const _cs=(v,n)=>typeof v==='string'?v.slice(0,n||80):(typeof v==='number'&&isFinite(v)?String(v):'');
+const _cn=v=>{ const x=Number(v); return isFinite(x)?x:0; };
+const _cnn=v=>v==null?null:_cn(v);                       // absent stays absent (set fields are optional)
+const _CODE_RE=/^[A-Za-z0-9@_-]{1,32}$/;                   // @username or legacy JCKD-XXXXXX
+const cleanCode=c=>typeof c==='string'&&_CODE_RE.test(c)?c:'';
+function cleanAvatar(u){ return typeof u==='string'&&/^https:\/\/[^\s'"()<>\\`]{1,500}$/.test(u)?u:''; }
+function cleanPerson(p){
+  if(!p||typeof p!=='object') return null;
+  const code=cleanCode(p.code); if(!code) return null;
+  const arr=(a,n)=>Array.isArray(a)?a.slice(0,n):[];
+  const obj=o=>o&&typeof o==='object'?o:{};
+  const dist=(o,w)=>{ const r={}; if(o.dist!=null){ r.dist=_cn(o.dist); r.pace=_cn(o.pace); } return Object.assign(w,r); };
+  return {...p, id:cleanCode(p.id)||code, code,
+    name:_cs(p.name,40)||'Lifter', username:_cs(p.username,40), avatarUrl:cleanAvatar(p.avatarUrl),
+    totalVolume:_cn(p.totalVolume), workouts:_cn(p.workouts), prs:_cn(p.prs), streak:_cn(p.streak),
+    consistency:_cn(p.consistency), badges:_cn(p.badges),
+    mVol:_cn(p.mVol), mWorkouts:_cn(p.mWorkouts), mPRs:_cn(p.mPRs),
+    days:arr(p.days,400).filter(d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)),
+    recent:arr(p.recent,20).map(obj).map(w=>dist(w,{name:_cs(w.name),date:_cs(w.date,40),totalVolume:_cn(w.totalVolume),sets:_cn(w.sets)})),
+    wd:arr(p.wd,60).map(obj).map(w=>dist(w,{name:_cs(w.name),date:_cs(w.date,40),vol:_cn(w.vol),sets:_cn(w.sets),
+      ex:arr(w.ex,60).map(obj).map(e=>({id:_cs(e.id,60),n:_cs(e.n),t:_cs(e.t,20),
+        sets:arr(e.sets,100).map(obj).map(s=>({mi:_cnn(s.mi),min:_cnn(s.min),w:_cnn(s.w),r:_cnn(s.r),sec:_cnn(s.sec)}))}))})),
+    badgeList:arr(p.badgeList,100).map(obj).map(b=>{
+      const [ic,co]=String(b.e||'').split('|');
+      return {n:_cs(b.n,60), t:(typeof b.t==='string'&&Object.prototype.hasOwnProperty.call(TIERC,b.t))?b.t:'',
+        e:(/^[a-z0-9_-]{1,30}$/i.test(ic||'')&&/^(#[0-9a-f]{3,8}|var\(--[a-z0-9-]{1,30}\))$/i.test(co||''))?ic+'|'+co:''};
+    })
+  };
+}
 function avi(n) { return (n||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??'; }
 // Avatar markup: uploaded photo if the person has one, initials disc otherwise.
 // The photo layers over the initials colour, so a dead URL degrades to the same
@@ -1074,9 +1119,10 @@ function avi(n) { return (n||'?').split(' ').map(w=>w[0]||'').join('').toUpperCa
 function avHTML(p,size){
   const s=size||42, nm=(p&&p.name)||'?';
   const dim=`width:${s}px;height:${s}px;font-size:${Math.round(s*0.4)}px`;
-  return (p&&p.avatarUrl)
-    ? `<div class="av" style="${dim};background:${avc(nm)} center/cover no-repeat url('${p.avatarUrl}')"></div>`
-    : `<div class="av" style="${dim};background:${avc(nm)};color:var(--on-accent)">${avi(nm)}</div>`;
+  const url=cleanAvatar(p&&p.avatarUrl);
+  return url
+    ? `<div class="av" style="${dim};background:${avc(nm)} center/cover no-repeat url('${url}')"></div>`
+    : `<div class="av" style="${dim};background:${avc(nm)};color:var(--on-accent)">${esc(avi(nm))}</div>`;
 }
 function uid()  { return Math.random().toString(36).slice(2,8).toUpperCase(); }
 function genCode() { return 'JCKD-' + uid(); }
@@ -1098,8 +1144,24 @@ async function usernameTaken(u, exceptMine){
 // ============================================================
 // STORAGE
 // ============================================================
+// Every reader below does `S.g(k)||default` and then calls .map/.filter/.find or spreads
+// the result, so a value of the WRONG TYPE (an object where a list belongs, a string where
+// an object belongs) doesn't just look wrong — it throws on the first render, on every boot.
+// The shape contract lives HERE, once, and is enforced on both sides: S.g never hands back
+// a wrong-typed value (returns null → the caller's default), and restoreKeys refuses to
+// write one (import / cloud restore). Keys not listed are free-form scalars.
+const KEY_SHAPE={
+  routines:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
+  prof:'o',prs:'o',settings:'o',exRename:'o',exOverride:'o',exNotes:'o',cardioPR:'o',metrics:'o',
+  sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o'
+};
+function shapeOk(k,v){
+  const t=KEY_SHAPE[k];
+  if(!t||v==null) return true;                       // null = absent, always fine
+  return t==='a' ? Array.isArray(v) : (typeof v==='object' && !Array.isArray(v));
+}
 const S = {
-  g: k => { try{ return JSON.parse(localStorage.getItem('jk_'+k)); }catch(e){ return null; }},
+  g: k => { try{ const v=JSON.parse(localStorage.getItem('jk_'+k)); return shapeOk(k,v)?v:null; }catch(e){ return null; }},
   s: (k,v) => { try{ localStorage.setItem('jk_'+k, JSON.stringify(v)); }catch(e){ console.warn('Storage full?',e); }}
 };
 const gCEx    = () => S.g('cex')      || [];
@@ -1594,7 +1656,7 @@ function renderHome() {
                                : `${fmtD(w.date)} · ${w.duration} · ${w.sets} sets`;
     return `<div class="wli" onclick="openWD('${w.id}')">${ic}
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
+        <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.name)}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">${meta}</div>
       </div>
       <div style="font-family:var(--fh);font-size:18px;font-weight:700;color:var(--text2);text-align:right;flex-shrink:0">${metric}</div>
@@ -3769,10 +3831,13 @@ function myActivity(){
   };
 }
 
+// Friends list for display: live from Supabase, else this device's cached copy. The cache
+// can hold rows from an imported backup or an older build, so it is cleaned too.
+function friendSrc(){ return (supaEnabled()&&liveFriends)?liveFriends:gFr().map(cleanPerson).filter(Boolean); }
 function personByCode(code){
   const you=yourStats();
   if(code===you.code||code==='me') return {...you,...myActivity()};
-  const src=(supaEnabled()&&liveFriends)?liveFriends:gFr();
+  const src=friendSrc();
   const f=src.find(x=>x.code===code||x.id===code);
   return f?{...f,days:f.days||[],recent:f.recent||[],wd:f.wd||[]}:null;
 }
@@ -3782,8 +3847,8 @@ function lbRow(p,opts={}){
   return `<div class="fc" style="cursor:pointer" onclick="openFriend('${p.code}')">
     ${avHTML(p)}
     <div style="flex:1;min-width:0">
-      <div style="font-weight:600;font-size:14px">${p.name}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div>
-      <div style="font-size:11px;color:var(--muted)">${p.username||''} · ${p.workouts||0} workouts · ${p.badges||0} ${uic('medal',undefined,12)}</div>
+      <div style="font-weight:600;font-size:14px">${esc(p.name)}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div>
+      <div style="font-size:11px;color:var(--muted)">${esc(p.username)} · ${p.workouts||0} workouts · ${p.badges||0} ${uic('medal',undefined,12)}</div>
     </div>
     ${opts.star?`<button class="btn bg ic xs" title="Close buddy" style="font-size:16px;color:${isCB?'#ffd700':'var(--muted)'}" onclick="event.stopPropagation();toggleCB('${p.code}')">★</button>`:''}
     ${opts.canRemove?`<button class="btn bd xs" onclick="event.stopPropagation();rmFr('${p.code}')">✕</button>`:''}
@@ -3832,7 +3897,7 @@ function openFriend(code){
         const metric=isRun?`${w.dist} mi`:`${fmtW(w.vol||0)} ${uL()}`;
         const meta=(isRun&&w.pace>0)?`${fmtD(w.date)} · ${fmtPace(w.pace)}`:`${fmtD(w.date)} · ${w.sets||0} sets`;
         return `<div class="wli" style="cursor:pointer" onclick="openFriendWorkout('${code}',${i})">
-        <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.name)}</div>
         <div style="font-size:11px;color:var(--muted)">${meta}</div></div>
         <div style="font-family:var(--fh);font-weight:700;color:var(--text2)">${metric} ›</div></div>`;
       }).join('');
@@ -3844,7 +3909,7 @@ function openFriend(code){
         const metric=isRun?`${w.dist} mi`:`${fmtW(w.totalVolume||0)} ${uL()}`;
         const meta=(isRun&&w.pace>0)?`${fmtD(w.date)} · ${fmtPace(w.pace)}`:`${fmtD(w.date)} · ${w.sets||0} sets`;
         return `<div class="wli" style="cursor:default">
-        <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.name)}</div>
         <div style="font-size:11px;color:var(--muted)">${meta}</div></div>
         <div style="font-family:var(--fh);font-weight:700;color:var(--text2)">${metric}</div></div>`;
       }).join('')
@@ -3887,7 +3952,7 @@ function openFriendWorkout(code,idx){
   const w=(p.wd||[])[idx]; if(!w){ toast('Workout detail not available','err'); return; }
   const isRun=!(w.vol>0)&&w.dist>0;
   let h=`<button class="btn bg sm" onclick="openFriend('${code}')">‹ Back</button>
-    <div style="font-family:var(--fh);font-size:22px;font-weight:800;margin:14px 0 2px">${w.name}</div>
+    <div style="font-family:var(--fh);font-size:22px;font-weight:800;margin:14px 0 2px">${esc(w.name)}</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">${fmtD(w.date)}${(isRun&&w.pace>0)?' · '+fmtPace(w.pace):''}</div>
     <div class="stats-g" style="margin-bottom:12px">
       <div class="sc"><div class="sv">${isRun?w.dist:fmtW(w.vol||0)}</div><div class="sl">${isRun?'Miles':uL()+' Vol'}</div></div>
@@ -3904,7 +3969,7 @@ function openFriendWorkout(code,idx){
         <span style="font-family:var(--fh);font-weight:700">${sharedSetLabel(s)}</span></div>`).join('')
       : '<div style="font-size:12px;color:var(--muted)">No sets logged</div>';
     return `<div style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
-      <div style="font-weight:600;font-size:14px;margin-bottom:4px">${e.n}</div>${rows}</div>`;
+      <div style="font-weight:600;font-size:14px;margin-bottom:4px">${esc(e.n)}</div>${rows}</div>`;
   }).join('') : '<div style="color:var(--muted);font-size:13px">No exercise detail shared.</div>';
   document.getElementById('fpContent').innerHTML=h;
 }
@@ -3961,12 +4026,12 @@ function showFriendBadges(code){
     c.innerHTML=list.map(b=>{
       const tier=b.t||'';
       const status=tier
-        ? `<span class="badge" style="background:${TIERC[tier]}22;color:${TIERC[tier]};border:1px solid ${TIERC[tier]}66;text-transform:capitalize">${tier}</span>`
+        ? `<span class="badge" style="background:${TIERC[tier]}22;color:${TIERC[tier]};border:1px solid ${TIERC[tier]}66;text-transform:capitalize">${esc(tier)}</span>`
         : '<span class="badge bgreen">Earned</span>';
       const [bIcon,bColor]=(b.e||'medal|var(--muted)').split('|');
       return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
         <div>${uic(bIcon,bColor,28)}</div>
-        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${b.n}</div><div style="font-size:12px;color:var(--muted)">${BADGE_HOW[b.n]||''}</div></div>
+        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${esc(b.n)}</div><div style="font-size:12px;color:var(--muted)">${esc(BADGE_HOW[b.n]||'')}</div></div>
         ${status}</div>`;
     }).join('');
   }
@@ -3974,7 +4039,7 @@ function showFriendBadges(code){
 }
 
 function renderLB() {
-  const src=(supaEnabled()&&liveFriends)?liveFriends:gFr();
+  const src=friendSrc();
   const you=yourStats();
   const accepted=src.filter(f=>!f.pending);
   const pending=src.filter(f=>f.pending);
@@ -3999,7 +4064,7 @@ function renderLB() {
     board=ranked.map((p,i)=>`<div class="lbi ${p.isYou?'lbyou':''}" style="cursor:pointer" onclick="openFriend('${p.code}')">
       <div class="lbr ${i===0?'gold':i===1?'silver':i===2?'bronze':'other'}">${medal(i)}</div>
       ${avHTML(p)}
-      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${p.name}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div><div style="font-size:11px;color:var(--muted)">${p.username||''}</div></div>
+      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(p.name)}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div><div style="font-size:11px;color:var(--muted)">${esc(p.username)}</div></div>
       <div style="font-family:var(--fh);font-size:20px;font-weight:800;color:${i===0?'var(--accent)':'var(--text2)'}">${def.fmt(getv(p))}</div>
     </div>`).join('');
   }
@@ -4021,7 +4086,7 @@ function renderLB() {
   if(pending.length){pw.style.display='block';document.getElementById('pendingList').innerHTML=pending.map(f=>`
     <div class="qc">
       ${avHTML(f)}
-      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${f.name}</div><div style="font-size:11px;color:var(--muted)">${f.username}</div></div>
+      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(f.name)}</div><div style="font-size:11px;color:var(--muted)">${esc(f.username)}</div></div>
       <div style="display:flex;gap:6px"><button class="btn ba xs" onclick="acceptFr('${f.code}')">Accept</button><button class="btn bd xs" onclick="rmFr('${f.code}')">Decline</button></div>
     </div>`).join('');}
   else pw.style.display='none';
@@ -4509,7 +4574,7 @@ async function refreshFriends() {
       if (r.status==='accepted') accepted.add(other);
       else if (r.status==='pending' && r.to_code===my) pendingIn.push(other);
     });
-    const codes=[...new Set([...accepted,...pendingIn])];
+    const codes=[...new Set([...accepted,...pendingIn])].filter(cleanCode);   // codes reach onclick="fn('…')" — drop malformed ones here
     let profs=[];
     if (codes.length) {
       const COLS='code,name,username,total_volume,workouts,prs,streak,consistency,badges,data,updated_at';
@@ -4527,9 +4592,9 @@ async function refreshFriends() {
       days:data.days||[], recent:data.recent||[], wd:data.wd||[], badgeList:data.badgeList||[],
       mVol:m.v||0, mWorkouts:m.w||0, mPRs:m.p||0 }; };
     liveFriends=[
-      ...[...accepted].map(c=>({...mk(c),pending:false})),
-      ...pendingIn.map(c=>({...mk(c),pending:true}))
-    ];
+      ...[...accepted].filter(cleanCode).map(c=>({...mk(c),pending:false})),
+      ...pendingIn.filter(cleanCode).map(c=>({...mk(c),pending:true}))
+    ].map(cleanPerson).filter(Boolean);
   } catch(e){ console.warn('refreshFriends',e); }
   renderLB();
 }
@@ -4825,10 +4890,26 @@ async function cloudLogin() {
       SUPA.from('profiles').select('code,name').eq('code',u).maybeSingle()
     ]);
     if (bkErr) { console.warn('cloudLogin',bkErr); toast('Login failed — try again','err'); return; }
-    const bk = (bkRow && bkRow.backup && typeof bkRow.backup==='object') ? bkRow.backup : {};
-    // Replace this device's data with the account's cloud snapshot.
-    Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
-    restoreKeys(bk);
+    const bk = (bkRow && bkRow.backup && typeof bkRow.backup==='object' && !Array.isArray(bkRow.backup)) ? bkRow.backup : {};
+    // The confirm above promised "REPLACE this device's data with the account's" — that
+    // only makes sense if the account HAS data. No backup row (never synced, or a watch-
+    // first account) is not a snapshot of an empty account; it is nothing to restore, and
+    // wiping the device for it is how a login deletes someone's only copy.
+    const hasCloud = Object.keys(bk).some(k=>k.startsWith('jk_'));
+    if (!hasCloud && localHist) {
+      if (SUPA) SUPA.auth.signOut({scope:'local'}).catch(()=>{});
+      clearLocalSession();
+      loginMsg(`${u} has no cloud backup to load, so this device's ${localHist} workout(s) were left untouched and you were not logged in. Use Settings → cloud backup to save them to an account first.`);
+      return;
+    }
+    // Replace this device's data with the account's cloud snapshot — all or nothing.
+    const applied = applyBundle(bk,{wipe:true});
+    if (!applied.ok) {
+      if (SUPA) SUPA.auth.signOut({scope:'local'}).catch(()=>{});
+      clearLocalSession();
+      loginMsg("Couldn't store the account's data on this device (storage full?). Nothing on this device was changed.");
+      return;
+    }
     // Normalize the restored profile: checkOnboarding() gates on jk_prof.username,
     // and a watch-first account (or a hand-merged row) can carry a jk_prof with only
     // {code}. Identity always comes from the account just signed in to.
@@ -4933,13 +5014,36 @@ function collectBackup() {
 // to the cloud?" prompt re-appeared AND drainSync()'s never-enrolled gate turned
 // sync-on-change off until the user answered it. Legacy exports whose string
 // values are already JSON text are stored verbatim.
+// Returns {written, rejected, failed}. `rejected` = keys skipped because the value has the
+// wrong shape for that key (see KEY_SHAPE); `failed` = keys the browser refused to store
+// (quota). Callers that can't tolerate a partial write use applyBundle(), which rolls back.
 function restoreKeys(bundle){
+  const res={written:[],rejected:[],failed:[]};
   Object.keys(bundle).forEach(k=>{
     const v=bundle[k]; let enc;
+    if(k.startsWith('jk_') && !shapeOk(k.slice(3), v)){ res.rejected.push(k); return; }
     if(typeof v==='string'){ let legacy=false; try{ JSON.parse(v); legacy=true; }catch(_){} enc=legacy?v:JSON.stringify(v); }
     else enc=JSON.stringify(v);
-    try{ localStorage.setItem(k,enc); }catch(_){}
+    try{ localStorage.setItem(k,enc); res.written.push(k); }catch(_){ res.failed.push(k); }
   });
+  return res;
+}
+
+// All-or-nothing replace of this device's jk_ data. The old data is held in memory while
+// the new data is written; if any write is refused (quota) the snapshot goes back and the
+// caller is told nothing changed. `wipe` clears every jk_ key first (login: the account's
+// snapshot REPLACES the device); without it the bundle is laid over what is there (import).
+function applyBundle(bundle,{wipe=false}={}){
+  const jk=()=>Object.keys(localStorage).filter(k=>k.startsWith('jk_'));
+  const before={}; jk().forEach(k=>before[k]=localStorage.getItem(k));
+  if(wipe) jk().forEach(k=>localStorage.removeItem(k));
+  const res=restoreKeys(bundle);
+  if(res.failed.length){
+    jk().forEach(k=>localStorage.removeItem(k));
+    Object.keys(before).forEach(k=>{ try{ localStorage.setItem(k,before[k]); }catch(_){} });
+    return {ok:false,...res};
+  }
+  return {ok:true,...res};
 }
 
 function exportData() {
@@ -4978,10 +5082,12 @@ function importJsonBackup(t) {
   showConfirm('Import will REPLACE all current data on this device. Continue?').then(ok=>{
     if(!ok) return;
     const bundle={}; keys.forEach(k=>{ bundle[k]=data[k]; });
-    restoreKeys(bundle);
+    const r=applyBundle(bundle);
+    if(!r.ok){ toast('Import failed — not enough storage. Nothing was changed.','err'); return; }
+    if(!r.written.length){ toast('Nothing importable in that file — nothing was changed.','err'); return; }
     localStorage.setItem('jk_appVersion', APP_VERSION);
-    toast('Data imported — reloading…','ok');
-    setTimeout(()=>window.location.reload(),700);
+    toast(r.rejected.length?`Imported — skipped ${r.rejected.length} malformed section(s). Reloading…`:'Data imported — reloading…','ok');
+    setTimeout(()=>window.location.reload(),r.rejected.length?1800:700);
   });
 }
 
