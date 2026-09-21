@@ -1565,7 +1565,7 @@ function curatedPickHtml(pick){
   return `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
       <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px">Trusted pick of the day</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-        <div style="min-width:0"><span style="font-weight:700">${pick.name}</span> <span style="font-size:11px;color:var(--muted)">· ${pick.program} (${pick.source})</span></div>
+        <div style="min-width:0"><span style="font-weight:700">${esc(pick.name)}</span> <span style="font-size:11px;color:var(--muted)">· ${pick.program} (${pick.source})</span></div>
         <button class="btn ba sm" onclick="startCuratedRoutine(${pick.pi},${pick.ri})">Start</button>
       </div>
     </div>`;
@@ -1605,7 +1605,7 @@ function renderSuggest(){
     const sub = d>=900?'not trained yet':d===0?'trained today':`${d}d since last`;
     return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--border)">
         <div style="min-width:0"><span style="font-weight:700;text-transform:capitalize">${nm}</span> <span style="font-size:11px;color:var(--muted)">· ${sub}</span></div>
-        ${r?`<button class="btn ba sm" onclick="startRW('${r.id}')">Start ${r.name}</button>`:''}
+        ${r?`<button class="btn ba sm" onclick="startRW('${r.id}')">Start ${esc(r.name)}</button>`:''}
       </div>`;
   };
   el.innerHTML=`<div style="flex:1;min-width:0">
@@ -1701,10 +1701,10 @@ function openDay(ds){
   } else {
     c.innerHTML=ws.map(w=>`<div class="card-dark" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--accent)">${w.name}</div>
+        <div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--accent)">${esc(w.name)}</div>
         <div style="font-size:11px;color:var(--muted)">${w.duration||''} · ${w.sets||0} sets · ${(w.totalVolume||0)>0||workoutDistance(w)<=0?fmtW(w.totalVolume||0)+' '+uL():(Math.round(workoutDistance(w)*100)/100)+' mi'}</div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px">${(w.exercises||[]).map(e=>`<span class="badge bm">${e.name}</span>`).join('')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">${(w.exercises||[]).map(e=>`<span class="badge bm">${esc(e.name)}</span>`).join('')}</div>
       <button class="btn bg sm wf" style="margin-top:10px" onclick="cm('dayModal');openWD('${w.id}')">View details</button>
     </div>`).join('')+addBtn;
   }
@@ -1759,7 +1759,7 @@ function renderEx() {
     const trackLabel={weight_reps:'Weight+Reps',bodyweight_reps:'BW+Reps',duration:'Duration',distance:'Distance',reps_only:'Reps'}[e.tracking]||'';
     return `<div class="eli" style="cursor:pointer" onclick="openExInfo('${e.id}')">${img}
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px">${isFav(e.id)?'<span style="color:#ffd700">★</span> ':''}${e.name}</div>
+        <div style="font-weight:600;font-size:13px">${isFav(e.id)?'<span style="color:#ffd700">★</span> ':''}${esc(e.name)}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">${capW(e.muscle)} ${e.equip?'· '+capW(e.equip):''} ${e.category?'· '+capW(e.category):''} ${trackLabel?'· '+trackLabel:''}</div>
       </div>
       ${pr?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${dW(pr.weight)}${uL()}<div style="font-size:9px;color:var(--muted);font-weight:400">${pr.reps}r PR</div></div>`:''}
@@ -1817,11 +1817,11 @@ function renderCurated() {
     const days=p.routines.length;
     const routineList=p.routines.map((rt,ri)=>{
       const isPick=pick&&pick.pi===i&&pick.ri===ri;
-      return `<div style="font-size:12px;margin-top:3px;${isPick?'color:var(--blue);font-weight:700':'color:var(--text2)'}">${isPick?"Today's pick · ":''}${rt.name}</div>`;
+      return `<div style="font-size:12px;margin-top:3px;${isPick?'color:var(--blue);font-weight:700':'color:var(--text2)'}">${isPick?"Today's pick · ":''}${esc(rt.name)}</div>`;
     }).join('');
     return `<div class="cur-card">
-      <div style="font-family:var(--fh);font-size:18px;font-weight:800;line-height:1.05">${p.name}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${p.desc}</div>
+      <div style="font-family:var(--fh);font-size:18px;font-weight:800;line-height:1.05">${esc(p.name)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(p.desc)}</div>
       <div style="margin-top:6px">${routineList}</div>
       <div style="font-size:10px;color:var(--muted);margin-top:6px">${days} workout${days!==1?'s':''} · ${p.source}</div>
       <button class="btn ba xs" style="margin-top:10px" onclick="addCurated(${i})">+ Add to Routines</button>
@@ -2104,7 +2104,7 @@ function renderRoutines() {
     return `<div class="rc">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
         <div style="min-width:0">
-          <div class="rn">${r.name}</div>
+          <div class="rn">${esc(r.name)}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px">${r.desc||''} · ${exs.length} exercises</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
@@ -2113,7 +2113,7 @@ function renderRoutines() {
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:10px">
-        ${exs.slice(0,5).map(e=>`<span class="badge bm">${e.name}</span>`).join('')}
+        ${exs.slice(0,5).map(e=>`<span class="badge bm">${esc(e.name)}</span>`).join('')}
         ${exs.length>5?`<span class="badge bm">+${exs.length-5} more</span>`:''}
       </div>
       <button class="rsb" onclick="startRW('${r.id}')">Start Workout</button>
@@ -2152,7 +2152,7 @@ function renderREP() {
     return `<div class="rep-card">
       <div class="rep-bar">
         ${img}
-        <span class="rep-name">${ex.name}</span>
+        <span class="rep-name">${esc(ex.name)}</span>
       </div>
       <div class="rep-btns">
         <button class="repb" onclick="moveExR(${i},-1)"><span>${uic('arrowUp',undefined,15)}</span><small>Up</small></button>
@@ -2225,7 +2225,7 @@ function aeRow(e) {
     <div class="esr-check">${sel?`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0b0a16" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>`:''}</div>
     ${ih}
     <div style="min-width:0">
-      <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}</div>
+      <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name)}</div>
       <div style="font-size:11px;color:var(--muted)">${capW(e.muscle)} ${e.equip?'· '+capW(e.equip):''}</div>
     </div>
   </div>`;
@@ -2360,10 +2360,10 @@ function openQS() {
   document.getElementById('qsRoutines').innerHTML=rs.map(r=>{
     const exs=(r.exercises||[]).map(id=>byId(id));
     return `<div class="rc" style="cursor:pointer;margin-bottom:8px" onclick="startRW('${r.id}');cm('qsModal')">
-      <div class="rn" style="font-size:19px">${r.name}</div>
+      <div class="rn" style="font-size:19px">${esc(r.name)}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">${r.desc||''}</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
-        ${exs.slice(0,4).map(e=>`<span class="badge bm">${e.name}</span>`).join('')}
+        ${exs.slice(0,4).map(e=>`<span class="badge bm">${esc(e.name)}</span>`).join('')}
         ${exs.length>4?`<span class="badge bm">+${exs.length-4}</span>`:''}
       </div>
     </div>`;
@@ -2491,7 +2491,7 @@ function renderWS() {
       ${picking?`<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:6px">Tap another exercise's link icon to pair</div>`:''}
       <div class="ebh">${ih}
         <div style="flex:1;min-width:0">
-          <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${ex.name}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}</div>
+          <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${esc(ex.name)}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:3px">${cardio?(cprev&&cprev.time?`Best ${fmtPace(pacePerMile(cprev.dist,cprev.time))}${cprev.maxDist?` · Longest ${cprev.maxDist} mi`:''}`:'No cardio PR yet'):(pr?`PR: ${dW(pr.weight)}${uL()} × ${pr.reps}`:'No PR yet')}</div>
         </div>
         <div class="eb-actions" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;max-width:150px">
@@ -2890,7 +2890,7 @@ function renderReorder(){
   const el=document.getElementById('reorderList'); if(!el) return;
   el.innerHTML=aw.exercises.map((ex,i)=>`<div class="ro-row">
     <span style="font-family:var(--fh);font-weight:700;color:var(--muted);width:18px">${i+1}</span>
-    <span style="flex:1;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
+    <span style="flex:1;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ex.name)}</span>
     <button class="btn bg ic" onclick="moveReorder(${i},-1)" aria-label="Up">${uic('arrowUp',undefined,16)}</button>
     <button class="btn bg ic" onclick="moveReorder(${i},1)" aria-label="Down">${uic('arrowDown',undefined,16)}</button>
   </div>`).join('');
@@ -3033,12 +3033,12 @@ function buildProgressNotes(rec,preProgress,prList){
     const todayW=done.reduce((m,s)=>Math.max(m,effWeight(ex,s)),0);
     const pre=preProgress[ex.exId];
     if(pre&&pre.up&&todayW>pre.weight+0.01){
-      notes.push({type:'up',text:`Nice — you moved up on ${ex.name}: ${dW(pre.weight)}${uL()} → ${dW(todayW)}${uL()}.`});
+      notes.push({type:'up',text:`Nice — you moved up on ${esc(ex.name)}: ${dW(pre.weight)}${uL()} → ${dW(todayW)}${uL()}.`});
       return;   // don't also fire a fresh down-check for the exercise that just went up
     }
     const post=evaluateProgress(ex.exId);   // gH() already includes tonight by this point
     if(post.down&&!prNames.has(ex.name)){
-      notes.push({type:'down',text:`${ex.name} — no set reached ${progMin()} reps at ${dW(post.weight)}${uL()}, consider lighter.`});
+      notes.push({type:'down',text:`${esc(ex.name)} — no set reached ${progMin()} reps at ${dW(post.weight)}${uL()}, consider lighter.`});
     }
   });
   return notes;
@@ -3097,7 +3097,7 @@ function showFinishSummary(o) {
     <div class="sc" style="margin-bottom:14px"><div class="sv" style="color:#ffd700">${prList.length}</div><div class="sl">Personal Records</div></div>
     ${prList.length?`<div class="st" style="margin-bottom:8px">New PRs</div>`+prList.map(p=>
       `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
-        <span style="font-size:13px;font-weight:600">★ ${p.name}</span>
+        <span style="font-size:13px;font-weight:600">★ ${esc(p.name)}</span>
         <span style="font-family:var(--fh);font-weight:700;color:var(--accent)">${p.cardio?p.label:dW(p.weight)+uL()+' × '+p.reps}</span>
       </div>`).join(''):''}
     ${progressNotes.length?progressNotes.map(n=>
@@ -3210,7 +3210,7 @@ function openWD(id) {
     h+=`<div class="card-dark" style="margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         ${ex.imgUrl?`<img src="${ex.imgUrl}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'" loading="lazy">`:`<div style="width:44px;height:44px;border-radius:8px;background:var(--bg4);flex-shrink:0"></div>`}
-        <div><div style="font-family:var(--fh);font-size:17px;font-weight:700;color:var(--accent)">${ex.name}${ex.cable?` <span style="font-size:11px;color:var(--muted);font-weight:500">· ${ex.cable}</span>`:''}</div>${sub}</div>
+        <div><div style="font-family:var(--fh);font-size:17px;font-weight:700;color:var(--accent)">${esc(ex.name)}${ex.cable?` <span style="font-size:11px;color:var(--muted);font-weight:500">· ${ex.cable}</span>`:''}</div>${sub}</div>
       </div>
       ${ex.note?`<div style="font-size:12px;color:var(--text2);background:var(--bg3);border-radius:7px;padding:7px 9px;margin-bottom:8px">${ex.note.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`:''}
       ${shown.map((s,i)=>`<div style="display:flex;justify-content:space-between;padding:5px 2px;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--muted)">Set ${i+1}</span><span style="font-weight:600">${setStr(s)}</span></div>`).join('')||'<div style="font-size:12px;color:var(--muted)">No sets logged</div>'}
@@ -3257,7 +3257,7 @@ function renderWE(){
     const c4=tr==='distance'?'Min':isDur?'—':'Reps';
     return `<div class="card-dark" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-family:var(--fh);font-size:16px;font-weight:700;color:var(--accent);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</div>
+        <div style="font-family:var(--fh);font-size:16px;font-weight:700;color:var(--accent);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ex.name)}</div>
         <button class="btn bd ic xs" onclick="weRemoveEx(${ei})" aria-label="Remove exercise" style="flex-shrink:0">${uic('trash',undefined,14)}</button>
       </div>
       ${isDur?`<div class="cable-row" style="padding-left:2px">
@@ -3690,7 +3690,7 @@ function cardLifetime(){
       <div class="sc"><div class="sv">${fmtW(tv)}</div><div class="sl">${uL()} Lifted</div></div>
       <div class="sc"><div class="sv">${ts}</div><div class="sl">Total Sets</div></div>
       <div class="sc"><div class="sv">${avgMin}</div><div class="sl">Avg min/session</div></div>
-    </div>${tEx?`<div style="background:var(--bg3);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px;margin-top:8px"><div>${uic('trophy','#ffd700',24)}</div><div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Top PR</div><div style="font-weight:600;font-size:14px;margin-top:2px">${tEx.name}</div><div style="font-family:var(--fh);font-size:22px;font-weight:800;color:var(--accent)">${dW(topPR[1].weight)}${uL()} × ${topPR[1].reps} reps</div></div></div>`:''}`;
+    </div>${tEx?`<div style="background:var(--bg3);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px;margin-top:8px"><div>${uic('trophy','#ffd700',24)}</div><div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Top PR</div><div style="font-weight:600;font-size:14px;margin-top:2px">${esc(tEx.name)}</div><div style="font-family:var(--fh);font-size:22px;font-weight:800;color:var(--accent)">${dW(topPR[1].weight)}${uL()} × ${topPR[1].reps} reps</div></div></div>`:''}`;
   return {id:'lifetime',title:'Lifetime Stats',html};
 }
 
@@ -4882,8 +4882,12 @@ async function cloudLogin() {
     if (st.status === 'not_found') { toast('No account found with that username','err'); return; }
     if (st.status === 'unclaimed') { loginMsg(`${u} doesn't have a password yet. Open Jacked on a device that's already signed in as ${u} — it will ask you to set one.`); return; }
     const localHist = (S.g('hist')||[]).length;
+    // What the device would lose. Workouts are the headline, but routines, custom
+    // exercises, PRs and weight logs are just as unrecoverable, so they count too.
+    const localData = localHist + (S.g('routines')||[]).length + (S.g('cex')||[]).length
+                    + Object.keys(S.g('prs')||{}).length + (S.g('bwlog')||[]).length;
     // Confirm BEFORE signing in, so cancelling never swaps this device's session.
-    if (localHist && !(await showConfirm(`Logging in as ${u} will REPLACE the ${localHist} workout(s) on this device. Export a backup first if you want to keep them.\n\nContinue?`))) return;
+    if (localData && !(await showConfirm(`Logging in as ${u} will REPLACE the data on this device (${localHist} workout(s), ${(S.g('routines')||[]).length} routine(s)). Export a backup first if you want to keep it.\n\nContinue?`))) return;
     if (!(await signInAs(st.email, pw))) { loginMsg('Wrong username or password.'); return; }
     const [{ data:bkRow, error:bkErr }, { data:prof }] = await Promise.all([
       SUPA.from('profile_backups').select('backup').eq('code',u).maybeSingle(),
@@ -4896,10 +4900,10 @@ async function cloudLogin() {
     // first account) is not a snapshot of an empty account; it is nothing to restore, and
     // wiping the device for it is how a login deletes someone's only copy.
     const hasCloud = Object.keys(bk).some(k=>k.startsWith('jk_'));
-    if (!hasCloud && localHist) {
+    if (!hasCloud && localData) {
       if (SUPA) SUPA.auth.signOut({scope:'local'}).catch(()=>{});
       clearLocalSession();
-      loginMsg(`${u} has no cloud backup to load, so this device's ${localHist} workout(s) were left untouched and you were not logged in. Use Settings → cloud backup to save them to an account first.`);
+      loginMsg(`${u} has no cloud backup to load, so the data on this device (workouts, routines, exercises) was left untouched and you were not logged in. Use Settings → cloud backup to save them to an account first.`);
       return;
     }
     // Replace this device's data with the account's cloud snapshot — all or nothing.
