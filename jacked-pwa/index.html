@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
-  --bg:#0c0c10;--bg2:#16161c;--bg3:#1e1e26;--bg4:#292932;
+  --bg:#000;--bg2:#16161c;--bg3:#1e1e26;--bg4:#292932;
   --border:#26262f;--border2:#363642;
   --accent:#20d3c2;--accent2:#14a99b;--accent-bright:#5ce9da;--on-accent:#04140a;
   --red:#ff5d6c;--green:#3ddc97;--blue:#5aa9ff;--orange:#ff9f4d;--purple:#b07cff;
@@ -296,12 +296,13 @@ body.resting #resumeBar{bottom:calc(118px + var(--navB));z-index:98}
 
 /* ===== Visual revamp (v0.14): periwinkle accent + depth ===== */
 /* Soft periwinkle glow washing down from the top of the canvas. */
-/* v1.8.20: one fixed black->grey gradient (even stops, doesn't move on scroll); sticky headers are
-   translucent so no colour band shows behind titles. */
-html{background:#000}
-body{background:transparent}
-body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(180deg,#000 0%,#26262c 100%)}
-.ph,.sticky-sub{background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+/* v1.8.21: flat black canvas (no gradient). Sticky header has a fixed height so the sticky
+   search/chips row sits exactly under it (was hardcoded 62px vs a taller header -> search clipped). */
+html,body{background:#000}
+body{background-image:none}
+.ph{height:calc(env(safe-area-inset-top) + 62px);box-sizing:border-box;padding:env(safe-area-inset-top) 0 0;margin-bottom:0;background:#000}
+.page>.ph+*:not(.sticky-sub){margin-top:12px}
+.sticky-sub{background:#000;padding-top:4px}
 /* Lift the main surfaces off the canvas with a soft shadow. */
 .card,.rc,.eb,.metric-card,.cw,.cur-card{box-shadow:var(--shadow)}
 /* Primary buttons get a subtle vertical gradient + accent glow. */
@@ -5412,7 +5413,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.20';
+const BUILD = 'v1.8.21';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
