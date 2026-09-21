@@ -1088,7 +1088,15 @@ const _cn=v=>{ const x=Number(v); return isFinite(x)?x:0; };
 const _cnn=v=>v==null?null:_cn(v);                       // absent stays absent (set fields are optional)
 const _CODE_RE=/^[A-Za-z0-9@_-]{1,32}$/;                   // @username or legacy JCKD-XXXXXX
 const cleanCode=c=>typeof c==='string'&&_CODE_RE.test(c)?c:'';
-function cleanAvatar(u){ return typeof u==='string'&&/^https:\/\/[^\s'"()<>\\`]{1,500}$/.test(u)?u:''; }
+// Avatars are never taken from a stored URL. The photo always lives at a fixed path in OUR
+// bucket (<code>.jpg, see uploadAvatar), so the only thing read from the database is the
+// cache-busting version stamp in avatar_url ("…?v=<digits>"); the URL itself is rebuilt
+// here from the project URL and the (pattern-checked) code. Whatever else someone writes
+// into that column is ignored, so it can't point the app at another site or carry markup.
+function cleanAvatar(u,code){
+  const m=typeof u==='string'&&/[?&]v=(\d{1,15})$/.exec(u), c=cleanCode(code);
+  return (m&&c)?`${SUPABASE_URL}/storage/v1/object/public/avatars/${encodeURIComponent(c)}.jpg?v=${m[1]}`:'';
+}
 function cleanPerson(p){
   if(!p||typeof p!=='object') return null;
   const code=cleanCode(p.code); if(!code) return null;
@@ -1096,7 +1104,7 @@ function cleanPerson(p){
   const obj=o=>o&&typeof o==='object'?o:{};
   const dist=(o,w)=>{ const r={}; if(o.dist!=null){ r.dist=_cn(o.dist); r.pace=_cn(o.pace); } return Object.assign(w,r); };
   return {...p, id:cleanCode(p.id)||code, code,
-    name:_cs(p.name,40)||'Lifter', username:_cs(p.username,40), avatarUrl:cleanAvatar(p.avatarUrl),
+    name:_cs(p.name,40)||'Lifter', username:_cs(p.username,40), avatarUrl:cleanAvatar(p.avatarUrl,code),
     totalVolume:_cn(p.totalVolume), workouts:_cn(p.workouts), prs:_cn(p.prs), streak:_cn(p.streak),
     consistency:_cn(p.consistency), badges:_cn(p.badges),
     mVol:_cn(p.mVol), mWorkouts:_cn(p.mWorkouts), mPRs:_cn(p.mPRs),
@@ -1119,7 +1127,7 @@ function avi(n) { return (n||'?').split(' ').map(w=>w[0]||'').join('').toUpperCa
 function avHTML(p,size){
   const s=size||42, nm=(p&&p.name)||'?';
   const dim=`width:${s}px;height:${s}px;font-size:${Math.round(s*0.4)}px`;
-  const url=cleanAvatar(p&&p.avatarUrl);
+  const url=cleanAvatar(p&&p.avatarUrl,p&&p.code);
   return url
     ? `<div class="av" style="${dim};background:${avc(nm)} center/cover no-repeat url('${url}')"></div>`
     : `<div class="av" style="${dim};background:${avc(nm)};color:var(--on-accent)">${esc(avi(nm))}</div>`;
