@@ -296,8 +296,12 @@ body.resting #resumeBar{bottom:calc(118px + var(--navB));z-index:98}
 
 /* ===== Visual revamp (v0.14): periwinkle accent + depth ===== */
 /* Soft periwinkle glow washing down from the top of the canvas. */
-body{background-image:radial-gradient(130% 70% at 50% -15%,rgba(32,211,194,.13),transparent 58%);
-  background-attachment:fixed;background-repeat:no-repeat}
+/* v1.8.20: one fixed black->grey gradient (even stops, doesn't move on scroll); sticky headers are
+   translucent so no colour band shows behind titles. */
+html{background:#000}
+body{background:transparent}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(180deg,#000 0%,#26262c 100%)}
+.ph,.sticky-sub{background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
 /* Lift the main surfaces off the canvas with a soft shadow. */
 .card,.rc,.eb,.metric-card,.cw,.cur-card{box-shadow:var(--shadow)}
 /* Primary buttons get a subtle vertical gradient + accent glow. */
@@ -3812,7 +3816,7 @@ const CMP=[
   {k:'consistency', label:`${uic('barchart')} Consistency`,  all:p=>p.consistency||0, mon:p=>p.consistency||0, fmt:v=>v+'%'},
   {k:'badges',      label:`${uic('medal')} Badges`,       all:p=>p.badges||0,      mon:p=>p.badges||0,    fmt:v=>v+' '+uic('medal')},
 ];
-let cmpM='volume', cmpRange='all';   // 'all' | 'month'
+let cmpM='volume', cmpRange='month';   // 'all' | 'month' (default: this month)
 function cmpSw(k){ cmpM=k; renderLB(); }
 function cmpRangeSet(r){ cmpRange=r; renderLB(); }
 
@@ -5408,7 +5412,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.8.19';
+const BUILD = 'v1.8.20';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
