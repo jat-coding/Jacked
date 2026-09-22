@@ -939,16 +939,19 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="md">
     <div class="mh"><div class="mt">Add Friend</div><button class="cb" onclick="cm('afModal')">✕</button></div>
     <div class="invite-code">
-      <div style="font-size:11px;color:var(--muted)">Your username</div>
+      <div style="font-size:11px;color:var(--muted)">Invite a friend — send your link</div>
       <div class="code-display" id="afYourCode" style="letter-spacing:1px;font-size:24px">—</div>
-      <button class="btn bg sm wf" onclick="copyCode()" style="margin-top:4px">Copy</button>
+      <div style="font-size:11px;color:var(--muted);word-break:break-all;margin-bottom:8px" id="afLink"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn ba sm" style="flex:1" onclick="shareInvite()">Text / Share</button>
+        <button class="btn bg sm" style="flex:1" onclick="copyInvite()">Copy link</button>
+      </div>
     </div>
     <div class="fg">
-      <label>Enter Friend's Username</label>
+      <label>Or add by username</label>
       <input type="text" id="afCode" placeholder="@username" autocapitalize="none" autocorrect="off" maxlength="21" style="letter-spacing:1px;font-family:var(--fh);font-size:18px;font-weight:700">
     </div>
-    <button class="btn ba wf" onclick="doAF()" style="margin-bottom:12px">Send Request</button>
-
+    <button class="btn ba wf" onclick="doAF()" style="margin-bottom:12px">Add Friend</button>
   </div>
 </div>
 
@@ -1331,6 +1334,7 @@ function finishOnboard() {
   renderHome();
   maybeResumeAW();
   authBoot();   // signed in → daily cloud sync; otherwise ask for the password
+  setTimeout(handleInviteLink,1200);
 }
 
 // ============================================================
@@ -4320,11 +4324,43 @@ async function acceptFr(id) {
 // ============================================================
 // FRIEND SYSTEM
 // ============================================================
-function openAF() {
+// Invite link = this app's URL + ?add=<my username>. Opening it offers to add me (see handleInviteLink).
+function inviteLink(){
+  const u=((gProf()||{}).code||'').replace(/^@/,'');
+  return u ? location.origin+location.pathname.replace(/index\.html$/,'')+'?add='+encodeURIComponent(u) : '';
+}
+function openAF(prefill) {
   const p=gProf()||{code:''};
   document.getElementById('afYourCode').textContent=p.code||'—';
-  document.getElementById('afCode').value='';
+  document.getElementById('afLink').textContent=inviteLink();
+  document.getElementById('afCode').value=(typeof prefill==='string')?prefill:'';
   om('afModal');
+}
+function copyInvite(){
+  const l=inviteLink(); if(!l){ toast('No username found','err'); return; }
+  if(navigator.clipboard) navigator.clipboard.writeText(l).then(()=>toast('Invite link copied ✓','ok')).catch(()=>toast(l,'ok'));
+  else toast(l,'ok');
+}
+async function shareInvite(){
+  const l=inviteLink(); if(!l){ toast('No username found','err'); return; }
+  const text='Add me on Jacked: '+l;
+  if(navigator.share){ try{ await navigator.share({title:'Jacked',text,url:l}); return; }catch(e){ if(e&&e.name==='AbortError') return; } }
+  copyInvite();
+}
+// Capture ?add= immediately (before any reload/onboarding), strip it from the address bar.
+try{
+  const q=new URLSearchParams(location.search).get('add');
+  if(q){ const c=normU(q); if(c&&!validU(c)) localStorage.setItem('jk_pendingAdd',JSON.stringify(c));
+    history.replaceState(null,'',location.pathname); }
+}catch(_){}
+// Once the app is up, offer the pending invite: prefilled, one tap to confirm (never auto-adds).
+function handleInviteLink(){
+  let c=null; try{ c=JSON.parse(localStorage.getItem('jk_pendingAdd')||'null'); }catch(_){}
+  if(!c) return;
+  try{ localStorage.removeItem('jk_pendingAdd'); }catch(_){}
+  if(c===(gProf()||{}).code) return;
+  sp('leaderboard'); openAF(c);
+  toast('Tap Add Friend to connect with '+c,'ok');
 }
 
 async function doAF() {
