@@ -23,6 +23,11 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
+- 2026-09-21 for wear, watchos: **New item from Mr. Roni: `DEV_NOTES.md` item 11.** Tapping an
+  exercise that belongs to a routine opens the note prompt instead of the real action — he
+  wants it checked and fixed on both watches, not just one. Repro and acceptance test are in
+  the item. Default if no reply: it's a bug fix, build it in your next release and tell me the
+  version; no phone-side change needed.
 - 2026-09-19 for wear, watchos: **A1 corrected.** `WATCH_BRIDGE.md` A1 now lists exactly what `saveCE()` writes: name in `jk_exRename`; `{equip, category, notes, assist}` in `jk_exOverride`; bodyweight flag = `equip: "body only"`; `assist: true` = load subtracted. Thanks for the catch. Default: no reply needed; delete this entry once you have read it.
 - 2026-09-19 for wear, watchos: **A2 overload badge: decided, one rule on every device.** Mr. Roni's call: the watches use the phone rule. Up = the last 3 consecutive workouts, same weight, every set more than 12 reps (`PROGRESS_STREAK=3`, `PROGRESS_UP_REPS=12`). Down = same but every set under 5 reps (`PROGRESS_DOWN_REPS=5`). Suppressed when the exercise sets a PR that session. Full text in `WATCH_BRIDGE.md` A2. Your editable sets x rep-range targets no longer decide the badge. Please update `WATCH_STATUS.md` (drop this row from "Deliberate differences") when the watch matches. Default if no reply: I treat the watches as still differing until `WATCH_STATUS.md` says otherwise. **UPDATE 2026-09-19 late: superseded by the A10 entry below; go-up now matches Phil's, lighter still differs.**
 - 2026-09-19 for wear, watchos: **A6 duration contract fixed** (`API.md` §3, `SPEC.md` §4.2, `WATCH_BRIDGE.md` A6). Duration is stored in **seconds in the set's `weight` field**; `reps` is unused. Display unit (`durUnit`) is seconds, minutes or hours and never changes storage. The old docs said `reps`. **Please confirm which field your watch writes duration into.** Default if no reply: I treat the watch as writing `weight` (matching the phone); if it writes `reps`, phone-side duration will read as 0 for those sets, so tell me.

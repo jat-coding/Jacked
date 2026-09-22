@@ -232,5 +232,28 @@ Source: Mr. Roni, 2026-09-20 6:07pm MDT (first asked 6:01pm as "Done", renamed a
 checked and exercise 3 opens. On the last exercise, Lock in lands on the full list. The button appears nowhere
 else, and set checking outside it behaves as before.
 
+## 11. Tapping an exercise in a routine opens the note prompt instead — OPEN
+Source: Mr. Roni, 2026-09-21 6:58pm MDT.
+
+**Where:** a routine, on the watch — before a workout starts (routines are read-only on the
+watch per `WATCH_STATUS.md`) and, if it reproduces there too, in the workout list/focus view
+after starting a workout from a routine.
+
+**Observed (his words):** "it keeps prompting the notes section when trying to click anything
+on the exercise in a routine." Wants it fixed everywhere — both watches, not just one.
+
+**Required behavior:**
+1. Tapping an exercise that belongs to a routine must not open the note editor/prompt. It
+   should do whatever that screen's real action is (view the exercise, or nothing, since
+   routine editing is read-only on the watch) — not fall through to notes.
+2. Check every place a routine's exercises are tappable: the Routines list itself, and the
+   workout list / focus view (item 5) when the workout was started from a routine.
+3. Do not guess the cause. Reproduce on the emulator first (open a routine, tap an exercise),
+   then find where that tap is wired to the note prompt instead of the expected handler.
+
+**Acceptance test:** open a routine, tap each exercise in it — no note prompt appears, each
+tap does its real, correct action. Start a workout from that routine and tap an exercise in
+the resulting list/focus view — same result.
+
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
