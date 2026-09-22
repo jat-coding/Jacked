@@ -1966,13 +1966,27 @@ async function startCuratedRoutine(pi,ri){
   const prog=CURATED[pi]; if(!prog) return;
   const rt=prog.routines[ri]; if(!rt) return;
   const tag=prog.name+' · '+prog.source;
+  // If the user already explicitly added this program (Library → "+ Add to Routines"),
+  // start their own saved copy so it behaves like any other routine (updates, reorders,
+  // shows in the Routines tab as theirs). Otherwise run it ad hoc: tapping "Start" on a
+  // suggestion is not the user adding a routine, so nothing is written to jk_routines here
+  // (Mr. Roni, 2026-09-22 — no routine gets added without the user's own input). They can
+  // still choose "Save as a new routine…" on the finish summary if they want to keep it.
   const existing=gR().find(r=>r.name===rt.name && r.desc===tag);
   if(existing){ startRW(existing.id); return; }
   if(!dbLoaded) { toast('Loading exercises…'); await loadDB(); }
   const ids=rt.exercises.map(resolveExercise).filter(Boolean);
-  const id='r'+Date.now();
-  const rs=gR(); rs.push({id,name:rt.name,desc:tag,exercises:ids}); S.s('routines',rs);
-  startRW(id);
+  cm('qsModal'); cm('crModal');
+  awStart=Date.now();
+  aw={
+    id:'w'+Date.now(), routineId:null, name:rt.name, date:new Date().toISOString(),
+    exercises:ids.map(id=>{
+      const ex=byId(id);
+      return {exId:id, name:ex.name, muscle:ex.muscle||'', equip:ex.equip||'', assist:ex.assist||false, tracking:ex.tracking||'weight_reps', imgUrl:imgUrl(ex)||null,
+        sets:seedSets(id)};
+    })
+  };
+  beginW();
 }
 
 // ============================================================
@@ -3404,15 +3418,20 @@ function saveWE(){
   toast('Workout updated ✓','ok'); weId=null; weDraft=null;
 }
 
-// Turn a logged workout into a reusable routine.
+// Turn a logged workout into a reusable routine. Asks for (or confirms) a name first —
+// never silently saves under whatever the workout happened to be auto-named.
 function saveWorkoutAsRoutine(id){
   const w=gH().find(h=>h.id===id); if(!w) return;
   const ids=[...new Set((w.exercises||[]).map(e=>e.exId).filter(x=>x&&x!=='?'))];
   if(!ids.length){ toast('No exercises to save','err'); return; }
-  const rs=gR();
-  rs.push({id:'r'+Date.now(), name:w.name||'Saved Workout', desc:'Saved from '+fmtD(w.date), exercises:ids});
-  S.s('routines',rs);
-  cm('wdModal'); toast('Saved as routine ✓','ok');
+  showConfirm('Name this routine:',{isPrompt:true,defaultValue:w.name||''}).then(nm=>{
+    if(nm==null) return;
+    const name=nm.trim()||'Saved Workout';
+    const rs=gR();
+    rs.push({id:'r'+Date.now(), name, desc:'Saved from '+fmtD(w.date), exercises:ids});
+    S.s('routines',rs);
+    cm('wdModal'); toast('Saved as routine ✓','ok');
+  });
 }
 
 // ============================================================
@@ -5582,7 +5601,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.9.0';
+const BUILD = 'v1.9.1';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

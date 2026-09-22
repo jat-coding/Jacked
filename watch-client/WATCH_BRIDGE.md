@@ -55,6 +55,26 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ## APP-WIDE (watch must mirror)
 
+### A12. Routines never get added without an explicit "add" from the user — build v1.9.1
+Bug report 2026-09-22: a user opened Jacked and found a routine ("Dip Machine Day") in their
+Routines list they never chose to add. Root cause found in `jacked-pwa/index.html`:
+- `startCuratedRoutine()` (the Home "Trusted pick of the day" card's Start button) wrote a new
+  entry into `jk_routines` on every tap, before starting the workout, with no confirmation and
+  no visible "added" moment. Tapping Start to try a suggestion is not the user adding a routine.
+- `saveWorkoutAsRoutine()` (a past workout's "Save as routine" button) saved instantly using the
+  workout's own name verbatim, including an auto-generated name like "Dip Machine Day" from
+  `autoNameWorkout()` (the exercise with the day's highest e1RM + " Day") -- one tap, no naming
+  step, no way to see what was about to be saved.
+Fixed: `startCuratedRoutine` now runs the suggested workout ad hoc (nothing written to
+`jk_routines`) unless the user already explicitly added that program via Library's
+"+ Add to Routines" (`addCurated()`, unchanged, still the only silent-free path that persists a
+curated program). `saveWorkoutAsRoutine` now prompts for a name first (same pattern as
+`saveAsNewRoutine`), pre-filled with the workout's name so the user sees and can change it.
+**Rule for any future save-a-routine code path (Mr. Roni, 2026-09-22): no routine is added to a
+user's Routines without their own explicit input.** Watch relevance: ask wear/watchos whether
+their own curated-program or workout-save flows write to `jk_routines` without an equivalent
+explicit step -- flagged on the board.
+
 ### A11. Achievements: 1000lb Club renamed, Cardio-Maxing resets quarterly, full-screen detail — build v1.8.19
 - **Rename:** the badge `1000lb Club-Maxing` is now `1000lb Club` (the `-Maxing` suffix is dropped for it only).
   The name string is what goes into a profile's `badgeList` (friends' view), so older stored lists still say
