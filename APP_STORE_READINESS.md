@@ -40,10 +40,28 @@ auth lands. See "Changes since v1.2" at the bottom.
 | 18 | Push notifications | 🟢 Wanted | M | Native entitlement; helps #4. |
 | 19 | Offline support | 🟢 Wanted | S | Mostly there via `sw.js`. Blocked by #3. |
 | 20 | Exercise DB licence | ✅ Clear | — | free-exercise-db is Unlicense/public domain. Data + images fine to ship. |
+| 21 | **Password-reset email** | 🟢 Wanted | S | Tabled 2026-09-21 (Mr. Roni: set up when we build the real app). See detail below. |
 
 Effort: XS < S < M < L.
 
 ---
+
+## 21 — Password-reset email (tabled)
+
+Mr. Roni asked 2026-09-21 whether he could make an email address for this himself; answer below
+is recorded so it's not re-derived. **Real blocker, not a config step:** signup fabricates
+`{uuid}@users.jacked.example.com` (`supabase/functions/jacked-auth/logic.ts`) and never asks for a
+real email, so there's no address to send a reset link to yet. This has to be built (collect and
+verify a real email per account) before any reset email can work — it isn't just "add an email".
+
+Once that exists, sending is simple: a "noreply@" address needs no inbox, just a domain +
+verification with a transactional-email service (Resend, Postmark, SendGrid) via DNS records,
+then either Supabase's built-in `resetPasswordForEmail` (point its SMTP settings at the service)
+or a custom email from the `jacked-auth` function for full control of the wording. No domain is
+owned for Jacked yet; register one when this is picked up (`jackedapp.com` or similar).
+
+Sequence with #1/#2 (real auth/RLS): do the email-collection + verification step as part of that
+work, not before it, since it's the same "give accounts a real identity" effort.
 
 ## Detail on the blockers
 
