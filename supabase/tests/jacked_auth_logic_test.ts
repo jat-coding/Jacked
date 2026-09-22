@@ -23,8 +23,11 @@ const PW = "hunter2hunter2";
   eq(r.status, "ok", "matching proof claims (username normalised)");
   eq(typeof (r as {email?: string}).email, "string", "email returned");
   eq((await register(s, { code: "@mom", password: PW, proofIds: ["w1"] })).status, "already_claimed", "second claim refused"); }
-{ const s = fake({ "@empty": null }, {});
-  eq((await register(s, { code: "@empty", password: PW })).status, "ok", "empty-history account claimable without proof"); }
+{ // codes/stats are public, so a no-history profile has nothing to prove
+  // against — must fail closed, not hand it to whoever asks first.
+  const s = fake({ "@empty": null }, {});
+  eq((await register(s, { code: "@empty", password: PW })).status, "proof_failed", "empty-history account NOT claimable without proof");
+  eq(s.users.size, 0, "no auth user created for empty-history claim without proof"); }
 { const s = fake({}, {});
   eq((await register(s, { code: "@newbie", password: PW, name: "New" })).status, "ok", "new username signup");
   eq((await register(s, { code: "@newbie", password: PW })).status, "already_claimed", "taken new username"); }
@@ -33,9 +36,9 @@ const PW = "hunter2hunter2";
   eq((await register(s, { code: "@abc", password: "short" })).status, "weak_password", "short password");
   eq((await register(s, { code: "@abc", password: 12345678 })).status, "weak_password", "non-string password"); }
 { // race: profile claimed between check and claim → auth user rolled back
-  const s = fake({ "@race": null }, {});
+  const s = fake({ "@race": null }, { "@race": ["w1"] });
   const orig = s.claimProfile; s.claimProfile = async (c, u) => { await orig("@race", "other"); return orig(c, u); };
-  eq((await register(s, { code: "@race", password: PW })).status, "already_claimed", "race loser told already_claimed");
+  eq((await register(s, { code: "@race", password: PW, proofIds: ["w1"] })).status, "already_claimed", "race loser told already_claimed");
   eq(s.users.size, 0, "race loser's auth user deleted"); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS");
 if (fails) Deno.exit(1);

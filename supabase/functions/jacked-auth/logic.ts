@@ -18,8 +18,15 @@ export function normU(s: unknown): string {
 
 // Sets the password for a username: creates the account if the username is free,
 // or claims an existing password-less profile. Claiming a profile that already
-// has cloud workouts requires proof the caller holds that account's data (at
-// least one matching workout id) — knowing the username alone is not enough.
+// exists always requires proof the caller holds that account's data (at least
+// one matching workout id) — knowing the username alone is not enough.
+//
+// profiles.code/name/stats are public (leaderboard), so a bare username is
+// guessable/enumerable by anyone with the anon key. A profile with zero cloud
+// workout history has nothing to prove against, so it fails closed rather than
+// (as before) letting whoever asks first claim it — that let an attacker who
+// only knew a public code hijack any never-synced account. A genuine owner of
+// a no-history local account needs manual reconciliation, not self-serve claim.
 export async function register(store: Store, body: RegisterBody) {
   const code = normU(body.code);
   if (!/^@[a-z0-9_]{3,20}$/.test(code)) return { status: "invalid_username" };
@@ -31,11 +38,9 @@ export async function register(store: Store, body: RegisterBody) {
 
   if (prof) {
     const cloudIds = await store.getBackupHistIds(code);
-    if (cloudIds.length) {
-      const proof = Array.isArray(body.proofIds) ? body.proofIds.slice(0, 5000).map(String) : [];
-      const have = new Set(proof);
-      if (!cloudIds.some((id) => have.has(id))) return { status: "proof_failed" };
-    }
+    const proof = Array.isArray(body.proofIds) ? body.proofIds.slice(0, 5000).map(String) : [];
+    const have = new Set(proof);
+    if (!cloudIds.length || !cloudIds.some((id) => have.has(id))) return { status: "proof_failed" };
   }
 
   // Never mailed: login resolves username → email via account_status().
