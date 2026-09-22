@@ -4064,13 +4064,14 @@ function lbRow(p,opts={}){
 function miniCal(daysSet, friendCode){
   const now=new Date(), y=now.getFullYear(), m=now.getMonth();
   const fd=new Date(y,m,1).getDay(), dim=new Date(y,m+1,0).getDate();
+  const todayStr=dayKey(now);
   let g=['S','M','T','W','T','F','S'].map(d=>`<div class="cdl">${d}</div>`).join('');
   for(let i=0;i<fd;i++) g+='<div class="cd"></div>';
   for(let d=1;d<=dim;d++){
     const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const worked=daysSet.has(ds);
+    const worked=daysSet.has(ds), isToday=ds===todayStr;
     const clk=(worked&&friendCode)?` style="cursor:pointer" onclick="openFriendDay('${friendCode}','${ds}')"`:'';
-    g+=`<div class="cd ${worked?'worked':''}"${clk}>${d}</div>`;
+    g+=`<div class="cd ${worked?'worked':''}${isToday?' today':''}"${clk}>${d}</div>`;
   }
   return `<div class="cw"><div class="cm-label" style="margin-bottom:8px;font-size:16px">${MONTHS[m]} ${y}</div><div class="cg">${g}</div></div>`;
 }
