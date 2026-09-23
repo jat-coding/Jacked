@@ -26,14 +26,9 @@ Same shapes `logWeight()` writes (`index.html` ~line 1258), nothing new:
 
 Rules on the companion side:
 
-1. **One entry per day.** Health Connect `WeightRecord`s are grouped by the user's local
-   date; the **most recent reading of that day** is the day's value. *(Default — Phil may
-   prefer "first reading", i.e. the morning weigh-in.)*
-2. **A manual entry always wins.** The companion **only adds dates that are not already in
-   `jk_bwlog`**; it never changes an existing date. So a weight typed into Jacked that day
-   beats the import.
-3. **Backfill once, then incremental:** first run imports the last 90 days; later runs read
-   only records newer than the last imported timestamp (kept on the phone).
+1. **Current weight only** (Phil, 2026-09-23: Jacked uses body weight only for bodyweight-based exercises, so only the current value matters). Each run reads the **most recent** Health Connect `WeightRecord`; the most recent reading counts for its day. **No history backfill.**
+2. **One log entry, for that reading's day:** if `jk_bwlog` has no entry for that date the companion adds it; if it has one, the companion replaces it (most recent counts). It only writes when the reading is newer than the last one it imported (timestamp kept on the phone), so an old reading never overwrites a newer manual entry.
+3. `jk_bw` = the `kg` of the latest-dated `jk_bwlog` entry after the write.
 4. **Write safely:** the same read–merge–write with the `updated_at` compare-and-swap the
    watches use; on a CAS miss, re-read and retry. No other key is touched.
 5. **Opt-in switch** in the companion ("Import body weight from Samsung Health"), with the
@@ -65,13 +60,11 @@ requires.
 ## Test plan
 
 On the scratch account `@watchdev` only: seed a `jk_bwlog` with a manual entry for today,
-run the companion import with Health Connect weights for today and the previous 3 days →
-expect 3 added dates, today's manual value untouched, `jk_bw` = today's manual value. Then
-have the phone back up → the 3 imported dates survive (proves the merge rule). Repeat with
+give Health Connect a newer reading for today → expect today's entry replaced by it and `jk_bw` = it; give it a reading for a later day → expect a new entry and `jk_bw` = it. Then have the phone back up → the imported entry survives (proves the merge rule). Repeat with
 the phone offline during the import.
 
 ## Decisions wanted
 
 - **Mr. Roni:** the `jk_bwlog` union + derived `jk_bw` rule in `mergeBackup()` — yes/no, and
   the phone build it will ship in. Default if no reply: nothing is built; this stays a proposal.
-- **Phil:** most-recent vs first reading of the day; 90-day backfill; switch default on or off.
+- **Phil (decided 2026-09-23):** current weight only, no backfill; the most recent reading counts for the day. Still open: switch default on or off.
