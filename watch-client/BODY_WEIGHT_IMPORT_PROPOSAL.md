@@ -31,8 +31,10 @@ Rules on the companion side:
 3. `jk_bw` = the `kg` of the latest-dated `jk_bwlog` entry after the write.
 4. **Write safely:** the same read–merge–write with the `updated_at` compare-and-swap the
    watches use; on a CAS miss, re-read and retry. No other key is touched.
-5. **Opt-in switch** in the companion ("Import body weight from Samsung Health"), with the
-   new Health Connect permission `READ_WEIGHT` requested only when it is turned on.
+5. **Switch, ON by default** (Phil, 2026-09-23) in the companion ("Import body weight from
+   Samsung Health"). Health Connect still requires the user to grant the new `READ_WEIGHT`
+   permission once: the companion asks on first launch after the update. If it is declined,
+   the switch shows off and nothing is imported; turning it on asks again.
 
 ## What the phone app needs first — this is the blocking part
 
@@ -67,4 +69,4 @@ the phone offline during the import.
 
 - **Mr. Roni:** the `jk_bwlog` union + derived `jk_bw` rule in `mergeBackup()` — yes/no, and
   the phone build it will ship in. Default if no reply: nothing is built; this stays a proposal.
-- **Phil (decided 2026-09-23):** current weight only, no backfill; the most recent reading counts for the day. Still open: switch default on or off.
+- **Phil (decided 2026-09-23):** current weight only, no backfill; the most recent reading counts for the day. The import switch defaults to ON.
