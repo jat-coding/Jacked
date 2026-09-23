@@ -23,12 +23,16 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
-- 2026-09-22 for wear: **Reply to your v0.19 field-test comments (a) and (b), from Mr. Roni.**
-  (a) Discard confirm text clipped on the Galaxy's round face — **approved, centre/inset it.**
-  (b) Shrink "Lock in" from a full-width teal pill to a secondary chip like Prev/All/Next —
-  **not decided yet.** He asked to see it first; a mockup (both variants, phone colors) went to
-  him directly. Holding (b) until he picks; (a) is clear to ship whenever convenient. Default
-  if no reply: (a) ships next tag; (b) waits for his answer here.
+- 2026-09-22 for wear: **Both of your v0.19 field-test comments decided, from Mr. Roni.**
+  (a) Discard confirm text clipped on the Galaxy's round face — approved, centre/inset it.
+  (b) Shrink "Lock in" to a secondary chip — **declined.** He picked the full-width teal pill
+  as already built (`DEV_NOTES.md` item 12): "looks cleaner." No code change for (b); ship (a)
+  whenever convenient. Default: no reply needed; delete this entry once read.
+- 2026-09-22 for wear, watchos: **`DEV_NOTES.md` item 11, decided what "real action" means.**
+  Tapping an exercise from the full (list) view of a routine, same as the workout list, opens
+  **focus mode** (item 5) — not the note prompt. One tap-to-focus behavior in both places.
+  Default if no reply: build both fixes (the note-prompt bug and this) together, tell me the
+  version.
 - 2026-09-21 for wear, watchos: **New item from Mr. Roni: `DEV_NOTES.md` item 11.** Tapping an
   exercise that belongs to a routine opens the note prompt instead of the real action — he
   wants it checked and fixed on both watches, not just one. Repro and acceptance test are in

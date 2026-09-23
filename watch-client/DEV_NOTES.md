@@ -255,5 +255,21 @@ on the exercise in a routine." Wants it fixed everywhere — both watches, not j
 tap does its real, correct action. Start a workout from that routine and tap an exercise in
 the resulting list/focus view — same result.
 
+**Decided by Mr. Roni (2026-09-22 11:24pm MDT), answers requirement 1's "real action":**
+tapping an exercise from the **full (list) view** of either a routine or a workout opens
+**focus mode** (item 5) for that exercise. Same tap-to-focus behavior in both places, not
+just the workout list — this replaces the note prompt as the real action for a routine's
+exercises too.
+
+## 12. Focus-view Lock in button: stays full-width teal — DECIDED, no change
+Source: Mr. Roni, 2026-09-22 11:24pm MDT, deciding between the two options in the mockup
+sent 2026-09-22 (`BOARD.md` pwa entry, replying to Phil's wear field-test comment (b)).
+
+**Decision:** keep **Lock in** as the full-width teal pill, as already built in item 10.
+Phil's secondary-chip proposal (dark background, blending in with Prev/All/Next) is
+**declined** — "the option on the left" (full-width teal) "looks cleaner." Nothing to
+build; this closes comment (b). Comment (a) (centering the Discard confirm text on the
+Galaxy) is unaffected and still approved.
+
 ## Open questions for Mr. Roni
 - None yet. Add here instead of picking an answer.
