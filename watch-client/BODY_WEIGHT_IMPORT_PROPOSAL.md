@@ -41,8 +41,8 @@ Rules on the companion side:
 would put its own older `jk_bwlog` back and **silently erase them** — the same failure that
 erased watch notes until v1.8.11 (`SYNC_PLAYBOOK.md` §2). So, before the companion ships:
 
-- **`jk_bwlog`: union by `d`.** On a date both sides have, **local (phone) wins** — that
-  keeps "a manual entry always wins" true on the phone side as well.
+- **`jk_bwlog`: union by `d`.** On a date both sides have, **local (phone) wins** — a weight
+  typed on the phone that day after the import stays. (Rare: Phil weighs in on Samsung Health.)
 - **`jk_bw`: derived, not merged** — after the `jk_bwlog` union, `jk_bw` = `kg` of the
   latest-dated entry. (If `jk_bwlog` is empty on both sides, keep today's local-wins value.)
 - Add both to `SYNC_PLAYBOOK.md` §2's list of per-element merge rules.
