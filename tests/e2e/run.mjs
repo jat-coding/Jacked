@@ -235,6 +235,8 @@ async function jacked() {
     await page.waitForTimeout(200);
     const crowned = await page.evaluate(() => [...crownCodes()]);
     check('crown: last month top lifter (Bob, 50000) wears it', crowned.length === 1 && crowned[0] === '@bob', JSON.stringify(crowned));
+    const sub = await page.evaluate(() => [...crownCodes([yourStats(), { code: '@amy', pmVol: 20000 }])]);
+    check('crown: a board crowns its own top lifter (Amy wins a board without Bob)', sub.length === 1 && sub[0] === '@amy', JSON.stringify(sub));
     const rows = await page.locator('#page-leaderboard .gilded').count();
     check('crown: gilded row + crown icon on that name only', rows >= 1 && (await page.locator('#page-leaderboard .gilded svg').count()) >= 1 && (await page.locator('#page-leaderboard .gilded', { hasText: 'Amy' }).count()) === 0, String(rows));
     await page.screenshot({ path: SHOTS + '/crown.png' });
