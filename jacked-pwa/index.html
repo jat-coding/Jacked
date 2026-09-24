@@ -3889,7 +3889,7 @@ const BADGE_HOW={
   'PR-Maxing':'Hit at least one personal record on 7 days in a row. Only the last 3 months count.',
   'Consistency-Maxing':'Finish at least one workout on 7 days in a row. Only the last 3 months count.',
   'Coward-Maxing':'Given after 7+ days off in a row this month. Resets monthly — train consistently this month to clear it.',
-  'Jacked':'Earn every badge in the Monthly reset and 3-month reset groups, with the six lift and cardio badges at Gold. Permanent badges are not needed. Locked while you hold Coward-Maxing.',
+  'Jacked':'Earn every badge in the Monthly reset and 3-month reset groups, with every tiered badge at Gold. Permanent badges are not needed. Locked while you hold Coward-Maxing.',
   'Pull-up-Maxing':'Most reps in a single pull-up/chin-up set. Bronze 10, Silver 15, Gold 20.',
   'Push-up-Maxing':'Most reps in a single push-up set (one exercise, not summed). Bronze 30, Silver 50, Gold 80.',
   'Cardio-Maxing':'Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze 9:00, Silver 8:00, Gold 6:30 per mile. Only runs from the last 3 months count.',
@@ -3914,7 +3914,7 @@ const BADGE_DETAIL={
   'PR-Maxing':{how:'Hit at least one personal record on 7 days in a row.',note:'Resets every 3 months. Only the last 3 months count.'},
   'Consistency-Maxing':{how:'Finish at least one workout on 7 calendar days in a row. Two workouts on the same day still count as one day.',note:'Resets every 3 months. Only the last 3 months count.'},
   'Coward-Maxing':{how:'Given after 7+ days off in a row this month. Holding it locks the Jacked badge.',note:'Resets monthly. Only days off in the current month count, and the badge starts fresh on the 1st.'},
-  'Jacked':{how:'Earn every badge in the Monthly reset group and every badge in the 3-month reset group, with the six lift and cardio badges at Gold. The Permanent badges are not needed. You also cannot have Coward-Maxing: while you hold it, Jacked stays locked.',note:'Checked every month. If a 3-month badge falls below Gold (no Gold-level result in the last 3 months) or a monthly badge is not earned yet this month, Jacked is lost until you get it back.'}
+  'Jacked':{how:'Earn every badge in the Monthly reset group and every badge in the 3-month reset group, with every tiered badge at Gold. The Permanent badges are not needed. You also cannot have Coward-Maxing: while you hold it, Jacked stays locked.',note:'Checked every month. If a 3-month badge falls below Gold (no Gold-level result in the last 3 months) or a monthly badge is not earned yet this month, Jacked is lost until you get it back.'}
 };
 function badgeInfo(name){
   const b=computeBadges().find(x=>x.name===name); if(!b) return;
@@ -3938,7 +3938,7 @@ function badgeInfo(name){
     ${tiers}${secs}${allT}${ever}${teaser}${note}`;
   _badgeOpen=b;
   const sb=document.getElementById('badgeStartBtn'), plan=badgePlan(b);
-  sb.textContent=(aw&&!plan.page)?(plan.ids.length?'Add to my current workout':'Back to my workout'):plan.label; sb.style.display='';
+  sb.textContent=(aw&&!plan.page)?(plan.ids.length?'Add to my current workout':'Back to my workout'):plan.label; sb.style.display=plan.none?'none':'';
   document.getElementById('badgeFull').classList.add('open');
   document.getElementById('badgeFull').scrollTop=0;
 }
@@ -3976,7 +3976,7 @@ function badgePlan(b){
       if(!ids.length) ids=allEx().filter(e=>muscleGroup(e.muscle)===g&&/barbell|dumbbell/i.test(e.equip||'')).slice(0,3).map(e=>e.id);
       return ex(`Train ${MGNAME[g]||'it'} now`,`${MGNAME[g]||'Challenge'} day`,...ids);
     }
-    default: return ex('Start a workout','Workout');
+    default: return {none:true,ids:[]};   // no specific workout for this badge: the popup hides the button (Mr. Roni, 2026-09-24)
   }
 }
 async function badgeStart(){
@@ -6259,7 +6259,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.19';
+const BUILD = 'v1.10.20';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
