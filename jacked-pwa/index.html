@@ -134,6 +134,11 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 /* Every section/card gets a gold outline (outline follows the radius and adds no layout shift). */
 :root[data-jacked] :is(.sec,.metric-card,.cw,.card,.card-dark,.eb,.wstats,.rc){outline:1.5px solid rgba(255,215,0,.5);outline-offset:-1.5px}
 :root[data-jacked] .sec .rc{outline:none}
+/* The bottom tab pill goes gold too: gold outline, gold selected tab and sliding highlight. */
+:root[data-jacked] nav{border-color:rgba(255,215,0,.5)}
+:root[data-jacked] .nb.active{color:#ffd700}
+:root[data-jacked] .nb.active svg{filter:drop-shadow(0 0 9px rgba(255,215,0,.7))}
+:root[data-jacked] #navInd{background:rgba(255,215,0,.16);box-shadow:inset 0 0 0 1px rgba(255,215,0,.5)}
 @keyframes ptSweep{0%,45%{background-position:100% 0}100%{background-position:0 0}}
 @media (prefers-reduced-motion:reduce){.jh *,.jh::after,:root[data-jacked] .pt,:root[data-jacked] body::before{animation:none!important}}
 #recapCard{cursor:pointer;padding:16px;margin-bottom:20px}
@@ -6168,7 +6173,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.15';
+const BUILD = 'v1.10.16';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

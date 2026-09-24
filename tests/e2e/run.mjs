@@ -364,7 +364,10 @@ async function monthly() {
     await t.page.evaluate(() => { renderHome(); sp('metrics'); });
     const off = await t.page.evaluate(() => ({ attr: document.documentElement.hasAttribute('data-jacked'), anim: getComputedStyle(document.querySelector('#page-metrics .pt')).animationName }));
     check('gold titles: no Jacked -> plain titles', !off.attr && off.anim === 'none', JSON.stringify(off));
-    check('glow: nothing without Jacked', await t.page.evaluate(() => getComputedStyle(document.body, '::before').position !== 'fixed' && getComputedStyle(document.querySelector('#page-metrics .sec, #page-metrics .metric-card')).outlineStyle === 'none'));
+    await page.waitForTimeout(450);   // let the .2s colour transition finish
+    const nv = await page.evaluate(() => { const n = document.querySelector('nav'), ac = document.querySelector('nav .nb.active'); return [getComputedStyle(n).borderTopColor, getComputedStyle(ac).color, getComputedStyle(document.getElementById('navInd')).backgroundColor]; });
+    check('nav: pill outline, selected tab and highlight are gold with Jacked', /255, 215, 0/.test(nv[0]) && nv[1] === 'rgb(255, 215, 0)' && /255, 215, 0/.test(nv[2]), JSON.stringify(nv));
+    check('glow: nothing without Jacked', await t.page.evaluate(() => getComputedStyle(document.querySelector('nav .nb.active')).color !== 'rgb(255, 215, 0)' && getComputedStyle(document.body, '::before').position !== 'fixed' && getComputedStyle(document.querySelector('#page-metrics .sec, #page-metrics .metric-card')).outlineStyle === 'none'));
     await page.evaluate(() => { S.s('hist', gH().filter(w => !(w.exercises || []).some(e => /pull/i.test(e.name)))); renderHome(); });
     check('gold titles: losing Jacked removes it', await page.evaluate(() => !document.documentElement.hasAttribute('data-jacked') && getComputedStyle(document.querySelector('#page-metrics .pt')).animationName === 'none'));
     await ctx.close(); await t.ctx.close();
