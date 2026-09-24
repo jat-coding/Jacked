@@ -128,13 +128,12 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 /* While Jacked is held, every tab title is shimmering gold: a bright glint sweeps across gold letters. */
 :root[data-jacked] .pt{background:linear-gradient(105deg,#c99700 0%,#ffd700 36%,#fff6c2 50%,#ffd700 64%,#c99700 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:ptSweep 3.6s ease-in-out infinite;filter:drop-shadow(0 0 6px rgba(255,215,0,.35))}
 :root[data-jacked] .pt span{text-shadow:none}   /* the dot after JACKED joins the gold */
-/* Gold glow from the screen edges plus a gilded frame while Jacked is held (data-jframe=glow drops the frame). */
-:root[data-jacked] body::before{content:'';position:fixed;inset:0;z-index:9989;pointer-events:none;box-shadow:inset 0 0 38px 6px rgba(255,215,0,.42),inset 0 0 90px 10px rgba(255,180,0,.16);animation:jGlow 4.5s ease-in-out infinite}
-@keyframes jGlow{0%,100%{opacity:.7}50%{opacity:1}}
-:root[data-jacked]:not([data-jframe=glow]) body::after{content:'';position:fixed;inset:0;z-index:9990;pointer-events:none;padding:3px;box-sizing:border-box;
-  background:linear-gradient(135deg,#fff6c2,#ffd700 22%,#b8860b 45%,#ffe680 65%,#c99700 85%,#fff6c2);
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
-  box-shadow:inset 0 0 16px rgba(255,215,0,.35)}
+/* While Jacked is held: a soft gold glow from the screen edges (Mr. Roni's pick, toned down). */
+:root[data-jacked] body::before{content:'';position:fixed;inset:0;z-index:9989;pointer-events:none;box-shadow:inset 0 0 26px 1px rgba(255,215,0,.26),inset 0 0 64px 4px rgba(255,180,0,.09);animation:jGlow 4.5s ease-in-out infinite}
+@keyframes jGlow{0%,100%{opacity:.6}50%{opacity:.95}}
+/* Every section/card gets a gold outline (outline follows the radius and adds no layout shift). */
+:root[data-jacked] :is(.sec,.metric-card,.cw,.card,.card-dark,.eb,.wstats,.rc){outline:1.5px solid rgba(255,215,0,.5);outline-offset:-1.5px}
+:root[data-jacked] .sec .rc{outline:none}
 @keyframes ptSweep{0%,45%{background-position:100% 0}100%{background-position:0 0}}
 @media (prefers-reduced-motion:reduce){.jh *,.jh::after,:root[data-jacked] .pt,:root[data-jacked] body::before{animation:none!important}}
 #recapCard{cursor:pointer;padding:16px;margin-bottom:20px}
@@ -6169,7 +6168,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.14';
+const BUILD = 'v1.10.15';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
