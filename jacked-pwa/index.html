@@ -110,6 +110,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .rc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .rc-b{border:1px solid var(--border2);border-radius:12px;padding:8px 4px;text-align:center;background:var(--bg2);min-width:0}
 .rc-b .n{font-weight:800;font-size:13px;margin-top:3px}.rc-b .t{font-size:10px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;margin-top:1px}.rc-b .c{font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-height:700px){.rc-tile{padding:6px 12px}.rc-tile .v{font-size:20px}.rc-row{padding:6px 11px;margin-bottom:4px}.rc-b{padding:6px 4px}.rc-b .n{margin-top:1px}.rc-chips{margin:0 0 6px}}
 @media (min-height:780px){.rc-tile{padding:14px 14px}.rc-tile .v{font-size:30px}.rc-row{padding:13px 12px;margin-bottom:9px}.rc-tiles,.rc-grid{gap:10px}.rc-b{padding:16px 4px}.rc-b .n{font-size:15px;margin-top:6px}.rc-b .c{font-size:12px}.rc-chips{margin:6px 0 12px}}
 #recapFullBody{display:flex;flex-direction:column;justify-content:center}
 #recapFull{overflow-y:auto;padding-top:calc(10px + var(--sat));padding-bottom:calc(10px + var(--sab))}
@@ -3810,7 +3811,7 @@ function computeBadges() {
     const prevHits=inMonth(mAt(-1)).filter(w=>grpOf(w).has(group)).length;
     mb[curYM]={group,target:Math.min(10,Math.max(4,prevHits+2))}; mbDirty=true;
   }
-  const ch=mb[curYM], chCnt=inMonth(mAt(0)).filter(w=>grpOf(w).has(ch.group)).length, chDone=chCnt>=ch.target;
+  const ch=mb[curYM], chCnt=inMonth(mAt(0)).filter(w=>grpOf(w).has(ch.group)).length, chDone=chCnt>=ch.target||!!ch.done;   // once done this month it stays done
   if(chDone&&!ch.done){ ch.done=true; mbDirty=true; }
   if(comeback&&!ch.comeback){ ch.comeback=true; mbDirty=true; }
   const chWins=Object.keys(mb).filter(k=>mb[k]&&mb[k].done).length;
@@ -3840,7 +3841,7 @@ function computeBadges() {
     {icon:'dumbbell',color:MCOL[ch.group]||'var(--accent)',name:'Challenge-Maxing',monthly:true,earned:chDone,group:ch.group,
       desc:`${MGNAME[ch.group]} ${Math.min(chCnt,ch.target)} / ${ch.target}`,
       detail:`Train ${MGNAME[ch.group]} in ${ch.target} different workouts this month. ${chCnt} so far.`+(chWins?` Completed ${chWins} month${chWins!==1?'s':''} so far.`:'')},
-    {icon:'arrowUp',color:'var(--green)',name:'Comeback-Maxing',monthly:true,earned:comeback,
+    {icon:'arrowUp',color:'var(--green)',name:'Comeback-Maxing',monthly:true,earned:comeback||!!ch.comeback,
       desc:`${dCur} of ${dimCur} days trained · ${nCur} sessions vs ${nLast} last month`,
       detail:`${dCur} of ${dimCur} days trained this month (${Math.ceil(dimCur/2)} keeps it). ${nCur} sessions vs ${nLast} last month; your average over the 3 months before last was ${Math.round(avg3*10)/10}.`+(cbWins?` Earned ${cbWins} month${cbWins!==1?'s':''} so far.`:'')},
   ];
@@ -3848,13 +3849,13 @@ function computeBadges() {
   const CUR={'Bench-Maxing':bench>0?`${r0(bench)} lb`:'','Shoulder-Maxing':haveBW&&ohp>0?`${r0(ohp)} lb x5`:'','Leg-Maxing':haveBW&&sq>0?`${r0(sq)} lb x5`:'',
     'Pull-up-Maxing':pullBest>0?`${pullBest} reps`:'','Push-up-Maxing':pushBest>0?`${pushBest} reps`:'','Cardio-Maxing':isFinite(cardioBest)?`${fmtClock(cardioBest)}/mi`:''};
   list.forEach(b=>{ if(CUR[b.name]!==undefined) b.curV=CUR[b.name]; });
-  // Jacked: every other badge earned AND every tiered badge at Gold. Never counts
-  // itself; Coward-Maxing is a penalty, not a requirement -- but holding it locks Jacked.
-  const req=list.filter(b=>b.name!=='Coward-Maxing'&&!b.monthly);
+  // Jacked (Mr. Roni, 2026-09-24): every Monthly-reset and 3-month-reset badge earned, the 3-month ones all at Gold.
+  // Permanent badges are NOT required. Coward-Maxing is a penalty, not a requirement -- but holding it locks Jacked.
+  const req=list.filter(b=>b.tiered||b.monthly);
   const tiered=list.filter(b=>b.tiered);
   const nEarned=req.filter(b=>b.earned).length, nGold=tiered.filter(b=>b.tier==='gold').length;
   list.push({icon:'crown',color:'#ffd700',name:'Jacked',earned:nEarned===req.length&&nGold===tiered.length&&!weekOff,
-    desc:nEarned===req.length&&nGold===tiered.length&&!weekOff?'Every badge, all tiers Gold':'Unlock it and something special happens',
+    desc:nEarned===req.length&&nGold===tiered.length&&!weekOff?'Every monthly and 3-month badge, all at Gold':'Unlock it and something special happens',
     detail:`${nEarned} / ${req.length} badges · ${nGold} / ${tiered.length} at Gold`+(weekOff?' · locked by Coward-Maxing':''),
     locked:weekOff});
   const jk=list[list.length-1];
@@ -3876,7 +3877,7 @@ const BADGE_HOW={
   'PR-Maxing':'Hit at least one personal record on 7 days in a row.',
   'Consistency-Maxing':'Finish at least one workout on 7 days in a row. Yours for good once earned.',
   'Coward-Maxing':'Given after 7+ days off in a row this month. Resets monthly — train consistently this month to clear it.',
-  'Jacked':'Earn every other badge, with every tiered badge at Gold. Locked while you hold Coward-Maxing.',
+  'Jacked':'Earn every badge in the Monthly reset and 3-month reset groups, with the 3-month ones all at Gold. Permanent badges are not needed. Locked while you hold Coward-Maxing.',
   'Pull-up-Maxing':'Most reps in a single pull-up/chin-up set. Bronze 10, Silver 15, Gold 20.',
   'Push-up-Maxing':'Most reps in a single push-up set (one exercise, not summed). Bronze 30, Silver 50, Gold 80.',
   'Cardio-Maxing':'Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze 9:00, Silver 8:00, Gold 6:30 per mile. Only runs from the last 3 months count.',
@@ -3901,7 +3902,7 @@ const BADGE_DETAIL={
   'PR-Maxing':{how:'Hit at least one personal record on 7 days in a row.'},
   'Consistency-Maxing':{how:'Finish at least one workout on 7 calendar days in a row. Two workouts on the same day still count as one day. Yours for good once earned.'},
   'Coward-Maxing':{how:'Given after 7+ days off in a row this month. Holding it locks the Jacked badge.',note:'Resets monthly. Only days off in the current month count, and the badge starts fresh on the 1st.'},
-  'Jacked':{how:'Earn every other badge, with Bench, Shoulder, Leg, Pull-up, Push-up and Cardio-Maxing all at Gold. You also cannot have Coward-Maxing: while you hold it, Jacked stays locked. Tiered badges follow your best of the last 3 months and Coward-Maxing resets monthly, so Jacked is re-checked every month and can lapse and come back.',note:'Checked every month. If any of the six tiered badges falls below Gold (no Gold-level lift in the last 3 months), Jacked is lost until you get it back.'}
+  'Jacked':{how:'Earn every badge in the Monthly reset group and every badge in the 3-month reset group, with all of the 3-month ones at Gold. The Permanent badges are not needed. You also cannot have Coward-Maxing: while you hold it, Jacked stays locked.',note:'Checked every month. If a 3-month badge falls below Gold (no Gold-level result in the last 3 months) or a monthly badge is not earned yet this month, Jacked is lost until you get it back.'}
 };
 function badgeInfo(name){
   const b=computeBadges().find(x=>x.name===name); if(!b) return;
@@ -6174,7 +6175,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.17';
+const BUILD = 'v1.10.18';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
