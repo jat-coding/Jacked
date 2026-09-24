@@ -302,13 +302,14 @@ async function monthly() {
     await ctx.close();
   }
   {
-    // Unlocked non-tiered badges wear gold, like a Gold tier; Coward-Maxing (a penalty) does not.
+    // Earned non-tiered badges show a teal "Earned" pill and a teal icon backdrop in the popup; Coward-Maxing (a penalty) does not.
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
     await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
     const pill = await page.evaluate(() => { const r = n => document.querySelector(`[onclick="badgeInfo('${n}')"] .badge`); const a = r('PR-Maxing'), b = r('Consistency-Maxing'); return { a: a && a.textContent + '|' + getComputedStyle(a).color, b: b && b.textContent }; });
-    check('gold: unlocked non-tiered badge shows a gold Unlocked pill', /^Unlocked\|rgb\(255, 215, 0\)/.test(pill.a) && pill.b === 'Unlocked', JSON.stringify(pill));
+    check('teal: earned non-tiered badge shows a teal Earned pill', /^Earned\|rgb\(32, 211, 194\)/.test(pill.a) && pill.b === 'Earned', JSON.stringify(pill));
     await page.evaluate(() => badgeInfo('PR-Maxing'));
-    check('gold: popup status says unlocked', /unlocked/i.test(await page.locator('#badgeFullBody .bf-status').innerText()));
+    const pop = await page.evaluate(() => ({ st: document.querySelector('#badgeFullBody .bf-status').innerText, bg: getComputedStyle(document.querySelector('#badgeFullBody .bf-icon')).backgroundColor, ring: getComputedStyle(document.querySelector('#badgeFullBody .bf-status')).color }));
+    check('teal: popup status says earned, icon backdrop and status teal', /earned/i.test(pop.st) && pop.bg === 'rgba(32, 211, 194, 0.14)' && pop.ring === 'rgb(32, 211, 194)', JSON.stringify(pop));
     await ctx.close();
   }
   {
@@ -338,18 +339,32 @@ async function monthly() {
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
     await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
     const g = await page.evaluate(() => { const out = []; document.querySelectorAll('#page-metrics .bgrp, #page-metrics [onclick^="badgeInfo("]').forEach(el => out.push(el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2))); return out; });
-    const idx = n => g.indexOf(n), lab = ['#3-month reset', '#Monthly reset', '#Permanent'].map(idx);
-    check('groups: three grey labels in order', lab[0] >= 0 && lab[0] < lab[1] && lab[1] < lab[2], JSON.stringify(g));
-    check('groups: tiered under 3-month, Coward/Challenge/Comeback under Monthly, 1000lb/Variety/PR/Consistency under Permanent',
-      ['Bench-Maxing', 'Shoulder-Maxing', 'Leg-Maxing', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing'].every(n => idx(n) > lab[0] && idx(n) < lab[1]) &&
-      ['Coward-Maxing', 'Challenge-Maxing', 'Comeback-Maxing'].every(n => idx(n) > lab[1] && idx(n) < lab[2]) &&
+    const idx = n => g.indexOf(n), lab = ['#Monthly reset', '#3-month reset', '#Permanent'].map(idx);
+    check('groups: three grey labels in order (Monthly, 3-month, Permanent)', lab[0] >= 0 && lab[0] < lab[1] && lab[1] < lab[2], JSON.stringify(g));
+    check('groups: Coward/Challenge/Comeback under Monthly, tiered under 3-month, 1000lb/Variety/PR/Consistency under Permanent',
+      ['Coward-Maxing', 'Challenge-Maxing', 'Comeback-Maxing'].every(n => idx(n) > lab[0] && idx(n) < lab[1]) &&
+      ['Bench-Maxing', 'Shoulder-Maxing', 'Leg-Maxing', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing'].every(n => idx(n) > lab[1] && idx(n) < lab[2]) &&
       ['1000lb Club', 'Variety-Maxing', 'PR-Maxing', 'Consistency-Maxing'].every(n => idx(n) > lab[2]), JSON.stringify(g));
     await ctx.close();
     const l = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
     await l.page.evaluate(() => sp('metrics')); await l.page.waitForTimeout(300);
     const gl = await l.page.evaluate(() => [...document.querySelectorAll('#page-metrics .bgrp, #page-metrics [onclick^="badgeInfo("]')].map(el => el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2)));
-    check('groups: locked Jacked sits under Monthly reset', gl.indexOf('Jacked') > gl.indexOf('#Monthly reset') && gl.indexOf('Jacked') < gl.indexOf('#Permanent'), JSON.stringify(gl));
+    check('groups: locked Jacked sits under Monthly reset', gl.indexOf('Jacked') > gl.indexOf('#Monthly reset') && gl.indexOf('Jacked') < gl.indexOf('#3-month reset'), JSON.stringify(gl));
     await l.ctx.close();
+  }
+  {
+    // Shimmering tab titles while Jacked is held; plain when it is not.
+    const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
+    await page.evaluate(() => { renderHome(); sp('metrics'); });
+    const on = await page.evaluate(() => { const t = document.querySelector('#page-metrics .pt'); const cs = getComputedStyle(t); return { attr: document.documentElement.hasAttribute('data-jacked'), anim: cs.animationName, clip: cs.webkitBackgroundClip || cs.backgroundClip, ht: getComputedStyle(document.querySelector('#jackedHero .jh-t')).animationName }; });
+    check('shimmer: Jacked held -> tab titles animate, box shimmers', on.attr && on.anim === 'ptSweep' && /text/.test(on.clip) && on.ht === 'jhTxt', JSON.stringify(on));
+    const t = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
+    await t.page.evaluate(() => { renderHome(); sp('metrics'); });
+    const off = await t.page.evaluate(() => ({ attr: document.documentElement.hasAttribute('data-jacked'), anim: getComputedStyle(document.querySelector('#page-metrics .pt')).animationName }));
+    check('shimmer: no Jacked -> plain titles', !off.attr && off.anim === 'none', JSON.stringify(off));
+    await page.evaluate(() => { S.s('hist', gH().filter(w => !(w.exercises || []).some(e => /pull/i.test(e.name)))); renderHome(); });
+    check('shimmer: losing Jacked stops it', await page.evaluate(() => !document.documentElement.hasAttribute('data-jacked') && getComputedStyle(document.querySelector('#page-metrics .pt')).animationName === 'none'));
+    await ctx.close(); await t.ctx.close();
   }
   {
     // Comeback-Maxing anti-softlock: half the days of the month keeps it even when last month was better.
