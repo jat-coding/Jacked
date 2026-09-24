@@ -478,6 +478,10 @@ async function achievementsPage() {
     await page.evaluate(() => { sp('leaderboard'); renderLB(); }); await page.waitForTimeout(250);
     const n = await page.evaluate(() => { const st = document.querySelector('#compareBoard .st'), k = st.lastElementChild, a = st.getBoundingClientRect(), b = k.getBoundingClientRect(), t = st.firstElementChild.getBoundingClientRect(); return { txt: k.textContent.trim(), svg: !!k.querySelector('svg'), right: Math.abs(a.right - b.right) < 2, after: b.left > t.right, inside: b.right <= document.documentElement.clientWidth }; });
     check('leaderboards: crown + "Last month\'s winner" note at the far right of the title', /Last month's winner/.test(n.txt) && n.svg && n.right && n.after && n.inside, JSON.stringify(n));
+    await page.evaluate(() => document.querySelector('#compareBoard .st').lastElementChild.click()); await page.waitForTimeout(200);
+    const pop = await page.evaluate(() => ({ open: document.getElementById('confirmModal').classList.contains('open'), t: document.getElementById('cfMsg').textContent, cancel: getComputedStyle(document.getElementById('cfCancel')).display }));
+    check('leaderboards: tapping the crown key opens a description popup (last month\'s weight lifted)', pop.open && /last month/i.test(pop.t) && /weight lifted/i.test(pop.t) && pop.cancel === 'none', JSON.stringify(pop));
+    await page.evaluate(() => _cfDone(null));
     await ctx.close();
   }
 }
