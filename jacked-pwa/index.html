@@ -1118,6 +1118,8 @@ const _ICON={
   arrowUp:`<path d='M12 5l0 14'/><path d='M18 11l-6 -6'/><path d='M6 11l6 -6'/>`,
   arrowDown:`<path d='M12 5l0 14'/><path d='M18 13l-6 6'/><path d='M6 13l6 6'/>`,
   replace:`<path d='M3 4a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4'/><path d='M15 16a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4'/><path d='M21 11v-3a2 2 0 0 0 -2 -2h-6l3 3m0 -6l-3 3'/><path d='M3 13v3a2 2 0 0 0 2 2h6l-3 -3m0 6l3 -3'/>`,
+  calendarCheck:`<path d='M11.5 21h-5.5a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v6'/><path d='M16 3v4'/><path d='M8 3v4'/><path d='M4 11h16'/><path d='M15 19l2 2l4 -4'/>`,
+  crown:`<path d='M12 6l4 6l5 -4l-2 10h-14l-2 -10l5 4l4 -6'/>`,
   trash:`<path d='M4 7l16 0'/><path d='M10 11l0 6'/><path d='M14 11l0 6'/><path d='M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12'/><path d='M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3'/>`
 };
 function exIcon(muscle,size=24){
@@ -2877,12 +2879,12 @@ function progressInfo(kind){
 // LIVE METRIC-TIER BADGES (Bench/Shoulder/Leg/Pull-up/Push-up/Cardio-Maxing)
 // Placed next to the progression chip per Mr. Roni's request 2026-09-17.
 // Only these six can be scoped to ONE exercise -- 1000lb Club, Variety, the
-// 7-day PR streak and Coward-Maxing all need the whole account/workout and
+// 7-day PR streak, Consistency-Maxing, Coward-Maxing and Jacked all need the whole account/workout and
 // can't be tied to finishing a single lift (the limit flagged when he first
 // asked if this was possible).
 //
 // Formulas are duplicated from computeBadges(), not shared -- that function
-// scans ALL of history for ALL ten badges on every Metrics-page render;
+// scans ALL of history for ALL twelve badges on every Metrics-page render;
 // this needs one badge for one exercise, cheaply, on every set checked off.
 // Keep the two in sync if the tier thresholds ever change.
 // ============================================================
@@ -3447,17 +3449,33 @@ let metricUnit='metric'; // 'metric' | 'imperial' — derived from the profile u
 
 
 // ── Achievement badges (computed live from history + PRs) ──
+// Coward-Maxing is a penalty badge that resets monthly and contradicts
+// Consistency-Maxing, so Jacked does NOT require it (Mr. Roni's call pending,
+// 2026-09-24). Flip to true to make Jacked need every badge, Coward included.
+const JACKED_REQUIRES_COWARD=false;
 function computeBadges() {
   const h=gH(), prs=gPR();
   const dates=[...new Set(h.map(w=>dayKey(w.date)).filter(Boolean))].sort();
 
-  // 1) 7+ days off in a row. Resets every 3 months: only a lapse that lands in
-  // the CURRENT 3-month interval (calendar quarter) counts, plus any ongoing 7+
-  // day layoff right now — so a clean quarter clears the badge.
-  const qStart=+new Date(new Date().getFullYear(), Math.floor(new Date().getMonth()/3)*3, 1);
+  // 1) Coward-Maxing: 7+ days off in a row WITHIN the current calendar month
+  // (Mr. Roni, 2026-09-24 -- was the calendar quarter). Only off-days inside this
+  // month count, so the badge clears on the 1st and a layoff that straddles the
+  // month line counts just its days in the new month. Today is not an off-day
+  // yet (still time to train -- same grace as calcStreak), and days before your
+  // first-ever workout don't count, so a brand-new account never gets it.
+  const mStart=new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const qStart=+new Date(new Date().getFullYear(), Math.floor(new Date().getMonth()/3)*3, 1);  // Cardio-Maxing only
   let weekOff=false;
-  for(let i=1;i<dates.length;i++){ if((new Date(dates[i])-new Date(dates[i-1]))/864e5 > 7 && +new Date(dates[i])>=qStart){ weekOff=true; break; } }
-  if(dates.length && (Date.now()-new Date(dates[dates.length-1]))/864e5 > 7) weekOff=true;
+  if(dates.length){
+    const dset=new Set(dates);
+    const d=new Date(mStart), first=new Date(dates[0]+'T12:00:00'), today=dayKey(new Date());
+    let run=0;
+    for(;dayKey(d)<today;d.setDate(d.getDate()+1)){
+      const k=dayKey(d);
+      if(dset.has(k)||new Date(k+'T12:00:00')<=first){ run=0; continue; }
+      if(++run>=7){ weekOff=true; break; }
+    }
+  }
 
   // 2) A PR every day for 7 consecutive days
   const prDays=new Set(h.filter(w=>(w.prCount||0)>0).map(w=>dayKey(w.date)));
@@ -3512,7 +3530,8 @@ function computeBadges() {
   const pushBest=bestSetReps(f=>f.includes('pushup'));
   const pushT=tierOf(pushBest,[30,50,80]);
   // Cardio: lowest endurance-adjusted mile-equivalent (Riegel) across all logged runs.
-  // Resets every 3 months: only runs from the CURRENT calendar quarter count (same window as Coward-Maxing).
+  // Resets every 3 months: only runs from the CURRENT calendar quarter count. (Coward-Maxing used to
+  // share this window; it moved to monthly on 2026-09-24 -- Cardio stays quarterly.)
   let cardioBest=Infinity;
   h.forEach(w=>{ if(!(+new Date(w.date)>=qStart)) return; (w.exercises||[]).forEach(ex=>{ if(((ex.tracking)||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<cardioBest)cardioBest=me; } }); }); });
   const cardioT = cardioBest<=6.5?'gold':cardioBest<=8?'silver':cardioBest<=9?'bronze':null;
@@ -3526,26 +3545,42 @@ function computeBadges() {
   }));
   const variety=varSeen.size;
 
+  // Consistency-Maxing: trained on 7+ consecutive calendar days (local dates, any
+  // number of workouts per day), anywhere in history -- permanent once earned,
+  // like PR-Maxing. Not a duplicate of PR-Maxing: that one needs a PR on each
+  // of the 7 days; this only needs a finished workout on each.
+  const bestRun=bestStreak(h);
+
   // NOTE: badge names follow the "<Title>-Maxing" convention — keep it for new badges.
-  return [
-    {icon:'dumbbell',color:MCOL.chest,name:'Bench-Maxing',tier:benchT,earned:!!benchT,
+  // Jacked is the exception by request. tiered:true marks the Bronze/Silver/Gold badges.
+  const list=[
+    {icon:'dumbbell',color:MCOL.chest,name:'Bench-Maxing',tiered:true,tier:benchT,earned:!!benchT,
       desc: `1-rep bench (lb): ${tline(bench,[135,225,315])}`},
-    {icon:'dumbbell',color:MCOL.shoulders,name:'Shoulder-Maxing',tier:ohpT,earned:!!ohpT,needsWeight:!haveBW,
+    {icon:'dumbbell',color:MCOL.shoulders,name:'Shoulder-Maxing',tiered:true,tier:ohpT,earned:!!ohpT,needsWeight:!haveBW,
       desc: !haveBW?'Enter body weight in Profile to unlock':`OHP ×5 (lb): ${tline(ohp,[0.25*bwLb,0.5*bwLb,1.0*bwLb])}`},
-    {icon:'dumbbell',color:MCOL.legs,name:'Leg-Maxing',tier:sqT,earned:!!sqT,needsWeight:!haveBW,
+    {icon:'dumbbell',color:MCOL.legs,name:'Leg-Maxing',tiered:true,tier:sqT,earned:!!sqT,needsWeight:!haveBW,
       desc: !haveBW?'Enter body weight in Profile to unlock':`Squat ×5 (lb): ${tline(sq,[1.0*bwLb,1.5*bwLb,2.0*bwLb])}`},
     {icon:'trophy',color:'#ffd700',name:'1000lb Club',desc: bestSingle>0?`Best single-session Big-3: ${r0(bestSingle)} lb / 1000`:'Bench + Squat + Deadlift ≥ 1000 lb in one workout',earned:club},
-    {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tier:pullT,earned:!!pullT,
+    {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tiered:true,tier:pullT,earned:!!pullT,
       desc:`Best set: ${pullBest} reps — ${tline(pullBest,[10,15,20])}`},
-    {icon:'dumbbell',color:MCOL.triceps,name:'Push-up-Maxing',tier:pushT,earned:!!pushT,
+    {icon:'dumbbell',color:MCOL.triceps,name:'Push-up-Maxing',tiered:true,tier:pushT,earned:!!pushT,
       desc:`Best set: ${pushBest} reps — ${tline(pushBest,[30,50,80])}`},
-    {icon:'heart',color:MCOL.cardio,name:'Cardio-Maxing',tier:cardioT,earned:!!cardioT,
+    {icon:'heart',color:MCOL.cardio,name:'Cardio-Maxing',tiered:true,tier:cardioT,earned:!!cardioT,
       desc: isFinite(cardioBest)?`Best mile pace: ${fmtClock(cardioBest)}/mi — ${tlineLow(cardioBest,[6.5,8,9])}`:'Log a run (miles + minutes) to unlock'},
     {icon:'target',color:'var(--blue)',name:'Variety-Maxing',earned:variety>=100,
       desc:`${variety} / 100 different exercises logged`},
     {icon:'flame',color:'var(--orange)',name:'PR-Maxing',desc:'Hit a PR every day for 7 days straight',earned:prWeek},
-    {icon:'bed',color:'var(--muted)',name:'Coward-Maxing',desc:'Took 7+ days off in a row this quarter (resets every 3 months)',earned:weekOff},
+    {icon:'calendarCheck',color:'var(--green)',name:'Consistency-Maxing',desc:`Train 7 days in a row — best run: ${bestRun} day${bestRun!==1?'s':''}`,earned:bestRun>=7},
+    {icon:'bed',color:'var(--muted)',name:'Coward-Maxing',desc:'Took 7+ days off in a row this month (resets monthly)',earned:weekOff},
   ];
+  // Jacked: every other badge earned AND every tiered badge at Gold. Never counts
+  // itself; Coward-Maxing is left out unless JACKED_REQUIRES_COWARD is flipped.
+  const req=list.filter(b=>JACKED_REQUIRES_COWARD||b.name!=='Coward-Maxing');
+  const tiered=list.filter(b=>b.tiered);
+  const nEarned=req.filter(b=>b.earned).length, nGold=tiered.filter(b=>b.tier==='gold').length;
+  list.push({icon:'crown',color:'#ffd700',name:'Jacked',earned:nEarned===req.length&&nGold===tiered.length,
+    desc:`${nEarned} / ${req.length} badges · ${nGold} / ${tiered.length} at Gold`});
+  return list;
 }
 const TIERC={bronze:'#cd7f32',silver:'#b8b8c8',gold:'#ffd700'};
 // Tap-to-explain text for each badge.
@@ -3555,7 +3590,9 @@ const BADGE_HOW={
   'Leg-Maxing':'Barbell squat for 5 reps. Bronze 100%, Silver 150%, Gold 200% of your body weight. Set your weight in Profile.',
   '1000lb Club':'In a single workout, your best bench + squat + deadlift add up to 1000 lb or more.',
   'PR-Maxing':'Hit at least one personal record on 7 days in a row.',
-  'Coward-Maxing':'Given after 7+ days off in a row. Resets every 3 months — train consistently this quarter to clear it.',
+  'Consistency-Maxing':'Finish at least one workout on 7 days in a row. Yours for good once earned.',
+  'Coward-Maxing':'Given after 7+ days off in a row this month. Resets monthly — train consistently this month to clear it.',
+  'Jacked':'Earn every other badge, with every tiered badge at Gold. Coward-Maxing not required.',
   'Pull-up-Maxing':'Most reps in a single pull-up/chin-up set. Bronze 10, Silver 15, Gold 20.',
   'Push-up-Maxing':'Most reps in a single push-up set (one exercise, not summed). Bronze 30, Silver 50, Gold 80.',
   'Cardio-Maxing':'Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze 9:00, Silver 8:00, Gold 6:30 per mile. Resets every 3 months: only runs from the current quarter count.',
@@ -3574,7 +3611,9 @@ const BADGE_DETAIL={
   'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Resets every 3 months. Only runs from the current quarter count, and the badge starts fresh each quarter.'},
   'Variety-Maxing':{how:'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'},
   'PR-Maxing':{how:'Hit at least one personal record on 7 days in a row.'},
-  'Coward-Maxing':{how:'Given after 7+ days off in a row.',note:'Resets every 3 months. Train consistently this quarter to clear it.'}
+  'Consistency-Maxing':{how:'Finish at least one workout on 7 calendar days in a row. Two workouts on the same day still count as one day. Yours for good once earned.'},
+  'Coward-Maxing':{how:'Given after 7+ days off in a row this month.',note:'Resets monthly. Only days off in the current month count, and the badge starts fresh on the 1st.'},
+  'Jacked':{how:'Earn every other badge, with Bench, Shoulder, Leg, Pull-up, Push-up and Cardio-Maxing all at Gold. Coward-Maxing is not required. Cardio-Maxing resets every 3 months, so Jacked can lapse with it.'}
 };
 function badgeInfo(name){
   const b=computeBadges().find(x=>x.name===name); if(!b) return;
@@ -5553,6 +5592,30 @@ document.getElementById('cfInput').addEventListener('keydown',e=>{ if(e.key==='E
 const _isField=el=>el&&el.matches&&el.matches('input,textarea,select');
 document.addEventListener('focusin', e=>{ if(_isField(e.target)) document.body.classList.add('kb'); });
 document.addEventListener('focusout', ()=>{ setTimeout(()=>{ if(!_isField(document.activeElement)) document.body.classList.remove('kb'); }, 80); });
+
+// TAP-TO-CLEAR set inputs (Mr. Roni, 2026-09-24). Applies to every input.si --
+// the weight/reps cells of the live workout and of the history editor, which
+// also carry duration (time) and distance (miles/min) since those live in the
+// same two columns. Routines hold no set numbers, so there is nothing to clear
+// there. Focus: remember the value, empty the box, show the old number as the
+// greyed placeholder. Blur with nothing typed: put the old value back, and if
+// the user typed then erased (state was written as 0 by oninput), replay it
+// through the field's own oninput so the stored set gets the old value again.
+document.addEventListener('focusin', e=>{
+  const el=e.target; if(!el.matches||!el.matches('input.si')) return;
+  el._jkOld=el.value; el._jkPh=el.placeholder; el._jkTyped=false;
+  if(el.value!==''){ el.placeholder=el.value; el.value=''; }
+});
+document.addEventListener('input', e=>{ if(e.target._jkOld!==undefined) e.target._jkTyped=true; }, true);
+document.addEventListener('focusout', e=>{
+  const el=e.target; if(el._jkOld===undefined) return;
+  const old=el._jkOld, typed=el._jkTyped, bad=el.validity&&el.validity.badInput;
+  el.placeholder=el._jkPh; delete el._jkOld; delete el._jkPh; delete el._jkTyped;
+  if(el.value===''&&!bad&&old!==''){
+    el.value=old;
+    if(typed) el.dispatchEvent(new Event('input',{bubbles:true}));
+  }
+});
 
 // PULL ON FOCUS. The daily cold-boot pull cannot see anything the watch pushes
 // while this app sits in the background — and coming back to the app is exactly
