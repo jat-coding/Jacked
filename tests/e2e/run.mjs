@@ -334,6 +334,24 @@ async function monthly() {
     await ctx.close();
   }
   {
+    // Achievements grouped by reset type with small grey labels.
+    const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
+    await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
+    const g = await page.evaluate(() => { const out = []; document.querySelectorAll('#page-metrics .bgrp, #page-metrics [onclick^="badgeInfo("]').forEach(el => out.push(el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2))); return out; });
+    const idx = n => g.indexOf(n), lab = ['#3-month reset', '#Monthly reset', '#Permanent'].map(idx);
+    check('groups: three grey labels in order', lab[0] >= 0 && lab[0] < lab[1] && lab[1] < lab[2], JSON.stringify(g));
+    check('groups: tiered under 3-month, Coward/Challenge/Comeback under Monthly, 1000lb/Variety/PR/Consistency under Permanent',
+      ['Bench-Maxing', 'Shoulder-Maxing', 'Leg-Maxing', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing'].every(n => idx(n) > lab[0] && idx(n) < lab[1]) &&
+      ['Coward-Maxing', 'Challenge-Maxing', 'Comeback-Maxing'].every(n => idx(n) > lab[1] && idx(n) < lab[2]) &&
+      ['1000lb Club', 'Variety-Maxing', 'PR-Maxing', 'Consistency-Maxing'].every(n => idx(n) > lab[2]), JSON.stringify(g));
+    await ctx.close();
+    const l = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
+    await l.page.evaluate(() => sp('metrics')); await l.page.waitForTimeout(300);
+    const gl = await l.page.evaluate(() => [...document.querySelectorAll('#page-metrics .bgrp, #page-metrics [onclick^="badgeInfo("]')].map(el => el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2)));
+    check('groups: locked Jacked sits under Monthly reset', gl.indexOf('Jacked') > gl.indexOf('#Monthly reset') && gl.indexOf('Jacked') < gl.indexOf('#Permanent'), JSON.stringify(gl));
+    await l.ctx.close();
+  }
+  {
     // Comeback-Maxing anti-softlock: half the days of the month keeps it even when last month was better.
     const run = async (label, hist, want) => {
       const { page, ctx } = await phone({ seed: { hist }, now: new Date('2026-10-25T12:00:00-06:00') });

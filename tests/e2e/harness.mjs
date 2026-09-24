@@ -38,7 +38,7 @@ export async function phone({ width = 390, height = 844, seed = {}, now = null, 
     ...(videoDir ? { recordVideo: { dir: videoDir, size: { width, height } } } : {}),
   });
   await ctx.route(/supabase/, r => r.abort());
-  await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  if (!process.env.JK_FONTS) await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());   // JK_FONTS=1 loads the real web fonts for screenshots
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
