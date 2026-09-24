@@ -3708,7 +3708,13 @@ function computeBadges() {
   // Comeback-Maxing: more sessions this month than last, when last month ran below your average of the 3 months before it.
   const nCur=inMonth(mAt(0)).length, nLast=inMonth(mAt(-1)).length;
   const avg3=(inMonth(mAt(-2)).length+inMonth(mAt(-3)).length+inMonth(mAt(-4)).length)/3;
-  const comeback=avg3>0&&nLast<avg3&&nCur>nLast;
+  const bounce=avg3>0&&nLast<avg3&&nCur>nLast;
+  // Anti-softlock (Mr. Roni, 2026-09-24): if you train on at least half the days of the month you keep it, so a
+  // great streak of months can't lose it just because you didn't beat last month.
+  const dimCur=new Date(_n.getFullYear(),_n.getMonth()+1,0).getDate();
+  const dCur=new Set(inMonth(mAt(0)).map(w=>dayKey(w.date))).size;
+  const steady=dCur*2>=dimCur;
+  const comeback=bounce||steady;
   // Challenge-Maxing: your weakest muscle group (glutes left out), picked on the first look of the month from
   // last month's training, never the same group two months running. Train it in `target` different workouts.
   const grpOf=w=>new Set((w.exercises||[]).map(e=>muscleGroup(e.muscle)).filter(Boolean));
@@ -3753,8 +3759,8 @@ function computeBadges() {
       desc:`${MGNAME[ch.group]} ${Math.min(chCnt,ch.target)} / ${ch.target}`,
       detail:`Train ${MGNAME[ch.group]} in ${ch.target} different workouts this month. ${chCnt} so far.`+(chWins?` Completed ${chWins} month${chWins!==1?'s':''} so far.`:'')},
     {icon:'arrowUp',color:'var(--green)',name:'Comeback-Maxing',monthly:true,earned:comeback,
-      desc:`${nCur} sessions vs ${nLast} last month`,
-      detail:`${nCur} sessions this month vs ${nLast} last month. Your average over the 3 months before last was ${Math.round(avg3*10)/10}.`+(cbWins?` Earned ${cbWins} month${cbWins!==1?'s':''} so far.`:'')},
+      desc:`${dCur} of ${dimCur} days trained · ${nCur} sessions vs ${nLast} last month`,
+      detail:`${dCur} of ${dimCur} days trained this month (${Math.ceil(dimCur/2)} keeps it). ${nCur} sessions vs ${nLast} last month; your average over the 3 months before last was ${Math.round(avg3*10)/10}.`+(cbWins?` Earned ${cbWins} month${cbWins!==1?'s':''} so far.`:'')},
   ];
   list.forEach(b=>{ if(ALL[b.name]) b.all=ALL[b.name]; });
   const CUR={'Bench-Maxing':bench>0?`${r0(bench)} lb`:'','Shoulder-Maxing':haveBW&&ohp>0?`${r0(ohp)} lb x5`:'','Leg-Maxing':haveBW&&sq>0?`${r0(sq)} lb x5`:'',
@@ -3792,7 +3798,7 @@ const BADGE_HOW={
   'Push-up-Maxing':'Most reps in a single push-up set (one exercise, not summed). Bronze 30, Silver 50, Gold 80.',
   'Cardio-Maxing':'Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze 9:00, Silver 8:00, Gold 6:30 per mile. Only runs from the last 3 months count.',
   'Challenge-Maxing':'Train your weakest muscle group (glutes left out) enough times this month. A new group every month.',
-  'Comeback-Maxing':'More sessions this month than last month, after a month that ran below your recent average.',
+  'Comeback-Maxing':'Train on at least half the days of the month, or log more sessions than last month after a month that ran below your recent average.',
   'Variety-Maxing':'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'
 };
 // Name shown for a badge; older builds stored '1000lb Club-Maxing' in friends' badge lists.
@@ -3807,7 +3813,7 @@ const BADGE_DETAIL={
   'Push-up-Maxing':{how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze','30 reps'],['Silver','50 reps'],['Gold','80 reps']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
   'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Your tier follows your best pace in the last 3 months. Your highest ever stays below, grayed out.'},
   'Challenge-Maxing':{how:'Every month you get a target on your weakest muscle group, based on last month (glutes are left out, and it is never the same group two months in a row). Train that group in the target number of different workouts.',note:'Resets monthly with a new muscle group.'},
-  'Comeback-Maxing':{how:'Log more sessions this month than last month, when last month was below your average of the 3 months before it.',note:'Resets monthly.'},
+  'Comeback-Maxing':{how:'Either bounce back (more sessions this month than last month, after a month below your average of the 3 months before it) or keep it steady (train on at least half the days of the month). Either one earns it, so a run of great months never locks you out.',note:'Resets monthly.'},
   'Variety-Maxing':{how:'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'},
   'PR-Maxing':{how:'Hit at least one personal record on 7 days in a row.'},
   'Consistency-Maxing':{how:'Finish at least one workout on 7 calendar days in a row. Two workouts on the same day still count as one day. Yours for good once earned.'},
@@ -3817,8 +3823,9 @@ const BADGE_DETAIL={
 function badgeInfo(name){
   const b=computeBadges().find(x=>x.name===name); if(!b) return;
   const d=BADGE_DETAIL[name]||{how:BADGE_HOW[name]||''};
-  const col=b.tier?TIERC[b.tier]:(b.earned?'var(--green)':'var(--muted)');
-  const status=b.tier?b.tier:(b.earned?'earned':'locked');
+  const gold=b.earned&&!b.tier&&b.name!=='Coward-Maxing';   // unlocked non-tiered badges wear gold (Mr. Roni, 2026-09-24); Coward is a penalty
+  const col=b.tier?TIERC[b.tier]:(gold?TIERC.gold:(b.earned?'var(--green)':'var(--muted)'));
+  const status=b.tier?b.tier:(gold?'unlocked':(b.earned?'earned':'locked'));
   const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v])=>{const k=t.toLowerCase(),on=b.tier===k;return `<div class="bf-tier${on?' on':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span></div>`;}).join('')}</div>`:'';
   const note=d.note?`<div class="bf-h">Resets</div><div class="bf-body">${d.note}</div>`:'';
   const allT=b.all?`<div class="bf-h">Highest ever</div><div class="bf-tiers"><div class="bf-tier" style="opacity:.55;filter:grayscale(1)"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:700;text-transform:capitalize;color:var(--muted)">${b.all.tier||'no tier'}</span></div></div><div class="bf-body" style="font-size:12px;color:var(--muted);margin-top:6px">Your best in all of history. It never resets. The badge above only counts the last 3 months.</div>`:'';
@@ -4153,7 +4160,7 @@ function openRecap(y,m){
     ${d.bw?row('calendar','var(--accent)','Best week',recapWeekLine(d)):''}
     ${d.crown?row('crown','#ffd700','Leaderboard crown','Most weight lifted among your friends'):''}
     ${d.challenge?row('dumbbell',MCOL[d.challenge.group],'Challenge: '+MGNAME[d.challenge.group],`${d.challenge.target} workouts — ${d.challenge.done?'completed':'not completed'}`):''}
-    ${d.comeback?row('arrowUp','var(--green)','Comeback','More sessions than the month before'):''}
+    ${d.comeback?row('arrowUp','var(--green)','Comeback','Bounced back, or trained half the month'):''}
     <div class="bf-h" style="margin:18px 0 8px">Tiered badges</div>
     ${tiered.map(b=>`<div class="rc-row" style="border-color:${b.tier?TIERC[b.tier]+'66':'var(--border2)'}"><div>${uic(b.icon,b.color,24)}</div><div style="flex:1;min-width:0;font-weight:700;font-size:14px">${TIER_SHORT[b.name]||b.name}</div><div style="font-size:12px;color:var(--muted)">${b.curV||''}</div><span style="font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${b.tier?TIERC[b.tier]:'var(--muted)'};min-width:52px;text-align:right">${b.tier||'—'}</span></div>`).join('')}
     <div style="height:14px"></div>`;
@@ -4228,10 +4235,19 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeRecap(); });
 
 function cardBadges(){
   // Unlocked badges on top, locked at the bottom.
-  const badges=computeBadges().slice().sort((a,b)=>(b.earned?1:0)-(a.earned?1:0));
-  const html=badges.map(b=>{
+  const all=computeBadges(), jk=all.find(b=>b.name==='Jacked');
+  const hero=(jk&&jk.earned);   // unlocked Jacked gets its own gold section above the rest (Mr. Roni, 2026-09-24)
+  const badges=all.filter(b=>!(hero&&b.name==='Jacked')).sort((a,b)=>(b.earned?1:0)-(a.earned?1:0));
+  const heroHtml=hero?`<div id="jackedHero" onclick="badgeInfo('Jacked')" style="cursor:pointer;text-align:center;padding:22px 16px 20px;margin:0 0 14px;border:2px solid #ffd700;border-radius:20px;background:linear-gradient(180deg,#ffd70022,#ffd70008);box-shadow:0 0 28px -6px #ffd70088">
+      <div style="display:flex;justify-content:center">${uic(jk.icon,'#ffd700',52)}</div>
+      <div style="font-family:var(--fh);font-size:34px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ffd700;line-height:1.1;margin-top:8px">Jacked</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:6px">${jk.desc}</div>
+      <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#ffd700;margin-top:10px">Unlocked this month</div>
+    </div>`:'';
+  const html=heroHtml+badges.map(b=>{
     const status=b.tier
       ? `<span class="badge" style="background:${TIERC[b.tier]}22;color:${TIERC[b.tier]};border:1px solid ${TIERC[b.tier]}66;text-transform:capitalize">${b.tier}</span>`
+      : (b.earned&&b.name!=='Coward-Maxing')?`<span class="badge" style="background:${TIERC.gold}22;color:${TIERC.gold};border:1px solid ${TIERC.gold}66">Unlocked</span>`
       : b.earned?'<span class="badge bgreen">Earned</span>':'<span class="badge bm">Locked</span>';
     return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);opacity:${b.earned?1:.45};cursor:pointer" onclick="badgeInfo('${b.name}')">
       <div style="filter:${b.earned?'none':'grayscale(1)'}">${uic(b.icon,b.color,28)}</div>
@@ -6064,7 +6080,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.2';
+const BUILD = 'v1.10.4';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
