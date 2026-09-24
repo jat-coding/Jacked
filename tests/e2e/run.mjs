@@ -17,7 +17,7 @@ async function regression() {
     await page.waitForTimeout(150);
     check(`regression: ${t} tab renders`, await page.locator('#page-' + t).isVisible());
   }
-  check('regression: Achievements card lists 12 badges', (await badges(page)).length === 12, String((await badges(page)).length));
+  check('regression: Achievements card lists 14 badges', (await badges(page)).length === 14, String((await badges(page)).length));
   const lb = await page.evaluate(() => yourStats().badges);
   check('regression: leaderboard badge count = earned count', lb === (await badges(page)).filter(b => b.earned).length);
   const shared = await page.evaluate(() => myBadgeList().map(b => b.n));
@@ -244,6 +244,72 @@ async function jacked() {
   }
 }
 
+async function monthly() {
+  const seed = (o) => ({ hist: allGoldHistory(o), bw: 180 / LB });
+  {
+    // Tiers follow the last 3 months: the same September lifts, viewed in December, have dropped; all-time best is kept.
+    const { page, ctx } = await phone({ seed: seed(), now: new Date('2026-12-15T12:00:00-07:00') });
+    const bs = await badges(page);
+    check('rolling: Bench tier gone once the lift is older than 3 months', bs.find(b => b.name === 'Bench-Maxing').tier === null, JSON.stringify(bs.find(b => b.name === 'Bench-Maxing')));
+    check('rolling: Jacked lost when tiers drop below Gold', bs.find(b => b.name === 'Jacked').earned === false);
+    await page.evaluate(() => badgeInfo('Bench-Maxing'));
+    const txt = await page.locator('#badgeFullBody').innerText();
+    check('rolling: popup keeps the all-time best (315 lb, gold)', /all-time best/i.test(txt) && /315 lb/.test(txt) && /gold/i.test(txt), txt);
+    await ctx.close();
+  }
+  {
+    // ...and a lift still inside the window counts (Sep 8 seen from Nov 20).
+    const { page, ctx } = await phone({ seed: seed(), now: new Date('2026-11-20T12:00:00-07:00') });
+    check('rolling: lift 2.4 months old still counts', (await badge(page, 'Bench-Maxing')).tier === 'gold');
+    await ctx.close();
+  }
+  {
+    // Jacked is checked every month and each month it was held is kept.
+    const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
+    await badges(page);
+    const mb = await page.evaluate(() => S.g('monthBadges'));
+    check('jacked: month it was held is recorded', Array.isArray(mb._jackedMonths) && mb._jackedMonths.includes('2026-09'), JSON.stringify(mb));
+    await page.evaluate(() => badgeInfo('Jacked'));
+    const txt = await page.locator('#badgeFullBody').innerText();
+    check('jacked: popup shows months held', /held in 1 month/i.test(txt) && /September 2026/.test(txt), txt);
+    await ctx.close();
+  }
+  {
+    // Monthly recap card: top of Home, above the streak box, first 7 days of the month only.
+    const { page, ctx, errors } = await phone({ seed: seed(), now: new Date('2026-10-03T12:00:00-06:00') });
+    await page.evaluate(() => { renderHome(); });
+    const vis = await page.evaluate(() => { const c = document.getElementById('recapCard'), s = document.getElementById('streakBanner'); return { shown: c.style.display !== 'none', txt: c.innerText, above: !!(c.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING) }; });
+    check('recap: card shows in first week, names September', vis.shown && /September recap/i.test(vis.txt), JSON.stringify(vis));
+    check('recap: card sits above the streak box', vis.above);
+    await page.evaluate(() => document.getElementById('recapCard').click());
+    await page.waitForTimeout(250);
+    const full = await page.locator('#recapFullBody').innerText();
+    check('recap: tap opens full recap with tiles, best lift and tiers', /September 2026/.test(full) && /sessions/i.test(full) && /best lift/i.test(full) && /bench/i.test(full), full);
+    const dims = await page.evaluate(async () => { const c = await recapImage(_recap); return [c.width, c.height]; });
+    check('recap: share image renders (1080 wide)', dims[0] === 1080 && dims[1] > 1000, String(dims));
+    await page.evaluate(() => closeRecap());
+    await page.evaluate(() => dismissRecap('2026-09'));
+    check('recap: dismiss hides the card', await page.evaluate(() => document.getElementById('recapCard').style.display === 'none'));
+    check('recap: no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  {
+    const { page, ctx } = await phone({ seed: seed(), now: new Date('2026-10-15T12:00:00-06:00') });
+    await page.evaluate(() => renderHome());
+    check('recap: card hidden after day 7', await page.evaluate(() => document.getElementById('recapCard').style.display === 'none'));
+    const rows = await page.evaluate(() => cardRecaps().html);
+    check('recap: Metrics > Monthly Recaps still lists September', /September 2026/.test(rows));
+    await ctx.close();
+  }
+  {
+    // Challenge-Maxing: glutes never picked, never the same group two months running.
+    const { page, ctx } = await phone({ seed: seed(), now: new Date('2026-10-03T12:00:00-06:00') });
+    const g1 = await page.evaluate(() => { computeBadges(); return S.g('monthBadges')['2026-10'].group; });
+    check('challenge: group chosen, not glutes', !!g1 && g1 !== 'glutes', g1);
+    await ctx.close();
+  }
+}
+
 async function narrowAndShots() {
   const h = allGoldHistory({ pullReps: 15 });   // Consistency earned, Jacked locked -> both visible
   for (const width of [320, 390]) {
@@ -255,7 +321,7 @@ async function narrowAndShots() {
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(`narrow ${width}px: no horizontal overflow`, over <= 0, 'overflow px=' + over);
     const rows = await page.evaluate(() => [...document.querySelectorAll('[onclick^="badgeInfo("]')].map(el => { const r = el.getBoundingClientRect(); return { r: r.right, w: el.scrollWidth - el.clientWidth }; }));
-    check(`narrow ${width}px: every badge row fits the screen`, rows.length === 12 && rows.every(x => x.r <= width + 0.5 && x.w <= 0), JSON.stringify(rows.filter(x => x.r > width || x.w > 0)));
+    check(`narrow ${width}px: every badge row fits the screen`, rows.length === 14 && rows.every(x => x.r <= width + 0.5 && x.w <= 0), JSON.stringify(rows.filter(x => x.r > width || x.w > 0)));
     if (width === 390) {
       await page.locator('[onclick="badgeInfo(\'Consistency-Maxing\')"]').evaluate(el => el.scrollIntoView({ block: 'center' }));
       await page.waitForTimeout(150);
@@ -446,7 +512,7 @@ async function prReconcile() {
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, narrowAndShots, pastPRs, prReconcile]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, narrowAndShots, pastPRs, prReconcile]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

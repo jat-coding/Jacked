@@ -67,8 +67,8 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 /* MODAL */
 .mo{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:200;display:none;align-items:flex-end;justify-content:center}
 .mo.open{display:flex}
-#badgeFull{position:fixed;inset:0;z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + env(safe-area-inset-top)) 22px calc(20px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
-#badgeFull.open{display:flex;animation:pageIn .2s ease-out}
+#badgeFull,#recapFull{position:fixed;inset:0;z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + env(safe-area-inset-top)) 22px calc(20px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
+#badgeFull.open,#recapFull.open{display:flex;animation:pageIn .2s ease-out}
 .bf-x{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;width:38px;height:38px;font-size:18px}
 .bf-wrap{max-width:460px;width:100%;margin:0 auto;padding-top:34px;text-align:center;flex:1}
 .bf-icon{width:132px;height:132px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
@@ -82,6 +82,12 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .bf-tier{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 14px;border:1px solid var(--border);border-radius:14px;font-size:15px;text-align:left}
 .bf-tier.on{border-width:1.5px}
 .bf-you{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text2);background:var(--bg4);border-radius:10px;padding:2px 8px}
+.rc-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.rc-tile{border:1px solid var(--border2);border-radius:14px;padding:12px;text-align:left;background:var(--bg2)}
+.rc-tile .v{font-family:var(--fh);font-size:26px;font-weight:800;line-height:1.1}
+.rc-tile .l{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-top:3px}
+.rc-row{display:flex;align-items:center;gap:12px;border:1px solid var(--border2);border-radius:14px;padding:11px 12px;margin-bottom:8px;text-align:left;background:var(--bg2)}
+#recapCard{cursor:pointer;padding:16px;margin-bottom:20px}
 .bf-foot{max-width:460px;width:100%;margin:8px auto 0}.mo.ctr{align-items:center;padding-top:calc(env(safe-area-inset-top) + 8px)}
 .md{background:var(--bg2);border:1px solid var(--border2);border-radius:24px 24px 0 0;width:100%;max-width:640px;max-height:92vh;overflow-y:auto;padding:6px 20px 40px;overscroll-behavior:contain}
 .mo.ctr .md{border-radius:20px;max-width:400px;padding:24px;max-height:calc(92vh - env(safe-area-inset-top))}
@@ -459,6 +465,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <button class="btn bg sm ic" id="homeProfBtn" onclick="openProf()" style="padding:0;border:0;background:none;border-radius:50%;width:auto;height:auto"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0'/><path d='M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2'/></svg></button>
     </div>
   </div>
+    <div id="recapCard" class="sec" style="display:none" onclick="openRecapNow()"></div>
     <div id="streakBanner" class="sec" style="display:none"></div>
   <div class="cw">
     <div class="ch">
@@ -927,6 +934,13 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="bf-foot"><button class="btn bg wf" onclick="closeBadgeFull()">Close</button></div>
 </div>
 
+<!-- Full-screen monthly recap (Home card / Metrics > Monthly Recaps) -->
+<div id="recapFull" role="dialog" aria-modal="true">
+  <button class="cb bf-x" onclick="closeRecap()" aria-label="Close">✕</button>
+  <div id="recapFullBody" class="bf-wrap" style="padding-top:26px"></div>
+  <div class="bf-foot" style="display:flex;gap:10px"><button class="btn bp" style="flex:1" id="recapShareBtn" onclick="shareRecap()">Share</button><button class="btn bg" style="flex:1" onclick="closeRecap()">Close</button></div>
+</div>
+
 <!-- Achievement popup: a metric-tier badge earned live during a workout -->
 <div class="mo ctr" id="achModal" style="z-index:710">
   <div class="md" style="position:relative;text-align:center">
@@ -1230,7 +1244,7 @@ async function usernameTaken(u, exceptMine){
 const KEY_SHAPE={
   routines:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
   prof:'o',prs:'o',settings:'o',exRename:'o',exOverride:'o',exNotes:'o',cardioPR:'o',metrics:'o',
-  sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o'
+  sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o'
 };
 function shapeOk(k,v){
   const t=KEY_SHAPE[k];
@@ -1722,6 +1736,7 @@ function renderHome() {
   } else {
     sb.style.display='none';
   }
+  renderRecapCard();
   renderCal();
   const rec=[...h].reverse().slice(0,6);
   const el=document.getElementById('recentW');
@@ -3581,7 +3596,10 @@ function computeBadges() {
   // yet (still time to train -- same grace as calcStreak), and days before your
   // first-ever workout don't count, so a brand-new account never gets it.
   const mStart=new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const qStart=+new Date(new Date().getFullYear(), Math.floor(new Date().getMonth()/3)*3, 1);  // Cardio-Maxing only
+  // Tiered badges follow your best of the LAST 3 MONTHS (Mr. Roni, 2026-09-24); the all-time best is kept
+  // and shown in the badge popup.
+  const _n=new Date(), cut3=+new Date(_n.getFullYear(),_n.getMonth()-3,_n.getDate());
+  const h3=h.filter(w=>+new Date(w.date)>=cut3);
   let weekOff=false;
   if(dates.length){
     const dset=new Set(dates);
@@ -3619,7 +3637,7 @@ function computeBadges() {
   });
 
   // 4) Tiered lift badges. Best weight (lb) at >= minReps among matching lifts.
-  const bestLb=(pred,minReps)=>{ let best=0; h.forEach(w=>(w.exercises||[]).forEach(ex=>{ const nm=(ex.name||'').toLowerCase(); if(!pred(nm))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); })); return best; };
+  const bestLb=(pred,minReps,src=h3)=>{ let best=0; src.forEach(w=>(w.exercises||[]).forEach(ex=>{ const nm=(ex.name||'').toLowerCase(); if(!pred(nm))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); })); return best; };
   const tierOf=(v,t)=> v>=t[2]?'gold':v>=t[1]?'silver':v>=t[0]?'bronze':null;
   const bwKg=gBW(), bwLb=bwKg*2.20462, haveBW=bwKg>0;
 
@@ -3641,16 +3659,15 @@ function computeBadges() {
 
   // Pull-up / push-up: best single SET (never summed across sets).
   const flat=s=>(s||'').toLowerCase().replace(/[^a-z]/g,'');
-  const bestSetReps=pred=>{ let best=0; h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!pred(flat(ex.name)))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>best)best=s.reps||0; }); })); return best; };
+  const bestSetReps=(pred,src=h3)=>{ let best=0; src.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!pred(flat(ex.name)))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>best)best=s.reps||0; }); })); return best; };
   const pullBest=bestSetReps(f=>f.includes('pullup')||f.includes('chinup'));
   const pullT=tierOf(pullBest,[10,15,20]);
   const pushBest=bestSetReps(f=>f.includes('pushup'));
   const pushT=tierOf(pushBest,[30,50,80]);
   // Cardio: lowest endurance-adjusted mile-equivalent (Riegel) across all logged runs.
-  // Resets every 3 months: only runs from the CURRENT calendar quarter count. (Coward-Maxing used to
-  // share this window; it moved to monthly on 2026-09-24 -- Cardio stays quarterly.)
-  let cardioBest=Infinity;
-  h.forEach(w=>{ if(!(+new Date(w.date)>=qStart)) return; (w.exercises||[]).forEach(ex=>{ if(((ex.tracking)||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<cardioBest)cardioBest=me; } }); }); });
+  // Only runs from the last 3 months count (rolling, like the lifts).
+  const cardioOver=src=>{ let b=Infinity; src.forEach(w=>{ (w.exercises||[]).forEach(ex=>{ if(((ex.tracking)||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<b)b=me; } }); }); }); return b; };
+  const cardioBest=cardioOver(h3), cardioAll=cardioOver(h);
   const cardioT = cardioBest<=6.5?'gold':cardioBest<=8?'silver':cardioBest<=9?'bronze':null;
 
   // Variety: distinct exercises actually logged. Imported history can lack exId,
@@ -3667,6 +3684,49 @@ function computeBadges() {
   // like PR-Maxing. Not a duplicate of PR-Maxing: that one needs a PR on each
   // of the 7 days; this only needs a finished workout on each.
   const bestRun=bestStreak(h);
+
+  // All-time bests (kept even when the 3-month tier has dropped) -- shown in the popup.
+  const cardioTierOf=v=>v<=6.5?'gold':v<=8?'silver':v<=9?'bronze':null;
+  const pullF=f=>f.includes('pullup')||f.includes('chinup'), pushF=f=>f.includes('pushup');
+  const bA=bestLb(benchPred,1,h), oA=bestLb(ohpPred,5,h), qA=bestLb(sqPred,5,h), puA=bestSetReps(pullF,h), psA=bestSetReps(pushF,h);
+  const ALL={
+    'Bench-Maxing':bA>0&&{v:`${r0(bA)} lb`,tier:tierOf(bA,[135,225,315])},
+    'Shoulder-Maxing':haveBW&&oA>0&&{v:`${r0(oA)} lb x5`,tier:tierOf(oA,[0.25*bwLb,0.5*bwLb,1.0*bwLb])},
+    'Leg-Maxing':haveBW&&qA>0&&{v:`${r0(qA)} lb x5`,tier:tierOf(qA,[1.0*bwLb,1.5*bwLb,2.0*bwLb])},
+    'Pull-up-Maxing':puA>0&&{v:`${puA} reps`,tier:tierOf(puA,[10,15,20])},
+    'Push-up-Maxing':psA>0&&{v:`${psA} reps`,tier:tierOf(psA,[30,50,80])},
+    'Cardio-Maxing':isFinite(cardioAll)&&{v:`${fmtClock(cardioAll)} per mile`,tier:cardioTierOf(cardioAll)}
+  };
+
+  // Monthly badges: reset every calendar month, never required for Jacked.
+  const ymOf=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  const mAt=k=>new Date(_n.getFullYear(),_n.getMonth()+k,1);            // first of the month, k months from now
+  const inMonth=(d0)=>h.filter(w=>{ const d=new Date(w.date); return d.getFullYear()===d0.getFullYear()&&d.getMonth()===d0.getMonth(); });
+  const curYM=ymOf(mAt(0)), prevYM=ymOf(mAt(-1));
+  const mb=S.g('monthBadges')||{};
+  let mbDirty=false;
+  // Comeback-Maxing: more sessions this month than last, when last month ran below your average of the 3 months before it.
+  const nCur=inMonth(mAt(0)).length, nLast=inMonth(mAt(-1)).length;
+  const avg3=(inMonth(mAt(-2)).length+inMonth(mAt(-3)).length+inMonth(mAt(-4)).length)/3;
+  const comeback=avg3>0&&nLast<avg3&&nCur>nLast;
+  // Challenge-Maxing: your weakest muscle group (glutes left out), picked on the first look of the month from
+  // last month's training, never the same group two months running. Train it in `target` different workouts.
+  const grpOf=w=>new Set((w.exercises||[]).map(e=>muscleGroup(e.muscle)).filter(Boolean));
+  if(!mb[curYM]||!mb[curYM].group){
+    const CAND=MGROUPS.filter(g=>g!=='glutes'&&g!==(mb[prevYM]&&mb[prevYM].group));
+    let src=inMonth(mAt(-1)); if(!src.length) src=h3;
+    const use={}; CAND.forEach(g=>use[g]=0);
+    src.forEach(w=>(w.exercises||[]).forEach(e=>{ const g=muscleGroup(e.muscle); if(g in use) use[g]+=(e.sets||[]).filter(x=>x.done).length||(e.sets||[]).length; }));
+    const low=Math.min(...CAND.map(g=>use[g])), ties=CAND.filter(g=>use[g]===low);
+    const group=ties[(mAt(0).getMonth())%ties.length];
+    const prevHits=inMonth(mAt(-1)).filter(w=>grpOf(w).has(group)).length;
+    mb[curYM]={group,target:Math.min(10,Math.max(4,prevHits+2))}; mbDirty=true;
+  }
+  const ch=mb[curYM], chCnt=inMonth(mAt(0)).filter(w=>grpOf(w).has(ch.group)).length, chDone=chCnt>=ch.target;
+  if(chDone&&!ch.done){ ch.done=true; mbDirty=true; }
+  if(comeback&&!ch.comeback){ ch.comeback=true; mbDirty=true; }
+  const chWins=Object.keys(mb).filter(k=>mb[k]&&mb[k].done).length;
+  const cbWins=Object.keys(mb).filter(k=>mb[k]&&mb[k].comeback).length;
 
   // NOTE: badge names follow the "<Title>-Maxing" convention — keep it for new badges.
   // Jacked is the exception by request. tiered:true marks the Bronze/Silver/Gold badges.
@@ -3689,16 +3749,32 @@ function computeBadges() {
     {icon:'flame',color:'var(--orange)',name:'PR-Maxing',desc:'Hit a PR every day for 7 days straight',earned:prWeek},
     {icon:'calendarCheck',color:'var(--green)',name:'Consistency-Maxing',desc:`Train 7 days in a row — best run: ${bestRun} day${bestRun!==1?'s':''}`,earned:bestRun>=7},
     {icon:'bed',color:'var(--muted)',name:'Coward-Maxing',desc:'7+ days off in a row',earned:weekOff},
+    {icon:'dumbbell',color:MCOL[ch.group]||'var(--accent)',name:'Challenge-Maxing',monthly:true,earned:chDone,group:ch.group,
+      desc:`${MGNAME[ch.group]} ${Math.min(chCnt,ch.target)} / ${ch.target}`,
+      detail:`Train ${MGNAME[ch.group]} in ${ch.target} different workouts this month. ${chCnt} so far.`+(chWins?` Completed ${chWins} month${chWins!==1?'s':''} so far.`:'')},
+    {icon:'arrowUp',color:'var(--green)',name:'Comeback-Maxing',monthly:true,earned:comeback,
+      desc:`${nCur} sessions vs ${nLast} last month`,
+      detail:`${nCur} sessions this month vs ${nLast} last month. Your average over the 3 months before last was ${Math.round(avg3*10)/10}.`+(cbWins?` Earned ${cbWins} month${cbWins!==1?'s':''} so far.`:'')},
   ];
+  list.forEach(b=>{ if(ALL[b.name]) b.all=ALL[b.name]; });
+  const CUR={'Bench-Maxing':bench>0?`${r0(bench)} lb`:'','Shoulder-Maxing':haveBW&&ohp>0?`${r0(ohp)} lb x5`:'','Leg-Maxing':haveBW&&sq>0?`${r0(sq)} lb x5`:'',
+    'Pull-up-Maxing':pullBest>0?`${pullBest} reps`:'','Push-up-Maxing':pushBest>0?`${pushBest} reps`:'','Cardio-Maxing':isFinite(cardioBest)?`${fmtClock(cardioBest)}/mi`:''};
+  list.forEach(b=>{ if(CUR[b.name]!==undefined) b.curV=CUR[b.name]; });
   // Jacked: every other badge earned AND every tiered badge at Gold. Never counts
   // itself; Coward-Maxing is a penalty, not a requirement -- but holding it locks Jacked.
-  const req=list.filter(b=>b.name!=='Coward-Maxing');
+  const req=list.filter(b=>b.name!=='Coward-Maxing'&&!b.monthly);
   const tiered=list.filter(b=>b.tiered);
   const nEarned=req.filter(b=>b.earned).length, nGold=tiered.filter(b=>b.tier==='gold').length;
   list.push({icon:'crown',color:'#ffd700',name:'Jacked',earned:nEarned===req.length&&nGold===tiered.length&&!weekOff,
     desc:'Every badge, all tiers Gold',
     detail:`${nEarned} / ${req.length} badges · ${nGold} / ${tiered.length} at Gold`+(weekOff?' · locked by Coward-Maxing':''),
     locked:weekOff});
+  const jk=list[list.length-1];
+  // Jacked is a monthly achievement: re-checked live, and every month you held it is kept.
+  const jm=Array.isArray(mb._jackedMonths)?mb._jackedMonths:(mb._jacked?[mb._jacked]:[]);
+  if(jk.earned&&!jm.includes(curYM)){ jm.push(curYM); mb._jackedMonths=jm; mb._jacked=curYM; mbDirty=true; }
+  jk.everYM=jm.length?jm[jm.length-1]:null; jk.months=jm.length;
+  if(mbDirty) S.s('monthBadges',mb);
   return list;
 }
 const TIERC={bronze:'#cd7f32',silver:'#b8b8c8',gold:'#ffd700'};
@@ -3714,25 +3790,29 @@ const BADGE_HOW={
   'Jacked':'Earn every other badge, with every tiered badge at Gold. Locked while you hold Coward-Maxing.',
   'Pull-up-Maxing':'Most reps in a single pull-up/chin-up set. Bronze 10, Silver 15, Gold 20.',
   'Push-up-Maxing':'Most reps in a single push-up set (one exercise, not summed). Bronze 30, Silver 50, Gold 80.',
-  'Cardio-Maxing':'Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze 9:00, Silver 8:00, Gold 6:30 per mile. Resets every 3 months: only runs from the current quarter count.',
+  'Cardio-Maxing':'Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze 9:00, Silver 8:00, Gold 6:30 per mile. Only runs from the last 3 months count.',
+  'Challenge-Maxing':'Train your weakest muscle group (glutes left out) enough times this month. A new group every month.',
+  'Comeback-Maxing':'More sessions this month than last month, after a month that ran below your recent average.',
   'Variety-Maxing':'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'
 };
 // Name shown for a badge; older builds stored '1000lb Club-Maxing' in friends' badge lists.
 function badgeShownName(n){ return n==='1000lb Club-Maxing' ? '1000lb Club' : n; }
 // Full-screen achievement popup: same icon as the list, title, then the summary in a text hierarchy.
 const BADGE_DETAIL={
-  'Bench-Maxing':{how:'Barbell bench press, 1 rep.',tiers:[['Bronze','135 lb'],['Silver','225 lb'],['Gold','315 lb']]},
-  'Shoulder-Maxing':{how:'Barbell overhead press for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','25% of body weight'],['Silver','50% of body weight'],['Gold','100% of body weight']]},
-  'Leg-Maxing':{how:'Barbell squat for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','100% of body weight'],['Silver','150% of body weight'],['Gold','200% of body weight']]},
+  'Bench-Maxing':{how:'Barbell bench press, 1 rep.',tiers:[['Bronze','135 lb'],['Silver','225 lb'],['Gold','315 lb']],note:'Your tier follows your best in the last 3 months. Your all-time best stays below.'},
+  'Shoulder-Maxing':{how:'Barbell overhead press for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','25% of body weight'],['Silver','50% of body weight'],['Gold','100% of body weight']],note:'Your tier follows your best in the last 3 months. Your all-time best stays below.'},
+  'Leg-Maxing':{how:'Barbell squat for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','100% of body weight'],['Silver','150% of body weight'],['Gold','200% of body weight']],note:'Your tier follows your best in the last 3 months. Your all-time best stays below.'},
   '1000lb Club':{how:'In a single workout, your best bench + squat + deadlift add up to 1000 lb or more.'},
-  'Pull-up-Maxing':{how:'Most reps in a single pull-up or chin-up set.',tiers:[['Bronze','10 reps'],['Silver','15 reps'],['Gold','20 reps']]},
-  'Push-up-Maxing':{how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze','30 reps'],['Silver','50 reps'],['Gold','80 reps']]},
-  'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Resets every 3 months. Only runs from the current quarter count, and the badge starts fresh each quarter.'},
+  'Pull-up-Maxing':{how:'Most reps in a single pull-up or chin-up set.',tiers:[['Bronze','10 reps'],['Silver','15 reps'],['Gold','20 reps']],note:'Your tier follows your best in the last 3 months. Your all-time best stays below.'},
+  'Push-up-Maxing':{how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze','30 reps'],['Silver','50 reps'],['Gold','80 reps']],note:'Your tier follows your best in the last 3 months. Your all-time best stays below.'},
+  'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Your tier follows your best pace in the last 3 months. Your all-time best stays below.'},
+  'Challenge-Maxing':{how:'Every month you get a target on your weakest muscle group, based on last month (glutes are left out, and it is never the same group two months in a row). Train that group in the target number of different workouts.',note:'Resets monthly with a new muscle group.'},
+  'Comeback-Maxing':{how:'Log more sessions this month than last month, when last month was below your average of the 3 months before it.',note:'Resets monthly.'},
   'Variety-Maxing':{how:'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'},
   'PR-Maxing':{how:'Hit at least one personal record on 7 days in a row.'},
   'Consistency-Maxing':{how:'Finish at least one workout on 7 calendar days in a row. Two workouts on the same day still count as one day. Yours for good once earned.'},
   'Coward-Maxing':{how:'Given after 7+ days off in a row this month. Holding it locks the Jacked badge.',note:'Resets monthly. Only days off in the current month count, and the badge starts fresh on the 1st.'},
-  'Jacked':{how:'Earn every other badge, with Bench, Shoulder, Leg, Pull-up, Push-up and Cardio-Maxing all at Gold. You also cannot have Coward-Maxing: while you hold it, Jacked stays locked. Cardio-Maxing resets every 3 months and Coward-Maxing resets monthly, so Jacked can lapse and come back.'}
+  'Jacked':{how:'Earn every other badge, with Bench, Shoulder, Leg, Pull-up, Push-up and Cardio-Maxing all at Gold. You also cannot have Coward-Maxing: while you hold it, Jacked stays locked. Tiered badges follow your best of the last 3 months and Coward-Maxing resets monthly, so Jacked is re-checked every month and can lapse and come back.',note:'Checked every month. If any of the six tiered badges falls below Gold (no Gold-level lift in the last 3 months), Jacked is lost until you get it back.'}
 };
 function badgeInfo(name){
   const b=computeBadges().find(x=>x.name===name); if(!b) return;
@@ -3741,6 +3821,8 @@ function badgeInfo(name){
   const status=b.tier?b.tier:(b.earned?'earned':'locked');
   const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v])=>{const k=t.toLowerCase(),on=b.tier===k;return `<div class="bf-tier${on?' on':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span></div>`;}).join('')}</div>`:'';
   const note=d.note?`<div class="bf-h">Resets</div><div class="bf-body">${d.note}</div>`:'';
+  const allT=b.all?`<div class="bf-h">All-time best</div><div class="bf-tiers"><div class="bf-tier" style="${b.all.tier?`border-color:${TIERC[b.all.tier]}88;background:${TIERC[b.all.tier]}14`:''}"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:800;text-transform:capitalize;color:${b.all.tier?TIERC[b.all.tier]:'var(--muted)'}">${b.all.tier||'no tier'}</span></div></div>`:'';
+  const ever=(b.name==='Jacked'&&b.everYM)?`<div class="bf-h">Best in history</div><div class="bf-body">Last held ${MONTHS[+b.everYM.slice(5)-1]} ${b.everYM.slice(0,4)}. Held in ${b.months} month${b.months!==1?'s':''} so far.</div>`:'';
   document.getElementById('badgeFullBody').innerHTML=`
     <div class="bf-icon" style="filter:${b.earned?'none':'grayscale(1)'};box-shadow:0 0 0 1px ${col}55,0 0 60px -6px ${col}66">${uic(b.icon,b.color,84)}</div>
     <div class="bf-status" style="color:${col}">${status}</div>
@@ -3748,7 +3830,7 @@ function badgeInfo(name){
     <div class="bf-stat">${b.detail||b.desc}</div>
     <div class="bf-sep"></div>
     <div class="bf-h">How to earn it</div><div class="bf-body">${d.how}</div>
-    ${tiers}${note}`;
+    ${tiers}${allT}${ever}${note}`;
   document.getElementById('badgeFull').classList.add('open');
   document.getElementById('badgeFull').scrollTop=0;
 }
@@ -4008,6 +4090,142 @@ function cardLifetime(){
   return {id:'lifetime',title:'Lifetime Stats',html};
 }
 
+// ── Monthly recap ─────────────────────────────────────────────────────────────
+// Shown as a small card at the top of Home during the first 7 days of a month (recap of the month just
+// ended), always available from Metrics > Monthly Recaps. Tap = full recap; Share = image + text.
+const _pad2=n=>String(n).padStart(2,'0');
+function recapData(y,m){
+  const hm=gH().filter(w=>{ const d=new Date(w.date); return d.getFullYear()===y&&d.getMonth()===m; });
+  if(!hm.length) return null;
+  const vol=hm.reduce((a,w)=>a+(w.totalVolume||0),0), prs=hm.reduce((a,w)=>a+(w.prCount||0),0);
+  const days=new Set(hm.map(w=>dayKey(w.date))).size;
+  let best=null;
+  hm.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!isWT(ex)) return; (ex.sets||[]).forEach(st=>{
+    if(!(st.weight>0&&st.reps>0)) return; const e=e1rm(st.weight,st.reps);
+    if(!best||e>best.e) best={e,name:ex.name,w:st.weight,r:st.reps}; }); }));
+  const wk={};
+  hm.forEach(w=>{ const d=new Date(w.date), s0=new Date(d.getFullYear(),d.getMonth(),d.getDate()-d.getDay()); (wk[+s0]=wk[+s0]||{s0,vol:0,n:0}); wk[+s0].vol+=w.totalVolume||0; wk[+s0].n++; });
+  const bw=Object.values(wk).sort((a,b)=>b.vol-a.vol||b.n-a.n)[0];
+  const rec=(S.g('monthBadges')||{})[y+'-'+_pad2(m+1)]||{};
+  const now=new Date(), isPrev=(y*12+m)===(now.getFullYear()*12+now.getMonth()-1);
+  const crown=isPrev&&crownCodes().has((gProf()||{}).code);
+  return {y,m,label:MONTHS[m],sessions:hm.length,vol,prs,days,best,bw,crown,comeback:!!rec.comeback,
+    challenge:rec.group?{group:rec.group,target:rec.target,done:!!rec.done}:null};
+}
+function recapMonthToShow(){
+  const n=new Date(); if(n.getDate()>7) return null;
+  const p=new Date(n.getFullYear(),n.getMonth()-1,1), key=p.getFullYear()+'-'+_pad2(p.getMonth()+1);
+  if(S.g('recapDismissed')===key) return null;
+  return {y:p.getFullYear(),m:p.getMonth(),key};
+}
+function renderRecapCard(){
+  const el=document.getElementById('recapCard'); if(!el) return;
+  const t=recapMonthToShow(), d=t&&recapData(t.y,t.m);
+  if(!d){ el.style.display='none'; return; }
+  // 10% smaller than the Streak card (Mr. Roni, 2026-09-24): 90% of its padding, title, icon and number sizes.
+  el.style.display='block';
+  el.innerHTML=`<div style="display:flex;align-items:center;gap:11px">
+      <div>${uic('calendarCheck','var(--accent)',27)}</div>
+      <div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:21.6px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;line-height:1">${d.label} recap</div>
+        <div class="sl" style="margin-top:5px">${d.sessions} sessions · ${fmtW(d.vol)} ${uL()} · ${d.prs} PRs</div></div>
+      <span style="font-size:22px;color:var(--muted);line-height:1">&#8250;</span>
+      <button class="cb" style="width:26px;height:26px;font-size:12px;flex-shrink:0" aria-label="Dismiss" onclick="event.stopPropagation();dismissRecap('${t.key}')">✕</button>
+    </div>`;
+}
+function dismissRecap(key){ S.s('recapDismissed',key); renderRecapCard(); }
+function openRecapNow(){ const t=recapMonthToShow(); if(t) openRecap(t.y,t.m); }
+let _recap=null;
+const TIER_SHORT={'Bench-Maxing':'Bench','Shoulder-Maxing':'Shoulder','Leg-Maxing':'Leg','Pull-up-Maxing':'Pull-up','Push-up-Maxing':'Push-up','Cardio-Maxing':'Cardio'};
+function recapBestLine(d){ return d.best?`${esc(d.best.name)} — ${dW(d.best.w)} ${uL()} × ${d.best.r}`:''; }
+function recapWeekLine(d){ return d.bw?`Week of ${MONTHS[d.bw.s0.getMonth()].slice(0,3)} ${d.bw.s0.getDate()} — ${fmtW(d.bw.vol)} ${uL()} in ${d.bw.n} session${d.bw.n!==1?'s':''}`:''; }
+function openRecap(y,m){
+  const d=recapData(y,m); if(!d){ toast('No workouts that month','err'); return; }
+  _recap=d;
+  const tiered=computeBadges().filter(b=>b.tiered);
+  const tile=(v,l)=>`<div class="rc-tile"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  const row=(ic,col,t,sub)=>`<div class="rc-row"><div>${uic(ic,col,24)}</div><div style="min-width:0"><div style="font-weight:700;font-size:14px">${t}</div>${sub?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${sub}</div>`:''}</div></div>`;
+  document.getElementById('recapFullBody').innerHTML=`
+    <div class="bf-status" style="color:var(--accent)">Monthly recap</div>
+    <div class="bf-title">${d.label} ${d.y}</div>
+    <div class="bf-sep" style="margin:18px 0 16px"></div>
+    <div class="rc-tiles">${tile(d.sessions,'Sessions')}${tile(fmtW(d.vol)+' <span style="font-size:14px;color:var(--muted)">'+uL()+'</span>','Weight lifted')}${tile(d.prs,'PRs')}${tile(d.days,'Days trained')}</div>
+    ${d.best?row('trophy','#ffd700','Best lift',recapBestLine(d)):''}
+    ${d.bw?row('calendar','var(--accent)','Best week',recapWeekLine(d)):''}
+    ${d.crown?row('crown','#ffd700','Leaderboard crown','Most weight lifted among your friends'):''}
+    ${d.challenge?row('dumbbell',MCOL[d.challenge.group],'Challenge: '+MGNAME[d.challenge.group],`${d.challenge.target} workouts — ${d.challenge.done?'completed':'not completed'}`):''}
+    ${d.comeback?row('arrowUp','var(--green)','Comeback','More sessions than the month before'):''}
+    <div class="bf-h" style="margin:18px 0 8px">Tiered badges</div>
+    ${tiered.map(b=>`<div class="rc-row" style="border-color:${b.tier?TIERC[b.tier]+'66':'var(--border2)'}"><div>${uic(b.icon,b.color,24)}</div><div style="flex:1;min-width:0;font-weight:700;font-size:14px">${TIER_SHORT[b.name]||b.name}</div><div style="font-size:12px;color:var(--muted)">${b.curV||''}</div><span style="font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${b.tier?TIERC[b.tier]:'var(--muted)'};min-width:52px;text-align:right">${b.tier||'—'}</span></div>`).join('')}
+    <div style="height:14px"></div>`;
+  document.getElementById('recapFull').classList.add('open');
+  document.getElementById('recapFull').scrollTop=0;
+}
+function closeRecap(){ document.getElementById('recapFull').classList.remove('open'); }
+function cardRecaps(){
+  const n=new Date(), rows=[];
+  for(let k=1;k<=12;k++){ const dt=new Date(n.getFullYear(),n.getMonth()-k,1), d=recapData(dt.getFullYear(),dt.getMonth()); if(d) rows.push(d); }
+  const html=rows.length?rows.map(d=>`<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openRecap(${d.y},${d.m})">
+      <div>${uic('calendarCheck','var(--accent)',24)}</div>
+      <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${d.label} ${d.y}${d.crown?' '+uic('crown','#ffd700',14):''}</div><div style="font-size:12px;color:var(--muted)">${d.sessions} sessions · ${fmtW(d.vol)} ${uL()} · ${d.prs} PRs</div></div>
+      <span style="font-size:20px;color:var(--muted)">&#8250;</span></div>`).join('')
+    :'<div style="font-size:13px;color:var(--muted);padding:6px 0">Your first recap shows up after your first full month of workouts.</div>';
+  return {id:'recaps',title:'Monthly Recaps',html};
+}
+// Share: a framed PNG (stat tiles, best lift, tiered badges) plus a text line, via the phone's share sheet.
+async function recapImage(d){
+  const W=1080,H=1560, c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d');
+  const F=(getComputedStyle(document.body).fontFamily)||'sans-serif';
+  const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,'#17171e'); g.addColorStop(1,'#0a0a0d'); x.fillStyle=g; x.fillRect(0,0,W,H);
+  const box=(a,b,w,h,r,fill,stroke,lw)=>{ x.beginPath(); if(x.roundRect) x.roundRect(a,b,w,h,r); else x.rect(a,b,w,h); if(fill){x.fillStyle=fill;x.fill();} if(stroke){x.strokeStyle=stroke;x.lineWidth=lw||2;x.stroke();} };
+  const txt=(t,a,b,size,weight,color,align)=>{ x.font=`${weight} ${size}px ${F}`; x.fillStyle=color; x.textAlign=align||'left'; x.textBaseline='alphabetic'; x.fillText(t,a,b); };
+  const fit=(t,max)=>{ t=String(t); while(x.measureText(t).width>max&&t.length>4) t=t.slice(0,-2); return t; };
+  const icon=(name,color,sz)=>new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>res(null);
+    i.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(uic(name,color,sz).replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" ')); });
+  box(26,26,W-52,H-52,44,null,'#20d3c2',4);
+  txt('JACKED.',72,118,44,800,'#20d3c2');
+  txt('MONTHLY RECAP',W-72,118,26,700,'#8a8a98','right');
+  txt(`${d.label} ${d.y}`,72,214,84,800,'#f2f2f7');
+  const tw=(W-144-24)/2, tiles=[[String(d.sessions),'SESSIONS'],[`${fmtW(d.vol)} ${uL()}`,'WEIGHT LIFTED'],[String(d.prs),'PRS'],[String(d.days),'DAYS TRAINED']];
+  tiles.forEach((t,i)=>{ const a=72+(i%2)*(tw+24), b=262+Math.floor(i/2)*(170+24);
+    box(a,b,tw,170,26,'#0d0d11','#2c2c38',2); txt(t[0],a+30,b+92,64,800,'#f2f2f7'); txt(t[1],a+30,b+138,24,700,'#8a8a98'); });
+  let y=262+2*170+24+40;
+  const line=(lab,val,col)=>{ box(72,y,W-144,120,26,'#0d0d11','#2c2c38',2); txt(lab,102,y+42,22,700,col||'#8a8a98'); x.font=`700 34px ${F}`; txt(fit(val,W-204),102,y+90,34,700,'#f2f2f7'); y+=120+18; };
+  if(d.best) line('BEST LIFT',`${d.best.name} — ${dW(d.best.w)} ${uL()} × ${d.best.r}`,'#ffd700');
+  if(d.bw) line('BEST WEEK',recapWeekLine(d),'#20d3c2');
+  y+=22; txt('TIERED BADGES',72,y+20,26,800,'#8a8a98'); y+=48;
+  const tiered=computeBadges().filter(b=>b.tiered), cw=(W-144-40)/3, ch=250;
+  for(let i=0;i<tiered.length;i++){
+    const b=tiered[i], a=72+(i%3)*(cw+20), bb=y+Math.floor(i/3)*(ch+20), tc=b.tier?TIERC[b.tier]:'#5a5a68';
+    box(a,bb,cw,ch,28,'#0d0d11',tc,b.tier?4:2);
+    const im=await icon(b.icon,b.color,64); if(im) x.drawImage(im,a+cw/2-32,bb+28,64,64);
+    txt(TIER_SHORT[b.name]||b.name,a+cw/2,bb+132,34,800,'#f2f2f7','center');
+    txt((b.tier||'locked').toUpperCase(),a+cw/2,bb+176,28,800,tc,'center');
+    txt(fit(b.curV||'',cw-24),a+cw/2,bb+218,24,600,'#8a8a98','center');
+  }
+  y+=2*(ch+20)+16;
+  const tags=[]; if(d.crown) tags.push('LEADERBOARD CROWN'); if(d.challenge&&d.challenge.done) tags.push('CHALLENGE DONE'); if(d.comeback) tags.push('COMEBACK');
+  if(tags.length) txt(tags.join('   ·   '),W/2,y+20,26,800,'#ffd700','center');
+  txt('Tracked with Jacked',W/2,H-64,24,600,'#6a6a78','center');
+  return c;
+}
+async function shareRecap(){
+  const d=_recap; if(!d) return;
+  const text=`My ${d.label} on Jacked: ${d.sessions} sessions, ${fmtW(d.vol)} ${uL()} lifted, ${d.prs} PRs.`+(d.best?` Best lift: ${d.best.name} ${dW(d.best.w)} ${uL()} x ${d.best.r}.`:'');
+  const btn=document.getElementById('recapShareBtn'); if(btn) btn.disabled=true;
+  try{
+    const cv=await recapImage(d), blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+    const file=new File([blob],`jacked-${d.label.toLowerCase()}-${d.y}.png`,{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],text,title:`${d.label} recap`}); }
+    else{
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=file.name; document.body.appendChild(a); a.click(); a.remove();
+      try{ await navigator.clipboard.writeText(text); }catch(_){}
+      toast('Image saved, caption copied','ok');
+    }
+  }catch(e){ if(!(e&&e.name==='AbortError')) toast('Could not share','err'); }
+  if(btn) btn.disabled=false;
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeRecap(); });
+
 function cardBadges(){
   // Unlocked badges on top, locked at the bottom.
   const badges=computeBadges().slice().sort((a,b)=>(b.earned?1:0)-(a.earned?1:0));
@@ -4026,7 +4244,7 @@ function cardBadges(){
 
 // Saved section order (settings.cardOrder = array of card ids). Unknown/new ids sort last in default order.
 function metricsOrdered(){
-  const cards=[cardOverview(),cardWeight(),cardBody(),cardSummary(),cardLifetime(),cardBadges()];
+  const cards=[cardOverview(),cardWeight(),cardBody(),cardSummary(),cardLifetime(),cardRecaps(),cardBadges()];
   const ord=gSet().cardOrder||[];
   const rank=c=>{const i=ord.indexOf(c.id); return i<0?(c.id==='overview'?-1:999):i;};
   return cards.map((c,i)=>[c,i]).sort((a,b)=>rank(a[0])-rank(b[0])||a[1]-b[1]).map(x=>x[0]);
@@ -5846,7 +6064,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.0';
+const BUILD = 'v1.10.1';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
