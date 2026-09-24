@@ -341,8 +341,8 @@ async function monthly() {
     const g = await page.evaluate(() => { const out = []; document.querySelectorAll('#page-metrics .bgrp, #page-metrics [onclick^="badgeInfo("]').forEach(el => out.push(el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2))); return out; });
     const idx = n => g.indexOf(n), lab = ['#Monthly reset', '#3-month reset', '#Permanent'].map(idx);
     check('groups: three grey labels in order (Monthly, 3-month, Permanent)', lab[0] >= 0 && lab[0] < lab[1] && lab[1] < lab[2], JSON.stringify(g));
-    check('groups: Coward/Challenge/Comeback under Monthly, tiered under 3-month, 1000lb/Variety/PR/Consistency under Permanent',
-      ['Coward-Maxing', 'Challenge-Maxing', 'Comeback-Maxing'].every(n => idx(n) > lab[0] && idx(n) < lab[1]) &&
+    check('groups: Challenge/Comeback under Monthly (Coward hidden), tiered under 3-month, 1000lb/Variety/PR/Consistency under Permanent',
+      ['Challenge-Maxing', 'Comeback-Maxing'].every(n => idx(n) > lab[0] && idx(n) < lab[1]) && idx('Coward-Maxing') < 0 &&
       ['Bench-Maxing', 'Shoulder-Maxing', 'Leg-Maxing', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing'].every(n => idx(n) > lab[1] && idx(n) < lab[2]) &&
       ['1000lb Club', 'Variety-Maxing', 'PR-Maxing', 'Consistency-Maxing'].every(n => idx(n) > lab[2]), JSON.stringify(g));
     await ctx.close();
@@ -356,15 +356,21 @@ async function monthly() {
     // Shimmering tab titles while Jacked is held; plain when it is not.
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
     await page.evaluate(() => { renderHome(); sp('metrics'); });
-    const on = await page.evaluate(() => { const t = document.querySelector('#page-metrics .pt'); const cs = getComputedStyle(t); return { attr: document.documentElement.hasAttribute('data-jacked'), anim: cs.animationName, clip: cs.webkitBackgroundClip || cs.backgroundClip, ht: getComputedStyle(document.querySelector('#jackedHero .jh-t')).animationName }; });
-    check('shimmer: Jacked held -> tab titles animate, box shimmers', on.attr && on.anim === 'ptSweep' && /text/.test(on.clip) && on.ht === 'jhTxt', JSON.stringify(on));
+    const on = await page.evaluate(() => { const t = document.querySelector('#page-metrics .pt'); const cs = getComputedStyle(t); return { attr: document.documentElement.hasAttribute('data-jacked'), stroke: cs.webkitTextStrokeColor, w: cs.webkitTextStrokeWidth, ht: getComputedStyle(document.querySelector('#jackedHero .jh-t')).animationName }; });
+    check('outline: Jacked held -> tab titles get a gold outline, box shimmers', on.attr && on.stroke === 'rgb(255, 215, 0)' && parseFloat(on.w) > 0 && on.ht === 'jhTxt', JSON.stringify(on));
     const t = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
     await t.page.evaluate(() => { renderHome(); sp('metrics'); });
-    const off = await t.page.evaluate(() => ({ attr: document.documentElement.hasAttribute('data-jacked'), anim: getComputedStyle(document.querySelector('#page-metrics .pt')).animationName }));
-    check('shimmer: no Jacked -> plain titles', !off.attr && off.anim === 'none', JSON.stringify(off));
+    const off = await t.page.evaluate(() => ({ attr: document.documentElement.hasAttribute('data-jacked'), w: getComputedStyle(document.querySelector('#page-metrics .pt')).webkitTextStrokeWidth }));
+    check('outline: no Jacked -> plain titles', !off.attr && parseFloat(off.w) === 0, JSON.stringify(off));
     await page.evaluate(() => { S.s('hist', gH().filter(w => !(w.exercises || []).some(e => /pull/i.test(e.name)))); renderHome(); });
-    check('shimmer: losing Jacked stops it', await page.evaluate(() => !document.documentElement.hasAttribute('data-jacked') && getComputedStyle(document.querySelector('#page-metrics .pt')).animationName === 'none'));
+    check('outline: losing Jacked removes it', await page.evaluate(() => !document.documentElement.hasAttribute('data-jacked') && parseFloat(getComputedStyle(document.querySelector('#page-metrics .pt')).webkitTextStrokeWidth) === 0));
     await ctx.close(); await t.ctx.close();
+  }
+  {
+    // Coward-Maxing is hidden from Achievements until it is earned.
+    const has = async (o, now) => { const { page, ctx } = await phone({ seed: o, now }); await page.evaluate(() => sp('metrics')); await page.waitForTimeout(250); const r = await page.evaluate(() => !!document.querySelector('[onclick="badgeInfo(\'Coward-Maxing\')"]')); await ctx.close(); return r; };
+    check('coward: hidden from the list while not earned', (await has(seed(), SEP15)) === false);
+    check('coward: shown once earned', (await has(seed(), new Date('2026-09-29T12:00:00-06:00'))) === true);
   }
   {
     // Comeback-Maxing anti-softlock: half the days of the month keeps it even when last month was better.
@@ -397,7 +403,7 @@ async function narrowAndShots() {
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(`narrow ${width}px: no horizontal overflow`, over <= 0, 'overflow px=' + over);
     const rows = await page.evaluate(() => [...document.querySelectorAll('[onclick^="badgeInfo("]')].map(el => { const r = el.getBoundingClientRect(); return { r: r.right, w: el.scrollWidth - el.clientWidth }; }));
-    check(`narrow ${width}px: every badge row fits the screen`, rows.length === 14 && rows.every(x => x.r <= width + 0.5 && x.w <= 0), JSON.stringify(rows.filter(x => x.r > width || x.w > 0)));
+    check(`narrow ${width}px: every badge row fits the screen`, rows.length === 13 && rows.every(x => x.r <= width + 0.5 && x.w <= 0), JSON.stringify(rows.filter(x => x.r > width || x.w > 0)));
     if (width === 390) {
       await page.locator('[onclick="badgeInfo(\'Consistency-Maxing\')"]').evaluate(el => el.scrollIntoView({ block: 'center' }));
       await page.waitForTimeout(150);
