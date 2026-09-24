@@ -55,6 +55,33 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ## APP-WIDE (watch must mirror)
 
+### A13. Tap-to-clear set inputs; Coward-Maxing monthly; new Consistency-Maxing and Jacked badges — local, not pushed (BUILD not bumped yet)
+Mr. Roni, 2026-09-24. Committed locally on `main`; not pushed, not live. Gets a BUILD number on push.
+- **Tap-to-clear set inputs.** Every weight/reps cell of a set (live workout and the history
+  editor; duration and distance too, since they use the same two cells): on focus the box empties
+  and the old number shows as the greyed placeholder; typing starts from empty. Leaving the box
+  with nothing typed puts the old value back **and keeps it in the data** (typing then erasing
+  never stores 0). An already-empty set keeps its suggestion placeholder. Routines hold no set
+  numbers, so nothing changes there. Watch: the dial/keypad equivalent is "edit starts from blank,
+  cancel keeps the old value" -- mirror it if the watch has a type-in path.
+- **Coward-Maxing resets monthly** (was the calendar quarter). Rule: earned when there are 7+
+  consecutive calendar days with no workout **inside the current calendar month**, counting only
+  days before today and only days after the user's first-ever workout. A layoff that straddles
+  the 1st counts only its days in the new month. Cardio-Maxing keeps its **quarterly** window (A11);
+  it used to share the window with Coward-Maxing.
+- **New badge `Consistency-Maxing`** (icon Tabler `calendar-check`, green). Earned when the
+  history has 7+ consecutive local calendar days with at least one finished workout each
+  (several workouts on one day count once). Anywhere in history; permanent once earned (same as
+  PR-Maxing). Differs from `PR-Maxing`, which needs a PR on each of the 7 days.
+- **New badge `Jacked`** (icon Tabler `crown`, gold; no `-Maxing` suffix by request). Earned when
+  every other badge is earned AND all six tiered badges (Bench, Shoulder, Leg, Pull-up, Push-up,
+  Cardio-Maxing) are at Gold. Does not count itself. **Coward-Maxing is excluded** from the
+  requirement (`JACKED_REQUIRES_COWARD=false` in `index.html`; flip to require it). Because
+  Cardio-Maxing resets quarterly, Jacked can lapse with it.
+- **Data:** no new storage keys. Badge names go into a profile's `badgeList` as before
+  (`n:'Consistency-Maxing'`, `n:'Jacked'`, icons `calendarCheck` / `crown`); the `badges` count
+  rises to at most 12. Older phone builds show these two with a blank icon until updated.
+
 ### A12. Routines never get added without an explicit "add" from the user — build v1.9.1
 Bug report 2026-09-22: a user opened Jacked and found a routine ("Dip Machine Day") in their
 Routines list they never chose to add. Root cause found in `jacked-pwa/index.html`:
@@ -238,6 +265,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 09-24 | local (not pushed) | Tap-to-clear set inputs; Coward-Maxing resets monthly; new Consistency-Maxing and Jacked badges | APP-WIDE A13 |
 | 09-19 | `5832e21` | Muscle-group tier rebuild: 90-day window, rep cap 10, per-exercise scaling, top-3 average, tier lines at the standards | APP-WIDE A9 |
 | 09-19 | `0e23fee` | Tier colors switched to the Signal scheme (grey/red/green/blue/gold), one color per tier, shared by body, bars and badges | APP-WIDE A8 |
 | 09-21 | `98531e8` | Fixed black-to-grey gradient behind sticky headers; friends leaderboard defaults to This month | PHONE-ONLY (gradient), APP-WIDE (leaderboard default) |
