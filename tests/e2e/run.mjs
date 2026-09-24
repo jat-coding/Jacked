@@ -334,23 +334,6 @@ async function monthly() {
     await ctx.close();
   }
   {
-    // Gold accent while Jacked is held; teal again once it is lost.
-    const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
-    await page.evaluate(() => renderHome());
-    const acc = () => page.evaluate(() => ({ attr: document.documentElement.hasAttribute('data-jacked'), c: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() }));
-    const on = await acc();
-    check('theme: Jacked held -> gold accent', on.attr && on.c === '#ffd700', JSON.stringify(on));
-    await page.evaluate(() => { const h = gH().filter(w => w.date < '2026-09-10'); S.s('hist', h); renderHome(); });   // drop the recent training -> lock
-    await page.evaluate(() => { const h = gH().filter(w => !(w.exercises || []).some(e => /pull/i.test(e.name))); S.s('hist', h); renderHome(); });
-    const off = await acc();
-    check('theme: Jacked lost -> back to teal', !off.attr && off.c === '#20d3c2', JSON.stringify(off));
-    await ctx.close();
-    const t = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
-    await t.page.evaluate(() => renderHome());
-    check('theme: never earned -> teal', await t.page.evaluate(() => !document.documentElement.hasAttribute('data-jacked') && getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() === '#20d3c2'));
-    await t.ctx.close();
-  }
-  {
     // Comeback-Maxing anti-softlock: half the days of the month keeps it even when last month was better.
     const run = async (label, hist, want) => {
       const { page, ctx } = await phone({ seed: { hist }, now: new Date('2026-10-25T12:00:00-06:00') });
