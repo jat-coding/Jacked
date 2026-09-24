@@ -31,12 +31,23 @@ export async function close() { if (browser) await browser.close(); }
 
 // A phone-shaped page. seed = { key: value } written as jk_<key> (JSON) before boot.
 // now = fixed wall-clock (Date) so date-window badges are deterministic.
-export async function phone({ width = 390, height = 844, seed = {}, now = null, videoDir = null } = {}) {
+// angle = physical rotation to report: 0 | 90 | 270 (window.orientation 90 = turned counter-clockwise, -90 = clockwise),
+// or 'none' = a browser that reports no orientation at all. via: 'wo' (window.orientation, iOS) or 'so' (screen.orientation only).
+// Playwright's screenshot() resets CDP metrics, so orientation is spoofed in an init script rather than via CDP.
+export async function phone({ width = 390, height = 844, seed = {}, now = null, videoDir = null, angle = null, via = 'wo' } = {}) {
   const ctx = await browser.newContext({
     viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
     timezoneId: 'America/Denver', serviceWorkers: 'block',
     ...(videoDir ? { recordVideo: { dir: videoDir, size: { width, height } } } : {}),
   });
+  if (angle !== null) await ctx.addInitScript(([a, via]) => {
+    const wo = a === 270 ? -90 : a;
+    if (a === 'none') { try { delete window.orientation; } catch (_) {} Object.defineProperty(window, 'orientation', { value: undefined, configurable: true });
+      Object.defineProperty(screen, 'orientation', { value: undefined, configurable: true }); return; }
+    if (via === 'wo') Object.defineProperty(window, 'orientation', { get: () => wo, configurable: true });
+    else { Object.defineProperty(window, 'orientation', { value: undefined, configurable: true });
+      Object.defineProperty(screen, 'orientation', { value: { angle: a, type: 'landscape-primary', addEventListener() {} }, configurable: true }); }
+  }, [angle, via]);
   await ctx.route(/supabase/, r => r.abort());
   if (!process.env.JK_FONTS) await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());   // JK_FONTS=1 loads the real web fonts for screenshots
   const page = await ctx.newPage();
