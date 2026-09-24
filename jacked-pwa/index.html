@@ -3799,13 +3799,13 @@ const BADGE_HOW={
 function badgeShownName(n){ return n==='1000lb Club-Maxing' ? '1000lb Club' : n; }
 // Full-screen achievement popup: same icon as the list, title, then the summary in a text hierarchy.
 const BADGE_DETAIL={
-  'Bench-Maxing':{how:'Barbell bench press, 1 rep.',tiers:[['Bronze','135 lb'],['Silver','225 lb'],['Gold','315 lb']],note:'Your tier follows your best in the last 3 months. Your all-time best stays below.'},
-  'Shoulder-Maxing':{how:'Barbell overhead press for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','25% of body weight'],['Silver','50% of body weight'],['Gold','100% of body weight']],note:'Your tier follows your best in the last 3 months. Your all-time best stays below.'},
-  'Leg-Maxing':{how:'Barbell squat for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','100% of body weight'],['Silver','150% of body weight'],['Gold','200% of body weight']],note:'Your tier follows your best in the last 3 months. Your all-time best stays below.'},
+  'Bench-Maxing':{how:'Barbell bench press, 1 rep.',tiers:[['Bronze','135 lb'],['Silver','225 lb'],['Gold','315 lb']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
+  'Shoulder-Maxing':{how:'Barbell overhead press for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','25% of body weight'],['Silver','50% of body weight'],['Gold','100% of body weight']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
+  'Leg-Maxing':{how:'Barbell squat for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','100% of body weight'],['Silver','150% of body weight'],['Gold','200% of body weight']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
   '1000lb Club':{how:'In a single workout, your best bench + squat + deadlift add up to 1000 lb or more.'},
-  'Pull-up-Maxing':{how:'Most reps in a single pull-up or chin-up set.',tiers:[['Bronze','10 reps'],['Silver','15 reps'],['Gold','20 reps']],note:'Your tier follows your best in the last 3 months. Your all-time best stays below.'},
-  'Push-up-Maxing':{how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze','30 reps'],['Silver','50 reps'],['Gold','80 reps']],note:'Your tier follows your best in the last 3 months. Your all-time best stays below.'},
-  'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Your tier follows your best pace in the last 3 months. Your all-time best stays below.'},
+  'Pull-up-Maxing':{how:'Most reps in a single pull-up or chin-up set.',tiers:[['Bronze','10 reps'],['Silver','15 reps'],['Gold','20 reps']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
+  'Push-up-Maxing':{how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze','30 reps'],['Silver','50 reps'],['Gold','80 reps']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
+  'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Your tier follows your best pace in the last 3 months. Your highest ever stays below, grayed out.'},
   'Challenge-Maxing':{how:'Every month you get a target on your weakest muscle group, based on last month (glutes are left out, and it is never the same group two months in a row). Train that group in the target number of different workouts.',note:'Resets monthly with a new muscle group.'},
   'Comeback-Maxing':{how:'Log more sessions this month than last month, when last month was below your average of the 3 months before it.',note:'Resets monthly.'},
   'Variety-Maxing':{how:'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'},
@@ -3821,7 +3821,7 @@ function badgeInfo(name){
   const status=b.tier?b.tier:(b.earned?'earned':'locked');
   const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v])=>{const k=t.toLowerCase(),on=b.tier===k;return `<div class="bf-tier${on?' on':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span></div>`;}).join('')}</div>`:'';
   const note=d.note?`<div class="bf-h">Resets</div><div class="bf-body">${d.note}</div>`:'';
-  const allT=b.all?`<div class="bf-h">All-time best</div><div class="bf-tiers"><div class="bf-tier" style="${b.all.tier?`border-color:${TIERC[b.all.tier]}88;background:${TIERC[b.all.tier]}14`:''}"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:800;text-transform:capitalize;color:${b.all.tier?TIERC[b.all.tier]:'var(--muted)'}">${b.all.tier||'no tier'}</span></div></div>`:'';
+  const allT=b.all?`<div class="bf-h">Highest ever</div><div class="bf-tiers"><div class="bf-tier" style="opacity:.55;filter:grayscale(1)"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:700;text-transform:capitalize;color:var(--muted)">${b.all.tier||'no tier'}</span></div></div><div class="bf-body" style="font-size:12px;color:var(--muted);margin-top:6px">Your best in all of history. It never resets. The badge above only counts the last 3 months.</div>`:'';
   const ever=(b.name==='Jacked'&&b.everYM)?`<div class="bf-h">Best in history</div><div class="bf-body">Last held ${MONTHS[+b.everYM.slice(5)-1]} ${b.everYM.slice(0,4)}. Held in ${b.months} month${b.months!==1?'s':''} so far.</div>`:'';
   document.getElementById('badgeFullBody').innerHTML=`
     <div class="bf-icon" style="filter:${b.earned?'none':'grayscale(1)'};box-shadow:0 0 0 1px ${col}55,0 0 60px -6px ${col}66">${uic(b.icon,b.color,84)}</div>
@@ -6064,7 +6064,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.1';
+const BUILD = 'v1.10.2';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

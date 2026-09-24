@@ -254,7 +254,7 @@ async function monthly() {
     check('rolling: Jacked lost when tiers drop below Gold', bs.find(b => b.name === 'Jacked').earned === false);
     await page.evaluate(() => badgeInfo('Bench-Maxing'));
     const txt = await page.locator('#badgeFullBody').innerText();
-    check('rolling: popup keeps the all-time best (315 lb, gold)', /all-time best/i.test(txt) && /315 lb/.test(txt) && /gold/i.test(txt), txt);
+    check('rolling: popup keeps the highest ever, grayed (315 lb, gold)', /highest ever/i.test(txt) && /315 lb/.test(txt) && /gold/i.test(txt), txt);
     await ctx.close();
   }
   {
