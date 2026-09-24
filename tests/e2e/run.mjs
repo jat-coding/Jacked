@@ -302,6 +302,40 @@ async function monthly() {
     await ctx.close();
   }
   {
+    // Unlocked non-tiered badges wear gold, like a Gold tier; Coward-Maxing (a penalty) does not.
+    const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
+    await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
+    const pill = await page.evaluate(() => { const r = n => document.querySelector(`[onclick="badgeInfo('${n}')"] .badge`); const a = r('PR-Maxing'), b = r('Consistency-Maxing'); return { a: a && a.textContent + '|' + getComputedStyle(a).color, b: b && b.textContent }; });
+    check('gold: unlocked non-tiered badge shows a gold Unlocked pill', /^Unlocked\|rgb\(255, 215, 0\)/.test(pill.a) && pill.b === 'Unlocked', JSON.stringify(pill));
+    await page.evaluate(() => badgeInfo('PR-Maxing'));
+    check('gold: popup status says unlocked', /unlocked/i.test(await page.locator('#badgeFullBody .bf-status').innerText()));
+    await ctx.close();
+  }
+  {
+    // Unlocked Jacked: own gold hero section at the very top of Achievements, not repeated in the list.
+    const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
+    await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
+    const r = await page.evaluate(() => { const h = document.getElementById('jackedHero'); const first = document.querySelector('#page-metrics [onclick^="badgeInfo("]'); return { has: !!h, first: first && first.id, cnt: document.querySelectorAll('[onclick="badgeInfo(\'Jacked\')"]').length, fs: h && parseFloat(getComputedStyle(h.children[1]).fontSize), border: h && getComputedStyle(h).borderTopColor }; });
+    check('hero: unlocked Jacked has its own gold section, big font, once', r.has && r.cnt === 1 && r.fs >= 30 && r.border === 'rgb(255, 215, 0)', JSON.stringify(r));
+    await page.screenshot({ path: `${SHOTS}/hero.png` });
+    await ctx.close();
+    const l = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
+    await l.page.evaluate(() => sp('metrics')); await l.page.waitForTimeout(300);
+    check('hero: locked Jacked stays in the list, no hero', await l.page.evaluate(() => !document.getElementById('jackedHero') && document.querySelectorAll('[onclick="badgeInfo(\'Jacked\')"]').length === 1));
+    await l.ctx.close();
+  }
+  {
+    // Comeback-Maxing anti-softlock: half the days of the month keeps it even when last month was better.
+    const run = async (label, hist, want) => {
+      const { page, ctx } = await phone({ seed: { hist }, now: new Date('2026-10-25T12:00:00-06:00') });
+      check(`comeback: ${label}`, (await badge(page, 'Comeback-Maxing')).earned === want, (await badge(page, 'Comeback-Maxing')).desc);
+      await ctx.close();
+    };
+    const sep = days('2026-09-01', 30).map(d => wk(d));   // trained every day last month, so nothing to beat
+    await run('16 of 31 days in Oct after a perfect Sep -> kept', [...sep, ...days('2026-10-01', 16).map(d => wk(d))], true);
+    await run('15 of 31 days in Oct after a perfect Sep -> not earned', [...sep, ...days('2026-10-01', 15).map(d => wk(d))], false);
+  }
+  {
     // Challenge-Maxing: glutes never picked, never the same group two months running.
     const { page, ctx } = await phone({ seed: seed(), now: new Date('2026-10-03T12:00:00-06:00') });
     const g1 = await page.evaluate(() => { computeBadges(); return S.g('monthBadges')['2026-10'].group; });
