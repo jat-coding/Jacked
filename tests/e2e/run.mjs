@@ -5,7 +5,7 @@ import fs from 'fs';
 import { startServer, stopServer, launch, close, phone, check, results, wk, ex, days, LB } from './harness.mjs';
 const SHOTS = process.env.SHOTS || '/tmp/jk16/shots';
 fs.mkdirSync(SHOTS, { recursive: true });
-const badges = page => page.evaluate(() => computeBadges().map(b => ({ name: b.name, earned: b.earned, tier: b.tier || null, desc: b.desc })));
+const badges = page => page.evaluate(() => computeBadges().map(b => ({ name: b.name, earned: b.earned, tier: b.tier || null, desc: b.desc, detail: b.detail })));
 const badge = async (page, n) => (await badges(page)).find(b => b.name === n);
 const SEP15 = new Date('2026-09-15T12:00:00-06:00');
 
@@ -183,7 +183,7 @@ async function jacked() {
     const missing = bs.filter(b => !b.earned && b.name !== 'Jacked' && b.name !== 'Coward-Maxing').map(b => b.name);
     check('jacked: unlocked with every badge earned + all tiers gold', j.earned, `missing=${missing} ${j.desc}`);
     check('jacked: Coward-Maxing not required (it is locked here)', bs.find(b => b.name === 'Coward-Maxing').earned === false);
-    check('jacked: does not count itself (10 required, not 11/12)', /10 \/ 10 badges · 6 \/ 6 at Gold/.test(j.desc), j.desc);
+    check('jacked: does not count itself (10 required, not 11/12)', /10 \/ 10 badges · 6 \/ 6 at Gold/.test(j.detail) && !/\d+ \/ \d+/.test(j.desc), j.detail + ' | ' + j.desc);
     check('jacked: all six tiered badges gold', bs.filter(b => b.tier).every(b => b.tier === 'gold') && bs.filter(b => b.tier).length === 6);
     await page.evaluate(() => sp('metrics'));
     await page.waitForTimeout(200);
@@ -194,6 +194,39 @@ async function jacked() {
     const { page, ctx } = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
     const bs = await badges(page);
     check('jacked: locked when one tier is only silver (pull-ups 15)', bs.find(b => b.name === 'Pull-up-Maxing').tier === 'silver' && bs.find(b => b.name === 'Jacked').earned === false);
+    await ctx.close();
+  }
+  {
+    // Coward-Maxing locks Jacked: every badge otherwise earned, then a 14-day layoff inside the month.
+    const { page, ctx } = await phone({ seed: seed(), now: new Date('2026-09-29T12:00:00-06:00') });
+    const bs = await badges(page);
+    check('jacked: locked while Coward-Maxing is held', bs.find(b => b.name === 'Coward-Maxing').earned === true && bs.find(b => b.name === 'Jacked').earned === false, JSON.stringify(bs.filter(b => !b.earned).map(b => b.name)));
+    await page.evaluate(() => badgeInfo('Jacked'));
+    const txt = await page.locator('#badgeFullBody').innerText();
+    check('popup: Jacked says Coward-Maxing locks it', /locked by Coward-Maxing/i.test(txt) && /cannot have Coward-Maxing/i.test(txt), txt);
+    const coward = bs.find(b => b.name === 'Coward-Maxing');
+    check('metrics row: Coward description has no "resets monthly"', !/resets monthly/i.test(coward.desc), coward.desc);
+    await ctx.close();
+  }
+  {
+    // Leaderboard crown: previous calendar month's top weight lifted, next to the name with a gilded row.
+    const aug = wk('2026-08-12', [ex('Barbell Bench Press', [[185, 5]])]); aug.totalVolume = 10000;
+    const friends = [{ id: '@bob', code: '@bob', name: 'Bob', username: '@bob', pmVol: 50000 }, { id: '@amy', code: '@amy', name: 'Amy', username: '@amy', pmVol: 20000 }];
+    const { page, ctx, errors } = await phone({ seed: { hist: [aug], friends }, now: SEP15 });
+    await page.evaluate(() => { sp('leaderboard'); renderLB(); });
+    await page.waitForTimeout(200);
+    const crowned = await page.evaluate(() => [...crownCodes()]);
+    check('crown: last month top lifter (Bob, 50000) wears it', crowned.length === 1 && crowned[0] === '@bob', JSON.stringify(crowned));
+    const rows = await page.locator('#page-leaderboard .gilded').count();
+    check('crown: gilded row + crown icon on that name only', rows >= 1 && (await page.locator('#page-leaderboard .gilded svg').count()) >= 1 && (await page.locator('#page-leaderboard .gilded', { hasText: 'Amy' }).count()) === 0, String(rows));
+    await page.screenshot({ path: SHOTS + '/crown.png' });
+    check('crown: no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  {
+    // Nobody lifted last month -> nobody is crowned.
+    const { page, ctx } = await phone({ seed: {}, now: SEP15 });
+    check('crown: nobody crowned when nobody lifted last month', (await page.evaluate(() => crownCodes().size)) === 0);
     await ctx.close();
   }
   {
