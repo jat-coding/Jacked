@@ -349,6 +349,11 @@ async function monthly() {
     const l = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
     await l.page.evaluate(() => sp('metrics')); await l.page.waitForTimeout(300);
     const gl = await l.page.evaluate(() => [...document.querySelectorAll('#page-metrics .bgrp, #page-metrics [onclick^="badgeInfo("]')].map(el => el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2)));
+    const jt = await l.page.evaluate(() => { const j = computeBadges().find(b => b.name === 'Jacked'); badgeInfo('Jacked'); return [j.desc, document.getElementById('badgeFullBody').innerText]; });
+    check('teaser: locked Jacked promises something special (list + popup)', /something special/i.test(jt[0]) && /reward/i.test(jt[1]) && /something special/i.test(jt[1]), JSON.stringify(jt));
+    const ju = await phone({ seed: seed(), now: SEP15 });
+    check('teaser: unlocked Jacked shows no reward teaser', await ju.page.evaluate(() => { badgeInfo('Jacked'); return !/something special/i.test(document.getElementById('badgeFullBody').innerText); }));
+    await ju.ctx.close();
     check('groups: locked Jacked sits under Monthly reset', gl.indexOf('Jacked') > gl.indexOf('#Monthly reset') && gl.indexOf('Jacked') < gl.indexOf('#3-month reset'), JSON.stringify(gl));
     await l.ctx.close();
   }
