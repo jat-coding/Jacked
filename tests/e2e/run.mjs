@@ -358,10 +358,13 @@ async function monthly() {
     await page.evaluate(() => { renderHome(); sp('metrics'); });
     const on = await page.evaluate(() => { const t = document.querySelector('#page-metrics .pt'); const cs = getComputedStyle(t); return { attr: document.documentElement.hasAttribute('data-jacked'), anim: cs.animationName, clip: cs.webkitBackgroundClip || cs.backgroundClip, ht: getComputedStyle(document.querySelector('#jackedHero .jh-t')).animationName }; });
     check('gold titles: Jacked held -> tab titles shimmer in gold, box shimmers', on.attr && on.anim === 'ptSweep' && /text/.test(on.clip) && on.ht === 'jhTxt', JSON.stringify(on));
+    const fr = await page.evaluate(() => { const c = getComputedStyle(document.body, '::after'); return [c.position, c.pointerEvents, getComputedStyle(document.querySelector('.pt span')).textShadow]; });
+    check('frame: gilded border while Jacked held (fixed, click-through), dot has no teal glow', fr[0] === 'fixed' && fr[1] === 'none' && fr[2] === 'none', JSON.stringify(fr));
     const t = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
     await t.page.evaluate(() => { renderHome(); sp('metrics'); });
     const off = await t.page.evaluate(() => ({ attr: document.documentElement.hasAttribute('data-jacked'), anim: getComputedStyle(document.querySelector('#page-metrics .pt')).animationName }));
     check('gold titles: no Jacked -> plain titles', !off.attr && off.anim === 'none', JSON.stringify(off));
+    check('frame: no border without Jacked', await t.page.evaluate(() => getComputedStyle(document.body, '::after').position !== 'fixed'));
     await page.evaluate(() => { S.s('hist', gH().filter(w => !(w.exercises || []).some(e => /pull/i.test(e.name)))); renderHome(); });
     check('gold titles: losing Jacked removes it', await page.evaluate(() => !document.documentElement.hasAttribute('data-jacked') && getComputedStyle(document.querySelector('#page-metrics .pt')).animationName === 'none'));
     await ctx.close(); await t.ctx.close();
