@@ -3,7 +3,8 @@ export type Profile = { code: string; user_id: string | null };
 export interface Store {
   getProfile(code: string): Promise<Profile | null>;
   getBackupHistIds(code: string): Promise<string[]>;
-  createUser(email: string, password: string): Promise<string | null>;
+  // null = failed; { weak: true } = Auth refused the password (too weak / found in a breach list).
+  createUser(email: string, password: string): Promise<string | null | { weak: true }>;
   deleteUser(id: string): Promise<void>;
   claimProfile(code: string, uid: string): Promise<boolean>;
   insertProfile(code: string, name: string, uid: string): Promise<boolean>;
@@ -46,6 +47,7 @@ export async function register(store: Store, body: RegisterBody) {
   // Never mailed: login resolves username → email via account_status().
   const email = `${crypto.randomUUID()}@users.jacked.example.com`;
   const uid = await store.createUser(email, password);
+  if (uid && typeof uid === "object") return { status: "weak_password" };
   if (!uid) return { status: "error" };
 
   const name = String(body.name ?? "").trim().slice(0, 40) || code.slice(1);

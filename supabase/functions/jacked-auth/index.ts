@@ -29,7 +29,11 @@ const store: Store = {
   },
   async createUser(email, password) {
     const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-    if (error) { console.error("createUser", error); return null; }
+    if (error) {
+      console.error("createUser", error);
+      // Leaked-password protection (HaveIBeenPwned) and Auth's strength rules both surface as weak_password.
+      return (error as { code?: string }).code === "weak_password" ? { weak: true } : null;
+    }
     return data.user?.id ?? null;
   },
   async deleteUser(id) {

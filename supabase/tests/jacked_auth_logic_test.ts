@@ -35,6 +35,11 @@ const PW = "hunter2hunter2";
   eq((await register(s, { code: "@ab", password: PW })).status, "invalid_username", "short username");
   eq((await register(s, { code: "@abc", password: "short" })).status, "weak_password", "short password");
   eq((await register(s, { code: "@abc", password: 12345678 })).status, "weak_password", "non-string password"); }
+{ // Auth refuses a breached/weak password → tell the user, not a generic error, and create nothing
+  const s = fake({}, {});
+  s.createUser = async () => ({ weak: true });
+  eq((await register(s, { code: "@abc", password: PW })).status, "weak_password", "auth-rejected password");
+  eq(s.users.size, 0, "no user created when Auth rejects the password"); }
 { // race: profile claimed between check and claim → auth user rolled back
   const s = fake({ "@race": null }, { "@race": ["w1"] });
   const orig = s.claimProfile; s.claimProfile = async (c, u) => { await orig("@race", "other"); return orig(c, u); };
