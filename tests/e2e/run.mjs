@@ -324,6 +324,15 @@ async function monthly() {
     check('hero: locked Jacked stays in the list, no hero', await l.page.evaluate(() => !document.getElementById('jackedHero') && document.querySelectorAll('[onclick="badgeInfo(\'Jacked\')"]').length === 1));
     await l.ctx.close();
   }
+  for (const [w, hgt] of [[390, 844], [375, 667], [360, 640]]) {
+    // Monthly recap: one phone screen, no scrolling (Mr. Roni, 2026-09-24).
+    const { page, ctx } = await phone({ width: w, height: hgt, seed: seed(), now: new Date('2026-10-03T12:00:00-06:00') });
+    await page.evaluate(() => openRecapNow()); await page.waitForTimeout(300);
+    const m = await page.evaluate(() => { const f = document.getElementById('recapFull'); const wrap = document.getElementById('recapFullBody'); return { sh: f.scrollHeight, ch: f.clientHeight, ow: f.scrollWidth - f.clientWidth, tiers: wrap.querySelectorAll('.rc-b').length }; });
+    check(`recap fits one screen at ${w}x${hgt}`, m.sh <= m.ch && m.ow <= 0 && m.tiers === 6, JSON.stringify(m));
+    await page.screenshot({ path: `${SHOTS}/recap-${w}.png` });
+    await ctx.close();
+  }
   {
     // Comeback-Maxing anti-softlock: half the days of the month keeps it even when last month was better.
     const run = async (label, hist, want) => {
