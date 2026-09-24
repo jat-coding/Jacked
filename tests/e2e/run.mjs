@@ -287,6 +287,7 @@ async function pastPRs() {
       ex('Run', [[1, 8.5]], 'distance')]), 21, 10600);
     w3.name = 'Chest/Tris/Shoulders';
     const w4 = full(wk('2026-09-10', [ex('Incline Chest Press (Machine)', [[100, 5]])]), 1, 500);   // lighter than before: no PR
+    Object.assign(w1, { prCount: 5 }); Object.assign(w2, { prCount: 2 }); Object.assign(w3, { prCount: 2 }); Object.assign(w4, { prCount: 0 });   // as commitPRs would have stored them
     return [w1, w2, w3, w4];
   };
   const [w1, w2, w3, w4] = build();
@@ -385,10 +386,67 @@ async function pastPRs() {
   await n.ctx.close();
 }
 
+// Reconciling replay vs stored prCount: importer rule for imported ids, live rule otherwise, cardio
+// counted, and a guard so nothing visible ever disagrees with the stored count.
+async function prReconcile() {
+  const W = (d, id, exs, prCount, extra = {}) => Object.assign(wk(d, exs), { id, prCount, sets: exs.length, totalVolume: 1000 }, extra);
+  const undone = e => { e.sets.forEach(s => { s.done = false; }); return e; };
+  const I1 = W('2026-08-01', 'w1785000000000_0', [ex('Bench', [[100, 10]])], 1);                    // imported: first ever -> PR
+  const I2 = W('2026-08-08', 'w1785600000000_0', [undone(ex('Bench', [[110, 1]]))], 1);             // imported: heavier raw weight, NOT done, lower e1RM -> importer PR
+  const L1 = W('2026-08-15', 'wlive1', [ex('Bench', [[112, 1]]), ex('Squat', [[100, 5]]), ex('Run', [[1, 9]], 'distance')], 3);   // live: bench 112>110 e1RM, squat first, first run
+  const C1 = W('2026-08-20', 'wcardio1', [ex('Run', [[1, 8]], 'distance')], 1);                     // cardio PR (faster)
+  const C2 = W('2026-08-22', 'wcardio2', [ex('Run', [[1, 9]], 'distance')], 0);                     // slower: none
+  const M2 = W('2026-08-25', 'wmis2', [ex('Bench', [[200, 5]])], 2);                                // stored 2, replay 1 -> guard
+  const M0 = W('2026-08-26', 'wmis0', [ex('Squat', [[300, 5]])], 0);                                // stored 0, replay 1 -> guard
+  const PS = W('2026-08-27', 'wprsets', [ex('Deadlift', [[150, 3], [160, 3]])], 1, { prSets: [{ exId: 'deadlift', ei: 0, si: 0, weight: 150, reps: 3 }] });   // prSets trusted over replay (si 1)
+  const NC = W('2026-08-28', 'wnocount', [ex('Overhead Press', [[50, 5]])], undefined); delete NC.prCount;   // no stored count -> replay shown
+  const hist = [NC, PS, M0, M2, C2, C1, L1, I2, I1];                                                // unsorted
+  const { page, ctx, errors } = await phone({ seed: { hist, bw: 180 / LB }, now: SEP15 });
+  await condensed(page);
+  const rep = await page.evaluate(() => Object.fromEntries([...prReplay().entries()].map(([id, v]) => [id, { n: v.n, si: v.list.map(p => p.si), names: v.list.map(p => p.name) }])));
+  check('reconcile: imported rule: heaviest raw weight PR even when undone / lower e1RM', rep[I2.id].n === 1 && rep[I2.id].si[0] === 0, JSON.stringify(rep[I2.id]));
+  check('reconcile: live rule after an imported record: e1RM beats {110,1}', rep[L1.id].n === 3 && rep[L1.id].names.join() === 'Bench,Squat,Run', JSON.stringify(rep[L1.id]));
+  check('reconcile: cardio PRs counted (faster run yes, slower no)', rep[C1.id].n === 1 && rep[C2.id].n === 0, JSON.stringify([rep[C1.id], rep[C2.id]]));
+  const audit = await page.evaluate(() => prAudit());
+  check('audit: total counts only workouts with a stored prCount', audit.total === 8, JSON.stringify(audit));
+  check('audit: match count and mismatch list ({id,date,stored,replay})', audit.match === 6 && audit.mismatches.length === 2
+    && audit.mismatches.every(m => m.date && ((m.id === M2.id && m.stored === 2 && m.replay === 1) || (m.id === M0.id && m.stored === 0 && m.replay === 1))), JSON.stringify(audit));
+  const so = await page.evaluate(() => Object.fromEntries(gH().map(w => { const p = prsOf(w); return [w.id, { n: p.n, stars: p.list.length, at: [...p.at] }]; })));
+  check('guard: mismatch shows stored count (2) with no stars', so[M2.id].n === 2 && so[M2.id].stars === 0 && so[M2.id].at.length === 0, JSON.stringify(so[M2.id]));
+  check('guard: stored 0 vs replay 1 shows nothing', so[M0.id].n === 0 && so[M0.id].stars === 0, JSON.stringify(so[M0.id]));
+  check('guard: matching workouts keep replay stars', so[I2.id].n === 1 && so[I2.id].stars === 1 && so[L1.id].n === 3 && so[C1.id].n === 1 && so[C2.id].n === 0, JSON.stringify(so));
+  check('guard: absent prCount -> replay shown', so[NC.id].n === 1 && so[NC.id].stars === 1, JSON.stringify(so[NC.id]));
+  check('guard: prSets trusted over replay for stars', so[PS.id].n === 1 && so[PS.id].at.join() === '0:0', JSON.stringify(so[PS.id]));
+  // prSets that do not resolve against the exercises -> stored count, no stars.
+  const bad = await page.evaluate(() => { const w = { ...gH().find(x => x.id === 'wprsets'), prSets: [{ exId: 'nope', ei: 0, si: 0, weight: 1, reps: 1 }] }; const p = prsOf(w); return { n: p.n, stars: p.list.length }; });
+  check('guard: unresolvable prSets -> stored count, no stars', bad.n === 1 && bad.stars === 0, JSON.stringify(bad));
+
+  // Rendered: day sheet + detail.
+  const day = async ds => { await page.evaluate(ds => { cm('dayModal'); openDay(ds); }, ds); await page.waitForTimeout(150); return page.evaluate(() => document.getElementById('dayContent').innerText); };
+  const dM2 = await day('2026-08-25');
+  check('day sheet: mismatch header shows stored "★ 2 PRs", no row stars', dM2.includes('★ 2 PRs') && dM2.split('★').length === 2, dM2.replace(/\s+/g, ' '));
+  const dM0 = await day('2026-08-26');
+  check('day sheet: stored 0 vs replay 1 shows no PR header or star', !dM0.includes('★') && !dM0.includes('PR'), dM0.replace(/\s+/g, ' '));
+  const dI2 = await day('2026-08-08');
+  check('day sheet: imported workout shows its 1 PR row', dI2.includes('★ 1 PR') && dI2.split('★').length === 3, dI2.replace(/\s+/g, ' '));
+  const dC1 = await day('2026-08-20');
+  check('day sheet: cardio PR shown with pace row', dC1.includes('★ 1 PR') && /mi/.test(dC1), dC1.replace(/\s+/g, ' '));
+  const det = async id => { await page.evaluate(id => { cm('dayModal'); cm('wdModal'); openWD(id); }, id); await page.waitForTimeout(150);
+    return page.evaluate(() => ({ tiles: [...document.querySelectorAll('#wdContent .sc')].map(t => t.innerText.replace(/\s+/g, ' ').trim()), stars: [...document.querySelectorAll('#wdContent .card-dark div[style*="justify-content:space-between"]')].filter(r => r.innerText.includes('★')).map(r => r.innerText.replace(/\s+/g, ' ').trim()) })); };
+  const dtM2 = await det(M2.id);
+  check('detail: mismatch shows PRs tile = stored 2, no starred sets', dtM2.tiles.length === 4 && dtM2.tiles[3].startsWith('2') && dtM2.stars.length === 0, JSON.stringify(dtM2));
+  const dtM0 = await det(M0.id);
+  check('detail: stored 0 vs replay 1 keeps 3 tiles, no stars', dtM0.tiles.length === 3 && dtM0.stars.length === 0, JSON.stringify(dtM0));
+  const dtPS = await det(PS.id);
+  check('detail: prSets star lands on the stored set (Set 1)', dtPS.stars.length === 1 && dtPS.stars[0].includes('Set 1'), JSON.stringify(dtPS));
+  check('reconcile: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, narrowAndShots, pastPRs]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, narrowAndShots, pastPRs, prReconcile]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

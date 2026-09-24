@@ -3119,27 +3119,48 @@ function commitPRs(workout) {
   return list;
 }
 
-// PRs per PAST workout, derived by replaying history oldest → newest with a running best per
-// exercise under the same rule as commitPRs. Computed from history (never from stored flags), so
-// edits/deletes of past workouts stay correct. Returns Map<workoutId,{n,list,at}> where
-// list=[{exId,name,ei,si,weight,reps,cardio}] and at=Set of "ei:si" keys. Memoized on the raw
-// history string + body weight (bodyweight lifts depend on it), so repeated renders are free.
+// PRs per PAST workout, derived by replaying history oldest → newest (date, then array index) with
+// ONE running record {weight,reps} per exercise (the same record jk_prs keeps), so they agree with
+// the counts stored in prCount. Two rules, because two writers produced those counts:
+//  • Imported workouts (id like w<ms>_<n>, see the Strong importer): heaviest weight then most reps,
+//    raw weight, no done filter — PR if weight is higher, or equal with more reps.
+//  • Everything else (logged in the app): the live rule, prBest + e1RM — PR if e1RM beats the record.
+//  • Cardio keeps its own running best (lowest mileEquiv) under the live rule; those PRs are in prCount too.
+// Computed from history (never from stored flags), so edits/deletes stay correct. Returns
+// Map<workoutId,{n,list,at}> where list=[{exId,name,ei,si,weight,reps,cardio}] and at=Set of "ei:si"
+// keys. Memoized on the raw history string + body weight (bodyweight lifts depend on it).
+// Display goes through prsOf, which refuses to show anything that disagrees with the stored prCount.
+const IMPORTED_ID=/^w\d+_\d+$/;
+function importBest(ex){
+  let best=null;
+  (ex.sets||[]).forEach((s,si)=>{
+    if(!(s.weight>0||s.reps>0)) return;
+    if(!best||s.weight>best.weight||(s.weight===best.weight&&s.reps>best.reps)) best={si,weight:s.weight,reps:s.reps};
+  });
+  return best;
+}
 let _prMemo=null;
 function prReplay(){
   const raw=localStorage.getItem('jk_hist')||'', bw=gBW();
   if(_prMemo&&_prMemo.raw===raw&&_prMemo.bw===bw) return _prMemo.map;
-  const bestE=new Map(), bestC=new Map(), map=new Map();
+  const rec=new Map(), bestC=new Map(), map=new Map();
   gH().map((w,i)=>({w,i})).sort((a,b)=>(new Date(a.w.date)-new Date(b.w.date))||(a.i-b.i)).forEach(({w})=>{
-    const list=[];
+    const list=[], imported=IMPORTED_ID.test(w.id||'');
     (w.exercises||[]).forEach((ex,ei)=>{
-      const b=prBest(ex); if(!b) return;
-      const cardio=isCardio(ex), book=cardio?bestC:bestE;
-      const cur=cardio?mileEquiv(b.weight,b.reps):e1rm(b.weight,b.reps);
-      const prev=book.has(ex.exId)?book.get(ex.exId):(cardio?Infinity:0);   // no prior record: same start as commitPRs
-      if(cardio?cur<prev:cur>prev){
-        book.set(ex.exId,cur);
-        list.push({exId:ex.exId,name:ex.name,ei,si:b.si,weight:b.weight,reps:b.reps,cardio});
+      const exId=ex.exId; if(!exId||exId==='?') return;
+      const cardio=isCardio(ex);
+      const b=(imported&&!cardio)?importBest(ex):prBest(ex); if(!b) return;
+      let isPR;
+      if(cardio){
+        const cur=mileEquiv(b.weight,b.reps);
+        isPR=cur<(bestC.has(exId)?bestC.get(exId):Infinity);   // no prior record: same start as commitPRs
+        if(isPR) bestC.set(exId,cur);
+      } else {
+        const prev=rec.get(exId)||{weight:0,reps:0};
+        isPR=imported ? (b.weight>prev.weight||(b.weight===prev.weight&&b.reps>prev.reps)) : e1rm(b.weight,b.reps)>prE1rm(prev);
+        if(isPR) rec.set(exId,{weight:b.weight,reps:b.reps});
       }
+      if(isPR) list.push({exId,name:ex.name,ei,si:b.si,weight:b.weight,reps:b.reps,cardio});
     });
     map.set(w.id,{n:list.length,list,at:new Set(list.map(p=>p.ei+':'+p.si))});
   });
@@ -3147,7 +3168,39 @@ function prReplay(){
   return map;
 }
 const NO_PRS={n:0,list:[],at:new Set()};
-const prsOf=w=>prReplay().get(w&&w.id)||NO_PRS;
+// What may be SHOWN for a past workout. Nothing visible may disagree with the stored prCount:
+//  • w.prSets (saved by finishW) is trusted for count and stars, if it resolves against the exercises;
+//  • else the replay is used only when prCount is absent or equals the replay count;
+//  • else show the stored count with NO per-exercise/per-set stars — never guess which ones.
+function prsOf(w){
+  if(!w) return NO_PRS;
+  const stored=typeof w.prCount==='number'?w.prCount:undefined;
+  const hidden=()=>stored>0?{n:stored,list:[],at:new Set()}:NO_PRS;
+  if(Array.isArray(w.prSets)){
+    const list=[];
+    for(const p of w.prSets){
+      const ex=(w.exercises||[])[p.ei];
+      if(!ex||ex.exId!==p.exId||!(ex.sets||[])[p.si]) return hidden();
+      list.push({exId:p.exId,name:ex.name,ei:p.ei,si:p.si,weight:p.weight,reps:p.reps,cardio:isCardio(ex)});
+    }
+    if(stored!==undefined&&stored!==list.length) return hidden();
+    return {n:list.length,list,at:new Set(list.map(p=>p.ei+':'+p.si))};
+  }
+  const r=prReplay().get(w.id)||NO_PRS;
+  return (stored===undefined||stored===r.n)?r:hidden();
+}
+// Dev-only (console / e2e): how well the replay reproduces the stored prCount across history.
+// Workouts without a numeric prCount have nothing to compare and are not counted.
+function prAudit(){
+  const rp=prReplay(), mismatches=[]; let total=0, match=0;
+  gH().forEach(w=>{
+    if(typeof w.prCount!=='number') return;
+    total++;
+    const replay=(rp.get(w.id)||NO_PRS).n;
+    if(replay===w.prCount) match++; else mismatches.push({id:w.id,date:w.date,stored:w.prCount,replay});
+  });
+  return {total,match,mismatches};
+}
 const prSetText=p=>p.cardio?`${p.weight} mi · ${fmtPace(pacePerMile(p.weight,p.reps))}`:`${dW(p.weight)}${uL()} × ${p.reps}`;
 const PR_STAR=(sp='')=>`<span style="color:#ffd700">${sp}★</span>`;
 
