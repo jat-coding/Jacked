@@ -8,6 +8,8 @@ fs.mkdirSync(SHOTS, { recursive: true });
 const badges = page => page.evaluate(() => computeBadges().map(b => ({ name: b.name, earned: b.earned, tier: b.tier || null, desc: b.desc, detail: b.detail })));
 const badge = async (page, n) => (await badges(page)).find(b => b.name === n);
 const SEP15 = new Date('2026-09-15T12:00:00-06:00');
+// Sep 2026 monthly badges already done, so the all-gold seed can hold Jacked (it needs the Monthly-reset badges too).
+const MB_SEP = { '2026-09': { group: 'biceps', target: 4, done: true, comeback: true } };
 
 async function regression() {
   // Boot, every tab renders, no page errors.
@@ -175,7 +177,7 @@ function allGoldHistory({ pullReps = 20 } = {}) {
 }
 
 async function jacked() {
-  const seed = (o) => ({ hist: allGoldHistory(o), bw: 180 / LB });
+  const seed = (o) => ({ hist: allGoldHistory(o), bw: 180 / LB, monthBadges: MB_SEP });
   {
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
     const bs = await badges(page);
@@ -183,7 +185,7 @@ async function jacked() {
     const missing = bs.filter(b => !b.earned && b.name !== 'Jacked' && b.name !== 'Coward-Maxing').map(b => b.name);
     check('jacked: unlocked with every badge earned + all tiers gold', j.earned, `missing=${missing} ${j.desc}`);
     check('jacked: Coward-Maxing not required (it is locked here)', bs.find(b => b.name === 'Coward-Maxing').earned === false);
-    check('jacked: does not count itself (10 required, not 11/12)', /10 \/ 10 badges · 6 \/ 6 at Gold/.test(j.detail) && !/\d+ \/ \d+/.test(j.desc), j.detail + ' | ' + j.desc);
+    check('jacked: needs 8 (6 tiered + Challenge + Comeback), permanent ones not counted', /8 \/ 8 badges · 6 \/ 6 at Gold/.test(j.detail) && !/\d+ \/ \d+/.test(j.desc), j.detail + ' | ' + j.desc);
     check('jacked: all six tiered badges gold', bs.filter(b => b.tier).every(b => b.tier === 'gold') && bs.filter(b => b.tier).length === 6);
     await page.evaluate(() => sp('metrics'));
     await page.waitForTimeout(200);
@@ -195,6 +197,21 @@ async function jacked() {
     const bs = await badges(page);
     check('jacked: locked when one tier is only silver (pull-ups 15)', bs.find(b => b.name === 'Pull-up-Maxing').tier === 'silver' && bs.find(b => b.name === 'Jacked').earned === false);
     await ctx.close();
+  }
+  {
+    // Permanent badges are not required: only the Monthly-reset and 3-month-reset badges gate Jacked.
+    const h = [wk('2026-09-12', [ex('Barbell Bench Press', [[315, 1]]), ex('Barbell Squat', [[400, 5]]), ex('Barbell Overhead Press', [[185, 5]]), ex('Pull-up', [[0, 20]], 'bodyweight_reps'), ex('Push-up', [[0, 80]], 'bodyweight_reps'), ex('Run', [[1, 6]], 'distance')])];
+    const { page, ctx } = await phone({ seed: { hist: h, bw: 180 / LB, monthBadges: MB_SEP }, now: SEP15 });
+    const bs = await badges(page);
+    const perm = ['1000lb Club', 'Variety-Maxing', 'PR-Maxing', 'Consistency-Maxing'].map(n => bs.find(b => b.name === n).earned);
+    check('jacked: earned with NO permanent badge (3-month + monthly only)', bs.find(b => b.name === 'Jacked').earned === true && perm.every(x => x === false), JSON.stringify({ perm, j: bs.find(b => b.name === 'Jacked') }));
+    await page.evaluate(() => badgeInfo('Jacked'));
+    const txt = await page.locator('#badgeFullBody').innerText();
+    check('popup: Jacked how-to names the groups, not each badge', /Monthly reset/.test(txt) && /3-month reset/.test(txt) && /Permanent badges are not needed/.test(txt) && !/Bench, Shoulder/.test(txt), txt);
+    await ctx.close();
+    const m = await phone({ seed: { hist: h, bw: 180 / LB }, now: SEP15 });
+    check('jacked: locked when the monthly badges are not earned', (await badge(m.page, 'Jacked')).earned === false);
+    await m.ctx.close();
   }
   {
     // Coward-Maxing locks Jacked: every badge otherwise earned, then a 14-day layoff inside the month.
@@ -245,7 +262,7 @@ async function jacked() {
 }
 
 async function monthly() {
-  const seed = (o) => ({ hist: allGoldHistory(o), bw: 180 / LB });
+  const seed = (o) => ({ hist: allGoldHistory(o), bw: 180 / LB, monthBadges: MB_SEP });
   {
     // Tiers follow the last 3 months: the same September lifts, viewed in December, have dropped; all-time best is kept.
     const { page, ctx } = await phone({ seed: seed(), now: new Date('2026-12-15T12:00:00-07:00') });
