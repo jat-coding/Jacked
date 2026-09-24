@@ -316,6 +316,8 @@ body{background-image:none}
 /* Floating capsule bottom nav, frosted glass (Mr. Roni 2026-09-20), sitting low above the home line. */
 nav{background:rgba(22,22,30,.62);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 30px -8px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06)}
 .nb.active svg{filter:drop-shadow(0 0 9px rgba(32,211,194,.7))}
+.frdot{display:inline-block;min-width:16px;height:16px;line-height:16px;padding:0 4px;margin-left:4px;border-radius:8px;background:#ff453a;color:#fff;font-size:10px;font-weight:800;text-align:center;vertical-align:1px}
+.nb.has-req::after{content:"";position:absolute;top:5px;left:calc(50% + 6px);width:8px;height:8px;border-radius:50%;background:#ff453a;box-shadow:0 0 0 2px var(--bg,#0b0b10)}
 /* Sliding selected-tab pill: a soft teal tint on the glass that glides to the tapped tab. */
 .nb{position:relative;z-index:1}
 #navInd{position:absolute;left:0;top:0;border-radius:24px;background:rgba(32,211,194,.16);box-shadow:inset 0 0 0 1px rgba(32,211,194,.28);pointer-events:none;opacity:0;
@@ -501,7 +503,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 
 <!-- LEADERBOARD -->
 <div class="page" id="page-leaderboard">
-  <div class="ph"><div class="pt">Friends</div><button class="btn bg sm" onclick="openAF()">+ Friend</button></div>
+  <div class="ph"><div class="pt">Friends</div><button class="btn bg sm" id="afBtn" onclick="openAF()">+ Friend</button></div>
   <div id="compareBoard"></div>
   <div class="sec" id="friendsSec"><div class="sec-t">Friends</div>
     <div id="lbBuddiesWrap" style="display:none"><div class="sub-t"><svg viewBox='0 0 24 24' width='13' height='13' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Close buddies</div><div id="lbBuddies"></div></div>
@@ -510,6 +512,10 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div id="pendingWrap" class="sec" style="display:none">
     <div class="st" style="margin-bottom:12px"><svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M6.5 7h11'/><path d='M6.5 17h11'/><path d='M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1'/><path d='M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1'/></svg> Pending</div>
     <div id="pendingList"></div>
+  </div>
+  <div id="sentWrap" class="sec" style="display:none">
+    <div class="st" style="margin-bottom:12px">Requests you sent</div>
+    <div id="sentList"></div>
   </div>
 </div>
 
@@ -838,7 +844,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="sep"></div>
     <div class="st" style="margin-bottom:8px">Feedback</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Found a bug or want a change? Send it our way.</div>
-    <textarea id="fbText" rows="3" placeholder="What should we fix or add?" style="resize:vertical"></textarea>
+    <textarea id="fbText" rows="3" maxlength="2000" placeholder="What should we fix or add?" style="resize:vertical"></textarea>
     <button class="btn ba wf" style="margin-top:8px" onclick="submitFeedback()">Send Feedback</button>
 
     <div class="sep"></div>
@@ -1304,7 +1310,7 @@ async function obNext1() {
     const r = await registerAccount({code:u, password:pw, name});
     if (r !== 'ok') {
       btn.disabled = false; btn.textContent=prev;
-      toast(r==='already_claimed'||r==='taken'||r==='proof_failed' ? 'That username is already taken' : 'Could not create account — try again','err');
+      toast(r==='weak_password' ? 'That password is too weak or has appeared in a known data breach — pick a different one' : r==='already_claimed'||r==='taken'||r==='proof_failed' ? 'That username is already taken' : 'Could not create account — try again','err');
       return;
     }
   }
@@ -4307,6 +4313,18 @@ function renderLB() {
   document.getElementById('lbFriends').innerHTML=others.length?others.map(f=>lbRow(f,{star:true,canRemove:true})).join('')
     :(accepted.length?`<div style="color:var(--muted);font-size:13px;padding:6px 0">All friends are close buddies ${uic('star','#ffd700')}</div>`:'<div style="color:var(--muted);font-size:13px;padding:6px 0">No friends yet. Tap + Friend to add by username.</div>');
 
+  // Incoming requests: count on the + Friend button and a dot on the Friends tab.
+  const ab=document.getElementById('afBtn'); if(ab) ab.innerHTML='+ Friend'+(pending.length?`<span class="frdot">${pending.length}</span>`:'');
+  const nbf=document.getElementById('nav-leaderboard'); if(nbf) nbf.classList.toggle('has-req',pending.length>0);
+  const sw=document.getElementById('sentWrap');
+  const sent=(supaEnabled()?liveSent:[]);
+  if(sent.length){sw.style.display='block';document.getElementById('sentList').innerHTML=sent.map(f=>`
+    <div class="qc">
+      ${avHTML(f)}
+      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(f.name)}</div><div style="font-size:11px;color:var(--muted)">${esc(f.username)} · waiting for them to accept</div></div>
+      <button class="btn bd xs" onclick="rmFr('${f.code}')">Cancel</button>
+    </div>`).join('');}
+  else sw.style.display='none';
   const pw=document.getElementById('pendingWrap');
   if(pending.length){pw.style.display='block';document.getElementById('pendingList').innerHTML=pending.map(f=>`
     <div class="qc">
@@ -4331,11 +4349,15 @@ async function rmFr(id) {
 async function acceptFr(id) {
   if (supaEnabled()) {
     const my=(gProf()||{}).code; if(!my) return;
-    try{ const {error}=await SUPA.from('friend_requests').update({status:'accepted'})
-        .or(`and(from_code.eq.${id},to_code.eq.${my}),and(from_code.eq.${my},to_code.eq.${id})`);
-      if(error) console.warn('acceptFr',error);
+    // Only the RECIPIENT can accept (server rule), so match the request they sent to me.
+    let ok=false;
+    try{ const {data,error}=await SUPA.from('friend_requests').update({status:'accepted'})
+        .eq('from_code',id).eq('to_code',my).select('id');
+      if(error) console.warn('acceptFr',error); else ok=!!(data&&data.length);
     }catch(e){ console.warn('acceptFr',e); }
-    await refreshFriends(); toast('Friend added! ✓','ok'); return;
+    await refreshFriends();
+    if(ok) toast('Friend added! ✓','ok'); else toast('Could not accept — try again','err');
+    return;
   }
   const fs=gFr(); const f=fs.find(x=>x.id===id||x.code===id);
   if(f){f.pending=false;S.s('friends',fs);renderLB();toast('Friend added! ✓','ok');}
@@ -4394,19 +4416,25 @@ async function doAF() {
       await syncMe(); // make sure my profile row exists
       const { data: tgt } = await SUPA.from('profiles').select('code').eq('code',code).maybeSingle();
       if (!tgt) { toast('No user with that username yet','err'); return; }
-      // If they already requested me, accept it; otherwise send a request.
-      const { data: incoming } = await SUPA.from('friend_requests')
-        .select('id').eq('from_code',code).eq('to_code',myCode).maybeSingle();
-      if (incoming) {
-        await SUPA.from('friend_requests').update({status:'accepted'}).eq('id',incoming.id);
-      } else {
-        // Adding is instant + mutual. Accept right away so the
-        // friend shows up immediately on your side and on theirs (next sync/realtime).
-        await SUPA.from('friend_requests').upsert(
-          {from_code:myCode,to_code:code,status:'accepted'},{onConflict:'from_code,to_code'});
+      // A request never self-accepts (server-enforced): the other person has to accept it.
+      // The one exception is a request THEY already sent me -- adding them back accepts it.
+      const { data: rows, error: qErr } = await SUPA.from('friend_requests').select('id,from_code,to_code,status')
+        .or(`and(from_code.eq.${myCode},to_code.eq.${code}),and(from_code.eq.${code},to_code.eq.${myCode})`);
+      if (qErr) { console.warn('doAF lookup',qErr); toast('Network error — try again','err'); return; }
+      const mine=(rows||[]).find(r=>r.from_code===myCode), theirs=(rows||[]).find(r=>r.from_code===code);
+      const done=()=>{ document.getElementById('afCode').value=''; cm('afModal'); return refreshFriends(); };
+      if ((mine&&mine.status==='accepted')||(theirs&&theirs.status==='accepted')) { toast('Already friends!','err'); return; }
+      if (theirs && theirs.status==='pending') {
+        const { data:up, error } = await SUPA.from('friend_requests').update({status:'accepted'}).eq('id',theirs.id).select('id');
+        if (error || !(up&&up.length)) { console.warn('doAF accept',error); toast('Could not accept — try again','err'); return; }
+        toast(`${code} had already asked you — you're friends now ✓`,'ok'); await done(); return;
       }
-      toast('Friend added! ✓','ok');
-      document.getElementById('afCode').value=''; cm('afModal'); await refreshFriends();
+      if (mine && mine.status==='pending') { toast('You already sent a request — waiting for them to accept','ok'); await done(); return; }
+      if (mine) await SUPA.from('friend_requests').delete().eq('id',mine.id);   // stale (declined) row: clear it so a fresh request can go out
+      const { error } = await SUPA.from('friend_requests').insert({from_code:myCode,to_code:code,status:'pending'});
+      if (error) { console.warn('doAF send',error); toast('Could not send the request — try again','err'); return; }
+      toast(`Request sent to ${code} — they'll need to accept it`,'ok');
+      await done();
     }catch(e){ console.warn('doAF',e); toast('Network error — try again','err'); }
     return;
   }
@@ -4430,7 +4458,7 @@ async function doAF() {
 // ============================================================
 const SUPABASE_URL = 'https://qehlrwnumrjktujidabz.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_vmf9BELfVFZpKrdMN3Z34g_R9l056gJ';
-let SUPA = null, liveFriends = null, _authUid = null;
+let SUPA = null, liveFriends = null, liveSent = [], _authUid = null;
 // Warm start: last fetched friends list, so the Friends tab paints instantly and refreshes behind it.
 try{ const c=JSON.parse(localStorage.getItem('jk_friendsCache')||'null'); if(Array.isArray(c)&&c.length) liveFriends=c; }catch(_){}
 function supaInit() {
@@ -4539,6 +4567,7 @@ async function authGateSubmit(){
     else if (r === 'already_claimed') { const st = await accountStatus(_gate.code); showAuthGate('login', _gate.code, st.email); gateMsg('This account already has a password. Enter it to continue.'); }
     else if (r === 'proof_failed') gateMsg(`This device couldn't be verified as ${_gate.code} — its workouts don't match that account's cloud backup. Ask the Jacked admin to reset it.`);
     else if (r === 'taken') gateMsg('That username was just taken. Sign out and pick another.');
+    else if (r === 'weak_password') gateMsg('That password is too weak or has appeared in a known data breach — pick a different one.');
     else gateMsg('Could not save — check your connection and try again.');
   } finally { btn.disabled = false; btn.textContent = prev; }
 }
@@ -4818,6 +4847,32 @@ async function cloudPullMerge(){
   }catch(e){ console.warn('cloudPullMerge',e); return false; }
 }
 
+// Friend rows come from the friend_profiles() RPC, which returns `data` (calendar, recent
+// workouts, per-set detail, badge list) only for me and my ACCEPTED friends. A project that
+// hasn't run 20260924_profiles_data_private.sql has no such function, so fall back to the
+// old direct select (remembered for the page load). Throws on any other failure so the
+// caller keeps the friends it already has instead of blanking them.
+let _fpRpc=null;   // null untried · true works · false function missing
+function isMissingFunction(e){
+  const c=(e&&e.code)||'', m=(e&&e.message)||'';
+  return c==='PGRST202' || c==='42883' || /could not find the function|function .* does not exist/i.test(m);
+}
+async function fetchFriendProfiles(codes){
+  if (_fpRpc!==false){
+    const { data, error } = await SUPA.rpc('friend_profiles',{p_codes:codes});
+    if (!error){ _fpRpc=true; return data||[]; }
+    if (!isMissingFunction(error)) throw error;
+    _fpRpc=false;
+  }
+  const COLS='code,name,username,total_volume,workouts,prs,streak,consistency,badges,data,updated_at';
+  let { data, error } = await SUPA.from('profiles').select(COLS+',avatar_url').in('code',codes);
+  // Project hasn't run the avatar migration yet → drop the column rather
+  // than let one unknown column blank out the whole friends list.
+  if (error && isMissingColumn(error)) ({ data, error } = await SUPA.from('profiles').select(COLS).in('code',codes));
+  if (error) throw error;
+  return data||[];
+}
+
 // Pull friends + pending requests, then re-render the leaderboard.
 async function refreshFriends() {
   if (!supaEnabled()) { liveFriends=null; renderLB(); return; }
@@ -4827,21 +4882,17 @@ async function refreshFriends() {
     const my=p.code;
     const { data: reqs } = await SUPA.from('friend_requests').select('*')
       .or(`from_code.eq.${my},to_code.eq.${my}`);
-    const accepted=new Set(), pendingIn=[];
+    const accepted=new Set(), pendingIn=[], sentOut=[];
     (reqs||[]).forEach(r=>{
       const other = r.from_code===my ? r.to_code : r.from_code;
       if (r.status==='accepted') accepted.add(other);
       else if (r.status==='pending' && r.to_code===my) pendingIn.push(other);
+      else if (r.status==='pending' && r.from_code===my) sentOut.push(other);
     });
-    const codes=[...new Set([...accepted,...pendingIn])].filter(cleanCode);   // codes reach onclick="fn('…')" — drop malformed ones here
+    const codes=[...new Set([...accepted,...pendingIn,...sentOut])].filter(cleanCode);   // codes reach onclick="fn('…')" — drop malformed ones here
     let profs=[];
     if (codes.length) {
-      const COLS='code,name,username,total_volume,workouts,prs,streak,consistency,badges,data,updated_at';
-      let { data, error } = await SUPA.from('profiles').select(COLS+',avatar_url').in('code',codes);
-      // Project hasn't run the avatar migration yet → drop the column rather
-      // than let one unknown column blank out the whole friends list.
-      if (error && isMissingColumn(error)) ({ data } = await SUPA.from('profiles').select(COLS).in('code',codes));
-      profs=data||[];
+      profs=await fetchFriendProfiles(codes);
     }
     const byCode={}; profs.forEach(pr=>byCode[pr.code]=pr);
     const mk=(c)=>{ const pr=byCode[c]||{code:c}; const data=pr.data||{}; const m=data.m||{}; return {
@@ -4854,6 +4905,7 @@ async function refreshFriends() {
       ...[...accepted].filter(cleanCode).map(c=>({...mk(c),pending:false})),
       ...pendingIn.filter(cleanCode).map(c=>({...mk(c),pending:true}))
     ].map(cleanPerson).filter(Boolean);
+    liveSent=sentOut.filter(cleanCode).map(c=>{ const f=mk(c); return {code:c,name:f.name,username:f.username,avatarUrl:f.avatarUrl}; }).map(cleanPerson).filter(Boolean);
     try{ localStorage.setItem('jk_friendsCache',JSON.stringify(liveFriends)); }catch(_){}
   } catch(e){ console.warn('refreshFriends',e); }
   renderLB();
@@ -5257,7 +5309,7 @@ async function submitFeedback() {
   try{
     const u=(gProf()||{}).code||'@anon';
     const { error }=await SUPA.from('feedback').insert({username:u,text:t});
-    if(error){ console.warn('feedback',error); toast('Could not send — run the feedback SQL','err'); return; }
+    if(error){ console.warn('feedback',error); toast(error.code==='53400'?'Too much feedback in the last hour — try again later':'Could not send — try again','err'); return; }
     el.value=''; toast('Thanks! Feedback sent ✓','ok');
   }catch(e){ console.warn('feedback',e); toast('Network error — try again','err'); }
 }
@@ -5601,7 +5653,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.9.1';
+const BUILD = 'v1.10.0';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
