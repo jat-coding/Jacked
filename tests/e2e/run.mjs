@@ -454,6 +454,8 @@ async function achievementsPage() {
     check('badge button: Variety opens the library', /library/i.test(v), v);
     const none = await page.evaluate(() => ['PR-Maxing', 'Consistency-Maxing', 'Coward-Maxing', 'Jacked', 'Comeback-Maxing'].map(n => { badgeInfo(n); return [n, document.getElementById('badgeStartBtn').style.display]; }));
     check('badge button: hidden on badges with no specific workout', none.every(x => x[1] === 'none'), JSON.stringify(none));
+    const jr = await page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = achRow(computeBadges().find(b => b.name === 'Jacked')); document.body.appendChild(d); const t = d.innerText; const n = d.querySelector('div[style*="font-size:22px"]'); d.remove(); return { t, big: !!n }; });
+    check('Jacked row: just the word, larger, no message under it', /Jacked/.test(jr.t) && !/something special/i.test(jr.t) && jr.big, JSON.stringify(jr));
     const jk = await page.evaluate(() => { badgeInfo('Jacked'); return document.getElementById('badgeFullBody').innerText; });
     check('Jacked popup: generic wording, no lift/cardio list', /every tiered badge at Gold/.test(jk) && !/six lift/.test(jk), jk);
     await ctx.close();
