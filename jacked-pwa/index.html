@@ -3854,7 +3854,7 @@ function computeBadges() {
   const tiered=list.filter(b=>b.tiered);
   const nEarned=req.filter(b=>b.earned).length, nGold=tiered.filter(b=>b.tier==='gold').length;
   list.push({icon:'crown',color:'#ffd700',name:'Jacked',earned:nEarned===req.length&&nGold===tiered.length&&!weekOff,
-    desc:'Every badge, all tiers Gold',
+    desc:nEarned===req.length&&nGold===tiered.length&&!weekOff?'Every badge, all tiers Gold':'Unlock it and something special happens',
     detail:`${nEarned} / ${req.length} badges · ${nGold} / ${tiered.length} at Gold`+(weekOff?' · locked by Coward-Maxing':''),
     locked:weekOff});
   const jk=list[list.length-1];
@@ -3912,6 +3912,7 @@ function badgeInfo(name){
   const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v])=>{const k=t.toLowerCase(),on=b.tier===k;return `<div class="bf-tier${on?' on':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span></div>`;}).join('')}</div>`:'';
   const note=d.note?`<div class="bf-h">Resets</div><div class="bf-body">${d.note}</div>`:'';
   const allT=b.all?`<div class="bf-h">Highest ever</div><div class="bf-tiers"><div class="bf-tier" style="opacity:.55;filter:grayscale(1)"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:700;text-transform:capitalize;color:var(--muted)">${b.all.tier||'no tier'}</span></div></div><div class="bf-body" style="font-size:12px;color:var(--muted);margin-top:6px">Your best in all of history. It never resets. The badge above only counts the last 3 months.</div>`:'';
+  const teaser=(b.name==='Jacked'&&!b.earned)?`<div class="bf-h">Reward</div><div class="bf-body">Something special happens the moment you unlock this. You will know it when you see it.</div>`:'';
   const ever=(b.name==='Jacked'&&b.everYM)?`<div class="bf-h">Best in history</div><div class="bf-body">Last held ${MONTHS[+b.everYM.slice(5)-1]} ${b.everYM.slice(0,4)}. Held in ${b.months} month${b.months!==1?'s':''} so far.</div>`:'';
   document.getElementById('badgeFullBody').innerHTML=`
     <div class="bf-icon" style="filter:${b.earned?'none':'grayscale(1)'};${teal?'background:rgba(32,211,194,.14);':''}box-shadow:0 0 0 1px ${col}55,0 0 60px -6px ${col}66">${uic(b.icon,b.color,84)}</div>
@@ -3920,7 +3921,7 @@ function badgeInfo(name){
     <div class="bf-stat">${b.detail||b.desc}</div>
     <div class="bf-sep"></div>
     <div class="bf-h">How to earn it</div><div class="bf-body">${d.how}</div>
-    ${tiers}${allT}${ever}${note}`;
+    ${tiers}${allT}${ever}${teaser}${note}`;
   document.getElementById('badgeFull').classList.add('open');
   document.getElementById('badgeFull').scrollTop=0;
 }
@@ -6173,7 +6174,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.16';
+const BUILD = 'v1.10.17';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
