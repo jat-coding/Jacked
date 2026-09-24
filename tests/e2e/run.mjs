@@ -591,10 +591,148 @@ async function prReconcile() {
   await ctx.close();
 }
 
+// Landscape "fake portrait lock" (2026-09-24). On a phone turned sideways the app frame (body) is counter-rotated so the UI
+// stays upright relative to the phone body. angle 90 = phone turned counter-clockwise (its top on the screen's LEFT),
+// 270 = clockwise (top on the RIGHT). Portrait, keyboard-shrunk portrait, tablet/desktop must be untouched.
+const inVp = (b, w, h) => b.left >= -1 && b.top >= -1 && b.right <= w + 1 && b.bottom <= h + 1;
+const R = (page, sel) => page.evaluate(sel => { const e = document.querySelector(sel), b = e.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, w: b.width, h: b.height }; }, sel);
+const st = page => page.evaluate(() => ({ rot: document.documentElement.getAttribute('data-rot'), tf: getComputedStyle(document.body).transform, guard: getComputedStyle(document.getElementById('rotateGuard')).display, pos: getComputedStyle(document.body).position, navDisp: getComputedStyle(document.querySelector('nav')).display }));
+async function portraitLock() {
+  for (const [W, H] of [[844, 390], [932, 430], [667, 375]]) for (const a of [90, 270]) {
+    const tag = `lock ${W}x${H} @${a}`;
+    const { page, ctx, errors } = await phone({ width: W, height: H, angle: a, seed: { hist: [wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]])])] }, now: SEP15 });
+    const s = await st(page);
+    check(`${tag}: data-rot=${a}, guard hidden, body counter-rotated`, s.rot === String(a) && s.guard === 'none' && s.pos === 'fixed' && s.tf === (a === 90 ? `matrix(0, -1, 1, 0, 0, ${H})` : `matrix(0, 1, -1, 0, ${W}, 0)`), JSON.stringify(s));
+    const body = await R(page, 'body'), nav = await R(page, 'nav');
+    check(`${tag}: body exactly fills the viewport`, Math.abs(body.left) < 1 && Math.abs(body.top) < 1 && Math.abs(body.w - W) < 1 && Math.abs(body.h - H) < 1, JSON.stringify(body));
+    // Nav is the app's bottom: a tall narrow pill on the screen's right (90) / left (270), fully on screen.
+    check(`${tag}: bottom nav on the ${a === 90 ? 'right' : 'left'} edge, upright-to-phone (tall, narrow), on screen`, nav.h > nav.w * 3 && inVp(nav, W, H) && (a === 90 ? nav.right > W - 30 : nav.left < 30), JSON.stringify(nav));
+    const ph = await R(page, '#page-home .ph');
+    check(`${tag}: page header (app top) sits on the ${a === 90 ? 'left' : 'right'} edge`, a === 90 ? ph.left < 2 : ph.right > W - 2, JSON.stringify(ph));
+    check(`${tag}: home page fits the short axis (no clipping)`, (await R(page, '#page-home')).h <= H + 1 && (await page.evaluate(() => document.getElementById('jkRoot').scrollWidth <= document.getElementById('jkRoot').clientWidth + 1)));
+    // Text really is rotated: the "JACKED." wordmark reads along the screen's long axis.
+    const title = await page.evaluate(() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('#page-home .pt')); const b = r.getBoundingClientRect(); return { w: b.width, h: b.height }; });
+    check(`${tag}: title text runs vertically on screen (rotated)`, title.h > title.w, JSON.stringify(title));
+    // Bottom sheet, toast: fixed layers rotate with the frame and stay on screen.
+    await page.evaluate(() => om('cardOrderModal')); await page.waitForTimeout(150);
+    const md = await R(page, '#cardOrderModal .md');
+    check(`${tag}: bottom sheet hugs the ${a === 90 ? 'right' : 'left'} edge, on screen`, inVp(md, W, H) && (a === 90 ? md.right > W - 2 : md.left < 2) && md.w < W, JSON.stringify(md));
+    await page.screenshot({ path: `${SHOTS}/lock-${W}x${H}-${a}-sheet.png` });
+    await page.evaluate(() => cm('cardOrderModal'));
+    await page.evaluate(() => toast('Saved', 'ok')); await page.waitForTimeout(150);
+    const tb = await R(page, '#tc > *');
+    check(`${tag}: toast rotates with the app, on screen, at the app top`, inVp(tb, W, H) && tb.h > tb.w && (a === 90 ? tb.left < 60 : tb.right > W - 60), JSON.stringify(tb));
+    await page.screenshot({ path: `${SHOTS}/lock-${W}x${H}-${a}-home.png` });
+    check(`${tag}: no page errors`, errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  // Every tab and the live workout fit the frame width in the rotated frame (no sideways overflow), on the narrowest phone.
+  { const cex = [{ id: 'cex1', name: 'Barbell Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }];
+    const { page, ctx, errors } = await phone({ width: 667, height: 375, angle: 90, now: SEP15, seed: { cex, routines: [{ id: 'r1', name: 'Push', desc: '', exercises: ['cex1'] }], hist: [wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]])])] } });
+    const overflow = () => page.evaluate(() => { const r = document.getElementById('jkRoot'); return r.scrollWidth - r.clientWidth; });
+    for (const t of ['home', 'routines', 'exercises', 'metrics', 'leaderboard']) {
+      await page.evaluate(t => sp(t), t); await page.waitForTimeout(200);
+      check(`lock @90 667x375: ${t} tab has no sideways overflow`, (await overflow()) <= 1, String(await overflow()));
+      if (t === 'metrics') await page.screenshot({ path: `${SHOTS}/lock-667x375-90-metrics.png` });
+    }
+    await page.evaluate(() => startRW('r1')); await page.waitForTimeout(300);
+    check('lock @90 667x375: live workout has no sideways overflow and the top bar sits at the app top', (await overflow()) <= 1 && (await R(page, '.ab')).left < 2, JSON.stringify(await R(page, '.ab')));
+    await page.screenshot({ path: `${SHOTS}/lock-667x375-90-workout.png` });
+    check('lock @90 667x375: no page errors browsing tabs + workout', errors.length === 0, errors.join(' | '));
+    await ctx.close(); }
+  // Native touch scroll follows the APP's vertical axis (the screen's horizontal axis) in the rotated frame.
+  for (const a of [90, 270]) {
+    const { page, ctx } = await phone({ width: 844, height: 390, angle: a, now: SEP15 });
+    await page.evaluate(() => { const d = document.createElement('div'); d.style.height = '3000px'; d.id = 'spacer'; document.getElementById('page-home').appendChild(d); });
+    const cdp = await ctx.newCDPSession(page);
+    const tp = (t, x, y) => cdp.send('Input.dispatchTouchEvent', { type: t, touchPoints: t === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+    const swipe = async (x, y, dx, dy) => { await tp('touchStart', x, y); for (let i = 1; i <= 15; i++) { await tp('touchMove', x + dx * i / 15, y + dy * i / 15); await page.waitForTimeout(20); } await tp('touchEnd'); await page.waitForTimeout(700); };
+    const top = () => page.evaluate(() => document.getElementById('jkRoot').scrollTop);
+    // App down (content up) = finger toward the phone-top edge: left for 90, right for 270.
+    await swipe(400, 200, a === 90 ? -220 : 220, 0);
+    const t1 = await top();
+    check(`lock @${a}: touch swipe along the screen's horizontal axis scrolls the app`, t1 > 50, String(t1));
+    await swipe(400, 200, a === 90 ? 220 : -220, 0);
+    const t2 = await top();
+    check(`lock @${a}: swiping back scrolls up again`, t2 < t1 - 50, `${t2} < ${t1}`);
+    await swipe(400, 200, a === 90 ? -220 : 220, 0);
+    { const n = await R(page, 'nav'), h = await R(page, '#page-home .ph');
+      check(`lock @${a}: sticky header + fixed nav stay put while scrolled`, inVp(n, 844, 390) && (a === 90 ? n.right > 814 && h.left < 2 : n.left < 30 && h.right > 842), JSON.stringify({ n, h })); }
+    check(`lock @${a}: the window itself never scrolls`, await page.evaluate(() => scrollX === 0 && scrollY === 0));
+    await ctx.close();
+  }
+  // Drag-to-reorder uses the app's vertical axis. Move the first card down past the second by dragging along screen-X.
+  for (const a of [90, 270]) {
+    const { page, ctx, errors } = await phone({ width: 844, height: 390, angle: a, now: SEP15 });
+    await page.evaluate(() => openCardOrder()); await page.waitForTimeout(200);
+    const ids0 = await page.evaluate(() => [...document.querySelectorAll('#cardOrderList [data-id]')].map(e => e.dataset.id));
+    const h = await page.locator('#cardOrderList .cdrag').first().boundingBox();
+    const rows = await page.evaluate(() => [...document.querySelectorAll('#cardOrderList [data-id]')].slice(0, 2).map(e => { const b = e.getBoundingClientRect(); return { l: b.left, r: b.right }; }));
+    const step = Math.abs(rows[1].l - rows[0].l);   // one row, along screen-X
+    const dir = a === 90 ? 1 : -1;                   // app-down = screen-right for 90, screen-left for 270
+    const cx = h.x + h.width / 2, cy = h.y + h.height / 2;
+    await page.mouse.move(cx, cy); await page.mouse.down();
+    await page.mouse.move(cx + dir * step * 0.6, cy, { steps: 4 }); await page.mouse.move(cx + dir * step * 1.3, cy, { steps: 4 });
+    await page.mouse.up(); await page.waitForTimeout(250);
+    const ids1 = await page.evaluate(() => (gSet().cardOrder || []).slice());
+    check(`lock @${a}: drag-to-reorder moves card ${ids0[0]} below ${ids0[1]} (app-axis mapping)`, ids1[0] === ids0[1] && ids1[1] === ids0[0], JSON.stringify({ ids0, ids1 }));
+    check(`lock @${a}: reorder no page errors`, errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  // Typing works in the rotated frame and the field is not hidden (keyboard bug must not regress).
+  { const { page, ctx } = await phone({ width: 844, height: 390, angle: 90 });
+    await page.evaluate(() => om('loginModal')); await page.waitForTimeout(150);
+    const inp = page.locator('#loginModal input').first();
+    await inp.tap(); await page.keyboard.type('abc');
+    check('lock @90: focused input stays visible, keeps focus, accepts typing', (await inp.inputValue()) === 'abc' && (await inp.isVisible()) && (await page.evaluate(() => document.body.classList.contains('kb'))));
+    check('lock @90: modal input is on screen', inVp(await R(page, '#loginModal input'), 844, 390));
+    await page.screenshot({ path: `${SHOTS}/lock-844x390-90-login.png` });
+    await ctx.close(); }
+  // Unchanged: portrait, keyboard-shrunk portrait, tablet, desktop.
+  { const { page, ctx } = await phone({ width: 390, height: 844, angle: 0 });
+    const s = await st(page), nav = await R(page, 'nav');
+    check('portrait: no data-rot, no transform, guard hidden', s.rot === null && s.tf === 'none' && s.guard === 'none' && s.pos !== 'fixed', JSON.stringify(s));
+    check('portrait: nav is a wide pill at the bottom', nav.w > nav.h * 3 && nav.bottom > 800 && nav.bottom <= 844, JSON.stringify(nav));
+    check('portrait: #jkRoot is layout-transparent (display:contents)', await page.evaluate(() => getComputedStyle(document.getElementById('jkRoot')).display === 'contents'));
+    await page.screenshot({ path: `${SHOTS}/lock-portrait-unchanged.png` }); await ctx.close(); }
+  { // keyboard-shrunk portrait (~360x300 layout viewport reads as landscape); worst case: device reports angle 90 anyway.
+    for (const a of [0, 90]) {
+      const { page, ctx } = await phone({ width: 390, height: 300, angle: a });
+      const s = await st(page);
+      check(`keyboard-shrunk 390x300 (angle ${a}): app NOT rotated and NOT hidden`, s.tf === 'none' && s.guard === 'none' && s.navDisp === 'flex' && await page.evaluate(() => document.getElementById('page-home').offsetHeight > 0), JSON.stringify(s));
+      await ctx.close(); } }
+  { const { page, ctx } = await phone({ width: 1024, height: 768, angle: 90 });
+    const s = await st(page);
+    check('tablet landscape 1024x768 (portrait-natural, angle 90): untouched', s.tf === 'none' && s.guard === 'none' && s.pos !== 'fixed', JSON.stringify(s));
+    await ctx.close(); }
+  { const { page, ctx } = await phone({ width: 1000, height: 500, angle: 0 });
+    const s = await st(page);
+    check('short desktop window (angle 0): old rotate prompt, app hidden, NOT rotated', s.tf === 'none' && s.guard === 'flex' && s.navDisp === 'none', JSON.stringify(s));
+    await ctx.close(); }
+  // Fallbacks: no orientation info -> rotate prompt; screen.orientation-only browsers still lock.
+  { const { page, ctx } = await phone({ width: 844, height: 390, angle: 'none' });
+    const s = await st(page);
+    check('no orientation API at all: falls back to the rotate prompt', s.rot === null && s.tf === 'none' && s.guard === 'flex' && s.navDisp === 'none', JSON.stringify(s));
+    await page.screenshot({ path: `${SHOTS}/lock-fallback-guard.png` }); await ctx.close(); }
+  for (const a of [90, 270]) {
+    const { page, ctx } = await phone({ width: 844, height: 390, angle: a, via: 'so' });
+    const s = await st(page);
+    check(`screen.orientation.angle-only (${a}): locks in the same direction`, s.rot === String(a) && s.tf === (a === 90 ? 'matrix(0, -1, 1, 0, 0, 390)' : 'matrix(0, 1, -1, 0, 844, 0)') && s.guard === 'none', JSON.stringify(s));
+    await ctx.close(); }
+  // Live rotation via real CDP emulation: portrait -> landscape both ways -> portrait.
+  { const { page, ctx, errors } = await phone({ width: 390, height: 844 });
+    const cdp = await ctx.newCDPSession(page);
+    const rot = async (w, h, angle, type) => { await cdp.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true, screenOrientation: { angle, type } }); await page.waitForTimeout(250); return st(page); };
+    const l90 = await rot(844, 390, 90, 'landscapePrimary'), l270 = await rot(844, 390, 270, 'landscapeSecondary'), p = await rot(390, 844, 0, 'portraitPrimary');
+    check('live rotate: portrait -> 90 -> 270 -> portrait updates the lock each time', l90.rot === '90' && l90.tf.startsWith('matrix(0, -1') && l270.rot === '270' && l270.tf.startsWith('matrix(0, 1') && p.rot === null && p.tf === 'none', JSON.stringify([l90, l270, p]));
+    check('live rotate: no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close(); }
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, narrowAndShots, pastPRs, prReconcile]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, narrowAndShots, pastPRs, prReconcile, portraitLock]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
