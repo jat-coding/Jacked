@@ -85,6 +85,11 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 /* MODAL */
 .mo{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:200;display:none;align-items:flex-end;justify-content:center}
 .mo.open{display:flex}
+#achFull{position:fixed;inset:0;z-index:700;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#achFull.open{display:flex;animation:pageIn .2s ease-out}
+.agrow{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--border);cursor:pointer}
+.agt{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);min-width:104px}
+.agi{display:flex;gap:5px;flex:1;min-width:0;flex-wrap:wrap}.agc{font-size:12px;font-weight:800;color:var(--muted)}.agx{font-size:20px;color:var(--muted);line-height:1}
 #badgeFull,#recapFull{position:fixed;inset:0;z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--sab));-webkit-overflow-scrolling:touch}
 #badgeFull.open,#recapFull.open{display:flex;animation:pageIn .2s ease-out}
 .bf-x{position:absolute;top:calc(14px + var(--sat));right:16px;width:38px;height:38px;font-size:18px}
@@ -1010,10 +1015,16 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 </div>
 
 <!-- Full-screen achievement detail (Metrics > Achievements) -->
+<!-- Full-screen achievements page (Metrics > Achievements > View all) -->
+<div id="achFull" role="dialog" aria-modal="true">
+  <div class="ph" style="padding-top:calc(6px + env(safe-area-inset-top))"><div class="pt">Achievements</div><button class="cb" style="width:38px;height:38px;font-size:18px" onclick="closeAch()" aria-label="Close">✕</button></div>
+  <div id="achFullBody" style="padding:0 16px calc(96px + env(safe-area-inset-bottom))"></div>
+</div>
+
 <div id="badgeFull" role="dialog" aria-modal="true">
   <button class="cb bf-x" onclick="closeBadgeFull()" aria-label="Close">✕</button>
   <div id="badgeFullBody" class="bf-wrap"></div>
-  <div class="bf-foot"><button class="btn bg wf" onclick="closeBadgeFull()">Close</button></div>
+  <div class="bf-foot"><button class="btn bp wf" id="badgeStartBtn" style="display:none;margin-bottom:8px" onclick="badgeStart()"></button><button class="btn bg wf" onclick="closeBadgeFull()">Close</button></div>
 </div>
 
 <!-- Full-screen monthly recap (Home card / Metrics > Monthly Recaps) -->
@@ -3695,14 +3706,9 @@ function computeBadges() {
     }
   }
 
-  // 2) A PR every day for 7 consecutive days
-  const prDays=new Set(h.filter(w=>(w.prCount||0)>0).map(w=>dayKey(w.date)));
-  let prWeek=false;
-  for(const ds of prDays){
-    let ok=true;
-    for(let k=0;k<7;k++){ const d=dayKey(+new Date(ds)+k*864e5); if(!prDays.has(d)){ ok=false; break; } }
-    if(ok){ prWeek=true; break; }
-  }
+  // 2) A PR every day for 7 consecutive days (PR-Maxing is a 3-month-reset badge: only the last 3 months count)
+  const prBest3=bestStreak(h3.filter(w=>(w.prCount||0)>0)), prBestAll=bestStreak(h.filter(w=>(w.prCount||0)>0));
+  const prWeek=prBest3>=7;
 
   // 3) 1000 lb club — bench + squat + deadlift must all happen in ONE workout,
   // summing the heaviest set of each, ≥ 1000 lb.
@@ -3766,7 +3772,7 @@ function computeBadges() {
   // number of workouts per day), anywhere in history -- permanent once earned,
   // like PR-Maxing. Not a duplicate of PR-Maxing: that one needs a PR on each
   // of the 7 days; this only needs a finished workout on each.
-  const bestRun=bestStreak(h);
+  const bestRun=bestStreak(h3), bestRunAll=bestStreak(h);   // Consistency-Maxing is also a 3-month-reset badge
 
   // All-time bests (kept even when the 3-month tier has dropped) -- shown in the popup.
   const cardioTierOf=v=>v<=6.5?'gold':v<=8?'silver':v<=9?'bronze':null;
@@ -3778,7 +3784,9 @@ function computeBadges() {
     'Leg-Maxing':haveBW&&qA>0&&{v:`${r0(qA)} lb x5`,tier:tierOf(qA,[1.0*bwLb,1.5*bwLb,2.0*bwLb])},
     'Pull-up-Maxing':puA>0&&{v:`${puA} reps`,tier:tierOf(puA,[10,15,20])},
     'Push-up-Maxing':psA>0&&{v:`${psA} reps`,tier:tierOf(psA,[30,50,80])},
-    'Cardio-Maxing':isFinite(cardioAll)&&{v:`${fmtClock(cardioAll)} per mile`,tier:cardioTierOf(cardioAll)}
+    'Cardio-Maxing':isFinite(cardioAll)&&{v:`${fmtClock(cardioAll)} per mile`,tier:cardioTierOf(cardioAll)},
+    'PR-Maxing':prBestAll>0&&{v:`${prBestAll} day${prBestAll!==1?'s':''} in a row`},
+    'Consistency-Maxing':bestRunAll>0&&{v:`${bestRunAll} day${bestRunAll!==1?'s':''} in a row`}
   };
 
   // Monthly badges: reset every calendar month, never required for Jacked.
@@ -3835,27 +3843,31 @@ function computeBadges() {
       desc: isFinite(cardioBest)?`Best mile pace: ${fmtClock(cardioBest)}/mi — ${tlineLow(cardioBest,[6.5,8,9])}`:'Log a run (miles + minutes) to unlock'},
     {icon:'target',color:'var(--blue)',name:'Variety-Maxing',earned:variety>=100,
       desc:`${variety} / 100 different exercises logged`},
-    {icon:'flame',color:'var(--orange)',name:'PR-Maxing',desc:'Hit a PR every day for 7 days straight',earned:prWeek},
-    {icon:'calendarCheck',color:'var(--green)',name:'Consistency-Maxing',desc:`Train 7 days in a row — best run: ${bestRun} day${bestRun!==1?'s':''}`,earned:bestRun>=7},
+    {icon:'flame',color:'var(--orange)',name:'PR-Maxing',threeMonth:true,desc:`PR 7 days in a row — best: ${prBest3} day${prBest3!==1?'s':''}`,earned:prWeek},
+    {icon:'calendarCheck',color:'var(--green)',name:'Consistency-Maxing',threeMonth:true,desc:`Train 7 days in a row — best: ${bestRun} day${bestRun!==1?'s':''}`,earned:bestRun>=7},
     {icon:'bed',color:'var(--muted)',name:'Coward-Maxing',desc:'7+ days off in a row',earned:weekOff},
     {icon:'dumbbell',color:MCOL[ch.group]||'var(--accent)',name:'Challenge-Maxing',monthly:true,earned:chDone,group:ch.group,
       desc:`${MGNAME[ch.group]} ${Math.min(chCnt,ch.target)} / ${ch.target}`,
       detail:`Train ${MGNAME[ch.group]} in ${ch.target} different workouts this month. ${chCnt} so far.`+(chWins?` Completed ${chWins} month${chWins!==1?'s':''} so far.`:'')},
     {icon:'arrowUp',color:'var(--green)',name:'Comeback-Maxing',monthly:true,earned:comeback||!!ch.comeback,
-      desc:`${dCur} of ${dimCur} days trained · ${nCur} sessions vs ${nLast} last month`,
-      detail:`${dCur} of ${dimCur} days trained this month (${Math.ceil(dimCur/2)} keeps it). ${nCur} sessions vs ${nLast} last month; your average over the 3 months before last was ${Math.round(avg3*10)/10}.`+(cbWins?` Earned ${cbWins} month${cbWins!==1?'s':''} so far.`:'')},
+      desc:`${dCur} / ${Math.ceil(dimCur/2)} days this month`,
+      detail:`${dCur} / ${Math.ceil(dimCur/2)} days trained this month`+(cbWins?` · earned ${cbWins} month${cbWins!==1?'s':''} so far`:''),
+      sections:[
+        {t:'Steady',met:steady,rows:[['Days trained this month',`${dCur} / ${Math.ceil(dimCur/2)}`]]},
+        {t:'Bounce back',met:bounce,rows:[['Sessions this month',nCur],['Sessions last month',nLast],['Your usual month',avg3>0?String(Math.round(avg3*10)/10):'none yet'],['Last month below usual',avg3>0&&nLast<avg3?'Yes':'No']]}
+      ]},
   ];
   list.forEach(b=>{ if(ALL[b.name]) b.all=ALL[b.name]; });
   const CUR={'Bench-Maxing':bench>0?`${r0(bench)} lb`:'','Shoulder-Maxing':haveBW&&ohp>0?`${r0(ohp)} lb x5`:'','Leg-Maxing':haveBW&&sq>0?`${r0(sq)} lb x5`:'',
     'Pull-up-Maxing':pullBest>0?`${pullBest} reps`:'','Push-up-Maxing':pushBest>0?`${pushBest} reps`:'','Cardio-Maxing':isFinite(cardioBest)?`${fmtClock(cardioBest)}/mi`:''};
   list.forEach(b=>{ if(CUR[b.name]!==undefined) b.curV=CUR[b.name]; });
-  // Jacked (Mr. Roni, 2026-09-24): every Monthly-reset and 3-month-reset badge earned, the 3-month ones all at Gold.
-  // Permanent badges are NOT required. Coward-Maxing is a penalty, not a requirement -- but holding it locks Jacked.
-  const req=list.filter(b=>b.tiered||b.monthly);
+  // Jacked (Mr. Roni, 2026-09-24): every Monthly-reset and 3-month-reset badge earned, the tiered ones all at Gold.
+  // Permanent badges (1000lb Club, Variety) are NOT required. Coward-Maxing is a penalty, not a requirement -- but holding it locks Jacked.
+  const req=list.filter(b=>b.tiered||b.threeMonth||b.monthly);
   const tiered=list.filter(b=>b.tiered);
   const nEarned=req.filter(b=>b.earned).length, nGold=tiered.filter(b=>b.tier==='gold').length;
   list.push({icon:'crown',color:'#ffd700',name:'Jacked',earned:nEarned===req.length&&nGold===tiered.length&&!weekOff,
-    desc:nEarned===req.length&&nGold===tiered.length&&!weekOff?'Every monthly and 3-month badge, all at Gold':'Unlock it and something special happens',
+    desc:nEarned===req.length&&nGold===tiered.length&&!weekOff?'Every monthly and 3-month badge, tiers at Gold':'Unlock it and something special happens',
     detail:`${nEarned} / ${req.length} badges · ${nGold} / ${tiered.length} at Gold`+(weekOff?' · locked by Coward-Maxing':''),
     locked:weekOff});
   const jk=list[list.length-1];
@@ -3874,15 +3886,15 @@ const BADGE_HOW={
   'Shoulder-Maxing':'Barbell overhead press for 5 reps. Bronze 25%, Silver 50%, Gold 100% of your body weight. Set your weight in Profile.',
   'Leg-Maxing':'Barbell squat for 5 reps. Bronze 100%, Silver 150%, Gold 200% of your body weight. Set your weight in Profile.',
   '1000lb Club':'In a single workout, your best bench + squat + deadlift add up to 1000 lb or more.',
-  'PR-Maxing':'Hit at least one personal record on 7 days in a row.',
-  'Consistency-Maxing':'Finish at least one workout on 7 days in a row. Yours for good once earned.',
+  'PR-Maxing':'Hit at least one personal record on 7 days in a row. Only the last 3 months count.',
+  'Consistency-Maxing':'Finish at least one workout on 7 days in a row. Only the last 3 months count.',
   'Coward-Maxing':'Given after 7+ days off in a row this month. Resets monthly — train consistently this month to clear it.',
-  'Jacked':'Earn every badge in the Monthly reset and 3-month reset groups, with the 3-month ones all at Gold. Permanent badges are not needed. Locked while you hold Coward-Maxing.',
+  'Jacked':'Earn every badge in the Monthly reset and 3-month reset groups, with the six lift and cardio badges at Gold. Permanent badges are not needed. Locked while you hold Coward-Maxing.',
   'Pull-up-Maxing':'Most reps in a single pull-up/chin-up set. Bronze 10, Silver 15, Gold 20.',
   'Push-up-Maxing':'Most reps in a single push-up set (one exercise, not summed). Bronze 30, Silver 50, Gold 80.',
   'Cardio-Maxing':'Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze 9:00, Silver 8:00, Gold 6:30 per mile. Only runs from the last 3 months count.',
   'Challenge-Maxing':'Train your weakest muscle group (glutes left out) enough times this month. A new group every month.',
-  'Comeback-Maxing':'Train on at least half the days of the month, or log more sessions than last month after a month that ran below your recent average.',
+  'Comeback-Maxing':'Train on at least half the days of the month, or beat last month after a slow month.',
   'Variety-Maxing':'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'
 };
 // Name shown for a badge; older builds stored '1000lb Club-Maxing' in friends' badge lists.
@@ -3897,12 +3909,12 @@ const BADGE_DETAIL={
   'Push-up-Maxing':{how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze','30 reps'],['Silver','50 reps'],['Gold','80 reps']],note:'Your tier follows your best in the last 3 months.'},
   'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Your tier follows your best pace in the last 3 months.'},
   'Challenge-Maxing':{how:'Every month you get a target on your weakest muscle group, based on last month (glutes are left out, and it is never the same group two months in a row). Train that group in the target number of different workouts.',note:'Resets monthly with a new muscle group.'},
-  'Comeback-Maxing':{how:'Either bounce back (more sessions this month than last month, after a month below your average of the 3 months before it) or keep it steady (train on at least half the days of the month). Either one earns it, so a run of great months never locks you out.',note:'Resets monthly.'},
+  'Comeback-Maxing':{how:'Two ways to earn it. Steady: train on at least half the days of the month. Bounce back: log more sessions than last month, after a month below your usual.',note:'Resets monthly. Either one earns it, so a run of great months never locks you out.'},
   'Variety-Maxing':{how:'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'},
-  'PR-Maxing':{how:'Hit at least one personal record on 7 days in a row.'},
-  'Consistency-Maxing':{how:'Finish at least one workout on 7 calendar days in a row. Two workouts on the same day still count as one day. Yours for good once earned.'},
+  'PR-Maxing':{how:'Hit at least one personal record on 7 days in a row.',note:'Resets every 3 months. Only the last 3 months count.'},
+  'Consistency-Maxing':{how:'Finish at least one workout on 7 calendar days in a row. Two workouts on the same day still count as one day.',note:'Resets every 3 months. Only the last 3 months count.'},
   'Coward-Maxing':{how:'Given after 7+ days off in a row this month. Holding it locks the Jacked badge.',note:'Resets monthly. Only days off in the current month count, and the badge starts fresh on the 1st.'},
-  'Jacked':{how:'Earn every badge in the Monthly reset group and every badge in the 3-month reset group, with all of the 3-month ones at Gold. The Permanent badges are not needed. You also cannot have Coward-Maxing: while you hold it, Jacked stays locked.',note:'Checked every month. If a 3-month badge falls below Gold (no Gold-level result in the last 3 months) or a monthly badge is not earned yet this month, Jacked is lost until you get it back.'}
+  'Jacked':{how:'Earn every badge in the Monthly reset group and every badge in the 3-month reset group, with the six lift and cardio badges at Gold. The Permanent badges are not needed. You also cannot have Coward-Maxing: while you hold it, Jacked stays locked.',note:'Checked every month. If a 3-month badge falls below Gold (no Gold-level result in the last 3 months) or a monthly badge is not earned yet this month, Jacked is lost until you get it back.'}
 };
 function badgeInfo(name){
   const b=computeBadges().find(x=>x.name===name); if(!b) return;
@@ -3912,8 +3924,9 @@ function badgeInfo(name){
   const status=b.tier?b.tier:(b.earned?'earned':'locked');
   const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v])=>{const k=t.toLowerCase(),on=b.tier===k;return `<div class="bf-tier${on?' on':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span></div>`;}).join('')}</div>`:'';
   const note=d.note?`<div class="bf-h">Resets</div><div class="bf-body">${d.note}</div>`:'';
-  const allT=b.all?`<div class="bf-h">Highest ever</div><div class="bf-tiers"><div class="bf-tier" style="opacity:.55;filter:grayscale(1)"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:700;text-transform:capitalize;color:var(--muted)">${b.all.tier||'no tier'}</span></div></div><div class="bf-body" style="font-size:12px;color:var(--muted);margin-top:6px">Your best in all of history. It never resets. The badge above only counts the last 3 months.</div>`:'';
+  const allT=b.all?`<div class="bf-h">Highest ever</div><div class="bf-tiers"><div class="bf-tier" style="opacity:.55;filter:grayscale(1)"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:700;text-transform:capitalize;color:var(--muted)">${b.all.tier===undefined?'':(b.all.tier||'no tier')}</span></div></div><div class="bf-body" style="font-size:12px;color:var(--muted);margin-top:6px">Your best in all of history. It never resets. The badge above only counts the last 3 months.</div>`:'';
   const teaser=(b.name==='Jacked'&&!b.earned)?`<div class="bf-h">Reward</div><div class="bf-body">Something special happens the moment you unlock this. You will know it when you see it.</div>`:'';
+  const secs=(b.sections||[]).map(x=>`<div class="bf-h" style="display:flex;align-items:center;gap:8px">${x.t}${x.met?'<span style="color:var(--green);font-size:13px;letter-spacing:0">&#10003; met</span>':''}</div><div class="bf-tiers">${x.rows.map(([l,v])=>`<div class="bf-tier${x.met?' on':''}" style="${x.met?'border-color:rgba(61,220,151,.45);background:rgba(61,220,151,.07)':''}"><span style="color:var(--text2);font-weight:600">${l}</span><span style="margin-left:auto;font-weight:800">${v}</span></div>`).join('')}</div>`).join('');
   const ever=(b.name==='Jacked'&&b.everYM)?`<div class="bf-h">Best in history</div><div class="bf-body">Last held ${MONTHS[+b.everYM.slice(5)-1]} ${b.everYM.slice(0,4)}. Held in ${b.months} month${b.months!==1?'s':''} so far.</div>`:'';
   document.getElementById('badgeFullBody').innerHTML=`
     <div class="bf-icon" style="filter:${b.earned?'none':'grayscale(1)'};${teal?'background:rgba(32,211,194,.14);':''}box-shadow:0 0 0 1px ${col}55,0 0 60px -6px ${col}66">${uic(b.icon,b.color,84)}</div>
@@ -3922,11 +3935,64 @@ function badgeInfo(name){
     <div class="bf-stat">${b.detail||b.desc}</div>
     <div class="bf-sep"></div>
     <div class="bf-h">How to earn it</div><div class="bf-body">${d.how}</div>
-    ${tiers}${allT}${ever}${teaser}${note}`;
+    ${tiers}${secs}${allT}${ever}${teaser}${note}`;
+  _badgeOpen=b;
+  const sb=document.getElementById('badgeStartBtn'), plan=badgePlan(b);
+  sb.textContent=(aw&&!plan.page)?(plan.ids.length?'Add to my current workout':'Back to my workout'):plan.label; sb.style.display='';
   document.getElementById('badgeFull').classList.add('open');
   document.getElementById('badgeFull').scrollTop=0;
 }
 function closeBadgeFull(){ document.getElementById('badgeFull').classList.remove('open'); }
+
+// "Take me to the workout for this badge" button in the badge popup (Mr. Roni, 2026-09-24).
+const _flat=x=>String(x||'').toLowerCase().replace(/[^a-z]/g,'');
+// Matches the raw exercise-db name + equipment: display names drop the equipment word.
+function pickExId(want,bad){
+  const c=allDB.filter(e=>{ const f=_flat(e.name); return want(f+_flat(e.equipment))&&!(bad&&bad.test(f)); }).sort((a,b)=>a.name.length-b.name.length);
+  return c[0]?c[0].id:null;
+}
+function badgePlan(b){
+  const ex=(label,title,...ids)=>({label,title,ids:ids.filter(Boolean)});
+  const bench=()=>pickExId(f=>f.includes('barbell')&&f.includes('benchpress'),/incline|decline|closegrip|widegrip|reverse|floor|smith|dumbbell/);
+  const ohp=()=>pickExId(f=>f.includes('barbell')&&(f.includes('overheadpress')||f.includes('militarypress')),/seated|behind|smith|dumbbell|push/);
+  const squat=()=>pickExId(f=>f.includes('barbell')&&f.includes('squat'),/front|split|overhead|jump|hack|zercher|box|sissy|goblet|bulgarian|smith/);
+  const dead=()=>pickExId(f=>f.includes('barbell')&&f.includes('deadlift'),/romanian|stiff|sumo|straightleg|snatch|deficit|trapbar|single|smith/);
+  const pull=()=>pickExId(f=>f.includes('pullup')||f.includes('chinup'),/assist|band|weighted|machine/);
+  const push=()=>pickExId(f=>f.includes('pushup'),/decline|incline|wall|knee|diamond|clap|handstand/);
+  const run=()=>{ const c=allEx().filter(e=>(e.tracking||'')==='distance'); return (c.find(e=>/run/i.test(e.name))||c[0]||{}).id||null; };
+  switch(b.name){
+    case 'Bench-Maxing': return ex('Start a bench workout','Bench day',bench());
+    case 'Shoulder-Maxing': return ex('Start an overhead press workout','Shoulder day',ohp());
+    case 'Leg-Maxing': return ex('Start a squat workout','Leg day',squat());
+    case 'Pull-up-Maxing': return ex('Start a pull-up workout','Pull-ups',pull());
+    case 'Push-up-Maxing': return ex('Start a push-up workout','Push-ups',push());
+    case 'Cardio-Maxing': return ex('Start a run','Run',run());
+    case '1000lb Club': return ex('Start a big-3 workout','Big 3',bench(),squat(),dead());
+    case 'Variety-Maxing': return {label:'Browse the library',page:'exercises',ids:[]};
+    case 'Challenge-Maxing': {
+      const g=b.group, use={};
+      gH().forEach(w=>(w.exercises||[]).forEach(e=>{ if(muscleGroup(e.muscle)===g&&e.exId) use[e.exId]=(use[e.exId]||0)+1; }));
+      let ids=Object.keys(use).sort((x,y)=>use[y]-use[x]).slice(0,3);
+      if(!ids.length) ids=allEx().filter(e=>muscleGroup(e.muscle)===g&&/barbell|dumbbell/i.test(e.equip||'')).slice(0,3).map(e=>e.id);
+      return ex(`Train ${MGNAME[g]||'it'} now`,`${MGNAME[g]||'Challenge'} day`,...ids);
+    }
+    default: return ex('Start a workout','Workout');
+  }
+}
+async function badgeStart(){
+  const b=_badgeOpen; if(!b) return;
+  if(!dbLoaded){ await loadDB(); for(let i=0;i<50&&dbLoading;i++) await new Promise(r=>setTimeout(r,100)); }   // DB may still be loading
+  const plan=badgePlan(b);
+  closeBadgeFull(); closeAch();
+  if(plan.page){ sp(plan.page); return; }
+  if(!aw){
+    awStart=Date.now();
+    aw={id:'w'+Date.now(), name:plan.title, date:new Date().toISOString(), exercises:[]};
+  }
+  plan.ids.forEach(id=>{ if(!aw.exercises.find(e=>e.exId===id)) addExToWorkout(id); });
+  beginW();
+}
+let _badgeOpen=null;
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeBadgeFull(); });
 
 // Count how many badges are currently earned (used by the leaderboard too).
@@ -4315,35 +4381,53 @@ async function shareRecap(){
 }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeRecap(); });
 
-function cardBadges(){
-  // Unlocked badges on top, locked at the bottom.
+// Achievements: the Metrics card is a short summary; the full list lives on its own full-screen page (openAch).
+const ACH_GROUPS=[['Monthly reset',b=>!b.tiered&&!b.threeMonth&&(b.monthly||b.name==='Coward-Maxing'||b.name==='Jacked')],['3-month reset',b=>!!b.tiered||!!b.threeMonth],['Permanent',()=>true]];
+const achGrp=b=>ACH_GROUPS.findIndex(g=>g[1](b));
+function achView(){
   const all=computeBadges(), jk=all.find(b=>b.name==='Jacked');
-  const hero=(jk&&jk.earned);   // unlocked Jacked gets its own gold section above the rest (Mr. Roni, 2026-09-24)
+  const hero=!!(jk&&jk.earned);   // unlocked Jacked gets its own gold section above the rest (Mr. Roni, 2026-09-24)
   // Negative badges stay hidden until earned, so they never look like something to chase (Mr. Roni, 2026-09-24).
-  const badges=all.filter(b=>!(hero&&b.name==='Jacked')&&!(b.name==='Coward-Maxing'&&!b.earned)).sort((a,b)=>(b.earned?1:0)-(a.earned?1:0));
-  // Grouped by how they reset, with barely-there grey labels (Mr. Roni, 2026-09-24). Jacked is re-checked monthly.
-  const GROUPS=[['Monthly reset',b=>!b.tiered&&(b.monthly||b.name==='Coward-Maxing'||b.name==='Jacked')],['3-month reset',b=>!!b.tiered],['Permanent',()=>true]];
-  const grp=b=>GROUPS.findIndex(g=>g[1](b));
-  const heroHtml=hero?`<div id="jackedHero" class="jh" onclick="badgeInfo('Jacked')">
-      <span class="jh-ic">${uic(jk.icon,'#ffd700',30)}</span><span class="jh-t">Jacked</span>
-    </div>`:'';
-  const row=b=>{
-    const status=b.tier
-      ? `<span class="badge" style="background:${TIERC[b.tier]}22;color:${TIERC[b.tier]};border:1px solid ${TIERC[b.tier]}66;text-transform:capitalize">${b.tier}</span>`
-      : (b.earned&&b.name!=='Coward-Maxing')?'<span class="badge baccent">Earned</span>'
-      : b.earned?'<span class="badge bgreen">Earned</span>':'<span class="badge bm">Locked</span>';
-    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);opacity:${b.earned?1:.45};cursor:pointer" onclick="badgeInfo('${b.name}')">
-      <div style="filter:${b.earned?'none':'grayscale(1)'}">${uic(b.icon,b.color,28)}</div>
-      <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${b.name}</div><div style="font-size:12px;color:var(--muted)">${b.desc}</div></div>
-      ${status}
-    </div>`;
-  };
-  const html=heroHtml+GROUPS.map((g,gi)=>{
-    const rows=badges.filter(b=>grp(b)===gi); if(!rows.length) return '';
-    return `<div class="bgrp">${g[0]}</div>`+rows.map(row).join('');
+  const visible=all.filter(b=>!(b.name==='Coward-Maxing'&&!b.earned));
+  const heroHtml=(id)=>`<div ${id?`id="${id}" `:''}class="jh" onclick="badgeInfo('Jacked')"><span class="jh-ic">${uic(jk.icon,'#ffd700',30)}</span><span class="jh-t">Jacked</span></div>`;
+  return {all,jk,hero,visible,heroHtml};
+}
+function achRow(b){
+  const status=b.tier
+    ? `<span class="badge" style="background:${TIERC[b.tier]}22;color:${TIERC[b.tier]};border:1px solid ${TIERC[b.tier]}66;text-transform:capitalize">${b.tier}</span>`
+    : (b.earned&&b.name!=='Coward-Maxing')?'<span class="badge baccent">Earned</span>'
+    : b.earned?'<span class="badge bgreen">Earned</span>':'<span class="badge bm">Locked</span>';
+  return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);opacity:${b.earned?1:.45};cursor:pointer" onclick="badgeInfo('${b.name}')">
+    <div style="filter:${b.earned?'none':'grayscale(1)'}">${uic(b.icon,b.color,28)}</div>
+    <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${b.name}</div><div style="font-size:12px;color:var(--muted)">${b.desc}</div></div>
+    ${status}
+  </div>`;
+}
+function cardBadges(){
+  const v=achView();
+  const jkRow=(!v.hero&&v.jk)?achRow(v.jk):'';
+  const sums=ACH_GROUPS.map((g,gi)=>{
+    const rows=v.visible.filter(b=>b.name!=='Jacked'&&b.name!=='Coward-Maxing'&&achGrp(b)===gi).sort((a,b)=>(b.earned?1:0)-(a.earned?1:0));
+    if(!rows.length) return '';
+    const got=rows.filter(b=>b.earned).length;
+    return `<div class="agrow" onclick="openAch()"><div class="agt">${g[0]}</div><div class="agi">${rows.map(b=>`<span style="opacity:${b.earned?1:.3};filter:${b.earned?'none':'grayscale(1)'}">${uic(b.icon,b.color,18)}</span>`).join('')}</div><div class="agc">${got} / ${rows.length}</div><span class="agx">&#8250;</span></div>`;
   }).join('');
+  const html=(v.hero?v.heroHtml('jackedHero'):jkRow)+sums+`<button class="btn bg wf" style="margin-top:12px" onclick="openAch()">View all achievements</button>`;
   return {id:'badges',title:'Achievements',html};
 }
+function achPageHtml(){
+  const v=achView();
+  const badges=v.visible.filter(b=>!(v.hero&&b.name==='Jacked')).sort((a,b)=>(b.earned?1:0)-(a.earned?1:0));
+  return (v.hero?v.heroHtml(''):'')+ACH_GROUPS.map((g,gi)=>{
+    const rows=badges.filter(b=>achGrp(b)===gi); if(!rows.length) return '';
+    return `<div class="bgrp">${g[0]}</div>`+rows.map(achRow).join('');
+  }).join('');
+}
+function openAch(){
+  document.getElementById('achFullBody').innerHTML=achPageHtml();
+  const f=document.getElementById('achFull'); f.classList.add('open'); f.scrollTop=0;
+}
+function closeAch(){ document.getElementById('achFull').classList.remove('open'); }
 
 // Saved section order (settings.cardOrder = array of card ids). Unknown/new ids sort last in default order.
 function metricsOrdered(){
@@ -4798,7 +4882,7 @@ function renderLB() {
   }
   document.getElementById('compareBoard').innerHTML=`
     <div class="metric-card" style="margin-bottom:16px">
-      <div class="st" style="margin-bottom:10px">Leaderboards</div>
+      <div class="st" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>Leaderboards</span><span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted)">${uic('crown','#ffd700',13)}Last month's winner</span></div>
       ${rangeTog}
       <div class="chips" style="flex-wrap:wrap;margin-bottom:10px">${chips}</div>
       ${board}
@@ -6175,7 +6259,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.18';
+const BUILD = 'v1.10.19';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

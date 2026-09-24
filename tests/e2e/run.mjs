@@ -153,7 +153,8 @@ async function consistency() {
   await run('two workouts same day do not count as two days (6 distinct days, 7 workouts)', [...days('2026-08-01', 6).map(d => wk(d)), wk('2026-08-06', [], { hour: 18 })], false);
   await run('two workouts on one day inside a 7-day run -> earned', [...days('2026-08-01', 7).map(d => wk(d)), wk('2026-08-03', [], { hour: 19 })], true);
   await run('late-night local workouts use local dates (23:00 Denver = next day UTC)', days('2026-08-01', 7).map(d => wk(d, [], { hour: 23 })), true);
-  await run('permanent: streak back in August, nothing since', [...days('2026-06-01', 7), '2026-09-14'].map(d => wk(d)), true);
+  await run('3-month reset: streak back in June (over 3 months ago), nothing since -> not earned', [...days('2026-06-01', 7), '2026-09-14'].map(d => wk(d)), false);
+  await run('3-month reset: streak in July (inside 3 months) -> earned', [...days('2026-07-01', 7), '2026-09-14'].map(d => wk(d)), true);
   // Not a duplicate of PR-Maxing: 7 days in a row with no PRs earns Consistency only
   const { page, ctx } = await phone({ seed: { hist: days('2026-08-01', 7).map(d => wk(d)) }, now: SEP15 });
   check('consistency: differs from PR-Maxing (no PRs -> PR-Maxing locked)', (await badge(page, 'PR-Maxing')).earned === false && (await badge(page, 'Consistency-Maxing')).earned === true);
@@ -185,7 +186,7 @@ async function jacked() {
     const missing = bs.filter(b => !b.earned && b.name !== 'Jacked' && b.name !== 'Coward-Maxing').map(b => b.name);
     check('jacked: unlocked with every badge earned + all tiers gold', j.earned, `missing=${missing} ${j.desc}`);
     check('jacked: Coward-Maxing not required (it is locked here)', bs.find(b => b.name === 'Coward-Maxing').earned === false);
-    check('jacked: needs 8 (6 tiered + Challenge + Comeback), permanent ones not counted', /8 \/ 8 badges · 6 \/ 6 at Gold/.test(j.detail) && !/\d+ \/ \d+/.test(j.desc), j.detail + ' | ' + j.desc);
+    check('jacked: needs 10 (6 tiered + PR + Consistency + Challenge + Comeback), permanent ones not counted', /10 \/ 10 badges · 6 \/ 6 at Gold/.test(j.detail) && !/\d+ \/ \d+/.test(j.desc), j.detail + ' | ' + j.desc);
     check('jacked: all six tiered badges gold', bs.filter(b => b.tier).every(b => b.tier === 'gold') && bs.filter(b => b.tier).length === 6);
     await page.evaluate(() => sp('metrics'));
     await page.waitForTimeout(200);
@@ -199,11 +200,11 @@ async function jacked() {
     await ctx.close();
   }
   {
-    // Permanent badges are not required: only the Monthly-reset and 3-month-reset badges gate Jacked.
-    const h = [wk('2026-09-12', [ex('Barbell Bench Press', [[315, 1]]), ex('Barbell Squat', [[400, 5]]), ex('Barbell Overhead Press', [[185, 5]]), ex('Pull-up', [[0, 20]], 'bodyweight_reps'), ex('Push-up', [[0, 80]], 'bodyweight_reps'), ex('Run', [[1, 6]], 'distance')])];
+    // Permanent badges are not required: only the Monthly-reset and 3-month-reset badges gate Jacked (PR and Consistency are 3-month now).
+    const h = [...days('2026-09-01', 7).map(d => wk(d, [], { pr: true })), wk('2026-09-12', [ex('Barbell Bench Press', [[315, 1]]), ex('Barbell Squat', [[400, 5]]), ex('Barbell Overhead Press', [[185, 5]]), ex('Pull-up', [[0, 20]], 'bodyweight_reps'), ex('Push-up', [[0, 80]], 'bodyweight_reps'), ex('Run', [[1, 6]], 'distance')])];
     const { page, ctx } = await phone({ seed: { hist: h, bw: 180 / LB, monthBadges: MB_SEP }, now: SEP15 });
     const bs = await badges(page);
-    const perm = ['1000lb Club', 'Variety-Maxing', 'PR-Maxing', 'Consistency-Maxing'].map(n => bs.find(b => b.name === n).earned);
+    const perm = ['1000lb Club', 'Variety-Maxing'].map(n => bs.find(b => b.name === n).earned);
     check('jacked: earned with NO permanent badge (3-month + monthly only)', bs.find(b => b.name === 'Jacked').earned === true && perm.every(x => x === false), JSON.stringify({ perm, j: bs.find(b => b.name === 'Jacked') }));
     await page.evaluate(() => badgeInfo('Jacked'));
     const txt = await page.locator('#badgeFullBody').innerText();
@@ -321,7 +322,7 @@ async function monthly() {
   {
     // Earned non-tiered badges show a teal "Earned" pill and a teal icon backdrop in the popup; Coward-Maxing (a penalty) does not.
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
-    await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
+    await page.evaluate(() => { sp('metrics'); openAch(); }); await page.waitForTimeout(300);
     const pill = await page.evaluate(() => { const r = n => document.querySelector(`[onclick="badgeInfo('${n}')"] .badge`); const a = r('PR-Maxing'), b = r('Consistency-Maxing'); return { a: a && a.textContent + '|' + getComputedStyle(a).color, b: b && b.textContent }; });
     check('teal: earned non-tiered badge shows a teal Earned pill', /^Earned\|rgb\(32, 211, 194\)/.test(pill.a) && pill.b === 'Earned', JSON.stringify(pill));
     await page.evaluate(() => badgeInfo('PR-Maxing'));
@@ -354,18 +355,18 @@ async function monthly() {
   {
     // Achievements grouped by reset type with small grey labels.
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
-    await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
-    const g = await page.evaluate(() => { const out = []; document.querySelectorAll('#page-metrics .bgrp, #page-metrics [onclick^="badgeInfo("]').forEach(el => out.push(el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2))); return out; });
+    await page.evaluate(() => { sp('metrics'); openAch(); }); await page.waitForTimeout(300);
+    const g = await page.evaluate(() => { const out = []; document.querySelectorAll('#achFullBody .bgrp, #achFullBody [onclick^="badgeInfo("]').forEach(el => out.push(el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2))); return out; });
     const idx = n => g.indexOf(n), lab = ['#Monthly reset', '#3-month reset', '#Permanent'].map(idx);
     check('groups: three grey labels in order (Monthly, 3-month, Permanent)', lab[0] >= 0 && lab[0] < lab[1] && lab[1] < lab[2], JSON.stringify(g));
-    check('groups: Challenge/Comeback under Monthly (Coward hidden), tiered under 3-month, 1000lb/Variety/PR/Consistency under Permanent',
+    check('groups: Challenge/Comeback under Monthly (Coward hidden), tiered + PR + Consistency under 3-month, 1000lb/Variety under Permanent',
       ['Challenge-Maxing', 'Comeback-Maxing'].every(n => idx(n) > lab[0] && idx(n) < lab[1]) && idx('Coward-Maxing') < 0 &&
-      ['Bench-Maxing', 'Shoulder-Maxing', 'Leg-Maxing', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing'].every(n => idx(n) > lab[1] && idx(n) < lab[2]) &&
-      ['1000lb Club', 'Variety-Maxing', 'PR-Maxing', 'Consistency-Maxing'].every(n => idx(n) > lab[2]), JSON.stringify(g));
+      ['Bench-Maxing', 'Shoulder-Maxing', 'Leg-Maxing', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing', 'PR-Maxing', 'Consistency-Maxing'].every(n => idx(n) > lab[1] && idx(n) < lab[2]) &&
+      ['1000lb Club', 'Variety-Maxing'].every(n => idx(n) > lab[2]), JSON.stringify(g));
     await ctx.close();
     const l = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
-    await l.page.evaluate(() => sp('metrics')); await l.page.waitForTimeout(300);
-    const gl = await l.page.evaluate(() => [...document.querySelectorAll('#page-metrics .bgrp, #page-metrics [onclick^="badgeInfo("]')].map(el => el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2)));
+    await l.page.evaluate(() => { sp('metrics'); openAch(); }); await l.page.waitForTimeout(300);
+    const gl = await l.page.evaluate(() => [...document.querySelectorAll('#achFullBody .bgrp, #achFullBody [onclick^="badgeInfo("]')].map(el => el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2)));
     const jt = await l.page.evaluate(() => { const j = computeBadges().find(b => b.name === 'Jacked'); badgeInfo('Jacked'); return [j.desc, document.getElementById('badgeFullBody').innerText]; });
     check('teaser: locked Jacked promises something special (list + popup)', /something special/i.test(jt[0]) && /reward/i.test(jt[1]) && /something special/i.test(jt[1]), JSON.stringify(jt));
     const ju = await phone({ seed: seed(), now: SEP15 });
@@ -396,7 +397,7 @@ async function monthly() {
   }
   {
     // Coward-Maxing is hidden from Achievements until it is earned.
-    const has = async (o, now) => { const { page, ctx } = await phone({ seed: o, now }); await page.evaluate(() => sp('metrics')); await page.waitForTimeout(250); const r = await page.evaluate(() => !!document.querySelector('[onclick="badgeInfo(\'Coward-Maxing\')"]')); await ctx.close(); return r; };
+    const has = async (o, now) => { const { page, ctx } = await phone({ seed: o, now }); await page.evaluate(() => { sp('metrics'); openAch(); }); await page.waitForTimeout(250); const r = await page.evaluate(() => !!document.querySelector('#achFullBody [onclick="badgeInfo(\'Coward-Maxing\')"]')); await ctx.close(); return r; };
     check('coward: hidden from the list while not earned', (await has(seed(), SEP15)) === false);
     check('coward: shown once earned', (await has(seed(), new Date('2026-09-29T12:00:00-06:00'))) === true);
   }
@@ -420,6 +421,59 @@ async function monthly() {
   }
 }
 
+async function achievementsPage() {
+  const seed = (o) => ({ hist: allGoldHistory(o), bw: 180 / LB, monthBadges: MB_SEP });
+  {
+    // Metrics card is a short summary; the full list lives on its own page (Mr. Roni, 2026-09-24).
+    const { page, ctx } = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
+    await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
+    const m = await page.evaluate(() => ({ rows: document.querySelectorAll('#page-metrics .agrow').length, labs: [...document.querySelectorAll('#page-metrics .agt')].map(e => e.textContent), list: document.querySelectorAll('#page-metrics .bgrp').length, btn: /View all/i.test(document.querySelector('#page-metrics [onclick="openAch()"].btn')?.textContent || '') }));
+    check('achievements card: 3 group summary rows + View all button, no long list', m.rows === 3 && m.labs.join('|') === 'Monthly reset|3-month reset|Permanent' && m.list === 0 && m.btn, JSON.stringify(m));
+    await page.evaluate(() => document.querySelector('#page-metrics .agrow').click()); await page.waitForTimeout(300);
+    const o = await page.evaluate(() => ({ open: document.getElementById('achFull').classList.contains('open'), rows: document.querySelectorAll('#achFullBody [onclick^="badgeInfo("]').length }));
+    check('achievements: tapping a summary row opens the full-screen page with every badge', o.open && o.rows === 13, JSON.stringify(o));
+    await page.evaluate(() => badgeInfo('Bench-Maxing')); await page.waitForTimeout(200);
+    const z = await page.evaluate(() => { const b = document.getElementById('badgeFull'), a = document.getElementById('achFull'); return +getComputedStyle(b).zIndex > +getComputedStyle(a).zIndex && b.classList.contains('open'); });
+    check('achievements: badge popup opens on top of the full page', z);
+    await page.evaluate(() => { closeBadgeFull(); closeAch(); });
+    check('achievements: closing hides the page', await page.evaluate(() => !document.getElementById('achFull').classList.contains('open')));
+    await ctx.close();
+  }
+  {
+    // "Take me to the workout" button in the badge popup.
+    const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
+    await page.evaluate(() => sp('metrics')); await page.waitForTimeout(200);
+    await page.evaluate(() => badgeInfo('Bench-Maxing')); await page.waitForTimeout(150);
+    const lab = await page.evaluate(() => { const b = document.getElementById('badgeStartBtn'); return [b.style.display, b.textContent]; });
+    check('badge button: bench popup shows a start-workout button', lab[0] !== 'none' && /bench/i.test(lab[1]), JSON.stringify(lab));
+    await page.evaluate(() => badgeStart()); await page.waitForTimeout(400);
+    const w = await page.evaluate(() => ({ aw: !!aw, ex: aw ? aw.exercises.map(e => e.name) : [], pop: document.getElementById('badgeFull').classList.contains('open') }));
+    check('badge button: starts a workout with a barbell bench press, popup closed', w.aw && w.ex.some(n => /bench/i.test(n)) && !w.pop, JSON.stringify(w));
+    await page.evaluate(() => badgeInfo('Variety-Maxing')); await page.waitForTimeout(150);
+    const v = await page.evaluate(() => document.getElementById('badgeStartBtn').textContent);
+    check('badge button: Variety opens the library', /library/i.test(v), v);
+    await ctx.close();
+  }
+  {
+    // Comeback popup: two clear sections instead of a wall of maths.
+    const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
+    await page.evaluate(() => badgeInfo('Comeback-Maxing')); await page.waitForTimeout(150);
+    const t = await page.locator('#badgeFullBody').innerText();
+    check('comeback popup: Steady and Bounce back sections with this-month / last-month rows', /Steady/.test(t) && /Bounce back/.test(t) && /Sessions this month/.test(t) && /Sessions last month/.test(t) && /Days trained this month/.test(t), t);
+    const pr = await page.evaluate(() => { badgeInfo('PR-Maxing'); return document.getElementById('badgeFullBody').innerText; });
+    check('PR-Maxing popup: 3-month reset note + highest ever', /Resets every 3 months/.test(pr) && /Highest ever/i.test(pr) && /days? in a row/.test(pr), pr);
+    await ctx.close();
+  }
+  {
+    // Leaderboards title carries a small crown key at the far right.
+    const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
+    await page.evaluate(() => { sp('leaderboard'); renderLB(); }); await page.waitForTimeout(250);
+    const n = await page.evaluate(() => { const st = document.querySelector('#compareBoard .st'), k = st.lastElementChild, a = st.getBoundingClientRect(), b = k.getBoundingClientRect(), t = st.firstElementChild.getBoundingClientRect(); return { txt: k.textContent.trim(), svg: !!k.querySelector('svg'), right: Math.abs(a.right - b.right) < 2, after: b.left > t.right, inside: b.right <= document.documentElement.clientWidth }; });
+    check('leaderboards: crown + "Last month\'s winner" note at the far right of the title', /Last month's winner/.test(n.txt) && n.svg && n.right && n.after && n.inside, JSON.stringify(n));
+    await ctx.close();
+  }
+}
+
 async function narrowAndShots() {
   const h = allGoldHistory({ pullReps: 15 });   // Consistency earned, Jacked locked -> both visible
   for (const width of [320, 390]) {
@@ -430,10 +484,11 @@ async function narrowAndShots() {
     await card.scrollIntoViewIfNeeded();
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(`narrow ${width}px: no horizontal overflow`, over <= 0, 'overflow px=' + over);
-    const rows = await page.evaluate(() => [...document.querySelectorAll('[onclick^="badgeInfo("]')].map(el => { const r = el.getBoundingClientRect(); return { r: r.right, w: el.scrollWidth - el.clientWidth }; }));
+    await page.evaluate(() => openAch()); await page.waitForTimeout(250);
+    const rows = await page.evaluate(() => [...document.querySelectorAll('#achFullBody [onclick^="badgeInfo("]')].map(el => { const r = el.getBoundingClientRect(); return { r: r.right, w: el.scrollWidth - el.clientWidth }; }));
     check(`narrow ${width}px: every badge row fits the screen`, rows.length === 13 && rows.every(x => x.r <= width + 0.5 && x.w <= 0), JSON.stringify(rows.filter(x => x.r > width || x.w > 0)));
     if (width === 390) {
-      await page.locator('[onclick="badgeInfo(\'Consistency-Maxing\')"]').evaluate(el => el.scrollIntoView({ block: 'center' }));
+      await page.locator('#achFullBody [onclick="badgeInfo(\'Consistency-Maxing\')"]').evaluate(el => el.scrollIntoView({ block: 'center' }));
       await page.waitForTimeout(150);
       await page.screenshot({ path: `${SHOTS}/2-badges-new.png` });
       await page.evaluate(() => badgeInfo('Jacked')); await page.waitForTimeout(250);
@@ -760,7 +815,7 @@ async function portraitLock() {
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, narrowAndShots, pastPRs, prReconcile, portraitLock]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
