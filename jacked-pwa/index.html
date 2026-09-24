@@ -97,8 +97,9 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 #recapFull{overflow-y:auto;padding-top:calc(10px + env(safe-area-inset-top));padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 #recapFull .bf-x{top:calc(8px + env(safe-area-inset-top))}
 /* Jacked achievements box (unlocked): short, crown + name, gold outline. Style variants for Mr. Roni to choose from. */
+.bgrp{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);opacity:.6;margin:12px 0 0}
 .jh{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 16px;margin:0 0 12px;border-radius:16px;cursor:pointer;border:2px solid transparent;
-  background:linear-gradient(#17130a,#0f0c06) padding-box,linear-gradient(135deg,#fff6c2,#ffd700 28%,#b8860b 52%,#ffe680 74%,#c99700) border-box;
+  background:linear-gradient(#26241d,#1e1e22) padding-box,linear-gradient(135deg,#fff6c2,#ffd700 28%,#b8860b 52%,#ffe680 74%,#c99700) border-box;
   box-shadow:0 0 18px -4px rgba(255,215,0,.55),inset 0 1px 0 rgba(255,246,194,.25)}
 .jh-t{font-family:var(--fh);font-size:30px;font-weight:800;letter-spacing:2px;text-transform:uppercase;line-height:1;
   background:linear-gradient(180deg,#fff6c2 0%,#ffd700 45%,#c99700 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
@@ -111,9 +112,9 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .jh-shimmer .jh-t,.jh-bedazzled .jh-t{background-size:100% 220%;animation:jhTxt 3.6s ease-in-out infinite}
 @keyframes jhTxt{0%,100%{background-position:0 0}50%{background-position:0 100%}}
 .jh-bedazzled{background:radial-gradient(circle at 20% 30%,rgba(255,230,128,.35) 0 1px,transparent 1.5px) 0 0/14px 14px,radial-gradient(circle at 70% 60%,rgba(255,246,194,.4) 0 1px,transparent 1.5px) 0 0/19px 19px,linear-gradient(180deg,#3a2a06,#1c1403) padding-box,linear-gradient(135deg,#fff6c2,#ffd700 28%,#b8860b 52%,#ffe680 74%,#c99700) border-box}
-.jh-spin{border:0;background:#0f0c06;padding:14px 18px;z-index:0}
+.jh-spin{border:0;background:#1e1e22;padding:14px 18px;z-index:0}
 .jh-spin::before{content:'';position:absolute;inset:-60%;background:conic-gradient(from 0deg,#b8860b,#fff6c2,#ffd700,#b8860b,#ffe680,#b8860b);animation:jhRot 3.5s linear infinite;z-index:-2}
-.jh-spin::after{content:'';position:absolute;inset:2px;border-radius:14px;background:linear-gradient(#17130a,#0f0c06);z-index:-1}
+.jh-spin::after{content:'';position:absolute;inset:2px;border-radius:14px;background:linear-gradient(#26241d,#1e1e22);z-index:-1}
 @keyframes jhRot{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.jh *,.jh::before,.jh::after{animation:none!important}.jh-sp{opacity:.8;transform:scale(.8)}}
 #recapCard{cursor:pointer;padding:16px;margin-bottom:20px}
@@ -4265,6 +4266,9 @@ function cardBadges(){
   const all=computeBadges(), jk=all.find(b=>b.name==='Jacked');
   const hero=(jk&&jk.earned);   // unlocked Jacked gets its own gold section above the rest (Mr. Roni, 2026-09-24)
   const badges=all.filter(b=>!(hero&&b.name==='Jacked')).sort((a,b)=>(b.earned?1:0)-(a.earned?1:0));
+  // Grouped by how they reset, with barely-there grey labels (Mr. Roni, 2026-09-24). Jacked is re-checked monthly.
+  const GROUPS=[['3-month reset',b=>!!b.tiered],['Monthly reset',b=>b.monthly||b.name==='Coward-Maxing'||b.name==='Jacked'],['Permanent',()=>true]];
+  const grp=b=>GROUPS.findIndex(g=>g[1](b));
   const SP='<svg viewBox="0 0 24 24"><path d="M12 0L14.6 9.4 24 12 14.6 14.6 12 24 9.4 14.6 0 12 9.4 9.4Z"/></svg>';
   const spk=(HERO_STYLE==='sparkle'?[[8,22,9,0],[20,70,7,.7],[46,14,8,1.3],[72,74,9,.4],[90,28,10,1],[60,52,6,1.8]]
     :HERO_STYLE==='bedazzled'?[[5,30,10,0],[14,74,7,.5],[26,18,8,1.1],[38,78,6,.2],[52,12,9,1.6],[63,70,8,.9],[74,20,7,.3],[84,66,10,1.4],[93,26,8,.7],[47,50,6,2]]:[]);
@@ -4272,7 +4276,7 @@ function cardBadges(){
       ${spk.map(x=>`<span class="jh-sp" style="left:${x[0]}%;top:${x[1]}%;width:${x[2]}px;height:${x[2]}px;animation-delay:${x[3]}s">${SP}</span>`).join('')}
       <span class="jh-ic">${uic(jk.icon,'#ffd700',30)}</span><span class="jh-t">Jacked</span>
     </div>`:'';
-  const html=heroHtml+badges.map(b=>{
+  const row=b=>{
     const status=b.tier
       ? `<span class="badge" style="background:${TIERC[b.tier]}22;color:${TIERC[b.tier]};border:1px solid ${TIERC[b.tier]}66;text-transform:capitalize">${b.tier}</span>`
       : (b.earned&&b.name!=='Coward-Maxing')?`<span class="badge" style="background:${TIERC.gold}22;color:${TIERC.gold};border:1px solid ${TIERC.gold}66">Unlocked</span>`
@@ -4282,6 +4286,10 @@ function cardBadges(){
       <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${b.name}</div><div style="font-size:12px;color:var(--muted)">${b.desc}</div></div>
       ${status}
     </div>`;
+  };
+  const html=heroHtml+GROUPS.map((g,gi)=>{
+    const rows=badges.filter(b=>grp(b)===gi); if(!rows.length) return '';
+    return `<div class="bgrp">${g[0]}</div>`+rows.map(row).join('');
   }).join('');
   return {id:'badges',title:'Achievements',html};
 }
@@ -6108,7 +6116,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.7';
+const BUILD = 'v1.10.8';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
