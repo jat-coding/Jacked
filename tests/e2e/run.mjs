@@ -356,14 +356,14 @@ async function monthly() {
     // Shimmering tab titles while Jacked is held; plain when it is not.
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
     await page.evaluate(() => { renderHome(); sp('metrics'); });
-    const on = await page.evaluate(() => { const t = document.querySelector('#page-metrics .pt'); const cs = getComputedStyle(t); return { attr: document.documentElement.hasAttribute('data-jacked'), stroke: cs.webkitTextStrokeColor, w: cs.webkitTextStrokeWidth, ht: getComputedStyle(document.querySelector('#jackedHero .jh-t')).animationName }; });
-    check('outline: Jacked held -> tab titles get a gold outline, box shimmers', on.attr && on.stroke === 'rgb(255, 215, 0)' && parseFloat(on.w) > 0 && on.ht === 'jhTxt', JSON.stringify(on));
+    const on = await page.evaluate(() => { const t = document.querySelector('#page-metrics .pt'); const cs = getComputedStyle(t); return { attr: document.documentElement.hasAttribute('data-jacked'), anim: cs.animationName, clip: cs.webkitBackgroundClip || cs.backgroundClip, ht: getComputedStyle(document.querySelector('#jackedHero .jh-t')).animationName }; });
+    check('gold titles: Jacked held -> tab titles shimmer in gold, box shimmers', on.attr && on.anim === 'ptSweep' && /text/.test(on.clip) && on.ht === 'jhTxt', JSON.stringify(on));
     const t = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
     await t.page.evaluate(() => { renderHome(); sp('metrics'); });
-    const off = await t.page.evaluate(() => ({ attr: document.documentElement.hasAttribute('data-jacked'), w: getComputedStyle(document.querySelector('#page-metrics .pt')).webkitTextStrokeWidth }));
-    check('outline: no Jacked -> plain titles', !off.attr && parseFloat(off.w) === 0, JSON.stringify(off));
+    const off = await t.page.evaluate(() => ({ attr: document.documentElement.hasAttribute('data-jacked'), anim: getComputedStyle(document.querySelector('#page-metrics .pt')).animationName }));
+    check('gold titles: no Jacked -> plain titles', !off.attr && off.anim === 'none', JSON.stringify(off));
     await page.evaluate(() => { S.s('hist', gH().filter(w => !(w.exercises || []).some(e => /pull/i.test(e.name)))); renderHome(); });
-    check('outline: losing Jacked removes it', await page.evaluate(() => !document.documentElement.hasAttribute('data-jacked') && parseFloat(getComputedStyle(document.querySelector('#page-metrics .pt')).webkitTextStrokeWidth) === 0));
+    check('gold titles: losing Jacked removes it', await page.evaluate(() => !document.documentElement.hasAttribute('data-jacked') && getComputedStyle(document.querySelector('#page-metrics .pt')).animationName === 'none'));
     await ctx.close(); await t.ctx.close();
   }
   {
