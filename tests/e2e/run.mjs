@@ -315,8 +315,8 @@ async function monthly() {
     // Unlocked Jacked: own gold hero section at the very top of Achievements, not repeated in the list.
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
     await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
-    const r = await page.evaluate(() => { const h = document.getElementById('jackedHero'); const first = document.querySelector('#page-metrics [onclick^="badgeInfo("]'); return { has: !!h, first: first && first.id, cnt: document.querySelectorAll('[onclick="badgeInfo(\'Jacked\')"]').length, fs: h && parseFloat(getComputedStyle(h.children[1]).fontSize), border: h && getComputedStyle(h).borderTopColor }; });
-    check('hero: unlocked Jacked has its own gold section, big font, once', r.has && r.cnt === 1 && r.fs >= 30 && r.border === 'rgb(255, 215, 0)', JSON.stringify(r));
+    const r = await page.evaluate(() => { const h = document.getElementById('jackedHero'); const rc = h.getBoundingClientRect(); return { has: true, cnt: document.querySelectorAll('[onclick="badgeInfo(\'Jacked\')"]').length, ht: rc.height, txt: h.innerText.trim(), icon: !!h.querySelector('svg') }; });
+    check('hero: unlocked Jacked is a short crown + name box at the top, once, no description', r.cnt === 1 && r.ht < 70 && /^JACKED$/i.test(r.txt) && r.icon, JSON.stringify(r));
     await page.screenshot({ path: `${SHOTS}/hero.png` });
     await ctx.close();
     const l = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });

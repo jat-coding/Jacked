@@ -31,10 +31,11 @@ export async function close() { if (browser) await browser.close(); }
 
 // A phone-shaped page. seed = { key: value } written as jk_<key> (JSON) before boot.
 // now = fixed wall-clock (Date) so date-window badges are deterministic.
-export async function phone({ width = 390, height = 844, seed = {}, now = null } = {}) {
+export async function phone({ width = 390, height = 844, seed = {}, now = null, videoDir = null } = {}) {
   const ctx = await browser.newContext({
     viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
     timezoneId: 'America/Denver', serviceWorkers: 'block',
+    ...(videoDir ? { recordVideo: { dir: videoDir, size: { width, height } } } : {}),
   });
   await ctx.route(/supabase/, r => r.abort());
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
