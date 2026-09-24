@@ -3814,13 +3814,13 @@ const BADGE_HOW={
 function badgeShownName(n){ return n==='1000lb Club-Maxing' ? '1000lb Club' : n; }
 // Full-screen achievement popup: same icon as the list, title, then the summary in a text hierarchy.
 const BADGE_DETAIL={
-  'Bench-Maxing':{how:'Barbell bench press, 1 rep.',tiers:[['Bronze','135 lb'],['Silver','225 lb'],['Gold','315 lb']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
-  'Shoulder-Maxing':{how:'Barbell overhead press for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','25% of body weight'],['Silver','50% of body weight'],['Gold','100% of body weight']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
-  'Leg-Maxing':{how:'Barbell squat for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','100% of body weight'],['Silver','150% of body weight'],['Gold','200% of body weight']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
+  'Bench-Maxing':{how:'Barbell bench press, 1 rep.',tiers:[['Bronze','135 lb'],['Silver','225 lb'],['Gold','315 lb']],note:'Your tier follows your best in the last 3 months.'},
+  'Shoulder-Maxing':{how:'Barbell overhead press for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','25% of body weight'],['Silver','50% of body weight'],['Gold','100% of body weight']],note:'Your tier follows your best in the last 3 months.'},
+  'Leg-Maxing':{how:'Barbell squat for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','100% of body weight'],['Silver','150% of body weight'],['Gold','200% of body weight']],note:'Your tier follows your best in the last 3 months.'},
   '1000lb Club':{how:'In a single workout, your best bench + squat + deadlift add up to 1000 lb or more.'},
-  'Pull-up-Maxing':{how:'Most reps in a single pull-up or chin-up set.',tiers:[['Bronze','10 reps'],['Silver','15 reps'],['Gold','20 reps']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
-  'Push-up-Maxing':{how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze','30 reps'],['Silver','50 reps'],['Gold','80 reps']],note:'Your tier follows your best in the last 3 months. Your highest ever stays below, grayed out.'},
-  'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Your tier follows your best pace in the last 3 months. Your highest ever stays below, grayed out.'},
+  'Pull-up-Maxing':{how:'Most reps in a single pull-up or chin-up set.',tiers:[['Bronze','10 reps'],['Silver','15 reps'],['Gold','20 reps']],note:'Your tier follows your best in the last 3 months.'},
+  'Push-up-Maxing':{how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze','30 reps'],['Silver','50 reps'],['Gold','80 reps']],note:'Your tier follows your best in the last 3 months.'},
+  'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Your tier follows your best pace in the last 3 months.'},
   'Challenge-Maxing':{how:'Every month you get a target on your weakest muscle group, based on last month (glutes are left out, and it is never the same group two months in a row). Train that group in the target number of different workouts.',note:'Resets monthly with a new muscle group.'},
   'Comeback-Maxing':{how:'Either bounce back (more sessions this month than last month, after a month below your average of the 3 months before it) or keep it steady (train on at least half the days of the month). Either one earns it, so a run of great months never locks you out.',note:'Resets monthly.'},
   'Variety-Maxing':{how:'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'},
@@ -6086,7 +6086,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.5';
+const BUILD = 'v1.10.6';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
