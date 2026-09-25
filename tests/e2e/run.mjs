@@ -482,6 +482,8 @@ async function achievementsPage() {
     const pop = await page.evaluate(() => ({ open: document.getElementById('confirmModal').classList.contains('open'), t: document.getElementById('cfMsg').textContent, cancel: getComputedStyle(document.getElementById('cfCancel')).display }));
     check('leaderboards: tapping the crown key opens a description popup (last month\'s weight lifted)', pop.open && /last month/i.test(pop.t) && /weight lifted/i.test(pop.t) && pop.cancel === 'none', JSON.stringify(pop));
     await page.evaluate(() => _cfDone(null));
+    const jm = await page.evaluate(() => [jackedMark({ badgeList: [{ n: 'Jacked', t: '', e: 'crown|#ffd700' }] }), jackedMark({ badgeList: [{ n: 'Bench-Maxing', t: 'gold', e: 'dumbbell|#ffd700' }] }), jackedMark({})]);
+    check('leaderboards: Jacked pill shows for a friend who has the badge, not for others', /JACKED/.test(jm[0]) && jm[1] === '' && jm[2] === '', JSON.stringify(jm));
     await ctx.close();
   }
 }
