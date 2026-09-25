@@ -9,9 +9,9 @@ each editing only its own rows. Updated in the same push as the change it descri
 
 | Client | Version | Delivery | Verified |
 |---|---|---|---|
-| Wear OS (Galaxy Watch 8 Classic) | **v0.19** (wear vc118) | Play internal testing | tagged 2026-09-21: one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
+| Wear OS (Galaxy Watch 8 Classic) | **v0.20** (wear vc119) | Play internal testing | tagged 2026-09-24: focus header = list header, back returns to the same exercise, no "›", centred confirms; v0.19 (2026-09-21): one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
 | watchOS (Apple Watch) | **0.2.0 (24)** | TestFlight | build 22 field-tested; 24 adds overload nudges; Wear v0.15 parity items handed off 2026-09-20 |
-| Phone companion "Jacked Sync" (Android) | **v0.19** (phone vc18) | Play internal testing | no functional change since v0.14 |
+| Phone companion "Jacked Sync" (Android) | **v0.20** (phone vc19) | Play internal testing | no functional change since v0.14 |
 
 The companion is not a watch client: it reads the cloud blob and writes finished workouts into
 Android Health Connect, which is the only path into Samsung Health. It signs in like a watch.
@@ -37,7 +37,8 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   are written onto the workout as extra fields the PWA carries through untouched.
 - **Progressive-overload nudges:** both watches, target-based — see "Agreed cross-device rules".
 - **Focus view (Wear; `DEV_NOTES` items 5 and 10, as decided by Phil 2026-09-21):** tapping
-  an exercise **name** in the workout list opens that exercise alone — sets, − Set / + Set,
+  an exercise **name** in the workout list opens that exercise alone — the same header as the list
+  (timer, ❤/🔥), then sets, − Set / + Set,
   a full-width **Lock in** pill, **‹ Prev · All · Next ›**, and on the last exercise a
   **+ Exercise** pill at the end (same label as the list; opens the same picker). **Lock in**
   checks off that exercise's sets that have values and aren't already done — a blank set is
@@ -45,7 +46,8 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   focus view only; a manual ✓ is unchanged. Prev/Next grey out at the ends (never change
   function). *All*, a right-swipe or Back returns to the list, which stays the home view.
   **No Finish or Discard in the focus view** — list only. The focused exercise is remembered,
-  so *Resume workout* reopens it after a relaunch. Replace/remove/reorder stay on the list.
+  so *Resume workout* reopens it after a relaunch; leaving it scrolls the list back to that
+  exercise. Replace/remove/reorder stay on the list.
 - **Confirms (`DEV_NOTES` item 7) and long-press Resume (item 8):** Finish and Discard both
   confirm first. Cancel and the action sit **side by side on one line, Cancel on the left**,
   so neither is under the full-width tap that opened the screen. Wording follows the phone

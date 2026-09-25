@@ -1,10 +1,17 @@
-# Mirrors main to the `staging` branch on every push. Netlify builds `staging` as a branch deploy
+# Mirrors main to the `staging` branch on pushes to main. Netlify builds `staging` as a branch deploy
 # (staging--jacked-trainer.netlify.app) so changes can be verified before anything goes live.
 # Production publishing is locked in Netlify; going live is a manual step.
+#
+# Skipped when: the push only touches docs (watch-client/**, *.md), or staging is already AHEAD of
+# main (work is pushed to staging first for review). A plain fast-forward push would be rejected then,
+# and the run used to fail and email everyone. Staging is never force-pushed.
 name: sync-staging
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'watch-client/**'
+      - '**.md'
 permissions:
   contents: write
 concurrency: sync-staging
@@ -15,4 +22,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: git push origin HEAD:refs/heads/staging
+      - name: Fast-forward staging to main (skip if staging is ahead)
+        run: |
+          if ! git ls-remote --exit-code --heads origin staging >/dev/null 2>&1; then
+            git push origin HEAD:refs/heads/staging
+          elif git merge-base --is-ancestor origin/staging HEAD; then
+            git push origin HEAD:refs/heads/staging
+          else
+            echo "staging is ahead of (or diverged from) main; skipping sync"
+          fi
