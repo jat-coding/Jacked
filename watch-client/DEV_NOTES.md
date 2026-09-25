@@ -266,6 +266,21 @@ no routine list to browse; the tap lands on a finished workout's exercise detail
 is the only live target. Fix: keep the note editable but make it a distinct, smaller "✎ Note" target
 so it is not hit by accident; no other change. Still OPEN until Wear reports the version.
 
+**Update 2026-09-25 10:59am MDT (Mr. Roni): the fix is the tap target, not the look.** He wants a
+tighter button interaction, no visual redesign, and no repeat of the last bug where the note line
+was the only thing that received taps. Build rules (added to the default above):
+1. The note's click handler sits on the "✎ Note" chip only, never on a row, column or card that
+   also holds other content. The chip's tap area is its drawn bounds; do not pad or enlarge it so
+   it overlaps neighbours.
+2. Every other point on the exercise detail must reach that screen's real handler (or nothing, if
+   the screen is read-only), never the note editor. A parent that consumes the tap and forwards it
+   to the note is the bug to look for first.
+3. Do not change the look beyond what he already approved (smaller chip). No new colours, sizes
+   or layout moves.
+4. Acceptance addition: on the exercise detail, tap a grid of points across the whole screen
+   (title, PR line, session list, empty space) and count note-editor opens: exactly 0 outside the
+   chip, exactly 1 on it. Both watches; record the result in `WATCH_STATUS.md`.
+
 ## 12. Focus-view Lock in button: stays full-width teal — DECIDED, no change
 Source: Mr. Roni, 2026-09-22 11:24pm MDT, deciding between the two options in the mockup
 sent 2026-09-22 (`BOARD.md` pwa entry, replying to Phil's wear field-test comment (b)).
