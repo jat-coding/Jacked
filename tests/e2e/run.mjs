@@ -239,6 +239,8 @@ async function jacked() {
     check('crown: a board crowns its own top lifter (Amy wins a board without Bob)', sub.length === 1 && sub[0] === '@amy', JSON.stringify(sub));
     const bobRow = page.locator('#page-leaderboard .fc, #page-leaderboard .lbi', { hasText: 'Bob' }).first();
     check('crown: winner shows the crown icon and NO gold glow (glow is for Jacked only)', (await bobRow.locator('svg').count()) >= 1 && (await page.locator('#page-leaderboard .gilded').count()) === 0, '');
+    const ord = await bobRow.evaluate(r => { const n = [...r.querySelectorAll('div')].find(d => d.querySelector('svg') && /Bob/.test(d.textContent) && d.children.length >= 1 && d.firstElementChild.tagName === 'SPAN'); return n ? { crownFirst: !!n.firstElementChild.querySelector('svg'), txt: n.innerText.trim() } : null; });
+    check('crown: sits before the name, not after', !!ord && ord.crownFirst && /^Bob/.test(ord.txt), JSON.stringify(ord));
     await page.screenshot({ path: SHOTS + '/crown.png' });
     check('crown: no page errors', errors.length === 0, errors.join(' | '));
     await ctx.close();
@@ -338,11 +340,13 @@ async function monthly() {
     await page.evaluate(() => { sp('metrics'); openAch(); }); await page.waitForTimeout(300);
     const r = await page.evaluate(() => { const h = document.querySelector('#achFullBody .jh'); const rc = h.getBoundingClientRect(); return { has: true, cnt: document.querySelectorAll('#achFullBody [onclick="badgeInfo(\'Jacked\')"]').length, ht: rc.height, txt: h.innerText.trim(), icon: !!h.querySelector('svg') }; });
     check('hero: unlocked Jacked is a short crown + name box at the top, once, no description', r.cnt === 1 && r.ht < 70 && /^JACKED$/i.test(r.txt) && r.icon, JSON.stringify(r));
+    const tx = await page.evaluate(() => { sp('metrics'); const m = document.querySelector('#page-metrics .pt').getBoundingClientRect(); const a = document.querySelector('#achFull .pt').getBoundingClientRect(); return { mx: m.left, ax: a.left, my: m.top, ay: a.top }; });
+    check('title: Achievements is indented and level exactly like the Metrics title', Math.abs(tx.mx - tx.ax) < 0.5 && Math.abs(tx.my - tx.ay) < 0.5, JSON.stringify(tx));
     await page.screenshot({ path: `${SHOTS}/hero.png` });
     await ctx.close();
     const l = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
     await l.page.evaluate(() => { sp('metrics'); openAch(); }); await l.page.waitForTimeout(300);
-    check('hero: locked Jacked stays in the list, no hero', await l.page.evaluate(() => !document.querySelector('#achFullBody .jh') && document.querySelectorAll('#achFullBody [onclick="badgeInfo(\'Jacked\')"]').length === 1));
+    check('hero: locked Jacked still has its own box at the top (greyed, no shimmer), once, not in the list', await l.page.evaluate(() => { const h = document.querySelector('#achFullBody .jh'); return !!h && h.classList.contains('lock') && document.querySelector('#achFullBody').firstElementChild === h && getComputedStyle(h, '::after').display === 'none' && getComputedStyle(h.querySelector('.jh-t')).animationName === 'none' && document.querySelectorAll('#achFullBody [onclick="badgeInfo(\'Jacked\')"]').length === 1; }));
     await l.ctx.close();
   }
   for (const [w, hgt] of [[390, 844], [375, 667], [360, 640]]) {
@@ -374,7 +378,7 @@ async function monthly() {
     const ju = await phone({ seed: seed(), now: SEP15 });
     check('teaser: unlocked Jacked shows no reward teaser', await ju.page.evaluate(() => { badgeInfo('Jacked'); return !/something special/i.test(document.getElementById('badgeFullBody').innerText); }));
     await ju.ctx.close();
-    check('groups: locked Jacked sits under Monthly reset', gl.indexOf('Jacked') > gl.indexOf('#Monthly reset') && gl.indexOf('Jacked') < gl.indexOf('#3-month reset'), JSON.stringify(gl));
+    check('groups: locked Jacked sits above every group, first on the page', gl[0] === 'Jacked' && gl.indexOf('#Monthly reset') === 1, JSON.stringify(gl));
     await l.ctx.close();
   }
   {
