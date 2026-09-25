@@ -335,14 +335,14 @@ async function monthly() {
   {
     // Unlocked Jacked: own gold hero section at the very top of Achievements, not repeated in the list.
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
-    await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
-    const r = await page.evaluate(() => { const h = document.getElementById('jackedHero'); const rc = h.getBoundingClientRect(); return { has: true, cnt: document.querySelectorAll('[onclick="badgeInfo(\'Jacked\')"]').length, ht: rc.height, txt: h.innerText.trim(), icon: !!h.querySelector('svg') }; });
+    await page.evaluate(() => { sp('metrics'); openAch(); }); await page.waitForTimeout(300);
+    const r = await page.evaluate(() => { const h = document.querySelector('#achFullBody .jh'); const rc = h.getBoundingClientRect(); return { has: true, cnt: document.querySelectorAll('#achFullBody [onclick="badgeInfo(\'Jacked\')"]').length, ht: rc.height, txt: h.innerText.trim(), icon: !!h.querySelector('svg') }; });
     check('hero: unlocked Jacked is a short crown + name box at the top, once, no description', r.cnt === 1 && r.ht < 70 && /^JACKED$/i.test(r.txt) && r.icon, JSON.stringify(r));
     await page.screenshot({ path: `${SHOTS}/hero.png` });
     await ctx.close();
     const l = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
-    await l.page.evaluate(() => sp('metrics')); await l.page.waitForTimeout(300);
-    check('hero: locked Jacked stays in the list, no hero', await l.page.evaluate(() => !document.getElementById('jackedHero') && document.querySelectorAll('[onclick="badgeInfo(\'Jacked\')"]').length === 1));
+    await l.page.evaluate(() => { sp('metrics'); openAch(); }); await l.page.waitForTimeout(300);
+    check('hero: locked Jacked stays in the list, no hero', await l.page.evaluate(() => !document.querySelector('#achFullBody .jh') && document.querySelectorAll('#achFullBody [onclick="badgeInfo(\'Jacked\')"]').length === 1));
     await l.ctx.close();
   }
   for (const [w, hgt] of [[390, 844], [375, 667], [360, 640]]) {
@@ -380,8 +380,8 @@ async function monthly() {
   {
     // Shimmering tab titles while Jacked is held; plain when it is not.
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
-    await page.evaluate(() => { renderHome(); sp('metrics'); });
-    const on = await page.evaluate(() => { const t = document.querySelector('#page-metrics .pt'); const cs = getComputedStyle(t); return { attr: document.documentElement.hasAttribute('data-jacked'), anim: cs.animationName, clip: cs.webkitBackgroundClip || cs.backgroundClip, ht: getComputedStyle(document.querySelector('#jackedHero .jh-t')).animationName }; });
+    await page.evaluate(() => { renderHome(); sp('metrics'); openAch(); });
+    const on = await page.evaluate(() => { const t = document.querySelector('#page-metrics .pt'); const cs = getComputedStyle(t); return { attr: document.documentElement.hasAttribute('data-jacked'), anim: cs.animationName, clip: cs.webkitBackgroundClip || cs.backgroundClip, ht: getComputedStyle(document.querySelector('#achFullBody .jh-t')).animationName }; });
     check('gold titles: Jacked held -> tab titles shimmer in gold, box shimmers', on.attr && on.anim === 'ptSweep' && /text/.test(on.clip) && on.ht === 'jhTxt', JSON.stringify(on));
     const fr = await page.evaluate(() => { const g = getComputedStyle(document.body, '::before'); const sec = document.querySelector('#page-metrics .metric-card, #page-metrics .sec'); return [g.position, g.pointerEvents, getComputedStyle(document.body, '::after').position, sec && getComputedStyle(sec).outlineColor, sec && getComputedStyle(sec).outlineWidth, getComputedStyle(document.querySelector('.pt span')).textShadow]; });
     check('glow: soft edge glow (fixed, click-through), no screen border, gold outline on sections, dot has no teal glow', fr[0] === 'fixed' && fr[1] === 'none' && fr[2] !== 'fixed' && /255, 215, 0/.test(fr[3]) && parseFloat(fr[4]) > 0 && fr[5] === 'none', JSON.stringify(fr));
@@ -429,11 +429,11 @@ async function achievementsPage() {
     // Metrics card is a short summary; the full list lives on its own page (Mr. Roni, 2026-09-24).
     const { page, ctx } = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
     await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
-    const m = await page.evaluate(() => ({ rows: document.querySelectorAll('#page-metrics .agrow').length, labs: [...document.querySelectorAll('#page-metrics .agt')].map(e => e.textContent), list: document.querySelectorAll('#page-metrics .bgrp').length, btn: /View all/i.test(document.querySelector('#page-metrics [onclick="openAch()"].btn')?.textContent || '') }));
-    check('achievements card: 3 group summary rows + View all button, no long list', m.rows === 3 && m.labs.join('|') === 'Monthly reset|3-month reset|Permanent' && m.list === 0 && m.btn, JSON.stringify(m));
+    const m = await page.evaluate(() => ({ rows: document.querySelectorAll('#page-metrics .agrow').length, txt: document.querySelector('#page-metrics .agrow').innerText.replace(/\s+/g, ' ').trim(), list: document.querySelectorAll('#page-metrics .bgrp').length, btn: !!document.querySelector('#page-metrics [onclick="openAch()"].btn'), n: computeBadges().filter(b => b.name !== 'Coward-Maxing' && !(b.name === 'Coward-Maxing')).length }));
+    check('achievements card: a single tappable "N / M" bar, no group rows, no button, no list', m.rows === 1 && /^badges earned \d+ \/ \d+/i.test(m.txt) && m.list === 0 && !m.btn, JSON.stringify(m));
     await page.evaluate(() => document.querySelector('#page-metrics .agrow').click()); await page.waitForTimeout(300);
     const o = await page.evaluate(() => ({ open: document.getElementById('achFull').classList.contains('open'), rows: document.querySelectorAll('#achFullBody [onclick^="badgeInfo("]').length }));
-    check('achievements: tapping a summary row opens the full-screen page with every badge', o.open && o.rows === 13, JSON.stringify(o));
+    check('achievements: tapping the bar opens the full-screen page with every badge', o.open && o.rows === 13, JSON.stringify(o));
     await page.evaluate(() => badgeInfo('Bench-Maxing')); await page.waitForTimeout(200);
     const z = await page.evaluate(() => { const b = document.getElementById('badgeFull'), a = document.getElementById('achFull'); return +getComputedStyle(b).zIndex > +getComputedStyle(a).zIndex && b.classList.contains('open'); });
     check('achievements: badge popup opens on top of the full page', z);
@@ -488,6 +488,8 @@ async function achievementsPage() {
     await page.waitForTimeout(150);
     const gl = await page.evaluate(() => ({ glow: [...document.querySelectorAll('#page-leaderboard .gilded')].map(e => e.innerText.slice(0, 20)), pill: /JACKED/.test(document.getElementById('page-leaderboard').innerText) }));
     check('leaderboards: Jacked friend gets the glow row, no JACKED pill', gl.glow.length === 1 && /Bob/.test(gl.glow[0]) && !gl.pill, JSON.stringify(gl));
+    const tile = await page.evaluate(() => { openFriend('@bob'); const a = document.getElementById('fpContent') || document.getElementById('friendPage') || document.body; const t1 = document.body.innerText; openFriend('@dan'); return { bob: /Certified Jacked/i.test(t1) }; });
+    check('friend page: Jacked friend shows a "Certified Jacked" tile', tile.bob === true, JSON.stringify(tile));
     await ctx.close();
   }
 }
@@ -498,8 +500,6 @@ async function narrowAndShots() {
     const { page, ctx } = await phone({ width, height: width === 320 ? 640 : 844, seed: { hist: h, bw: 180 / LB }, now: SEP15 });
     await page.evaluate(() => sp('metrics'));
     await page.waitForTimeout(300);
-    const card = page.locator('[onclick="badgeInfo(\'Jacked\')"]');
-    await card.scrollIntoViewIfNeeded();
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(`narrow ${width}px: no horizontal overflow`, over <= 0, 'overflow px=' + over);
     await page.evaluate(() => openAch()); await page.waitForTimeout(250);
