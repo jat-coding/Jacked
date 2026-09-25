@@ -9,9 +9,9 @@ each editing only its own rows. Updated in the same push as the change it descri
 
 | Client | Version | Delivery | Verified |
 |---|---|---|---|
-| Wear OS (Galaxy Watch 8 Classic) | **v0.20** (wear vc119) | Play internal testing | tagged 2026-09-24: focus header = list header, back returns to the same exercise, no "›", centred confirms; v0.19 (2026-09-21): one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
+| Wear OS (Galaxy Watch 8 Classic) | **v0.21** (wear vc120) | Play internal testing | tagged 2026-09-25: workout list opens top-aligned; v0.20 (2026-09-24): focus header = list header, back returns to the same exercise, no "›", centred confirms; v0.19 (2026-09-21): one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
 | watchOS (Apple Watch) | **0.2.0 (24)** | TestFlight | build 22 field-tested; 24 adds overload nudges; Wear v0.15 parity items handed off 2026-09-20 |
-| Phone companion "Jacked Sync" (Android) | **v0.20** (phone vc19) | Play internal testing | no functional change since v0.14 |
+| Phone companion "Jacked Sync" (Android) | **v0.21** (phone vc20) | Play internal testing | no functional change since v0.14 |
 
 The companion is not a watch client: it reads the cloud blob and writes finished workouts into
 Android Health Connect, which is the only path into Samsung Health. It signs in like a watch.
