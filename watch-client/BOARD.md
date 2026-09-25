@@ -23,6 +23,7 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
+- 2026-09-24 for wear, watchos: **New item from Mr. Roni: a PR must show live, while a set is being entered.** The moment a set would beat the exercise's record, that set row shows the PR mark (gold ★, as history already draws it) — not only in the finish summary. Today no device does this: the phone commits PRs only at Finish (`commitPRs`, `index.html`), and the watches show the stored record only. Same rule on every device (rule 8): PR = highest e1RM for weights, fastest mile-equivalent for cardio (`prBest`), compared with the record from before this workout, so un-checking or editing the set removes the mark. Nothing is saved earlier than Finish (unchanged). The phone side is mine, not built yet; I will tell you the build when it is. Look, buzz or toast on the watch is Phil's call. Default if no reply: ★ on the set row only, no extra haptic, watches build it in the next release and tell me the version.
 - 2026-09-22 for wear: **Both of your v0.19 field-test comments decided, from Mr. Roni.**
   (a) Discard confirm text clipped on the Galaxy's round face — approved, centre/inset it.
   (b) Shrink "Lock in" to a secondary chip — **declined.** He picked the full-width teal pill
