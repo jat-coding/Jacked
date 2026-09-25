@@ -121,13 +121,17 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 #recapFull{overflow-y:auto;padding-top:calc(10px + var(--sat));padding-bottom:calc(10px + var(--sab))}
 #recapFull .bf-x{top:calc(8px + var(--sat))}
 .bgrp{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);opacity:.6;margin:12px 0 0}
-/* Jacked achievements box (unlocked): short crown + name box, gold outline, shimmer (Mr. Roni's pick, 2026-09-24). */
+/* Jacked achievements box (always shown; .lock = greyed while not held): short crown + name box, gold outline, shimmer (Mr. Roni's pick, 2026-09-24). */
 .jh{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 16px;margin:0 0 12px;border-radius:16px;cursor:pointer;border:2px solid transparent;
   background:linear-gradient(#26241d,#1e1e22) padding-box,linear-gradient(135deg,#fff6c2,#ffd700 28%,#b8860b 52%,#ffe680 74%,#c99700) border-box;
   box-shadow:0 0 18px -4px rgba(255,215,0,.55),inset 0 1px 0 rgba(255,246,194,.25)}
 .jh-t{font-family:var(--fh);font-size:30px;font-weight:800;letter-spacing:2px;text-transform:uppercase;line-height:1;
   background:linear-gradient(180deg,#fff6c2 0%,#ffd700 45%,#c99700 100%);background-size:100% 220%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:jhTxt 3.6s ease-in-out infinite}
 .jh-ic{display:flex;filter:drop-shadow(0 0 6px rgba(255,215,0,.6))}
+.jh.lock{background:linear-gradient(#1e1e22,#1e1e22) padding-box,linear-gradient(135deg,#4a4a54,#2e2e36) border-box;box-shadow:none}
+.jh.lock .jh-ic{filter:none}
+.jh.lock .jh-t{background:none;-webkit-text-fill-color:currentColor;color:#70707f;animation:none}
+.jh.lock::after{display:none}
 .jh::after{content:'';position:absolute;top:0;bottom:0;width:38%;left:-45%;background:linear-gradient(105deg,transparent,rgba(255,246,194,.55),transparent);transform:skewX(-18deg);animation:jhSweep 3.6s ease-in-out infinite;pointer-events:none}
 @keyframes jhSweep{0%,55%{left:-45%}100%{left:130%}}
 @keyframes jhTxt{0%,100%{background-position:0 0}50%{background-position:0 100%}}
@@ -1016,7 +1020,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- Full-screen achievement detail (Metrics > Achievements) -->
 <!-- Full-screen achievements page (Metrics > Achievements > View all) -->
 <div id="achFull" role="dialog" aria-modal="true">
-  <div class="ph" style="padding-top:calc(6px + env(safe-area-inset-top))"><div class="pt">Achievements</div><button class="cb" style="width:38px;height:38px;font-size:18px" onclick="closeAch()" aria-label="Close">✕</button></div>
+  <div class="ph" style="padding-left:16px;padding-right:16px;flex-shrink:0"><div class="pt">Achievements</div><button class="cb" style="width:38px;height:38px;font-size:18px" onclick="closeAch()" aria-label="Close">✕</button></div>
   <div id="achFullBody" style="padding:0 16px calc(96px + env(safe-area-inset-bottom))"></div>
 </div>
 
@@ -4386,10 +4390,10 @@ const ACH_GROUPS=[['Monthly reset',b=>!b.tiered&&!b.threeMonth&&(b.monthly||b.na
 const achGrp=b=>ACH_GROUPS.findIndex(g=>g[1](b));
 function achView(){
   const all=computeBadges(), jk=all.find(b=>b.name==='Jacked');
-  const hero=!!(jk&&jk.earned);   // unlocked Jacked gets its own gold section above the rest (Mr. Roni, 2026-09-24)
+  const hero=!!jk;   // Jacked always has its own box above the rest, gold when held and greyed while locked (Mr. Roni, 2026-09-24)
   // Negative badges stay hidden until earned, so they never look like something to chase (Mr. Roni, 2026-09-24).
   const visible=all.filter(b=>!(b.name==='Coward-Maxing'&&!b.earned));
-  const heroHtml=(id)=>`<div ${id?`id="${id}" `:''}class="jh" onclick="badgeInfo('Jacked')"><span class="jh-ic">${uic(jk.icon,'#ffd700',30)}</span><span class="jh-t">Jacked</span></div>`;
+  const heroHtml=(id)=>`<div ${id?`id="${id}" `:''}class="jh${jk.earned?'':' lock'}" onclick="badgeInfo('Jacked')"><span class="jh-ic">${uic(jk.icon,jk.earned?'#ffd700':'#70707f',30)}</span><span class="jh-t">Jacked</span></div>`;
   return {all,jk,hero,visible,heroHtml};
 }
 function achRow(b){
@@ -4650,13 +4654,13 @@ function crownCodes(list){
 }
 // Leaderboards: the gold glow row means Jacked, the crown alone means last month's winner (Mr. Roni, 2026-09-24). Friends' Jacked comes from the synced badgeList.
 const hasJacked=p=>(p.isYou?myBadgeList():(p.badgeList||[])).some(b=>b.n==='Jacked');
-const crownMark=()=>`<span title="Top weight lifted last month" style="display:inline-flex;vertical-align:-2px;margin-left:5px">${uic('crown','#ffd700',15)}</span>`;
+const crownMark=()=>`<span title="Top weight lifted last month" style="display:inline-flex;vertical-align:-2px;margin-right:5px">${uic('crown','#ffd700',15)}</span>`;
 function lbRow(p,opts={}){
   const isCB=gCB().includes(p.code), cr=crownCodes().has(p.code);
   return `<div class="fc${hasJacked(p)?' gilded':''}" style="cursor:pointer" onclick="openFriend('${p.code}')">
     ${avHTML(p)}
     <div style="flex:1;min-width:0">
-      <div style="font-weight:600;font-size:14px">${esc(p.name)}${cr?crownMark():''}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div>
+      <div style="font-weight:600;font-size:14px">${cr?crownMark():''}${esc(p.name)}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div>
       <div style="font-size:11px;color:var(--muted)">${esc(p.username)} · ${p.workouts||0} workouts · ${p.badges||0} ${uic('medal',undefined,12)}</div>
     </div>
     ${opts.star?`<button class="btn bg ic xs" title="Close buddy" style="font-size:16px;color:${isCB?'#ffd700':'var(--muted)'}" onclick="event.stopPropagation();toggleCB('${p.code}')">★</button>`:''}
@@ -4876,7 +4880,7 @@ function renderLB() {
     board=ranked.map((p,i)=>`<div class="lbi ${p.isYou?'lbyou':''}${hasJacked(p)?' gilded':''}" style="cursor:pointer" onclick="openFriend('${p.code}')">
       <div class="lbr ${i===0?'gold':i===1?'silver':i===2?'bronze':'other'}">${medal(i)}</div>
       ${avHTML(p)}
-      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(p.name)}${crowned.has(p.code)?crownMark():''}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div><div style="font-size:11px;color:var(--muted)">${esc(p.username)}</div></div>
+      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${crowned.has(p.code)?crownMark():''}${esc(p.name)}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div><div style="font-size:11px;color:var(--muted)">${esc(p.username)}</div></div>
       <div style="font-family:var(--fh);font-size:20px;font-weight:800;color:${i===0?'var(--accent)':'var(--text2)'}">${def.fmt(getv(p))}</div>
     </div>`).join('');
   }
@@ -6262,7 +6266,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.27';
+const BUILD = 'v1.10.28';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
