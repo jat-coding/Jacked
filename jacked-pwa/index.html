@@ -4653,16 +4653,15 @@ function crownCodes(list){
   const top=Math.max(0,...all.map(p=>p.pmVol||0));
   return top>0?new Set(all.filter(p=>(p.pmVol||0)===top).map(p=>p.code)):new Set();
 }
-// Jacked pill next to a name on the leaderboards (Mr. Roni, 2026-09-24): friends see it from the synced badgeList.
+// Leaderboards: the gold glow row means Jacked, the crown alone means last month's winner (Mr. Roni, 2026-09-24). Friends' Jacked comes from the synced badgeList.
 const hasJacked=p=>(p.isYou?myBadgeList():(p.badgeList||[])).some(b=>b.n==='Jacked');
-const jackedMark=p=>hasJacked(p)?`<span title="Has the Jacked badge" style="display:inline-flex;align-items:center;gap:3px;vertical-align:1px;margin-left:6px;padding:1px 6px;border-radius:99px;border:1px solid #ffd70088;background:#ffd70018;color:#ffd700;font-size:10px;font-weight:800;letter-spacing:.6px">${uic('crown','#ffd700',10)}JACKED</span>`:'';
 const crownMark=()=>`<span title="Top weight lifted last month" style="display:inline-flex;vertical-align:-2px;margin-left:5px">${uic('crown','#ffd700',15)}</span>`;
 function lbRow(p,opts={}){
   const isCB=gCB().includes(p.code), cr=crownCodes().has(p.code);
-  return `<div class="fc${cr?' gilded':''}" style="cursor:pointer" onclick="openFriend('${p.code}')">
+  return `<div class="fc${hasJacked(p)?' gilded':''}" style="cursor:pointer" onclick="openFriend('${p.code}')">
     ${avHTML(p)}
     <div style="flex:1;min-width:0">
-      <div style="font-weight:600;font-size:14px">${esc(p.name)}${cr?crownMark():''}${jackedMark(p)}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div>
+      <div style="font-weight:600;font-size:14px">${esc(p.name)}${cr?crownMark():''}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div>
       <div style="font-size:11px;color:var(--muted)">${esc(p.username)} · ${p.workouts||0} workouts · ${p.badges||0} ${uic('medal',undefined,12)}</div>
     </div>
     ${opts.star?`<button class="btn bg ic xs" title="Close buddy" style="font-size:16px;color:${isCB?'#ffd700':'var(--muted)'}" onclick="event.stopPropagation();toggleCB('${p.code}')">★</button>`:''}
@@ -4878,10 +4877,10 @@ function renderLB() {
     board=`<div style="color:var(--muted);font-size:13px;padding:6px 0">Mark friends as ${uic('star','#ffd700')} close buddies below to compare them here.</div>`;
   } else {
     const ranked=[you,...buddies].sort((a,b)=>getv(b)-getv(a)), crowned=crownCodes([you,...buddies]);
-    board=ranked.map((p,i)=>`<div class="lbi ${p.isYou?'lbyou':''}${crowned.has(p.code)?' gilded':''}" style="cursor:pointer" onclick="openFriend('${p.code}')">
+    board=ranked.map((p,i)=>`<div class="lbi ${p.isYou?'lbyou':''}${hasJacked(p)?' gilded':''}" style="cursor:pointer" onclick="openFriend('${p.code}')">
       <div class="lbr ${i===0?'gold':i===1?'silver':i===2?'bronze':'other'}">${medal(i)}</div>
       ${avHTML(p)}
-      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(p.name)}${crowned.has(p.code)?crownMark():''}${jackedMark(p)}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div><div style="font-size:11px;color:var(--muted)">${esc(p.username)}</div></div>
+      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(p.name)}${crowned.has(p.code)?crownMark():''}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div><div style="font-size:11px;color:var(--muted)">${esc(p.username)}</div></div>
       <div style="font-family:var(--fh);font-size:20px;font-weight:800;color:${i===0?'var(--accent)':'var(--text2)'}">${def.fmt(getv(p))}</div>
     </div>`).join('');
   }
@@ -6267,7 +6266,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.24';
+const BUILD = 'v1.10.25';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

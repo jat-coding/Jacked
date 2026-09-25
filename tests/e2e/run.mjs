@@ -237,8 +237,8 @@ async function jacked() {
     check('crown: last month top lifter (Bob, 50000) wears it', crowned.length === 1 && crowned[0] === '@bob', JSON.stringify(crowned));
     const sub = await page.evaluate(() => [...crownCodes([yourStats(), { code: '@amy', pmVol: 20000 }])]);
     check('crown: a board crowns its own top lifter (Amy wins a board without Bob)', sub.length === 1 && sub[0] === '@amy', JSON.stringify(sub));
-    const rows = await page.locator('#page-leaderboard .gilded').count();
-    check('crown: gilded row + crown icon on that name only', rows >= 1 && (await page.locator('#page-leaderboard .gilded svg').count()) >= 1 && (await page.locator('#page-leaderboard .gilded', { hasText: 'Amy' }).count()) === 0, String(rows));
+    const bobRow = page.locator('#page-leaderboard .fc, #page-leaderboard .lbi', { hasText: 'Bob' }).first();
+    check('crown: winner shows the crown icon and NO gold glow (glow is for Jacked only)', (await bobRow.locator('svg').count()) >= 1 && (await page.locator('#page-leaderboard .gilded').count()) === 0, '');
     await page.screenshot({ path: SHOTS + '/crown.png' });
     check('crown: no page errors', errors.length === 0, errors.join(' | '));
     await ctx.close();
@@ -482,8 +482,12 @@ async function achievementsPage() {
     const pop = await page.evaluate(() => ({ open: document.getElementById('confirmModal').classList.contains('open'), t: document.getElementById('cfMsg').textContent, cancel: getComputedStyle(document.getElementById('cfCancel')).display }));
     check('leaderboards: tapping the crown key opens a description popup (last month\'s weight lifted)', pop.open && /last month/i.test(pop.t) && /weight lifted/i.test(pop.t) && pop.cancel === 'none', JSON.stringify(pop));
     await page.evaluate(() => _cfDone(null));
-    const jm = await page.evaluate(() => [jackedMark({ badgeList: [{ n: 'Jacked', t: '', e: 'crown|#ffd700' }] }), jackedMark({ badgeList: [{ n: 'Bench-Maxing', t: 'gold', e: 'dumbbell|#ffd700' }] }), jackedMark({})]);
-    check('leaderboards: Jacked pill shows for a friend who has the badge, not for others', /JACKED/.test(jm[0]) && jm[1] === '' && jm[2] === '', JSON.stringify(jm));
+    const jm = await page.evaluate(() => [hasJacked({ badgeList: [{ n: 'Jacked', t: '', e: 'crown|#ffd700' }] }), hasJacked({ badgeList: [{ n: 'Bench-Maxing', t: 'gold', e: 'dumbbell|#ffd700' }] }), hasJacked({})]);
+    check('leaderboards: hasJacked true only for a friend holding the badge', jm[0] === true && jm[1] === false && jm[2] === false, JSON.stringify(jm));
+    await page.evaluate(() => { const f = [{ id: '@bob', code: '@bob', name: 'Bob', username: '@bob', pmVol: 0, badgeList: [{ n: 'Jacked', t: '', e: 'crown|#ffd700' }] }, { id: '@dan', code: '@dan', name: 'Dan', username: '@dan', pmVol: 0, badgeList: [] }]; window.friendSrc = () => f; renderLB(); });
+    await page.waitForTimeout(150);
+    const gl = await page.evaluate(() => ({ glow: [...document.querySelectorAll('#page-leaderboard .gilded')].map(e => e.innerText.slice(0, 20)), pill: /JACKED/.test(document.getElementById('page-leaderboard').innerText) }));
+    check('leaderboards: Jacked friend gets the glow row, no JACKED pill', gl.glow.length === 1 && /Bob/.test(gl.glow[0]) && !gl.pill, JSON.stringify(gl));
     await ctx.close();
   }
 }
