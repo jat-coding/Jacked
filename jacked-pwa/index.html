@@ -4404,15 +4404,10 @@ function achRow(b){
   </div>`;
 }
 function cardBadges(){
+  // Just one tappable bar: badges earned / total, opens the achievements screen (Mr. Roni, 2026-09-24).
   const v=achView();
-  const jkRow=(!v.hero&&v.jk)?achRow(v.jk):'';
-  const sums=ACH_GROUPS.map((g,gi)=>{
-    const rows=v.visible.filter(b=>b.name!=='Jacked'&&b.name!=='Coward-Maxing'&&achGrp(b)===gi).sort((a,b)=>(b.earned?1:0)-(a.earned?1:0));
-    if(!rows.length) return '';
-    const got=rows.filter(b=>b.earned).length;
-    return `<div class="agrow" onclick="openAch()"><div class="agt">${g[0]}</div><div class="agi">${rows.map(b=>`<span style="opacity:${b.earned?1:.3};filter:${b.earned?'none':'grayscale(1)'}">${uic(b.icon,b.color,18)}</span>`).join('')}</div><div class="agc">${got} / ${rows.length}</div><span class="agx">&#8250;</span></div>`;
-  }).join('');
-  const html=(v.hero?v.heroHtml('jackedHero'):jkRow)+sums+`<button class="btn bg wf" style="margin-top:12px" onclick="openAch()">View all achievements</button>`;
+  const list=v.visible.filter(b=>b.name!=='Coward-Maxing'), got=list.filter(b=>b.earned).length;
+  const html=`<div class="agrow" style="border-top:0;padding:4px 0" onclick="openAch()"><span style="display:flex">${uic('medal','#ffca4d',20)}</span><div class="agt" style="flex:1">Badges earned</div><div class="agc">${got} / ${list.length}</div><span class="agx">&#8250;</span></div>`;
   return {id:'badges',title:'Achievements',html};
 }
 function achPageHtml(){
@@ -4693,7 +4688,8 @@ function openFriend(code){
   document.getElementById('fpUser').textContent=p.username||'';
   document.getElementById('fpAv').innerHTML=avHTML(p,48);
   const days=new Set(p.days||[]);
-  let h=`<div class="stats-g" style="margin-bottom:10px">
+  const jkTile=hasJacked(p)?`<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:12px;border-radius:var(--r);border:1px solid rgba(255,215,0,.55);background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(255,215,0,.03) 60%)"><span style="display:flex;filter:drop-shadow(0 0 6px rgba(255,215,0,.6))">${uic('crown','#ffd700',30)}</span><div><div style="font-family:var(--fh);font-weight:800;font-size:17px;letter-spacing:1px;color:#ffd700;text-transform:uppercase">Certified Jacked</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${p.isYou?'You hold':'Holds'} every monthly and 3-month badge, with every tiered badge at Gold.</div></div></div>`:'';
+  let h=jkTile+`<div class="stats-g" style="margin-bottom:10px">
       <div class="sc"><div class="sv">${p.workouts||0}</div><div class="sl">Workouts</div></div>
       <div class="sc"><div class="sv">${fmtW(p.totalVolume||0)}</div><div class="sl">${uL()} Vol</div></div>
       <div class="sc"><div class="sv">${p.prs||0}</div><div class="sl">PRs</div></div>
@@ -6266,7 +6262,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.25';
+const BUILD = 'v1.10.26';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
