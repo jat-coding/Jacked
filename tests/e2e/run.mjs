@@ -473,6 +473,19 @@ async function achievementsPage() {
     await ctx.close();
   }
   {
+    // Closed sections are added back from the Reorder popup, not the bottom of the page.
+    const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
+    await page.evaluate(() => { sp('metrics'); toggleCard('lifetime'); }); await page.waitForTimeout(200);
+    const n0 = await page.evaluate(() => ({ bar: !!document.getElementById('hiddenCardsBar'), cards: document.querySelectorAll('#metricsCards .metric-card').length }));
+    await page.evaluate(() => openCardOrder()); await page.waitForTimeout(150);
+    const chip = await page.evaluate(() => [...document.querySelectorAll('#cardHiddenList .chip')].map(e => e.textContent));
+    check('reorder popup: a closed section is listed there, nothing at the bottom of the page', !n0.bar && chip.length === 1 && /Lifetime/i.test(chip[0]), JSON.stringify([n0, chip]));
+    await page.locator('#cardHiddenList .chip').first().click(); await page.waitForTimeout(150);
+    const n1 = await page.evaluate(() => ({ cards: document.querySelectorAll('#metricsCards .metric-card').length, left: document.querySelectorAll('#cardHiddenList .chip').length, listed: document.querySelectorAll('#cardOrderList [data-id]').length }));
+    check('reorder popup: tapping it adds the section back and it joins the order list', n1.cards === n0.cards + 1 && n1.left === 0 && n1.listed === n1.cards, JSON.stringify(n1));
+    await ctx.close();
+  }
+  {
     // Leaderboards title carries a small crown key at the far right.
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
     await page.evaluate(() => { sp('leaderboard'); renderLB(); }); await page.waitForTimeout(250);
@@ -488,8 +501,8 @@ async function achievementsPage() {
     await page.waitForTimeout(150);
     const gl = await page.evaluate(() => ({ glow: [...document.querySelectorAll('#page-leaderboard .gilded')].map(e => e.innerText.slice(0, 20)), pill: /JACKED/.test(document.getElementById('page-leaderboard').innerText) }));
     check('leaderboards: Jacked friend gets the glow row, no JACKED pill', gl.glow.length === 1 && /Bob/.test(gl.glow[0]) && !gl.pill, JSON.stringify(gl));
-    const tile = await page.evaluate(() => { openFriend('@bob'); const a = document.getElementById('fpContent') || document.getElementById('friendPage') || document.body; const t1 = document.body.innerText; openFriend('@dan'); return { bob: /Certified Jacked/i.test(t1) }; });
-    check('friend page: Jacked friend shows a "Certified Jacked" tile', tile.bob === true, JSON.stringify(tile));
+    const tile = await page.evaluate(() => { openFriend('@bob'); const t1 = document.body.innerText; const gold = [...document.querySelectorAll('div')].some(d => d.children.length === 0 && d.textContent === 'Jacked' && getComputedStyle(d).color === 'rgb(255, 215, 0)'); openFriend('@dan'); return { bob: !/Certified/i.test(t1) && gold }; });
+    check('friend page: Jacked friend shows a "Jacked" tile (not "Certified")', tile.bob === true, JSON.stringify(tile));
     await ctx.close();
   }
 }

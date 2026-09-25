@@ -458,7 +458,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 .sec .wli:first-child,.sec .eli:first-child,.sec .rc:first-child,.sec .fc:first-child{border-top:0}
 #curatedWrap .st{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;color:var(--text);line-height:1;margin-bottom:12px}
 .page .st,#compareBoard .st,#profModal .st{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text);line-height:1}
-#hiddenCardsBar .st{font-size:14px;color:var(--text2);letter-spacing:.8px}
+#cardHiddenList .st{font-size:14px;color:var(--text2);letter-spacing:.8px}
 .mc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:32px;margin-bottom:14px}
 .mc-head .mc-title,#compareBoard .st{margin:0}
 #compareBoard .st{margin-bottom:14px}
@@ -593,7 +593,6 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="page" id="page-metrics">
   <div class="ph"><div class="pt">Metrics</div><button class="btn bg sm" onclick="openCardOrder()">Reorder</button></div>
   <div id="metricsCards"></div>
-  <div id="hiddenCardsBar"></div>
 </div>
 
 <!-- LEADERBOARD -->
@@ -810,7 +809,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="md">
     <div class="drag-handle"></div>
     <div class="mh"><div class="mt">Reorder Exercises</div><button class="cb" onclick="cm('reorderModal')">✕</button></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Drag the grip to set the order.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Drag the grip to set the order. Tap a hidden section to add it back.</div>
     <div id="reorderList"></div>
     <button class="btn ba wf" onclick="cm('reorderModal')" style="margin-top:10px">Done</button>
   </div>
@@ -1074,8 +1073,9 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="md">
     <div class="drag-handle"></div>
     <div class="mh"><div class="mt">Reorder Sections</div><button class="cb" onclick="cm('cardOrderModal')">✕</button></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Drag the grip to set the order.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Drag the grip to set the order. Tap a hidden section to add it back.</div>
     <div id="cardOrderList" style="position:relative"></div>
+    <div id="cardHiddenList"></div>
     <button class="btn ba wf" onclick="cm('cardOrderModal')" style="margin-top:10px">Done</button>
   </div>
 </div>
@@ -4067,7 +4067,7 @@ function bodySimSVG(score, sex){
 
 // ── Metrics tab card system (hideable) ──
 function metricsHidden(){ return new Set(gSet().hiddenCards||[]); }
-function toggleCard(id){ const s=gSet(); const h=new Set(s.hiddenCards||[]); h.has(id)?h.delete(id):h.add(id); S.s('settings',{...s,hiddenCards:[...h]}); renderMetricsPage(); }
+function toggleCard(id){ const s=gSet(); const h=new Set(s.hiddenCards||[]); h.has(id)?h.delete(id):h.add(id); S.s('settings',{...s,hiddenCards:[...h]}); renderMetricsPage(); renderCardOrderList(); }
 
 // Strength standards, as a fraction of bodyweight, per muscle group and sex:
 // [t1,t2,t3,t4] = [beginner floor, BUILDING starts, STRONG starts, ELITE starts]. Below t2 is
@@ -4491,6 +4491,9 @@ function renderCardOrderList(){
       <div style="font-weight:600;font-size:14px">${c.title}</div>
       <div class="cdrag" aria-label="Drag to reorder" onpointerdown="cardDragStart(event)"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg></div>
     </div>`).join('');
+  // Closed sections are added back from here, not from the bottom of the page (Mr. Roni, 2026-09-24).
+  const hb=document.getElementById('cardHiddenList'), hid=metricsOrdered().filter(c=>hidden.has(c.id));
+  hb.innerHTML=hid.length?`<div class="st" style="margin:14px 0 8px">Hidden sections</div><div class="chips" style="flex-wrap:wrap">`+hid.map(c=>`<button class="chip" onclick="toggleCard('${c.id}')">+ ${c.title}</button>`).join('')+`</div>`:'';
 }
 function renderMetricsPage(){
   const hidden=metricsHidden();
@@ -4505,9 +4508,6 @@ function renderMetricsPage(){
       </div>
       ${c.html}
     </div>`).join('');
-  const hb=document.getElementById('hiddenCardsBar');
-  const hid=cards.filter(c=>hidden.has(c.id));
-  hb.innerHTML=hid.length?`<div class="st" style="margin-bottom:8px">Hidden cards</div><div class="chips" style="flex-wrap:wrap">`+hid.map(c=>`<button class="chip" onclick="toggleCard('${c.id}')">+ ${c.title}</button>`).join('')+`</div>`:'';
 }
 
 // ============================================================
@@ -4688,7 +4688,7 @@ function openFriend(code){
   document.getElementById('fpUser').textContent=p.username||'';
   document.getElementById('fpAv').innerHTML=avHTML(p,48);
   const days=new Set(p.days||[]);
-  const jkTile=hasJacked(p)?`<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:12px;border-radius:var(--r);border:1px solid rgba(255,215,0,.55);background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(255,215,0,.03) 60%)"><span style="display:flex;filter:drop-shadow(0 0 6px rgba(255,215,0,.6))">${uic('crown','#ffd700',30)}</span><div><div style="font-family:var(--fh);font-weight:800;font-size:17px;letter-spacing:1px;color:#ffd700;text-transform:uppercase">Certified Jacked</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${p.isYou?'You hold':'Holds'} every monthly and 3-month badge, with every tiered badge at Gold.</div></div></div>`:'';
+  const jkTile=hasJacked(p)?`<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:12px;border-radius:var(--r);border:1px solid rgba(255,215,0,.55);background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(255,215,0,.03) 60%)"><span style="display:flex;filter:drop-shadow(0 0 6px rgba(255,215,0,.6))">${uic('crown','#ffd700',30)}</span><div><div style="font-family:var(--fh);font-weight:800;font-size:17px;letter-spacing:1px;color:#ffd700;text-transform:uppercase">Jacked</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${p.isYou?'You hold':'Holds'} every monthly and 3-month badge, with every tiered badge at Gold.</div></div></div>`:'';
   let h=jkTile+`<div class="stats-g" style="margin-bottom:10px">
       <div class="sc"><div class="sv">${p.workouts||0}</div><div class="sl">Workouts</div></div>
       <div class="sc"><div class="sv">${fmtW(p.totalVolume||0)}</div><div class="sl">${uL()} Vol</div></div>
@@ -6262,7 +6262,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.26';
+const BUILD = 'v1.10.27';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
