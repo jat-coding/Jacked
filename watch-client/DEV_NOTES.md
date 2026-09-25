@@ -4,9 +4,9 @@ Read `WATCH_BRIDGE.md` (same folder) first: it lists which phone-app changes the
 This file is the watch-only to-do list.
 
 Each item is written as a spec so the bot working it does not have to decide what was meant.
-Source: Mr. Roni, Jacked room, 2026-09-19 3:13pm MDT. Status column: open until he says done.
+Source: Mr. Roni, Jacked room, 2026-09-19 3:13pm MDT. Status: closed when the watch dev reports it built and the version (Mr. Roni, 2026-09-25: no waiting for him to say done).
 
-## 1. Rep/set dial (rotary) is erratic — OPEN
+## 1. Rep/set dial (rotary) is erratic — BUILT (Wear v0.17; closed 2026-09-25)
 **Where:** editing the reps and sets values on an exercise (SPEC §4.2, "Rotary bezel scrubs the focused field").
 
 **Observed (his words):** no vibration as the number changes; spinning fast makes the value
@@ -30,7 +30,7 @@ the value). Verify in the watch code before changing it. Note: this repo has onl
 for the watch client (`watch-client/*.md`); the watch source is not in it, so read the real
 code first and record its path here.
 
-## 2. Change-exercise picker should start filtered and ranked — OPEN
+## 2. Change-exercise picker should start filtered and ranked — BUILT (Wear v0.15; closed 2026-09-25)
 **Where:** changing an existing exercise on the active workout (not "+ Exercise" for a new one).
 
 **Observed (his words):** it opens the picker on "All muscle groups". For a leg press it
@@ -48,7 +48,7 @@ should already be filtered to Legs.
 **Acceptance test:** on a leg press, tap change: the filter reads Legs, a favourited leg
 exercise is at the top, then recently used leg exercises, then the rest of Legs.
 
-## 3. Dial edits the wrong field after touching another one — OPEN
+## 3. Dial edits the wrong field after touching another one — BUILT (Wear v0.15; closed 2026-09-25)
 Source: Mr. Roni, 2026-09-19 3:15pm MDT (adds to item 1).
 
 **Where:** the set row on the active workout, fields Sets and Reps (SPEC §4.2, bezel scrubs "the focused field").
@@ -71,7 +71,7 @@ changes and Reps stays put. Touch Reps: the dial now edits Reps.
 **First thing to look at:** the touch handler on the value changes the value but never sets
 the focused-field state that the dial handler reads. Verify in the watch code.
 
-## 4. Change-exercise / search screen is visually muddled — OPEN
+## 4. Change-exercise / search screen is visually muddled — BUILT (Wear v0.17; closed 2026-09-25)
 Source: Mr. Roni, 2026-09-19 3:18pm MDT (same screen as item 2).
 
 **Where:** the picker opened by changing an exercise (and "+ Exercise", same screen).
@@ -100,7 +100,7 @@ which is the search bar, which is the filter, and which group each exercise is i
 **Note:** no mockup exists yet. Before building, produce one for Mr. Roni and get his
 approval; do not choose the final look alone.
 
-## 5. Focus mode: one exercise fills the whole screen — OPEN
+## 5. Focus mode: one exercise fills the whole screen — BUILT (Wear v0.15; closed 2026-09-25)
 Source: Mr. Roni, 2026-09-19 3:28pm MDT.
 
 **Where:** the active workout list (SPEC §4.2, the vertical list of exercise cards).
@@ -130,7 +130,7 @@ exercise 3 full screen, back out to the list: exercise 2 shows its logged sets.
 - The user can always go back to the full workout list from the focus view.
 - Leaving the focus view: a close button AND a back swipe. Both return to the full list.
 
-## 6. Back / swipe-out must never skip a page — OPEN
+## 6. Back / swipe-out must never skip a page — BUILT (Wear v0.18; closed 2026-09-25)
 Source: Mr. Roni, 2026-09-20 3:31pm MDT.
 
 **Observed (his words):** in the change-exercise menu on a routine, he opens the muscle-group
@@ -151,7 +151,7 @@ record the screen you land on, for swipe AND button. Put the table in `WATCH_STA
 **Acceptance test:** routine -> change exercise -> muscle filter -> back lands on change exercise;
 back again lands on the routine. Same for every other pair in the audit table.
 
-## 7. Confirm before Finish and before Discard — OPEN
+## 7. Confirm before Finish and before Discard — BUILT (Wear v0.19; closed 2026-09-25)
 Source: Mr. Roni, 2026-09-20 3:35pm MDT.
 
 **Why:** misclicks. Today one tap on Finish or Discard ends the workout.
@@ -167,7 +167,7 @@ Source: Mr. Roni, 2026-09-20 3:35pm MDT.
 
 **Acceptance test:** tap Finish then Cancel: workout intact, sets intact. Tap Discard then Cancel: same. Confirm: it finishes/discards.
 
-## 8. Long-press the Resume button to discard — OPEN
+## 8. Long-press the Resume button to discard — BUILT (Wear v0.19; closed 2026-09-25)
 Source: Mr. Roni, 2026-09-20 3:35pm MDT.
 
 **Where:** the main page while a workout is in progress shows a **Resume workout** button.
@@ -182,7 +182,7 @@ Source: Mr. Roni, 2026-09-20 3:35pm MDT.
 **Acceptance test:** start a workout, go to main: tap Resume resumes. Hold Resume: Discard option appears. Discard -> confirm ->
 main page shows no Resume button and the workout is gone from the watch.
 
-## 9. Haptics on every value scroller, and the number drifts while scrolling — OPEN
+## 9. Haptics on every value scroller, and the number drifts while scrolling — BUILT (Wear v0.18; closed 2026-09-25)
 Source: Mr. Roni, 2026-09-20 3:40pm MDT.
 
 **Observed (his words):** in Settings, the **Min, Max and Target sets** scrollers have no vibration
@@ -209,7 +209,7 @@ instance**, so no scroller can be built without it. Per-screen haptic code is wh
 **Acceptance test:** each control in the audit table ticks on every step, both directions. In
 Settings, spin Min up and down: the number stays put (no visible up/down shift) while the value changes.
 
-## 10. Focus view: no Finish/Discard; add a Lock in button — OPEN
+## 10. Focus view: no Finish/Discard; add a Lock in button — BUILT (Wear v0.19; closed 2026-09-25)
 Source: Mr. Roni, 2026-09-20 6:07pm MDT (first asked 6:01pm as "Done", renamed and tightened). **Changes item 5** (its "last exercise shows the list's Finish/Discard tail").
 
 **Required behavior:**
@@ -260,6 +260,11 @@ tapping an exercise from the **full (list) view** of either a routine or a worko
 **focus mode** (item 5) for that exercise. Same tap-to-focus behavior in both places, not
 just the workout list — this replaces the note prompt as the real action for a routine's
 exercises too.
+
+**Update 2026-09-25 (Wear dev's corrected reading, Mr. Roni approved "sounds good"):** the watch has
+no routine list to browse; the tap lands on a finished workout's exercise detail, where the note line
+is the only live target. Fix: keep the note editable but make it a distinct, smaller "✎ Note" target
+so it is not hit by accident; no other change. Still OPEN until Wear reports the version.
 
 ## 12. Focus-view Lock in button: stays full-width teal — DECIDED, no change
 Source: Mr. Roni, 2026-09-22 11:24pm MDT, deciding between the two options in the mockup
