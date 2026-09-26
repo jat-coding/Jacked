@@ -1164,10 +1164,54 @@ async function haptics() {
   await ctx.close();
 }
 
+async function tricepsTier() {
+  // Mr. Roni 2026-09-25 11:46pm: "I don't think my triceps need work at all". His real history: bench 225x12,
+  // pushdowns 70x14, one-arm cable extensions 70x8; the old code averaged only the isolation moves (x1.98) and
+  // showed Needs Work. Triceps now takes its strongest evidence, each lift on its own sourced ladder.
+  const BW = 229 / LB, NOW = new Date('2026-09-26T00:10:00-06:00');
+  const lift = (id, name, muscle, sets, extra = {}) => ({ ...ex(name, sets, 'weight_reps', id), muscle, ...extra });
+  const bench = lift('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press (barbell, med grip)', 'chest', [[225, 8]]);
+  const pushdown = lift('Triceps_Pushdown', 'Triceps Pushdown (cable)', 'triceps', [[60, 12]]);
+  const kickback = lift('Tricep_Dumbbell_Kickback', 'Tricep Dumbbell Kickback', 'triceps', [[10, 10]]);
+  const crunch = lift('Ab_Crunch_Machine', 'Ab Crunch (machine)', 'core', [[210, 14]]);
+  const kneeRaise = lift('Knee_Hip_Raise_On_Parallel_Bars', 'Knee/Hip Raise On Parallel Bars', 'core', [[10, 20]]);
+  const pushups = lift('Pushups', 'Pushups (bodyweight)', 'chest', [[229, 50]]);
+  const prof = { name: 'T', username: '@t', code: '@t', sex: 'male', birthday: '2000-07-10' };
+  const { page, ctx, errors } = await phone({ seed: { hist: [wk('2026-09-20', [bench, pushdown])], bw: BW, prof }, now: NOW });
+  await page.evaluate(async () => { for (let i = 0; i < 150 && (dbLoading || !dbLoaded); i++) await new Promise(r => setTimeout(r, 100)); });
+  const run = hist => page.evaluate(h => { S.s('hist', h); const p = musclePerf(), t = triStrength();
+    return { tri: strengthLabel(p.score.triceps).l, triScore: p.score.triceps, core: p.score.core, coreL: strengthLabel(p.score.core).l, best: t.best && t.best.key }; }, hist);
+  let r = await run([wk('2026-09-20', [bench, pushdown])]);
+  check('triceps-tier: solid bench + moderate pushdowns is not Needs Work (Strong)', r.tri === 'Strong', JSON.stringify(r));
+  check('triceps-tier: the bench is the evidence that carries it', r.best === 'Barbell_Bench_Press_-_Medium_Grip', JSON.stringify(r));
+  const withWeak = await run([wk('2026-09-20', [bench, pushdown, kickback])]);
+  check('triceps-tier: a light kickback cannot lower triceps below its best evidence', Math.abs(withWeak.triScore - r.triScore) < 1e-9, JSON.stringify([r, withWeak]));
+  const onlyIso = await run([wk('2026-09-20', [pushdown])]), both = await run([wk('2026-09-20', [pushdown, kickback])]);
+  check('triceps-tier: pushdowns alone are scored on the pushdown ladder, not averaged down', onlyIso.triScore > 0 && Math.abs(both.triScore - onlyIso.triScore) < 1e-9, JSON.stringify([onlyIso, both]));
+  const c1 = await run([wk('2026-09-20', [crunch])]), c2 = await run([wk('2026-09-20', [crunch, kneeRaise])]);
+  check('triceps-tier: core is not averaged down by a light knee raise (Strong)', c2.coreL === 'Strong' && Math.abs(c2.core - c1.core) < 1e-9, JSON.stringify([c1, c2]));
+  const blank = await run([wk('2026-09-20', [{ ...pushdown, muscle: '' }])]);
+  check('triceps-tier: a pushdown saved with a blank muscle still counts (via the library)', blank.triScore > 0 && blank.best === 'Triceps_Pushdown', JSON.stringify(blank));
+  const cexBlank = await page.evaluate(() => { S.s('cex', [{ id: 'cexTri', name: 'Rope Thing', muscle: 'triceps', equip: 'cable', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }]);
+    return strGroup({ exId: 'cexTri', name: 'Rope Thing', muscle: '' }); });
+  check('triceps-tier: a blank-muscle custom exercise resolves from its library entry', cexBlank === 'triceps', cexBlank);
+  const pu = await run([wk('2026-09-20', [pushups])]);
+  check('triceps-tier: plain push-ups at bodyweight are not counted as a 229 lb press', pu.triScore === 0, JSON.stringify(pu));
+  const old = await run([wk('2026-05-01', [bench])]);
+  check('triceps-tier: evidence older than 90 days drops off', old.triScore === 0, JSON.stringify(old));
+  // The Muscle Map row shows the same tier as the score.
+  await run([wk('2026-09-20', [bench, pushdown])]);
+  const row = await page.evaluate(() => { const c = cardBody(), d = document.createElement('div'); d.innerHTML = c.html;
+    return [...d.querySelectorAll('.mr-item')].map(e => e.innerText.replace(/\s+/g, ' ')).find(t => /Triceps/.test(t)) || ''; });
+  check('triceps-tier: Muscle Map row reads Strong', /Strong/.test(row), row);
+  check('triceps-tier: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

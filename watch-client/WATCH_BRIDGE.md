@@ -171,6 +171,14 @@ Building, Strong, Elite) plus Untrained (no data in the window). Rules, all in `
    Needs Work. Female values are in `STRENGTH_STD`.
 6. **Score 0-1** is anchored so the tier cutoffs (0.34 / 0.67 / 0.9) land exactly on those lines.
 Before this change Elite needed 1.5x the top standard and any single set could rank a group.
+7. **Update v1.10.36 (2026-09-26):** a blank or unmapped stored muscle falls back to the library's
+   muscle (`strGroup`). **Triceps** (`triStrength`) and **core** (`STR_BEST_ONLY`) score from their single
+   strongest exercise, never an average. Triceps line is now the chest ladder (.75/1.0/1.5 male). Triceps
+   evidence: loaded presses (bench, dips, overhead; not plain push-ups/bodyweight dips) at 0.97 of their
+   1RM (Strength Level average close-grip 206 lb vs bench 212 lb); isolation moves on their own Strength
+   Level ladders (male Building/Strong/Elite: pushdown .45/.70/1.05, lying extension .35/.55/.75,
+   dumbbell extension .15/.25/.45); one-arm cable/machine sets count 1.96x (Strength Level one-arm vs
+   two-arm cable curl averages). No 1.8x factor for triceps.
 
 ### A8. Strength-tier colors ("Signal" scheme) — `0e23fee`
 Body Simulation, the Muscle Group Usage bars and the tier badges use one color per tier:
@@ -288,6 +296,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 09-26 | staging | v1.10.36: Muscle Map triceps and core score from their strongest lift, not an average; triceps isolation on sourced Strength Level ladders, presses at 0.97; blank stored muscle falls back to the library (A9 rule 7); phone-only, no watch change | PHONE-ONLY |
 | 09-25 | staging | v1.10.35: Home "Suggested today" reads what each exercise really trains (stored muscle, then the library incl. exercise-db secondary glutes/abs, then the routine name); squats, leg press, RDLs, lunges count for Glutes; days-since counted in local calendar days; phone-only, no watch change | PHONE-ONLY |
 | 09-25 | staging | v1.10.30: single-button confirm popups ("Got it") are centered at the bottom; phone-only, no watch change | PHONE-ONLY |
 | 09-25 | local (not pushed) | Profile privacy: strangers see username + avatar only (phone v1.10.29 uses `public_profiles()`; migration held) | APP-WIDE A14 |

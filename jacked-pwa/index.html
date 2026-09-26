@@ -4221,13 +4221,17 @@ const STRENGTH_STD = {
 //  - each set's estimate counts at most 10 reps (a light 30-rep set can't inflate it)
 //  - each exercise is scaled to a "barbell compound" equivalent (exStrengthFactor)
 //  - the group scores from the average of its best 3 different exercises, not one set
+// Triceps and core are the exception (2026-09-26): they score from their single strongest piece of evidence
+// (triStrength; STR_BEST_ONLY). Averaging dragged both down: a 225 lb bench averaged with pushdowns, a 210 lb
+// ab-crunch-machine set averaged with a 10 lb knee raise. The other groups' tiers didn't move either way.
 const STR_WINDOW_DAYS=90, STR_REP_CAP=10, STR_TOP_N=3;
+const STR_BEST_ONLY=new Set(['core']);
 const STR_REF_ISOLATION=new Set(['biceps','core']);   // groups whose standard is an isolation lift
 const STR_EQUIP_FACTOR={barbell:1,'e-z curl bar':1,machine:0.9,cable:1.1,dumbbell:2,kettlebells:2,'body only':1,bands:1.5};
 // Scale one exercise to the group's reference lift. Dumbbell/kettlebell weights are logged
 // per hand, so they count double; isolation moves count 1.8x in groups whose standard is a
 // compound lift (a lateral raise is not a shoulder press). These factors are set values,
-// not sourced; edit here to tune.
+// not sourced; edit here to tune. (Triceps no longer uses the 1.8x: see TRI_ISO_STD.)
 function exStrengthFactor(exId,group){
   const db=allDB.find(e=>e.id===exId)||null;
   const equip=String((db&&db.equipment)||byId(exId).equip||'').toLowerCase();
@@ -4235,10 +4239,17 @@ function exStrengthFactor(exId,group){
   if(db&&db.mechanic==='isolation'&&!STR_REF_ISOLATION.has(group)) f*=1.8;
   return f;
 }
-// Pressing is triceps work too: a bench/overhead/dip set is credited to triceps as well as to
-// chest/shoulders, at TRI_PRESS_CREDIT of its value (set value, not sourced: a close-grip bench is a
-// bit lighter than a flat bench). Uses the DB's secondary muscles, else the exercise name.
-const TRI_PRESS_CREDIT=0.85;
+// The group a logged exercise counts for: the muscle saved on the log, else the library's
+// (custom exercise, or exercise-db primary muscle). A blank or unmapped saved muscle is not skipped.
+function strGroup(ex){
+  const lib=ex&&ex.exId?byId(ex.exId):{};
+  return [muscleGroup(ex&&ex.muscle),muscleGroup(lib.muscle)].find(g=>g in STRENGTH_STD)||'';
+}
+// Pressing is triceps work too: a loaded bench/overhead/dip set is triceps evidence as well as
+// chest/shoulder evidence. Uses the DB's secondary muscles, else the exercise name.
+// TRI_PRESS_CREDIT is sourced (Strength Level, 2026-09-26): the average close-grip bench is 206 lb vs
+// 212 lb for the bench press (men), 111 vs 112 lb (women), so a press counts at 0.97 on the close-grip ladder.
+const TRI_PRESS_CREDIT=0.97;
 function pressCreditsTriceps(exId,name,group){
   if(group!=='chest'&&group!=='shoulders') return false;
   const db=allDB.find(e=>e.id===exId);
@@ -4246,6 +4257,20 @@ function pressCreditsTriceps(exId,name,group){
   const n=(name||'').toLowerCase();
   return /bench|press|\bdip/.test(n)&&!/fly|flye|raise|pec deck|pullover|crossover/.test(n);
 }
+// Triceps isolation lifts are scored on their OWN Strength Level ladders (strengthlevel.com bodyweight-ratio
+// standards, read 2026-09-26; Beginner/Novice/Intermediate/Advanced -> the same four cut points as
+// STRENGTH_STD), not converted to a close-grip bench with a guessed factor:
+//   pushdown = Tricep Pushdown (cable/machine), lying = Lying Tricep Extension (skull crusher, barbell/EZ bar),
+//   dumbbell = Dumbbell Tricep Extension (weight of one dumbbell).
+// A one-arm cable/machine set counts TRI_ONE_ARM times its weight: Strength Level's average one-arm cable
+// curl is 55 lb vs 108 lb two-arm (men), i.e. 1.96x.
+const TRI_ISO_STD={
+  pushdown:{male:[.25,.45,.70,1.05], female:[.15,.25,.45,.70]},
+  lying:   {male:[.20,.35,.55,.75],  female:[.10,.20,.30,.50]},
+  dumbbell:{male:[.05,.15,.25,.45],  female:[.05,.10,.20,.30]},
+};
+const TRI_ONE_ARM=1.96;
+const TRI_COMPOUND=/close.?grip|\bdips?\b|jm press|diamond|bench|floor press/i;
 // Best estimated-1RM ÷ bodyweight per muscle group, from any exercise tagged
 // to that group (there's no per-exercise tagging finer than muscle group, so
 // the single best lift stands in for "the" representative lift).
@@ -4257,35 +4282,75 @@ function muscleStrengthRatio(){
   gH().forEach(w=>{
     if(!(+new Date(w.date)>=since)) return;
     (w.exercises||[]).forEach(ex=>{
-      const g=muscleGroup(ex.muscle); if(!g||!(g in STRENGTH_STD)||!isWT(ex)) return;
+      const g=strGroup(ex); if(!g||!isWT(ex)) return;
       const key=ex.exId||ex.name, f=exStrengthFactor(ex.exId,g);
       (ex.sets||[]).forEach(s=>{
         if(!(s.done||s.weight>0)) return;
         const v=e1rm(effWeight(ex,s), Math.min(s.reps||0,STR_REP_CAP))*f;
-        if(v>0){ const m=best[g]||(best[g]={}); if(v>(m[key]||0)) m[key]=v;
-          if(pressCreditsTriceps(ex.exId,ex.name,g)){ const t=best.triceps||(best.triceps={}), tv=v*TRI_PRESS_CREDIT; if(tv>(t[key]||0)) t[key]=tv; } }
+        if(v>0){ const m=best[g]||(best[g]={}); if(v>(m[key]||0)) m[key]=v; }
       });
     });
   });
   MGROUPS.forEach(g=>{
-    const vals=Object.values(best[g]||{}).sort((a,b)=>b-a).slice(0,STR_TOP_N);
+    const vals=Object.values(best[g]||{}).sort((a,b)=>b-a).slice(0,STR_BEST_ONLY.has(g)?1:STR_TOP_N);
     if(vals.length) out[g]=(vals.reduce((a,b)=>a+b,0)/vals.length)/bw;
   });
   return out;
 }
-// 0..1 score for the heat map / bars, anchored so the label cutoffs (TIER_CUT) land exactly on
-// the standards: t2 -> Building starts, t3 -> Strong starts, t4 -> Elite starts, 1.5*t4 -> full.
-function strengthScore(group,ratio){
-  const std=STRENGTH_STD[group]; if(!std||!ratio) return 0;
-  const sex=(gProf()||{}).sex==='female'?'female':'male';
-  const [t1,t2,t3,t4]=std[sex];
-  ratio=ratio/badgeAgeFactor(gAge());   // same age scaling as the badges: an older lifter's ratio counts for more
+// Triceps (Mr. Roni, 2026-09-26: "I think it's being calculated wrongly"). Every triceps-relevant exercise in
+// the window is scored on the ladder it belongs to, and the group takes the STRONGEST one; a heavy bench is
+// never averaged down by light pushdowns, or the other way round. Evidence:
+//   - loaded presses (bench, dips, overhead, close-grip...) on the close-grip ladder, at TRI_PRESS_CREDIT unless
+//     the lift is itself saved as triceps. Plain bodyweight reps (push-ups, unweighted dips) don't count,
+//     same rule as best lifts elsewhere (isPlainBW).
+//   - isolation moves on their Strength Level ladder (TRI_ISO_STD).
+// Returns { score 0..1, best: {key, ladder, ratio, score} } for the body map and ranking.
+function triStrength(){
+  const bw=gBW(), out={score:0,best:null}; if(!(bw>0)) return out;
+  const sex=(gProf()||{}).sex==='female'?'female':'male', age=badgeAgeFactor(gAge());
+  const since=Date.now()-STR_WINDOW_DAYS*864e5;
+  gH().forEach(w=>{
+    if(!(+new Date(w.date)>=since)) return;
+    (w.exercises||[]).forEach(ex=>{
+      const g=strGroup(ex); if(!isWT(ex)) return;
+      const lib=ex.exId?byId(ex.exId):{}, name=ex.name||lib.name||'', exn={...ex,name,equip:ex.equip||lib.equip};
+      const db=ex.exId&&allDB.find(e=>e.id===ex.exId), equip=String((db&&db.equipment)||lib.equip||'').toLowerCase();
+      let ladder, f;
+      if(g==='triceps'){
+        const compound=db?db.mechanic==='compound':TRI_COMPOUND.test(name);
+        if(compound){ if(isPlainBW(exn)) return; ladder=STRENGTH_STD.triceps[sex]; f=STR_EQUIP_FACTOR[equip]==null||equip==='machine'||equip==='cable'?1:STR_EQUIP_FACTOR[equip]; }
+        else {
+          const kind=/dumbbell|kettlebell/.test(equip)?'dumbbell':/barbell|e-z|ez/.test(equip)||/skull|lying/i.test(name)?'lying':'pushdown';
+          ladder=TRI_ISO_STD[kind][sex]; f=kind==='pushdown'&&/one.?arm|single.?arm|unilateral/i.test(name)?TRI_ONE_ARM:1;
+        }
+      } else if(pressCreditsTriceps(ex.exId,name,g)){
+        if(isPlainBW(exn)) return;
+        ladder=STRENGTH_STD.triceps[sex]; f=exStrengthFactor(ex.exId,g)*TRI_PRESS_CREDIT;
+      } else return;
+      (ex.sets||[]).forEach(s=>{
+        if(!(s.done||s.weight>0)) return;
+        const ratio=e1rm(effWeight(ex,s), Math.min(s.reps||0,STR_REP_CAP))*f/bw, sc=ladderScore(ladder,ratio/age);
+        if(sc>out.score){ out.score=sc; out.best={key:ex.exId||name,ladder,ratio,score:sc}; }
+      });
+    });
+  });
+  return out;
+}
+// 0..1 position on a [t1,t2,t3,t4] ladder, anchored so the label cutoffs (TIER_CUT) land exactly on the
+// standards: t2 -> Building starts, t3 -> Strong starts, t4 -> Elite starts, 1.5*t4 -> full.
+function ladderScore([t1,t2,t3,t4],ratio){
+  if(!(ratio>0)) return 0;
   const pts=[[0,0],[t1,TIER_CUT[0]/2],[t2,TIER_CUT[0]],[t3,TIER_CUT[1]],[t4,TIER_CUT[2]],[t4*1.5,1]];
   for(let i=0;i<pts.length-1;i++){
     const [x0,y0]=pts[i],[x1,y1]=pts[i+1];
     if(ratio<=x1) return y0+(ratio-x0)/(x1-x0)*(y1-y0);
   }
   return 1;
+}
+function strengthScore(group,ratio){
+  const std=STRENGTH_STD[group]; if(!std||!ratio) return 0;
+  const sex=(gProf()||{}).sex==='female'?'female':'male';
+  return ladderScore(std[sex], ratio/badgeAgeFactor(gAge()));   // same age scaling as the badges: an older lifter's ratio counts for more
 }
 const strengthLabel=p=>p<=0?{l:'Untrained',b:'bm'}:p<TIER_CUT[0]?{l:'Needs Work',b:'bred'}:p<TIER_CUT[1]?{l:'Building',b:'bgreen'}:p<TIER_CUT[2]?{l:'Strong',b:'bblue'}:{l:'Elite',b:'bgold'};
 // Strength-relative-to-bodyweight ranking. Falls back to set-count (the old
@@ -4295,6 +4360,7 @@ function musclePerf(){
   const bw=gBW();
   if(!bw){ const freq=muscleUsage(); const max=Math.max(1,...MGROUPS.map(g=>freq[g])); const score={}; MGROUPS.forEach(g=>score[g]=freq[g]/max); return {mode:'volume',score}; }
   const ratio=muscleStrengthRatio(); const score={}; MGROUPS.forEach(g=>score[g]=strengthScore(g,ratio[g]));
+  score.triceps=triStrength().score;
   return {mode:'strength',score};
 }
 
@@ -6410,7 +6476,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.35';
+const BUILD = 'v1.10.36';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
