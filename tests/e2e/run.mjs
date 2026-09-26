@@ -2,7 +2,7 @@
 // 2026-09-24 changes (tap-to-clear set inputs, monthly Coward-Maxing,
 // Consistency-Maxing, Jacked). Screenshots go to $SHOTS (default /tmp/jk16/shots).
 import fs from 'fs';
-import { startServer, stopServer, launch, close, phone, check, results, wk, ex, days, LB } from './harness.mjs';
+import { startServer, stopServer, launch, close, phone, check, results, wk, ex, days, LB, URL } from './harness.mjs';
 const SHOTS = process.env.SHOTS || '/tmp/jk16/shots';
 fs.mkdirSync(SHOTS, { recursive: true });
 const badges = page => page.evaluate(() => computeBadges().map(b => ({ name: b.name, earned: b.earned, tier: b.tier || null, desc: b.desc, detail: b.detail })));
@@ -503,9 +503,9 @@ async function achievementsPage() {
     // Leaderboards title carries a small crown key at the far right.
     const { page, ctx } = await phone({ seed: seed(), now: SEP15 });
     await page.evaluate(() => { sp('leaderboard'); renderLB(); }); await page.waitForTimeout(250);
-    const n = await page.evaluate(() => { const st = document.querySelector('#compareBoard .st'), k = st.lastElementChild, a = st.getBoundingClientRect(), b = k.getBoundingClientRect(), t = st.firstElementChild.getBoundingClientRect(); return { txt: k.textContent.trim(), svg: !!k.querySelector('svg'), right: Math.abs(a.right - b.right) < 2, after: b.left > t.right, inside: b.right <= document.documentElement.clientWidth }; });
+    const n = await page.evaluate(() => { const st = document.querySelector('#compareBoard .blk-head'), k = st.lastElementChild, a = st.getBoundingClientRect(), b = k.getBoundingClientRect(), t = st.firstElementChild.getBoundingClientRect(); return { txt: k.textContent.trim(), svg: !!k.querySelector('svg'), right: Math.abs(a.right - b.right) < 2, after: b.left > t.right, inside: b.right <= document.documentElement.clientWidth }; });
     check('leaderboards: crown + "Last month\'s winner" note at the far right of the title', /Last month's winner/.test(n.txt) && n.svg && n.right && n.after && n.inside, JSON.stringify(n));
-    await page.evaluate(() => document.querySelector('#compareBoard .st').lastElementChild.click()); await page.waitForTimeout(200);
+    await page.evaluate(() => document.querySelector('#compareBoard .blk-head').lastElementChild.click()); await page.waitForTimeout(200);
     const pop = await page.evaluate(() => ({ open: document.getElementById('confirmModal').classList.contains('open'), t: document.getElementById('cfMsg').textContent, cancel: getComputedStyle(document.getElementById('cfCancel')).display }));
     check('leaderboards: tapping the crown key opens a description popup (last month\'s weight lifted)', pop.open && /last month/i.test(pop.t) && /weight lifted/i.test(pop.t) && pop.cancel === 'none', JSON.stringify(pop));
     await page.evaluate(() => _cfDone(null));
@@ -945,10 +945,75 @@ async function cardioOrder() {
   await ctx.close();
 }
 
+// Type and spacing rulebook (Mr. Roni, 2026-09-25; Home is the standard, artifacts/jacked-type-and-spacing-rules.md):
+// one block-title style everywhere, 22px between any two blocks, cards 18px padding / 20px corners / 16px side margin,
+// title 18px from the card top and 12px above its content. Fails if any page or popup has a second title style or card gap.
+async function typeRulebook() {
+  const H = []; for (let i = 1; i <= 14; i++) { const d = new Date(SEP15 - i * 86400000).toISOString().slice(0, 10); H.push(wk(d, [ex('Barbell Bench Press', [[60, 8], [60, 8]]), ex('Run', [[1, 8]], 'distance')])); }
+  const measure = () => {
+    const vis = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden'; };
+    const root = document.querySelector('.mo.open .md') || document.querySelector('#achFull.open') || document.querySelector('.page.active');
+    const legacy = document.querySelectorAll('.st,.sec-t,.mc-title,.mc-head,.sec-head').length;
+    const titles = [...root.querySelectorAll('.blk-t')].filter(vis).map(t => {
+      const c = getComputedStyle(t), tr = t.getBoundingClientRect();
+      const row = t.parentElement.classList.contains('blk-head') ? t.parentElement : t;
+      let n = row.nextElementSibling; while (n && !vis(n)) n = n.nextElementSibling;
+      let nTop = null; if (n) { const kids = [n, ...n.querySelectorAll('*')].filter(vis); nTop = Math.min(...kids.map(k => k.getBoundingClientRect().top)); }
+      const card = t.closest('.sec,.metric-card,.cw');
+      return { txt: t.textContent.trim().slice(0, 20), style: [c.fontFamily.split(',')[0], c.fontSize, c.fontWeight, c.letterSpacing, c.textTransform, c.lineHeight].join(' '),
+        toContent: nTop === null ? null : Math.round(nTop - row.getBoundingClientRect().bottom), fromCardTop: card && card.firstElementChild === row ? Math.round(tr.top - card.getBoundingClientRect().top) : null };
+    });
+    const blocks = []; const collect = el => { for (const c of el.children) { if (!vis(c)) continue; const cs = getComputedStyle(c); if (cs.position === 'sticky' || cs.position === 'fixed') continue; if (c.id === 'metricsCards' || c.id === 'compareBoard') { collect(c); continue; } blocks.push(c); } };
+    if (root.classList.contains('page')) collect(root);
+    const gaps = blocks.slice(1).map((b, i) => ({ a: blocks[i].id || blocks[i].className, b: b.id || b.className, gap: Math.round(b.getBoundingClientRect().top - blocks[i].getBoundingClientRect().bottom) }));
+    const cards = [...root.querySelectorAll('.sec,.metric-card,.cw')].filter(vis).map(e => { const cs = getComputedStyle(e), r = e.getBoundingClientRect(); return [cs.padding, cs.borderTopLeftRadius, Math.round(r.left), Math.round(innerWidth - r.right)].join(' '); });
+    const bottoms = [...root.querySelectorAll('.sec,.metric-card,.cw')].filter(vis).map(e => { const kids = [...e.children].filter(vis); return { id: e.id || e.className, space: kids.length ? Math.round(e.getBoundingClientRect().bottom - Math.max(...kids.map(k => k.getBoundingClientRect().bottom))) : 18 }; }).filter(x => x.space !== 18);
+    // every titled card opens with the one title style (the calendar keeps its month switcher; the recap row is 10% smaller by his 9/24 call)
+    const untitled = [...root.querySelectorAll('.sec,.metric-card,#suggestCard')].filter(vis).filter(e => e.id !== 'recapCard').filter(e => { const f = [...e.children].find(vis); return !f || !(f.classList.contains('blk-t') || f.classList.contains('blk-head')); }).map(e => e.id || e.className);
+    return { legacy, titles, gaps, cards, bottoms, untitled };
+  };
+  const all = {};
+  for (const pg of ['home', 'routines', 'exercises', 'metrics', 'leaderboard']) {
+    const { page, ctx, errors } = await phone({ width: 393, height: 852, seed: { hist: H, bw: 80 }, now: SEP15 });
+    await page.evaluate(p => sp(p), pg); await page.waitForTimeout(300);
+    all[pg] = await page.evaluate(measure);
+    if (pg === 'home' || pg === 'metrics') await page.screenshot({ path: `${SHOTS}/rulebook-${pg}-393.png`, fullPage: false });
+    if (pg === 'metrics') { await page.evaluate(() => window.scrollTo(0, 400)); await page.waitForTimeout(150); await page.screenshot({ path: `${SHOTS}/rulebook-metrics-scrolled-393.png` }); }
+    if (pg === 'leaderboard') await page.screenshot({ path: `${SHOTS}/rulebook-friends-393.png` });
+    check(`rulebook: ${pg} no page errors`, errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  for (const [name, open] of [['profile', () => openProf()], ['exercise info', () => openExInfo(allEx()[0].id)], ['workout detail', () => openWD(gH()[gH().length - 1].id)], ['achievements', () => openAch()]]) {
+    const { page, ctx, errors } = await phone({ width: 393, height: 852, seed: { hist: H, bw: 80 }, now: SEP15 });
+    await page.evaluate(open); await page.waitForTimeout(350);
+    all[name] = await page.evaluate(measure);
+    await page.screenshot({ path: `${SHOTS}/rulebook-${name.replace(' ', '-')}-393.png` });
+    check(`rulebook: ${name} popup no page errors`, errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  const styles = new Set(), bad = [];
+  for (const [pg, m] of Object.entries(all)) {
+    check(`rulebook: ${pg} has no old title classes`, m.legacy === 0, String(m.legacy));
+    m.titles.forEach(t => styles.add(t.style));
+    const off = m.titles.filter(t => (t.toContent !== null && t.toContent !== 12) || (t.fromCardTop !== null && t.fromCardTop !== 18));
+    check(`rulebook: ${pg} titles sit 18px into the card and 12px above content`, off.length === 0, JSON.stringify(off));
+    const g = m.gaps.filter(x => x.gap !== 22); if (g.length) bad.push([pg, g]);
+    check(`rulebook: ${pg} every gap between blocks is 22px`, g.length === 0, JSON.stringify(g));
+    check(`rulebook: ${pg} every card starts with the standard block title`, m.untitled.length === 0, JSON.stringify(m.untitled));
+    check(`rulebook: ${pg} cards end 18px below their last item`, m.bottoms.length === 0, JSON.stringify(m.bottoms));
+    check(`rulebook: ${pg} cards are 18px padding, 20px corners, 16px side margins`, m.cards.every(c => c === '18px 20px 16 16'), JSON.stringify([...new Set(m.cards)]));
+  }
+  check('rulebook: exactly one block-title style across every page and popup', styles.size === 1, JSON.stringify([...styles]));
+  const need = ['home', 'routines', 'exercises', 'metrics', 'leaderboard', 'profile', 'exercise info'];
+  check('rulebook: every page and titled popup was measured', need.every(k => all[k] && all[k].titles.length), Object.entries(all).map(([k, m]) => k + ':' + m.titles.length).join(' '));
+  const css = await (await fetch(URL)).text();
+  check('rulebook: stylesheet has no old title classes left', !/\.(st|sec-t|mc-title|mc-head|sec-head)\b[\s{,:]/.test(css.split('</style>')[0]), '');
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders, confirmCentered, cardioOrder]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders, confirmCentered, cardioOrder, typeRulebook]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

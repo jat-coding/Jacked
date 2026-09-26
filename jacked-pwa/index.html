@@ -181,7 +181,6 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .sc{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px 8px;text-align:center}
 .sv{font-family:var(--fh);font-size:26px;font-weight:800;color:var(--accent)}
 .sl{font-size:10px;color:var(--muted);margin-top:1px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.st{font-family:var(--fh);font-size:14px;font-weight:700;letter-spacing:.8px;margin-bottom:10px;color:var(--text2);text-transform:uppercase}
 
 /* CALENDAR */
 .cw{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:14px;margin-bottom:20px}
@@ -284,8 +283,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 
 /* METRICS */
 .metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:20px;margin-bottom:0}
-#metricsCards{display:flex;flex-direction:column;gap:26px;padding-bottom:6px}
-.mc-title{font-family:var(--fh);font-size:22px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text);margin:0;padding-left:12px;border-left:4px solid var(--accent);line-height:1.15}
+#metricsCards{display:flex;flex-direction:column;padding-bottom:6px}
 .bmi-val{font-family:var(--fh);font-size:56px;font-weight:900;text-align:center;line-height:1}
 .bmi-cat{text-align:center;font-size:13px;font-weight:600;margin-top:6px}
 .mr-item{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border)}
@@ -378,7 +376,7 @@ body.resting #resumeBar{bottom:calc(118px + var(--navB));z-index:98}
 html,body{background:#000}
 body{background-image:none}
 .ph{height:calc(var(--sat) + 62px);box-sizing:border-box;padding:var(--sat) 0 0;margin-bottom:0;background:#000}
-.page>.ph+*:not(.sticky-sub){margin-top:12px}
+.page>.ph:not(:has(+.sticky-sub)){margin-bottom:12px}   /* 12px under every page header, even when the first block is hidden (Home's recap card) */
 .sticky-sub{background:#000;padding-top:4px}
 /* Lift the main surfaces off the canvas with a soft shadow. */
 .card,.rc,.eb,.metric-card,.cw,.cur-card{box-shadow:var(--shadow)}
@@ -457,21 +455,20 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 /* ===== Hybrid layout (2026-09-21 test): big titles, one soft card per section, dark stat wells, hairline rows ===== */
 .sec,.metric-card,.cw{background:linear-gradient(180deg,#1a1a21,#131318);border:0;border-radius:20px;padding:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 12px 30px -14px rgba(0,0,0,.8);margin:0 0 22px}
 .sub-t{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin:2px 0 6px}
-.sec-t,.mc-title{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text);line-height:1;margin:0 0 12px;padding:0;border:0}
-#metricsCards{gap:22px}
+.blk-t{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text);line-height:1;margin:0 0 12px;padding:0;border:0}
+/* Type and spacing rulebook (artifacts/jacked-type-and-spacing-rules.md, Home is the standard): ONE block-title class (.blk-t),
+   one title row (.blk-head), 22px between any two blocks (margin on the block, never also a container gap). */
+.blk-t:not(:first-child){margin-top:22px}
+.blk-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:24px;margin-bottom:12px}
+.blk-head>.blk-t{margin:0}
+.blk-head>:not(.blk-t){margin-top:-12px;margin-bottom:-12px}   /* actions up to 48px tall (44px tap targets) keep the row at title height */
+.blk-head+*{margin-top:0!important}
+:is(.sec,.metric-card,.cw)>:last-child{margin-bottom:0!important}   /* the card's own 18px padding is the bottom space */
+.blk-act{display:inline-flex;align-items:center;gap:4px;font-family:var(--fb);font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted);cursor:pointer;padding:4px 0 4px 8px}
 .sec .stats-g,.sec .stats-g2{margin-bottom:0}
 .sc{background:#0d0d11;border:0;border-radius:14px;text-align:left;padding:12px 12px}
 .sec .wli,.sec .eli,.sec .rc,.sec .fc{background:none;border:0;border-top:1px solid #23232b;border-radius:0;padding:12px 0;margin:0;box-shadow:none}
 .sec .wli:first-child,.sec .eli:first-child,.sec .rc:first-child,.sec .fc:first-child{border-top:0}
-#curatedWrap .st{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;color:var(--text);line-height:1;margin-bottom:12px}
-.page .st,#compareBoard .st,#profModal .st{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text);line-height:1}
-#cardHiddenList .st{font-size:14px;color:var(--text2);letter-spacing:.8px}
-.mc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:32px;margin-bottom:14px}
-.mc-head .mc-title,#compareBoard .st{margin:0}
-#compareBoard .st{margin-bottom:14px}
-.metric-card>.mc-head+*{margin-top:0!important}
-.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
-.sec-head .sec-t{margin:0}
 #exLoadState{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
 </style>
 </head>
@@ -569,21 +566,21 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     </div>
     <div class="cg" id="calGrid"></div>
   </div>
-  <button class="btn ba wf" onclick="openQS()" style="margin:2px 0 12px;font-size:16px;padding:14px"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" style="vertical-align:-2px;margin-right:6px"><path d="M8 5v14l11-7z"/></svg>Start Workout</button>
-  <div id="suggestCard" style="display:none;align-items:flex-start;gap:12px;background:var(--bg2);border:1px solid rgba(77,158,255,.3);border-radius:var(--rl);padding:14px 16px;margin-bottom:20px"></div>
-  <div class="sec"><div class="sec-t">Recent workouts</div><div id="recentW"></div></div>
+  <button class="btn ba wf" onclick="openQS()" style="margin:0 0 22px;font-size:16px;padding:14px"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" style="vertical-align:-2px;margin-right:6px"><path d="M8 5v14l11-7z"/></svg>Start Workout</button>
+  <div id="suggestCard" style="display:none;background:var(--bg2);border:1px solid rgba(77,158,255,.3);border-radius:20px;padding:18px;margin-bottom:22px"></div>
+  <div class="sec"><div class="blk-t">Recent workouts</div><div id="recentW"></div></div>
   <div id="homeVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:22px 0 6px"></div>
 </div>
 
 <!-- ROUTINES -->
 <div class="page" id="page-routines">
   <div class="ph"><div class="pt">Routines</div><button class="btn bg sm" onclick="openCR()">+ New</button></div>
-  <button class="btn bg wf" onclick="startEmpty()" style="margin-bottom:16px">Start Empty Workout</button>
+  <button class="btn bg wf" onclick="startEmpty()" style="margin-bottom:22px">Start Empty Workout</button>
   <div id="curatedWrap" class="sec">
-    <div class="st" style="margin-bottom:12px"><svg viewBox='0 0 24 24' width='18' height='18' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
+    <div class="blk-t"><svg viewBox='0 0 24 24' width='18' height='18' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
     <div class="chips" id="curatedList" style="gap:10px"></div>
   </div>
-  <div class="sec"><div class="sec-t">My routines</div><div id="routinesList"></div></div>
+  <div class="sec"><div class="blk-t">My routines</div><div id="routinesList"></div></div>
 </div>
 
 <!-- EXERCISES / LIBRARY -->
@@ -593,7 +590,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="sw"><span class="sw-ic"><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0'/><path d='M21 21l-6 -6'/></svg></span><input type="text" id="exSearch" placeholder="Search exercises..." oninput="renderEx()"></div>
     <div class="chips" id="muscleChips"></div>
   </div>
-  <div class="sec"><div class="sec-head"><div class="sec-t">Exercises</div><span id="exLoadState"></span></div><div id="exList"></div></div>
+  <div class="sec"><div class="blk-head"><div class="blk-t">Exercises</div><span id="exLoadState"></span></div><div id="exList"></div></div>
 </div>
 
 <!-- METRICS -->
@@ -606,16 +603,16 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="page" id="page-leaderboard">
   <div class="ph"><div class="pt">Friends</div><button class="btn bg sm" id="afBtn" onclick="openAF()">+ Friend</button></div>
   <div id="compareBoard"></div>
-  <div class="sec" id="friendsSec"><div class="sec-t">Friends</div>
+  <div class="sec" id="friendsSec"><div class="blk-t">Friends</div>
     <div id="lbBuddiesWrap" style="display:none"><div class="sub-t"><svg viewBox='0 0 24 24' width='13' height='13' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Close buddies</div><div id="lbBuddies"></div></div>
     <div id="lbFriendsWrap"><div class="sub-t" id="lbFriendsT" style="display:none">Buddies</div><div id="lbFriends"></div></div>
   </div>
   <div id="pendingWrap" class="sec" style="display:none">
-    <div class="st" style="margin-bottom:12px"><svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M6.5 7h11'/><path d='M6.5 17h11'/><path d='M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1'/><path d='M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1'/></svg> Pending</div>
+    <div class="blk-t"><svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M6.5 7h11'/><path d='M6.5 17h11'/><path d='M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1'/><path d='M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1'/></svg> Pending</div>
     <div id="pendingList"></div>
   </div>
   <div id="sentWrap" class="sec" style="display:none">
-    <div class="st" style="margin-bottom:12px">Requests you sent</div>
+    <div class="blk-t">Requests you sent</div>
     <div id="sentList"></div>
   </div>
 </div>
@@ -644,7 +641,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="mh"><div class="mt">Start Workout</div><button class="cb" onclick="cm('qsModal')">✕</button></div>
     <button class="btn bg wf" onclick="startEmpty()"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11'/></svg> Empty Workout</button>
     <div class="sep"></div>
-    <div class="st" style="margin-bottom:10px">Choose Routine</div>
+    <div class="blk-t">Choose Routine</div>
     <div id="qsRoutines"></div>
   </div>
 </div>
@@ -656,7 +653,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="mh"><div class="mt" id="crTitle">New Routine</div><button class="cb" onclick="cm('crModal')">✕</button></div>
     <div class="fg"><label>Routine Name</label><input type="text" id="rName" placeholder="e.g. Push Day"></div>
     <div class="fg"><label>Description</label><input type="text" id="rDesc" placeholder="e.g. Chest · Shoulders · Triceps"></div>
-    <div class="st" style="margin:14px 0 8px">Exercises</div>
+    <div class="blk-t">Exercises</div>
     <div id="rExPicker"></div>
     <button class="btn bg wf" onclick="openAEModal('routine')" style="margin-top:6px">+ Add Exercises</button>
     <div class="sep"></div>
@@ -878,7 +875,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     </div>
 
     <div id="profTab-main">
-      <div class="st" style="margin-bottom:10px">Preferences</div>
+      <div class="blk-t">Preferences</div>
       <label>Units</label>
       <div class="unit-tog" id="setUnitTog">
         <button type="button" data-v="lb" onclick="segPick(this)">lb / in</button>
@@ -901,7 +898,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       </div>
 
       <div class="sep"></div>
-      <div class="st" style="margin-bottom:8px">Your Username</div>
+      <div class="blk-t">Your Username</div>
       <div class="invite-code">
         <div style="font-size:11px;color:var(--muted)">Share this so friends can add you</div>
         <div class="code-display" id="profCode" style="letter-spacing:1px;font-size:26px">—</div>
@@ -910,7 +907,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     </div>
 
     <div id="profTab-body" style="display:none">
-      <div class="st" style="margin-bottom:10px">Body Metrics</div>
+      <div class="blk-t">Body Metrics</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Used for strength-based rankings on the Metrics tab and your achievement badges.</div>
       <label>Body</label>
       <div class="unit-tog" id="setSexTog">
@@ -928,7 +925,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <button class="btn ba wf" onclick="saveProf()">Save Profile</button>
 
     <div class="sep"></div>
-    <div class="st" style="margin-bottom:8px">Data & Backup</div>
+    <div class="blk-t">Data & Backup</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Changes sync to the cloud automatically, and your watch picks them up from there. Export any time for an offline copy. Import a Jacked backup, or a Hevy CSV export (.csv/.txt) to bring in your history.</div>
     <div class="fr">
       <button class="btn bg" onclick="exportData()">Export</button>
@@ -943,13 +940,13 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <button class="btn ba wf" style="margin-top:10px" onclick="syncNow()"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4'/><path d='M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4'/></svg> Sync now</button>
 
     <div class="sep"></div>
-    <div class="st" style="margin-bottom:8px">Feedback</div>
+    <div class="blk-t">Feedback</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Found a bug or want a change? Send it our way.</div>
     <textarea id="fbText" rows="3" maxlength="2000" placeholder="What should we fix or add?" style="resize:vertical"></textarea>
     <button class="btn ba wf" style="margin-top:8px" onclick="submitFeedback()">Send Feedback</button>
 
     <div class="sep"></div>
-    <div class="st" style="margin-bottom:8px">Account</div>
+    <div class="blk-t">Account</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Signing out clears this device's data. Your workouts live only here — <b>export a backup first</b> if you want to keep them or move them to another account.</div>
     <div class="fr">
       <button class="btn bg" onclick="exportData()">Export backup</button>
@@ -1024,7 +1021,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- Full-screen achievements page (Metrics > Achievements > View all) -->
 <div id="achFull" role="dialog" aria-modal="true">
   <div class="ph" style="padding-left:16px;padding-right:16px;flex-shrink:0"><div class="pt">Achievements</div><button class="cb" style="width:38px;height:38px;font-size:18px" onclick="closeAch()" aria-label="Close">✕</button></div>
-  <div id="achFullBody" style="padding:0 16px calc(96px + env(safe-area-inset-bottom))"></div>
+  <div id="achFullBody" style="padding:12px 16px calc(96px + env(safe-area-inset-bottom))"></div>
 </div>
 
 <div id="badgeFull" role="dialog" aria-modal="true">
@@ -1803,10 +1800,10 @@ function renderSuggest(){
   const today=dayKey(new Date());
   if(S.g('suggestDismiss')===today){ el.style.display='none'; return; }
   const h=gH();
-  el.style.display='flex';
+  el.style.display='block';
   const curated=todaysCuratedPick(today);
   if(!h.length){
-    el.innerHTML=`<div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--blue)">Let's get started</div><div style="font-size:12px;color:var(--text2);margin-top:3px;line-height:1.4">Pick a routine, or start an empty workout.</div>${curatedPickHtml(curated)}</div><button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss">✕</button>`;
+    el.innerHTML=`<div class="blk-head"><div class="blk-t">Let's get started</div><button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss">✕</button></div><div style="min-width:0"><div style="font-size:12px;color:var(--text2);line-height:1.4">Pick a routine, or start an empty workout.</div>${curatedPickHtml(curated)}</div>`;
     return;
   }
   // Rank by days since he last trained each group (biceps + triceps together as "Arms"),
@@ -1825,13 +1822,12 @@ function renderSuggest(){
         ${r?`<button class="btn ba sm" onclick="startRW('${r.id}')">Start ${esc(r.name)}</button>`:`<button class="btn ba sm" onclick="startGroupWorkout('${l}')">Start</button>`}
       </div>`;
   };
-  el.innerHTML=`<div style="flex:1;min-width:0">
-      <div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--blue)">Suggested today</div>
-      <div style="font-size:12px;color:var(--text2);margin:3px 0 2px;line-height:1.4">A few good options — mix it up.</div>
+  el.innerHTML=`<div class="blk-head"><div class="blk-t">Suggested today</div><button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss">✕</button></div>
+    <div style="min-width:0">
+      <div style="font-size:12px;color:var(--text2);margin:0 0 2px;line-height:1.4">A few good options — mix it up.</div>
       ${picks.map(item).join('')}
       ${curatedPickHtml(curated)}
-    </div>
-    <button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss" style="align-self:flex-start">✕</button>`;
+    </div>`;
 }
 
 // Home header profile button shows the same avatar as the friends list (photo, else initials).
@@ -1851,7 +1847,7 @@ function renderHome() {
   const sb=document.getElementById('streakBanner'), best=Math.max(bestStreak(h),streak);
   if (best>0) {
     sb.style.display='block';
-    sb.innerHTML=`<div class="sec-t">Streak</div>
+    sb.innerHTML=`<div class="blk-t">Streak</div>
       <div style="display:flex;align-items:center;gap:14px">
         <div>${uic('flame',streak>0?'var(--orange)':'var(--muted)',30)}</div>
         <div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:30px;font-weight:900;line-height:1;color:${streak>0?'var(--text)':'var(--muted)'}">${streak} day${streak!==1?'s':''}</div>
@@ -2012,7 +2008,7 @@ function openExInfo(exId){
   let chart;
   if(recent.length){
     const max=Math.max(...recent.map(p=>p.v));
-    chart=`<div class="st" style="margin:14px 0 8px">Recent top weight (${uL()})</div>
+    chart=`<div class="blk-t">Recent top weight (${uL()})</div>
       <div style="display:flex;align-items:flex-end;gap:6px;height:120px">
       ${recent.map(p=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
         <div style="font-size:9px;color:var(--muted);margin-bottom:3px">${dW(p.v)}</div>
@@ -2023,7 +2019,7 @@ function openExInfo(exId){
   } else chart=`<div style="font-size:13px;color:var(--muted);margin:12px 0">No logged sets for this exercise yet.</div>`;
   const instr=ex.instructions||[];
   const how=instr.length
-    ? `<div class="st" style="margin:16px 0 8px">How to perform</div><ol style="margin:0;padding-left:18px;font-size:13px;color:var(--text2);line-height:1.55">${instr.map(s=>`<li style="margin-bottom:6px">${s}</li>`).join('')}</ol>`
+    ? `<div class="blk-t">How to perform</div><ol style="margin:0;padding-left:18px;font-size:13px;color:var(--text2);line-height:1.55">${instr.map(s=>`<li style="margin-bottom:6px">${s}</li>`).join('')}</ol>`
     : `<div style="font-size:13px;color:var(--muted);margin-top:14px">No instructions available${dbLoaded?'':' yet — open the Library once to load them'}.</div>`;
   const meta=`<div style="font-size:12px;color:var(--muted)">${[ex.muscle,ex.equip,ex.category].filter(Boolean).map(capW).join(' · ')}</div>`;
   const actions=`<div style="display:flex;gap:8px;margin:12px 0 8px">
@@ -3490,7 +3486,7 @@ function showFinishSummary(o) {
       <div class="sc"><div class="sv">${fmtW(vol)}</div><div class="sl">${uL()} Lifted</div></div>
     </div>
     <div class="sc" style="margin-bottom:14px"><div class="sv" style="color:#ffd700">${prList.length}</div><div class="sl">Personal Records</div></div>
-    ${prList.length?`<div class="st" style="margin-bottom:8px">New PRs</div>`+prList.map(p=>
+    ${prList.length?`<div class="blk-t">New PRs</div>`+prList.map(p=>
       `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
         <span style="font-size:13px;font-weight:600">★ ${esc(p.name)}</span>
         <span style="font-family:var(--fh);font-weight:700;color:var(--accent)">${p.cardio?p.label:dW(p.weight)+uL()+' × '+p.reps}</span>
@@ -3584,7 +3580,7 @@ function openWD(id) {
   const pr=prsOf(w);
   // Four tiles are tighter: equal columns that may shrink, slightly smaller number + label.
   const t4=pr.n?';padding:12px 6px':'', v4=pr.n?'font-size:22px':'', l4=pr.n?'font-size:9px;letter-spacing:.2px':'';
-  let h=`<div class="stats-g" style="margin-bottom:14px${pr.n?';grid-template-columns:repeat(4,minmax(0,1fr));gap:6px':''}">
+  let h=`<div class="stats-g" style="margin-bottom:14px${pr.n?';grid-template-columns:repeat(4,minmax(0,1fr))':''}">
     <div class="sc" style="${t4}"><div class="sv" style="${v4}">${w.sets}</div><div class="sl" style="${l4}">Sets</div></div>
     ${volCard.replace('class="sc"',`class="sc" style="${t4}"`).replace('class="sv"',`class="sv" style="${v4}"`).replace('class="sl"',`class="sl" style="${l4}"`)}
     <div class="sc" style="${t4}"><div class="sv" style="${v4}">${w.exercises?.length||0}</div><div class="sl" style="${l4}">Exercises</div></div>
@@ -4549,7 +4545,7 @@ function renderCardOrderList(){
     </div>`).join('');
   // Closed sections are added back from here, not from the bottom of the page (Mr. Roni, 2026-09-24).
   const hb=document.getElementById('cardHiddenList'), hid=metricsOrdered().filter(c=>hidden.has(c.id));
-  hb.innerHTML=hid.length?`<div class="st" style="margin:14px 0 8px">Hidden sections</div><div class="chips" style="flex-wrap:wrap">`+hid.map(c=>`<button class="chip" onclick="toggleCard('${c.id}')">+ ${c.title}</button>`).join('')+`</div>`:'';
+  hb.innerHTML=hid.length?`<div class="blk-t">Hidden sections</div><div class="chips" style="flex-wrap:wrap">`+hid.map(c=>`<button class="chip" onclick="toggleCard('${c.id}')">+ ${c.title}</button>`).join('')+`</div>`:'';
 }
 function renderMetricsPage(){
   const hidden=metricsHidden();
@@ -4558,8 +4554,8 @@ function renderMetricsPage(){
   const vis=cards.filter(c=>!hidden.has(c.id));
   cont.innerHTML=vis.map((c,i)=>`
     <div class="metric-card" data-id="${c.id}">
-      <div class="mc-head">
-        <div class="mc-title">${c.title}</div>
+      <div class="blk-head">
+        <div class="blk-t">${c.title}</div>
         <button class="btn bg ic xs" title="Hide card" onclick="toggleCard('${c.id}')">✕</button>
       </div>
       ${c.html}
@@ -4759,7 +4755,7 @@ function openFriend(code){
   // Fall back to the old 6-item summary for friends still on a pre-wd build.
   const wd=p.wd||[];
   if(wd.length){
-    h+=`<div class="st" style="margin:14px 0 8px">Workouts · last 30 days</div>`+
+    h+=`<div class="blk-t">Workouts · last 30 days</div>`+
       wd.map((w,i)=>{
         const isRun=!(w.vol>0)&&w.dist>0;
         const metric=isRun?`${w.dist} mi`:`${fmtW(w.vol||0)} ${uL()}`;
@@ -4771,7 +4767,7 @@ function openFriend(code){
       }).join('');
   } else {
     const rec=p.recent||[];
-    h+=`<div class="st" style="margin:14px 0 8px">Recent Workouts</div>`+
+    h+=`<div class="blk-t">Recent Workouts</div>`+
       (rec.length?rec.map(w=>{
         const isRun=!(w.totalVolume>0)&&w.dist>0;
         const metric=isRun?`${w.dist} mi`:`${fmtW(w.totalVolume||0)} ${uL()}`;
@@ -4828,7 +4824,7 @@ function openFriendWorkout(code,idx){
       <div class="sc"><div class="sv">${(w.ex||[]).length}</div><div class="sl">Exercises</div></div>
     </div>
     <button class="btn ba wf" style="margin-bottom:14px" onclick="copyFriendWorkout('${code}',${idx})">${uic('clipboard')} Copy to my workout</button>
-    <div class="st" style="margin-bottom:8px">Exercises &amp; sets</div>`;
+    <div class="blk-t">Exercises &amp; sets</div>`;
   h+=(w.ex||[]).length ? (w.ex||[]).map(e=>{
     const sets=e.sets||[];
     const rows = sets.length ? sets.map((s,i)=>
@@ -4937,8 +4933,8 @@ function renderLB() {
     </div>`).join('');
   }
   document.getElementById('compareBoard').innerHTML=`
-    <div class="metric-card" style="margin-bottom:16px">
-      <div class="st" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>Leaderboards</span><span role="button" tabindex="0" onclick="crownInfo()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted);cursor:pointer;padding:4px 0 4px 8px">${uic('crown','#ffd700',13)}Last month's winner</span></div>
+    <div class="metric-card">
+      <div class="blk-head"><div class="blk-t">Leaderboards</div><span class="blk-act" role="button" tabindex="0" onclick="crownInfo()">${uic('crown','#ffd700',13)}Last month's winner</span></div>
       ${rangeTog}
       <div class="chips" style="flex-wrap:wrap;margin-bottom:10px">${chips}</div>
       ${board}
@@ -6320,7 +6316,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.31';
+const BUILD = 'v1.10.32';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
