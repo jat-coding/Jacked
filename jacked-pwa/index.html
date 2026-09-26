@@ -1696,7 +1696,23 @@ function handleAEChip(e) {
 // ============================================================
 // NAV
 // ============================================================
+// The ONE haptic entry point (Mr. Roni, 2026-09-25): tab bar, page-changing buttons, set done, rest over.
+// Inside the native shell it uses Capacitor Haptics (impact / notification) with no other change needed;
+// on the web it falls back to navigator.vibrate, which Android browsers honour and iPhone Safari ignores.
+// fromTap: only buzz inside a real tap, so boot-time and programmatic page changes stay silent.
+const HAPTIC_MS={light:10,medium:15,heavy:25,success:[120,60,120]};
+function haptic(kind='light',fromTap=true){
+  try{
+    if(fromTap && navigator.userActivation && !navigator.userActivation.isActive) return false;
+    const H=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.Haptics;
+    if(H){ if(kind==='success') H.notification({type:'SUCCESS'}); else H.impact({style:kind.toUpperCase()}); return true; }
+    if(navigator.vibrate) return navigator.vibrate(HAPTIC_MS[kind]||HAPTIC_MS.light);
+  }catch(_){}
+  return false;
+}
 function sp(id) {
+  const tgt=document.getElementById('page-'+id);
+  if(tgt && !tgt.classList.contains('active')) haptic();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   const page = document.getElementById('page-'+id);
@@ -1712,6 +1728,7 @@ function sp(id) {
   updateResumeBar();
 }
 function sap() {
+  if(!document.getElementById('page-active').classList.contains('active')) haptic();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-active').classList.add('active');
@@ -2908,7 +2925,7 @@ function togSet(ei,si) {
     const sug=setSuggestion(ex,si);
     if (!(set.weight>0)) set.weight=sug.w;
     if (!(set.reps>0))   set.reps  =sug.r;
-    if (navigator.vibrate) navigator.vibrate(15);
+    haptic('medium');
     // PRs are NOT committed mid-workout — only the visual ★ via beatsPR() in renderWS.
     if (gSet().autoRest!==false) startRest(gSet().restDefault||90);
   }
@@ -3524,7 +3541,7 @@ function cancelW() {
 function restTick() {
   restSec=Math.max(0,Math.round((restEnd-Date.now())/1000));
   document.getElementById('restDisp').textContent = restSec>=60 ? Math.floor(restSec/60)+':'+String(restSec%60).padStart(2,'0') : restSec;
-  if (restSec<=0) { clearInterval(rt); document.getElementById('restBar').classList.remove('show'); document.body.classList.remove('resting'); if(navigator.vibrate) navigator.vibrate([120,60,120]); }
+  if (restSec<=0) { clearInterval(rt); document.getElementById('restBar').classList.remove('show'); document.body.classList.remove('resting'); haptic('success',false); }
 }
 function startRest(s) { restEnd=Date.now()+s*1000; clearInterval(rt); document.getElementById('restBar').classList.add('show'); document.body.classList.add('resting'); restTick(); rt=setInterval(restTick,250); }
 function adjRest(d) { restEnd=Math.max(Date.now()+5000, restEnd+d*1000); restTick(); }
@@ -4343,7 +4360,7 @@ function renderRecapCard(){
     </div>`;
 }
 function dismissRecap(key){ S.s('recapDismissed',key); renderRecapCard(); }
-function openRecapNow(){ const t=recapMonthToShow(); if(t) openRecap(t.y,t.m); }
+function openRecapNow(){ const t=recapMonthToShow(); if(t){ haptic(); openRecap(t.y,t.m); } }
 let _recap=null;
 const TIER_SHORT={'Bench-Maxing':'Bench','Shoulder-Maxing':'Shoulder','Leg-Maxing':'Leg','Pull-up-Maxing':'Pull-up','Push-up-Maxing':'Push-up','Cardio-Maxing':'Cardio'};
 function recapBestLine(d){ return d.best?`${esc(d.best.name)} — ${dW(d.best.w)} ${uL()} × ${d.best.r}`:''; }
@@ -4471,6 +4488,7 @@ function achPageHtml(){
   }).join('');
 }
 function openAch(){
+  haptic();
   document.getElementById('achFullBody').innerHTML=achPageHtml();
   const f=document.getElementById('achFull'); f.classList.add('open'); f.scrollTop=0;
 }
@@ -4736,6 +4754,7 @@ function miniCal(daysSet, friendCode){
 
 function openFriend(code){
   const p=personByCode(code); if(!p){ toast('No data for that person','err'); return; }
+  haptic();
   document.getElementById('fpName').textContent=p.name+(p.isYou?' (You)':'');
   document.getElementById('fpUser').textContent=p.username||'';
   document.getElementById('fpAv').innerHTML=avHTML(p,48);
@@ -6316,7 +6335,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.32';
+const BUILD = 'v1.10.33';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

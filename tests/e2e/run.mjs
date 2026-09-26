@@ -1010,10 +1010,49 @@ async function typeRulebook() {
   check('rulebook: stylesheet has no old title classes left', !/\.(st|sec-t|mc-title|mc-head|sec-head)\b[\s{,:]/.test(css.split('</style>')[0]), '');
 }
 
+// Haptics (Mr. Roni, 2026-09-25): one haptic() for the tab bar and page-changing buttons. Web = navigator.vibrate
+// (Android; iPhone Safari ignores it), native shell = Capacitor Haptics. Programmatic page changes stay silent.
+async function haptics() {
+  const { page, ctx, errors } = await phone({ width: 393, height: 852, seed: { hist: [wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]])])] }, now: SEP15 });
+  await page.evaluate(() => { window._vib = []; Object.defineProperty(navigator, 'vibrate', { configurable: true, value: p => { window._vib.push(p); return true; } }); });
+  const vib = () => page.evaluate(() => { const v = window._vib; window._vib = []; return JSON.stringify(v); });
+  // Playwright's evaluate() counts as a user gesture, so "no tap" is simulated through the activation flag haptic() reads.
+  await page.evaluate(() => { const ua = navigator.userActivation; Object.defineProperty(navigator, 'userActivation', { configurable: true, value: { isActive: false, hasBeenActive: true } }); sp('metrics'); Object.defineProperty(navigator, 'userActivation', { configurable: true, value: ua }); });
+  await page.waitForTimeout(100);
+  check('haptics: a page change from code (no tap) does not buzz', await vib() === '[]');
+  await page.evaluate(() => { Object.defineProperty(navigator, 'userActivation', { configurable: true, value: { isActive: false } }); haptic('success', false); delete navigator.userActivation; });
+  check('haptics: the rest-timer buzz still fires without a tap', await vib() === '[[120,60,120]]');
+  for (const t of ['routines', 'exercises', 'home', 'leaderboard', 'metrics']) {
+    await page.locator('#nav-' + t).click(); await page.waitForTimeout(80);
+    check(`haptics: tab bar ${t} tap buzzes once, light`, await vib() === '[10]');
+  }
+  await page.locator('#nav-metrics').click(); await page.waitForTimeout(80);
+  check('haptics: tapping the tab you are already on does not buzz', await vib() === '[]');
+  await page.locator('#metricsCards [onclick="openAch()"]').first().click(); await page.waitForTimeout(150);
+  check('haptics: opening the full Achievements page buzzes', await vib() === '[10]');
+  await page.evaluate(() => closeAch());
+  await page.locator('#nav-home').click(); await page.waitForTimeout(80); await vib();
+  await page.locator('#page-home button', { hasText: 'Start Workout' }).click(); await page.waitForTimeout(150); await vib();
+  await page.locator('#qsModal button', { hasText: /Empty/ }).first().click(); await page.waitForTimeout(200);
+  check('haptics: starting a workout (opens the workout page) buzzes', await vib() === '[10]', String(await page.evaluate(() => !!aw)));
+  await page.evaluate(() => { const c = { id: 'cex1', name: 'Barbell Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }; S.s('cex', [c]); addExToWorkout ? addExToWorkout('cex1') : null; });
+  await page.waitForTimeout(150); await vib();
+  const sd = page.locator('#wSession .sd').first();
+  if (await sd.count()) { await sd.click(); await page.waitForTimeout(80); check('haptics: ticking a set done buzzes medium', (await vib()).startsWith('[15')); }
+  await page.evaluate(() => { window._imp = []; window.Capacitor = { Plugins: { Haptics: { impact: o => window._imp.push(o.style), notification: o => window._imp.push(o.type) } } }; });
+  await page.locator('#nav-routines').click(); await page.waitForTimeout(80);
+  const imp = await page.evaluate(() => JSON.stringify(window._imp));
+  check('haptics: inside the native shell it uses Capacitor Haptics, not vibrate', imp === '["LIGHT"]' && await vib() === '[]', imp);
+  const src = await (await fetch(URL)).text();
+  check('haptics: navigator.vibrate is called in exactly one place (haptic())', (src.match(/navigator\.vibrate\(/g) || []).length === 1);
+  check('haptics: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders, confirmCentered, cardioOrder, typeRulebook]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders, confirmCentered, cardioOrder, typeRulebook, haptics]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
