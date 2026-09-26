@@ -296,6 +296,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 09-26 | staging | v1.10.37: every popup close button (21) now uses one shared drawn X, centered in its circle at any size (was a text glyph that sat off-center) | PHONE-ONLY |
 | 09-26 | staging | v1.10.36: Muscle Map triceps and core score from their strongest lift, not an average; triceps isolation on sourced Strength Level ladders, presses at 0.97; blank stored muscle falls back to the library (A9 rule 7); phone-only, no watch change | PHONE-ONLY |
 | 09-25 | staging | v1.10.35: Home "Suggested today" reads what each exercise really trains (stored muscle, then the library incl. exercise-db secondary glutes/abs, then the routine name); squats, leg press, RDLs, lunges count for Glutes; days-since counted in local calendar days; phone-only, no watch change | PHONE-ONLY |
 | 09-25 | staging | v1.10.30: single-button confirm popups ("Got it") are centered at the bottom; phone-only, no watch change | PHONE-ONLY |

@@ -160,6 +160,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .mh{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .mt{font-family:var(--fh);font-size:26px;font-weight:800}
 .cb{background:var(--bg4);border:none;color:var(--text2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cb svg{width:44%;height:44%;display:block;pointer-events:none}
 
 /* CARDS */
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:16px}
@@ -638,7 +639,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="qsModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div class="mt">Start Workout</div><button class="cb" onclick="cm('qsModal')">✕</button></div>
+    <div class="mh"><div class="mt">Start Workout</div><button class="cb" onclick="cm('qsModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <button class="btn bg wf" onclick="startEmpty()"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='vertical-align:-2px'><path d='M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11'/></svg> Empty Workout</button>
     <div class="sep"></div>
     <div class="blk-t">Choose Routine</div>
@@ -650,7 +651,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="crModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div class="mt" id="crTitle">New Routine</div><button class="cb" onclick="cm('crModal')">✕</button></div>
+    <div class="mh"><div class="mt" id="crTitle">New Routine</div><button class="cb" onclick="cm('crModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="fg"><label>Routine Name</label><input type="text" id="rName" placeholder="e.g. Push Day"></div>
     <div class="fg"><label>Description</label><input type="text" id="rDesc" placeholder="e.g. Chest · Shoulders · Triceps"></div>
     <div class="blk-t">Exercises</div>
@@ -668,7 +669,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="ceModal" style="z-index:250">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div class="mt" id="ceTitle">Create Exercise</div><button class="cb" onclick="cm('ceModal')">✕</button></div>
+    <div class="mh"><div class="mt" id="ceTitle">Create Exercise</div><button class="cb" onclick="cm('ceModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div id="ceMuscleLocked" style="display:none;font-size:12px;color:var(--muted);margin:-6px 0 10px">Muscle group is set by the exercise database and can't be changed here.</div>
     <div class="fg"><label>Exercise Name</label><input type="text" id="ceName" placeholder="e.g. EZ Bar Curl"></div>
     <div class="fr">
@@ -762,7 +763,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <div class="drag-handle"></div>
       <div class="mh">
         <div class="mt" id="aeModalTitle">Add Exercise</div>
-        <button class="cb" onclick="cm('aeModal')">✕</button>
+        <button class="cb" onclick="cm('aeModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <div class="sw" style="margin-bottom:8px"><span class="sw-ic"><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0'/><path d='M21 21l-6 -6'/></svg></span><input type="text" id="aeSearch" placeholder="Search exercises..." oninput="renderAEList()"></div>
       <div class="chips" id="aeChips" style="margin-bottom:6px"></div>
@@ -783,7 +784,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="drag-handle"></div>
     <div class="mh">
       <div><div class="mt" id="wdName"></div><div style="font-size:12px;color:var(--muted);margin-top:2px" id="wdDate"></div></div>
-      <button class="cb" onclick="cm('wdModal')">✕</button>
+      <button class="cb" onclick="cm('wdModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
     <div id="wdContent"></div>
     <div class="sep"></div>
@@ -797,7 +798,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="weModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div class="mt">Edit Workout</div><button class="cb" onclick="cm('weModal')">✕</button></div>
+    <div class="mh"><div class="mt">Edit Workout</div><button class="cb" onclick="cm('weModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="fr">
       <div class="fg"><label>Name</label><input type="text" id="weName"></div>
       <div class="fg"><label>Date</label><input type="date" id="weDate"></div>
@@ -812,7 +813,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="reorderModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div class="mt">Reorder Exercises</div><button class="cb" onclick="cm('reorderModal')">✕</button></div>
+    <div class="mh"><div class="mt">Reorder Exercises</div><button class="cb" onclick="cm('reorderModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Drag the grip to set the order. Tap a hidden section to add it back.</div>
     <div id="reorderList"></div>
     <button class="btn ba wf" onclick="cm('reorderModal')" style="margin-top:10px">Done</button>
@@ -839,7 +840,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- Plate Calculator -->
 <div class="mo ctr" id="pcModal">
   <div class="md">
-    <div class="mh"><div class="mt">Plate Calculator</div><button class="cb" onclick="cm('pcModal')">✕</button></div>
+    <div class="mh"><div class="mt">Plate Calculator</div><button class="cb" onclick="cm('pcModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="fr" style="margin-bottom:12px">
       <div class="fg"><label id="pcTargetLbl">Target Weight</label><input type="number" id="pcTarget" inputmode="decimal" min="0" step="0.5" oninput="calcPlates()"></div>
       <div class="fg"><label id="pcBarLbl">Bar Weight</label><input type="number" id="pcBar" inputmode="decimal" min="0" step="0.5" oninput="calcPlates()"></div>
@@ -851,7 +852,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- Profile -->
 <div class="mo ctr" id="profModal">
   <div class="md">
-    <div class="mh"><div class="mt">My Profile</div><button class="cb" onclick="cm('profModal')">✕</button></div>
+    <div class="mh"><div class="mt">My Profile</div><button class="cb" onclick="cm('profModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
       <div id="profAvPrev"></div>
       <div style="flex:1;min-width:0">
@@ -962,7 +963,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- z-index above .ob-wrap (500) so it shows when opened from the welcome screen -->
 <div class="mo ctr" id="loginModal" style="z-index:600">
   <div class="md">
-    <div class="mh"><div class="mt">Log in</div><button class="cb" onclick="cm('loginModal')">✕</button></div>
+    <div class="mh"><div class="mt">Log in</div><button class="cb" onclick="cm('loginModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Enter your username and password to load that account and all of its workouts onto this device.</div>
     <form onsubmit="event.preventDefault();cloudLogin()" autocomplete="on">
     <div class="fg"><label>Username</label><input type="text" id="loginUser" name="username" placeholder="@username" autocapitalize="none" autocorrect="off" autocomplete="username" maxlength="20"></div>
@@ -1020,19 +1021,19 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- Full-screen achievement detail (Metrics > Achievements) -->
 <!-- Full-screen achievements page (Metrics > Achievements > View all) -->
 <div id="achFull" role="dialog" aria-modal="true">
-  <div class="ph" style="padding-left:16px;padding-right:16px;flex-shrink:0"><div class="pt">Achievements</div><button class="cb" style="width:38px;height:38px;font-size:18px" onclick="closeAch()" aria-label="Close">✕</button></div>
+  <div class="ph" style="padding-left:16px;padding-right:16px;flex-shrink:0"><div class="pt">Achievements</div><button class="cb" style="width:38px;height:38px;font-size:18px" onclick="closeAch()" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   <div id="achFullBody" style="padding:12px 16px calc(96px + env(safe-area-inset-bottom))"></div>
 </div>
 
 <div id="badgeFull" role="dialog" aria-modal="true">
-  <button class="cb bf-x" onclick="closeBadgeFull()" aria-label="Close">✕</button>
+  <button class="cb bf-x" onclick="closeBadgeFull()" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   <div id="badgeFullBody" class="bf-wrap"></div>
   <div class="bf-foot"><button class="btn bp wf" id="badgeStartBtn" style="display:none;margin-bottom:8px" onclick="badgeStart()"></button><button class="btn bg wf" onclick="closeBadgeFull()">Close</button></div>
 </div>
 
 <!-- Full-screen monthly recap (Home card / Metrics > Monthly Recaps) -->
 <div id="recapFull" role="dialog" aria-modal="true">
-  <button class="cb bf-x" onclick="closeRecap()" aria-label="Close">✕</button>
+  <button class="cb bf-x" onclick="closeRecap()" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   <div id="recapFullBody" class="bf-wrap" style="padding-top:0;flex:1 1 auto"></div>
   <div class="bf-foot" style="margin-top:10px"><button class="btn bp" id="recapShareBtn" onclick="shareRecap()">Share</button></div>
 </div>
@@ -1040,7 +1041,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- Achievement popup: a metric-tier badge earned live during a workout -->
 <div class="mo ctr" id="achModal" style="z-index:710">
   <div class="md" style="position:relative;text-align:center">
-    <button class="cb" style="position:absolute;top:0;right:0" onclick="cm('achModal')">✕</button>
+    <button class="cb" style="position:absolute;top:0;right:0" onclick="cm('achModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <div id="achIcon" style="margin:4px 0 12px"></div>
     <div id="achTier" style="font-family:var(--fh);font-size:14px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase"></div>
     <div id="achName" style="font-family:var(--fh);font-size:27px;font-weight:800;margin:2px 0 6px;text-wrap:balance"></div>
@@ -1054,7 +1055,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- Add Friend -->
 <div class="mo ctr" id="afModal">
   <div class="md">
-    <div class="mh"><div class="mt">Add Friend</div><button class="cb" onclick="cm('afModal')">✕</button></div>
+    <div class="mh"><div class="mt">Add Friend</div><button class="cb" onclick="cm('afModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="invite-code">
       <div style="font-size:11px;color:var(--muted)">Invite a friend — send your link</div>
       <div class="code-display" id="afYourCode" style="letter-spacing:1px;font-size:24px">—</div>
@@ -1076,7 +1077,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="cardOrderModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div class="mt">Reorder Sections</div><button class="cb" onclick="cm('cardOrderModal')">✕</button></div>
+    <div class="mh"><div class="mt">Reorder Sections</div><button class="cb" onclick="cm('cardOrderModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Drag the grip to set the order. Tap a hidden section to add it back.</div>
     <div id="cardOrderList" style="position:relative"></div>
     <div id="cardHiddenList"></div>
@@ -1088,7 +1089,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="fpModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div style="display:flex;align-items:center;gap:12px;min-width:0"><span id="fpAv" style="flex-shrink:0"></span><div style="min-width:0"><div class="mt" id="fpName"></div><div style="font-size:12px;color:var(--muted)" id="fpUser"></div></div></div><button class="cb" onclick="cm('fpModal')">✕</button></div>
+    <div class="mh"><div style="display:flex;align-items:center;gap:12px;min-width:0"><span id="fpAv" style="flex-shrink:0"></span><div style="min-width:0"><div class="mt" id="fpName"></div><div style="font-size:12px;color:var(--muted)" id="fpUser"></div></div></div><button class="cb" onclick="cm('fpModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div id="fpContent"></div>
   </div>
 </div>
@@ -1097,7 +1098,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="fbModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div><div class="mt">Badges</div><div style="font-size:12px;color:var(--muted)" id="fbName"></div></div><button class="cb" onclick="cm('fbModal')">✕</button></div>
+    <div class="mh"><div><div class="mt">Badges</div><div style="font-size:12px;color:var(--muted)" id="fbName"></div></div><button class="cb" onclick="cm('fbModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div id="fbContent"></div>
   </div>
 </div>
@@ -1105,7 +1106,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- Calendar day detail -->
 <div class="mo ctr" id="dayModal">
   <div class="md">
-    <div class="mh"><div class="mt" id="dayTitle"></div><button class="cb" onclick="cm('dayModal')">✕</button></div>
+    <div class="mh"><div class="mt" id="dayTitle"></div><button class="cb" onclick="cm('dayModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div id="dayContent"></div>
   </div>
 </div>
@@ -1114,7 +1115,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="exInfoModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div class="mt" id="exInfoName"></div><button class="cb" onclick="cm('exInfoModal')">✕</button></div>
+    <div class="mh"><div class="mt" id="exInfoName"></div><button class="cb" onclick="cm('exInfoModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div id="exInfoContent"></div>
   </div>
 </div>
@@ -4497,7 +4498,7 @@ function renderRecapCard(){
       <div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:21.6px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;line-height:1">${d.label} recap</div>
         <div class="sl" style="margin-top:5px">${d.sessions} sessions · ${fmtW(d.vol)} ${uL()} · ${d.prs} PRs</div></div>
       <span style="font-size:22px;color:var(--muted);line-height:1">&#8250;</span>
-      <button class="cb" style="width:26px;height:26px;font-size:12px;flex-shrink:0" aria-label="Dismiss" onclick="event.stopPropagation();dismissRecap('${t.key}')">✕</button>
+      <button class="cb" style="width:26px;height:26px;font-size:12px;flex-shrink:0" aria-label="Dismiss" onclick="event.stopPropagation();dismissRecap('${t.key}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>`;
 }
 function dismissRecap(key){ S.s('recapDismissed',key); renderRecapCard(); }
@@ -6476,7 +6477,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.36';
+const BUILD = 'v1.10.37';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
