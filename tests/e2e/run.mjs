@@ -898,16 +898,82 @@ async function badgeLadders() {
   const none = await ladders({});
   check('badge ladders: no sex or birthday set = male ladders', j(none.T) === j(m.T), j(none.T));
   const f = await ladders({ sex: 'female', birthday: '1995-01-01' });
-  check('badge ladders: female 30 is lower on every strength ladder', f.T.bench.every((x, i) => x < m.T.bench[i]) && f.T.ohpFrac.every((x, i) => x < m.T.ohpFrac[i]) && f.T.squatFrac.every((x, i) => x < m.T.squatFrac[i]) && f.T.pullup.every((x, i) => x < m.T.pullup[i]) && f.T.pushup.every((x, i) => x < m.T.pushup[i]), j(f.T));
+  check('badge ladders: female 30 is lower on every hand-set strength ladder', f.T.ohpFrac.every((x, i) => x < m.T.ohpFrac[i]) && f.T.squatFrac.every((x, i) => x < m.T.squatFrac[i]) && f.T.pullup.every((x, i) => x < m.T.pullup[i]) && f.T.pushup.every((x, i) => x < m.T.pushup[i]), j(f.T));
   check('badge ladders: female 30 mile ladder is slower', f.T.cardio.every((x, i) => x > m.T.cardio[i]), j(f.T.cardio));
-  check('badge ladders: female ladders still ascend', f.T.bench[0] < f.T.bench[1] && f.T.bench[1] < f.T.bench[2] && f.T.pullup[0] < f.T.pullup[1] && f.T.pullup[1] < f.T.pullup[2], j(f.T));
+  check('badge ladders: female with no body weight gets the standard bench ladder', j(f.T.bench) === '[135,225,315]', j(f.T.bench));
+  check('badge ladders: female ladders still ascend', f.T.pullup[0] < f.T.pullup[1] && f.T.pullup[1] < f.T.pullup[2], j(f.T));
   const old = await ladders({ sex: 'male', birthday: '1960-01-01' });
   check('badge ladders: male 65 is lower than male 30 (strength) and slower (mile)', old.T.bench.every((x, i) => x < m.T.bench[i]) && old.T.cardio.every((x, i) => x > m.T.cardio[i]), j(old.T));
   const teen = await ladders({ sex: 'male', birthday: '2010-01-01' });
-  check('badge ladders: a 16-year-old is scaled down too', teen.T.bench[2] < m.T.bench[2], j(teen.T));
+  check('badge ladders: a 16-year-old is scaled down on the hand-set ladders', teen.T.pullup[2] < m.T.pullup[2], j(teen.T));
+  check('badge ladders: bench has no youth factor (Foster skipped)', j(teen.T.bench) === j(m.T.bench), j(teen.T.bench));
   check('badge ladders: description text follows the ladder and says it is adjusted', /Bronze 5, Silver 8, Gold 10/.test(f.how) && /Adjusted for your profile/.test(f.how) && f.det.tiers[2][1] === f.T.bench[2] + ' lb', f.how + ' | ' + j(f.det));
+  check('badge ladders: bench popup says it is the standard ladder when body weight is missing', /1 rep\. Standard numbers: set your sex and body weight in Profile/.test(f.det.how), f.det.how);
   check('badge ladders: male description has no adjusted note', !/Adjusted/.test(m.how), m.how);
   check('badge ladders: no page errors', [m, none, f, old, teen].every(x => x.errors.length === 0), '');
+}
+
+// Bench-Maxing from the IPF GOODLIFT formula (Mr. Roni approved "Option A", 2026-09-25): 30 / 50 / 70 points at the
+// lifter's sex and body weight, McCulloch age factor from 41, flat 135 / 225 / 315 without sex or body weight, and no
+// tier taken away from a lift logged before the switch. Expected numbers are the research worked tables.
+async function benchGoodlift() {
+  const OCT15 = new Date('2026-10-15T12:00:00-06:00');
+  const run = async ({ prof = {}, lb = 0, hist = [], now = new Date('2026-09-25T19:14:00-06:00') }) => {
+    const seed = { prof: { name: 'T', username: '@t', code: '@t', ...prof }, hist };
+    if (lb) seed.bw = lb / LB;
+    const { page, ctx, errors } = await phone({ seed, now });
+    const r = await page.evaluate(() => { const b = computeBadges().find(x => x.name === 'Bench-Maxing'); return { T: badgeT().bench, det: BADGE_DETAIL['Bench-Maxing'], how: BADGE_HOW['Bench-Maxing'], tier: b.tier || null, desc: b.desc, all: b.all && b.all.tier, live: badgeTierForKey('bench', gH()).tier, ohp: badgeT().ohpFrac }; });
+    return { ...r, page, ctx, errors };
+  };
+  const j = a => JSON.stringify(a), errs = [];
+  const want = [['female', 114, null, [70, 115, 160]], ['female', 148, null, [80, 135, 190]], ['female', 198, null, [90, 150, 210]],
+    ['male', 198, null, [135, 230, 320]], ['male', 198, '1981-01-01', [130, 215, 305]], ['male', 198, '1966-01-01', [100, 170, 240]],
+    ['female', 148, '1981-01-01', [80, 130, 180]], ['male', 198, '1986-01-01', [135, 230, 320]]];
+  for (const [sex, lb, birthday, T] of want) {
+    const r = await run({ prof: birthday ? { sex, birthday } : { sex }, lb });
+    check(`bench goodlift: ${sex} ${lb} lb${birthday ? ' born ' + birthday.slice(0, 4) : ''} = ${T.join('/')}`, j(r.T) === j(T), j(r.T));
+    errs.push(...r.errors); await r.ctx.close();
+  }
+  const f = await run({ prof: { sex: 'female', birthday: '1981-01-01' }, lb: 148 });
+  check('bench goodlift: popup says how it was worked out', f.det.how === 'Barbell bench press, 1 rep. Worked out from IPF GOODLIFT points (30 / 50 / 70) at your 148 lb body weight, eased for age 45.', f.det.how);
+  check('bench goodlift: tap text says the same', /IPF GOODLIFT/.test(f.how) && !/Adjusted for your profile/.test(f.how), f.how);
+  const bf = await f.page.evaluate(() => JSON.stringify(BADGE_FEMALE));
+  check('bench goodlift: bench factor gone from BADGE_FEMALE, the others unchanged', bf === '{"ohp":0.6,"squat":0.6,"pullup":0.5,"pushup":0.6,"cardio":1.11}', bf);
+  await f.page.evaluate(() => badgeInfo('Bench-Maxing')); await f.page.waitForTimeout(250);
+  const txt = await f.page.evaluate(() => document.getElementById('badgeFullBody').innerText);
+  check('bench goodlift: the popup on screen shows the line and the tiers', /IPF GOODLIFT/.test(txt) && /180 lb/.test(txt) && /130 lb/.test(txt), txt.replace(/\s+/g, ' '));
+  await f.page.screenshot({ path: SHOTS + '/bench-goodlift-popup.png' });
+  errs.push(...f.errors); await f.ctx.close();
+  // Fallback: sex or body weight missing.
+  for (const [nm, o] of [['no body weight', { prof: { sex: 'male' } }], ['no sex', { lb: 250 }]]) {
+    const r = await run(o);
+    check(`bench goodlift: ${nm} falls back to 135/225/315`, j(r.T) === '[135,225,315]', j(r.T));
+    check(`bench goodlift: ${nm} says so on the badge`, /^Standard 1-rep bench/.test(r.desc) && /Standard numbers/.test(r.det.how), r.desc + ' | ' + r.det.how);
+    errs.push(...r.errors); await r.ctx.close();
+  }
+  const s = await run({ prof: { sex: 'male' }, lb: 198 });
+  check('bench goodlift: with sex and body weight the badge line is not marked standard', /^1-rep bench/.test(s.desc), s.desc);
+  errs.push(...s.errors); await s.ctx.close();
+  // No revoke. A 250 lb man benched 230 on Sep 20: Silver under the old 225, only Bronze under the new 255.
+  const bench = (d, lbs) => wk(d, [ex('Barbell Bench Press', [[lbs, 1]])]);
+  const k = await run({ prof: { sex: 'male' }, lb: 250, hist: [bench('2026-09-20', 230)], now: OCT15 });
+  check('bench goodlift: 250 lb man thresholds rise to 155/255/355', j(k.T) === '[155,255,355]', j(k.T));
+  check('bench goodlift: a Silver earned before the switch is kept', k.tier === 'silver' && k.all === 'silver' && k.live === 'silver', j([k.tier, k.all, k.live]));
+  check('bench goodlift: a kept tier says so', /kept from the old numbers/.test(k.desc), k.desc);
+  errs.push(...k.errors); await k.ctx.close();
+  const n = await run({ prof: { sex: 'male' }, lb: 250, hist: [bench('2026-10-01', 230)], now: OCT15 });
+  check('bench goodlift: the same lift after the switch is judged on the new numbers', n.tier === 'bronze' && n.live === 'bronze' && !/kept/.test(n.desc), j([n.tier, n.live, n.desc]));
+  errs.push(...n.errors); await n.ctx.close();
+  const w = await run({ prof: { sex: 'female' }, lb: 198, hist: [bench('2026-09-24', 190)], now: OCT15 });
+  check('bench goodlift: a 198 lb woman keeps the Gold her 190 earned under the old x0.6', w.tier === 'gold', j([w.T, w.tier]));
+  errs.push(...w.errors); await w.ctx.close();
+  const x = await run({ prof: { sex: 'male' }, lb: 250, hist: [bench('2026-09-20', 230)], now: new Date('2027-01-05T12:00:00-06:00') });
+  check('bench goodlift: a kept tier still ages out after 3 months', x.tier === null && x.all === 'silver', j([x.tier, x.all]));
+  errs.push(...x.errors); await x.ctx.close();
+  const l = await run({ prof: { sex: 'male' }, lb: 165, hist: [bench('2026-10-01', 215)], now: OCT15 });
+  check('bench goodlift: a lighter man reaches Silver at a lower weight than 225', l.tier === 'silver', j([l.T, l.tier]));
+  errs.push(...l.errors); await l.ctx.close();
+  check('bench goodlift: no page errors', errs.length === 0, errs.join(' | '));
 }
 
 // Single-button confirms ("Got it") sit centered at the bottom of the dialog (Mr. Roni, 2026-09-25).
@@ -1052,7 +1118,7 @@ async function haptics() {
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders, confirmCentered, cardioOrder, typeRulebook, haptics]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
