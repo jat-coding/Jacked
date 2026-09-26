@@ -9,9 +9,9 @@ each editing only its own rows. Updated in the same push as the change it descri
 
 | Client | Version | Delivery | Verified |
 |---|---|---|---|
-| Wear OS (Galaxy Watch 8 Classic) | **v0.21** (wear vc120) | Play internal testing | tagged 2026-09-25: workout list opens top-aligned; v0.20 (2026-09-24): focus header = list header, back returns to the same exercise, no "›", centred confirms; v0.19 (2026-09-21): one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
+| Wear OS (Galaxy Watch 8 Classic) | **v0.22** (wear vc121) | Play internal testing | tagged 2026-09-25: live PR ★, "✎ Note" target (item 11), "How Jacked works" guide, ▼ Lighter on the card; v0.21 (2026-09-25): workout list opens top-aligned; v0.20 (2026-09-24): focus header = list header, back returns to the same exercise, no "›", centred confirms; v0.19 (2026-09-21): one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
 | watchOS (Apple Watch) | **0.2.0 (24)** | TestFlight | build 22 field-tested; 24 adds overload nudges; Wear v0.15 parity items handed off 2026-09-20 |
-| Phone companion "Jacked Sync" (Android) | **v0.21** (phone vc20) | Play internal testing | no functional change since v0.14 |
+| Phone companion "Jacked Sync" (Android) | **v0.22** (phone vc21) | Play internal testing | no functional change since v0.14 |
 
 The companion is not a watch client: it reads the cloud blob and writes finished workouts into
 Android Health Connect, which is the only path into Samsung Health. It signs in like a watch.
@@ -153,3 +153,18 @@ custom-exercise creation, GPS/route tracking, body-weight logging.
 | A4 auto-name untitled workouts | **Mirrored on Wear (v0.15):** an untitled workout (`""`, `"Workout"`, `"Quick Workout"`) becomes "`<top-e1RM exercise> Day`" at finish, same `autoNameWorkout` logic incl. the reps+weight fallback. Routine names untouched. |
 | A5 notes carry forward + `exercises[].note` at finish | **Mirrored on Wear (v0.15):** the note in effect is snapshotted onto `exercises[].note` at finish (omitted when blank) and shown in workout detail. "Placeholder" on the watch = the persistent note shown on the card, tap to edit with prefill; blank never deletes. |
 | A6 duration `durUnit` | Not mirrored; the watch stores and displays seconds. |
+
+## Wear v0.22 additions (2026-09-25)
+
+- **Live PR ★ (phone parity, `renderWS` rule):** while a workout is in progress, the single
+  best done set that beats the exercise's pre-workout record (e1RM on effective weight;
+  mile-equivalent for cardio) gets a gold ★ on its row. Moves or disappears on edit /
+  un-check; nothing is saved before Finish; no extra haptic (the default).
+- **DEV_NOTES 11 — "✎ Note" target:** on the exercise detail reached from History, the note is
+  edited only through a small "✎ Note" chip; the note text is read-only. **Acceptance run,
+  Galaxy-size AVD (438 px), 2026-09-25:** 10 taps across the title, PR/session card, beside the
+  chip and empty space → **0** note-editor opens; 1 tap on the chip → **1** open.
+- **"How Jacked works"** — in-app user guide at the top of Settings (topics index). Text:
+  `jacked-wear/USER_GUIDE.md`.
+- **▼ Lighter** also shows on the exercise card (beside the PR line, like ▲ Go up) when the last
+  session never reached min; clears once a done set today reaches min.
