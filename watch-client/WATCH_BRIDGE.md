@@ -55,6 +55,28 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ## APP-WIDE (watch must mirror)
 
+### A14. Profile privacy: strangers see only username + avatar — server change HELD until the watch answers
+Mr. Roni, 2026-09-25. **Rule:** the only public profile fields are username and avatar. Name, volume,
+workouts, PRs, streak, consistency, badges, `updated_at` and `data` are readable by the owner and
+by accepted friends only. Phone build v1.10.29 is committed locally (not pushed); the database
+migration `supabase/migrations/20260925_profiles_public_username_avatar_only.sql` is written and
+tested but **not applied**. Order: phone build live, then your answer on the board, then migration.
+- **What changes on the wire.** `profiles` becomes row-level: a signed-in caller gets their own row
+  plus their accepted friends' rows; everyone else, and every request carrying only the anon key,
+  gets `[]` (not an error). No column is revoked, so a request for `total_volume,workouts,prs,streak`
+  still works for the owner.
+- **What the watch must check (this is the whole watch-side risk):** the cheap poll in
+  `AUTH_HANDOFF.md` §4 (`GET profiles?code=eq.<code>&select=total_volume,workouts,prs,streak,updated_at`)
+  must send `Authorization: Bearer <access_token>`. Without it the reply is `[]`. If it already does,
+  nothing changes. If it does not, add the header, or poll `profile_backups?code=eq.<code>&select=updated_at`
+  (owner-only, already documented). Treat `[]` from an owner poll as "token missing or expired,
+  refresh and retry", never as "profile deleted" or "no change".
+- **Unchanged:** `PATCH profiles` (stats), everything on `profile_backups`, `friend_requests`,
+  avatar reads (the bucket stays public).
+- **Not used by the watch:** other users' profiles. If any watch screen reads someone else's
+  profile, say so on the board; that read now returns username and avatar only.
+- **Board question is on the `pwa` section:** default if unanswered = migration stays held.
+
 ### A13. Tap-to-clear set inputs; Coward-Maxing monthly; new Consistency-Maxing and Jacked badges — local, not pushed (BUILD not bumped yet)
 Mr. Roni, 2026-09-24. Committed locally on `main`; not pushed, not live. Gets a BUILD number on push.
 - **Tap-to-clear set inputs.** Every weight/reps cell of a set (live workout and the history
@@ -265,6 +287,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 09-25 | local (not pushed) | Profile privacy: strangers see username + avatar only (phone v1.10.29 uses `public_profiles()`; migration held) | APP-WIDE A14 |
 | 09-24 | local (not pushed) | Tap-to-clear set inputs; Coward-Maxing resets monthly; new Consistency-Maxing and Jacked badges | APP-WIDE A13 |
 | 09-19 | `5832e21` | Muscle-group tier rebuild: 90-day window, rep cap 10, per-exercise scaling, top-3 average, tier lines at the standards | APP-WIDE A9 |
 | 09-19 | `0e23fee` | Tier colors switched to the Signal scheme (grey/red/green/blue/gold), one color per tier, shared by body, bars and badges | APP-WIDE A8 |

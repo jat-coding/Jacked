@@ -153,7 +153,8 @@ other column gets `403`/permission denied. The row always exists for a signed-in
 
 ### Cheap poll
 `GET /rest/v1/profiles?code=eq.%40mom&select=total_volume,workouts,prs,streak,updated_at` still
-works (profiles stay publicly readable). To detect *backup* changes, poll
+works **while you send your access token**. Once `WATCH_BRIDGE.md` A14 is applied, `profiles` is
+readable only for your own row and your friends' rows: an anon-key-only poll returns `[]`. To detect *backup* changes, poll
 `profile_backups?…&select=updated_at` with the token instead.
 
 ### Friends (if used)
