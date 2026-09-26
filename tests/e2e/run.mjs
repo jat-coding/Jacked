@@ -925,10 +925,30 @@ async function confirmCentered() {
   }
 }
 
+// Cardio tier ladder reads like the others: lowest tier (slowest pace) left, best (fastest) right
+// (Mr. Roni, 2026-09-25 7:46pm; v1.10.28 printed 6:30 / 8:00 / 9:00).
+async function cardioOrder() {
+  const { page, ctx, errors } = await phone({ width: 393, height: 852, seed: { hist: [wk('2026-09-05', [ex('Run', [[1, 7.5]], 'distance')])], bw: 80 }, now: SEP15 });
+  const b = await badge(page, 'Cardio-Maxing');
+  const paces = (b.desc.split('—')[1] || '').replace(/<[^>]+>/g, '').split('/').map(x => x.trim());
+  const sec = t => { const [m, s] = t.split(':').map(Number); return m * 60 + s; };
+  check('cardio order: list line is slowest to fastest, left to right', paces.length === 3 && sec(paces[0]) > sec(paces[1]) && sec(paces[1]) > sec(paces[2]), b.desc);
+  const bench = await badge(page, 'Bench-Maxing');
+  const lifts = (bench.desc.split(':')[1] || '').replace(/<[^>]+>/g, '').split('/').map(x => Number(x.trim()));
+  check('cardio order: bench line still lowest to highest, left to right', lifts[0] < lifts[1] && lifts[1] < lifts[2], bench.desc);
+  await page.evaluate(() => badgeInfo('Cardio-Maxing'));
+  await page.waitForTimeout(250);
+  const tiers = await page.evaluate(() => [...document.querySelectorAll('#badgeFullBody .bf-tiers')][0].innerText.split('\n').map(x => x.trim()).filter(x => /Bronze|Silver|Gold/.test(x)));
+  check('cardio order: popup tiers run Bronze, Silver, Gold', tiers.join(',') === 'Bronze,Silver,Gold', tiers.join(','));
+  await page.screenshot({ path: SHOTS + '/cardio-order-393.png' });
+  check('cardio order: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders, confirmCentered]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders, confirmCentered, cardioOrder]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
