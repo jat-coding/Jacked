@@ -241,6 +241,7 @@ Full specs in `watch-client/DEV_NOTES.md`. Status of all: open (the watch source
 
 ## PHONE-ONLY (no watch action)
 - Bottom tab bar is now frosted glass and sits low above the home line (build v1.8.18): translucent blur, teal pill on the active tab. Layout offsets for the resume/rest bars and page padding follow it.
+- "Suggested today" (Home) counts a group as trained from the stored muscle, the library entry (exercise-db secondary glutes/abs included) or the routine name, so leg days count for Glutes (build v1.10.35).
 - Removed the "0/3 done" progress text from the PR line.
 - Exercise header wraps below 360px wide — `0608651`.
 - Badge row scrolls sideways when several badges show (added with the stress-test fixes, `add4de6`).
@@ -287,6 +288,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 09-25 | staging | v1.10.35: Home "Suggested today" reads what each exercise really trains (stored muscle, then the library incl. exercise-db secondary glutes/abs, then the routine name); squats, leg press, RDLs, lunges count for Glutes; days-since counted in local calendar days; phone-only, no watch change | PHONE-ONLY |
 | 09-25 | staging | v1.10.30: single-button confirm popups ("Got it") are centered at the bottom; phone-only, no watch change | PHONE-ONLY |
 | 09-25 | local (not pushed) | Profile privacy: strangers see username + avatar only (phone v1.10.29 uses `public_profiles()`; migration held) | APP-WIDE A14 |
 | 09-24 | local (not pushed) | Tap-to-clear set inputs; Coward-Maxing resets monthly; new Consistency-Maxing and Jacked badges | APP-WIDE A13 |

@@ -885,6 +885,55 @@ async function suggestions() {
   await ctx.close();
 }
 
+async function suggestTrained() {
+  // "Suggested today" must know what a workout trained even when the stored muscle is the
+  // primary only (squat = quads) or blank. Mr. Roni 2026-09-25: Glutes showed 134d while he
+  // leg-pressed/squatted every week. Leg day logged 9/19 at 10:30pm Denver = 9/20 UTC.
+  const lift = (id, name, muscle) => ({ ...ex(name, [[135, 8]], 'weight_reps', id), muscle });
+  const at = (d, h, exs, extra = {}) => ({ ...wk(d, exs), date: new Date(`${d}T${h}:00-06:00`).toISOString(), ...extra });
+  const cex = [{ id: 'cexAb', name: 'Torso Machine', muscle: 'abdominals', equip: 'machine', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }];
+  const hist = [
+    at('2026-09-24', '18:00', [lift('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press', 'chest'), lift('Barbell_Curl', 'Curl', 'biceps')]),
+    at('2026-09-23', '18:00', [lift('Pullups', 'Pullups', 'lats'), lift('Side_Lateral_Raise', 'Lateral Raise', 'shoulders')]),
+    at('2026-09-22', '18:00', [{ ...lift('cexAb', '', ''), name: '' }]),                  // blank stored muscle AND name
+    at('2026-09-19', '22:30', [lift('Barbell_Full_Squat', 'Full Squat (barbell)', 'quadriceps'), lift('Romanian_Deadlift', 'Romanian Deadlift (barbell)', 'hamstrings')]),
+    at('2026-05-14', '14:00', [lift('imp_hip_abduction_machine_', 'Hip Abduction (Machine)', 'glutes')]),
+  ];
+  const routines = [{ id: 'rLegs', name: 'Legs', desc: '', exercises: ['Barbell_Full_Squat'] }];
+  const { page, ctx, errors } = await phone({ seed: { hist, cex, routines }, now: new Date('2026-09-25T23:38:00-06:00') });
+  const rowsNow = async () => { await page.evaluate(() => { S.s('suggestDismiss', ''); renderSuggest(); });
+    return page.evaluate(() => [...document.querySelectorAll('#suggestCard > div > div[style*="border-top"]')].map(r => r.innerText.replace(/\s+/g, ' ').trim()).filter(t => !/Trusted pick/i.test(t))); };
+  // Without the exercise library (offline / still loading): names alone must carry squat + RDL.
+  await page.evaluate(async () => { for (let i = 0; i < 100 && dbLoading; i++) await new Promise(r => setTimeout(r, 100)); window._db = allDB; allDB = []; });
+  let rows = await rowsNow(), txt = rows.join(' | ');
+  check('suggest-trained: squat + RDL day marks Legs trained (6d, not the UTC day)', rows.some(r => /^Legs · 6d since last/.test(r)), txt);
+  check('suggest-trained: squat + RDL day marks Glutes trained too (6d, not 134d)', rows.some(r => /^Glutes · 6d since last/.test(r)), txt);
+  check('suggest-trained: blank stored muscle still counts via the library (Core 3d)', rows.some(r => /^Core · 3d since last/.test(r)), txt);
+  // With the exercise-db entry: secondary glutes on a lift whose NAME says nothing about glutes.
+  await page.evaluate(() => { allDB = [...window._db.filter(e => e.id !== 'Zz_Hinge'), { id: 'Zz_Hinge', name: 'Zz Hinge', primaryMuscles: ['hamstrings'], secondaryMuscles: ['glutes', 'lower back'], equipment: 'barbell', images: [] },
+    { id: 'Zz_Core', name: 'Zz Brace', primaryMuscles: ['abdominals'], secondaryMuscles: [], equipment: 'body only', images: [] }]; });
+  const g = await page.evaluate(() => ({
+    hinge: [...exGroups({ exId: 'Zz_Hinge', name: 'Zz Hinge', muscle: 'hamstrings' })].sort(),
+    blankDb: [...exGroups({ exId: 'Zz_Core', name: '', muscle: '' })],
+    chest: [...exGroups({ exId: 'Dips_-_Chest_Version', name: 'Dips', muscle: 'chest' })],
+    calf: [...exGroups({ exId: 'x', name: 'Calf Press On The Leg Press Machine', muscle: 'calves' })].sort(),
+    routine: [...exGroups({ exId: 'mystery', name: 'Thing', muscle: '' }, { routineId: 'rLegs', name: 'Quick Workout' })],
+    cardio: [...exGroups({ exId: 'cexRun', name: 'Run', muscle: 'Cardio', tracking: 'distance' }, { routineId: 'rLegs' })],
+  }));
+  check('suggest-trained: exercise-db secondary glutes count', JSON.stringify(g.hinge) === '["glutes","legs"]', JSON.stringify(g.hinge));
+  check('suggest-trained: blank stored muscle resolves from exercise-db primary', JSON.stringify(g.blankDb) === '["core"]', JSON.stringify(g.blankDb));
+  check('suggest-trained: chest secondaries do not mark arms/shoulders', JSON.stringify(g.chest) === '["chest"]', JSON.stringify(g.chest));
+  check('suggest-trained: calf press on the leg press is legs, not glutes', JSON.stringify(g.calf) === '["legs"]', JSON.stringify(g.calf));
+  check('suggest-trained: unknown exercise falls back to its routine (Legs)', JSON.stringify(g.routine) === '["legs"]', JSON.stringify(g.routine));
+  check('suggest-trained: cardio in a leg routine is not counted as legs', g.cardio.length === 0, JSON.stringify(g.cardio));
+  // Calendar days, both sides local: a date-only key is that local day, 11:38pm is still "today".
+  const k = await page.evaluate(() => ({ d: dayKey('2026-09-19'), iso: dayKey('2026-09-20T04:30:00.000Z'), today: dayKey(new Date()), n: calDays('2026-11-02', '2026-10-31') }));
+  check('suggest-trained: day keys are local calendar days across the UTC boundary', k.d === '2026-09-19' && k.iso === '2026-09-19' && k.today === '2026-09-25', JSON.stringify(k));
+  check('suggest-trained: day count ignores the DST change', k.n === 2, JSON.stringify(k));
+  check('suggest-trained: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 async function badgeLadders() {
   // Badge ladders scale with profile sex and age; the male 18-39 (and no-birthday) ladders never move.
   const ladders = async prof => {
@@ -1118,7 +1167,7 @@ async function haptics() {
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
