@@ -35,7 +35,7 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   finish → summary (volume, duration, PRs).
 - **Sensors (Wear):** live HR + calories during the session; `hrAvg`/`hrMax`/`kcal`/`hrSeries`
   are written onto the workout as extra fields the PWA carries through untouched.
-- **Progressive-overload nudges:** both watches, target-based — see "Agreed cross-device rules".
+- **Progressive-overload nudges:** both watches, target-based — see "Agreed cross-device rules". On Wear the down nudge also shows **on the exercise card as "▼ Lighter"** next to the PR line (like "▲ Go up") when the last session never reached min, and clears once a done set today reaches min (Phil 2026-09-25); the finish-screen line reads "▼ Lighter · <exercise> — never reached N reps".
 - **Focus view (Wear; `DEV_NOTES` items 5 and 10, as decided by Phil 2026-09-21):** tapping
   an exercise **name** in the workout list opens that exercise alone — the same header as the list
   (timer, ❤/🔥), then sets, − Set / + Set,
