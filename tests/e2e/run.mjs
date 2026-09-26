@@ -349,6 +349,16 @@ async function monthly() {
     check('hero: locked Jacked still has its own box at the top (greyed, no shimmer), once, not in the list', await l.page.evaluate(() => { const h = document.querySelector('#achFullBody .jh'); return !!h && h.classList.contains('lock') && document.querySelector('#achFullBody').firstElementChild === h && getComputedStyle(h, '::after').display === 'none' && getComputedStyle(h.querySelector('.jh-t')).animationName === 'none' && document.querySelectorAll('#achFullBody [onclick="badgeInfo(\'Jacked\')"]').length === 1; }));
     await l.ctx.close();
   }
+  {
+    // Bodyweight moves (push-ups) log your own body weight; they must not win "Best lift" (Mr. Roni, 2026-09-25).
+    const hist = [wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]]), { ...ex('Pushups (bodyweight)', [[229, 50]]), equip: 'body only' }, ex('Pushups (bodyweight)', [[229, 60]], 'weight_reps', 'imported-push')])];
+    const { page, ctx } = await phone({ seed: { hist, bw: 229 / LB }, now: new Date('2026-10-03T12:00:00-06:00') });
+    const r = await page.evaluate(() => recapData(2026, 8).best);
+    check('recap: bodyweight push-ups never count as the best lift', r && /bench/i.test(r.name), JSON.stringify(r));
+    const sb = await page.evaluate(() => ['recapFull', 'badgeFull', 'achFull', 'qsModal'].map(id => { const e = document.getElementById(id); return getComputedStyle(e, '::-webkit-scrollbar').display + '/' + getComputedStyle(e).scrollbarWidth; }));
+    check('popups: no visible scrollbar on recap, badge, achievements or sheets', sb.every(x => x === 'none/none'), JSON.stringify(sb));
+    await ctx.close();
+  }
   for (const [w, hgt] of [[390, 844], [375, 667], [360, 640]]) {
     // Monthly recap: one phone screen, no scrolling (Mr. Roni, 2026-09-24).
     const { page, ctx } = await phone({ width: w, height: hgt, seed: seed(), now: new Date('2026-10-03T12:00:00-06:00') });
@@ -847,10 +857,63 @@ async function portraitLock() {
     await ctx.close(); }
 }
 
+async function suggestions() {
+  // "Suggested today" ranks by days since last trained: what he did yesterday must not appear,
+  // and every button must match its row (no "Start Chest" under Arms).
+  const m = (name, muscle, id) => ({ ...ex(name, [[100, 8]], 'weight_reps', id), muscle });
+  const hist = [
+    wk('2026-09-24', [m('Bench', 'chest', 'e-bench'), m('Curl', 'biceps', 'e-curl')]),
+    wk('2026-09-22', [m('Core A', 'abdominals', 'e-core')]),
+    wk('2026-09-21', [m('Row', 'lats', 'e-row')]),
+    wk('2026-09-20', [m('Hip thrust', 'glutes', 'e-hip')]),
+    wk('2026-09-18', [m('Press', 'shoulders', 'e-ohp')]),
+    wk('2026-09-15', [m('Squat', 'quadriceps', 'e-squat'), m('Leg press', 'quadriceps', 'e-lp')]),
+  ];
+  const routines = [{ id: 'r1', name: 'Chest 2', desc: '', exercises: ['e-bench'] }, { id: 'r2', name: 'Push', desc: '', exercises: ['e-bench', 'e-ohp', 'e-curl'] }];
+  const { page, ctx, errors } = await phone({ seed: { hist, routines }, now: new Date('2026-09-25T19:14:00-06:00') });
+  await page.evaluate(() => { S.s('suggestDismiss', ''); renderSuggest(); });
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#suggestCard > div > div[style*="border-top"]')].map(r => r.innerText.replace(/\s+/g, ' ').trim()).filter(t => !/Trusted pick/i.test(t)));
+  const txt = rows.join(' | ');
+  check('suggestions: top 3 are the longest gaps (legs, shoulders, glutes)', /^Legs/.test(rows[0]) && /^Shoulders/.test(rows[1]) && /^Glutes/.test(rows[2]), txt);
+  check('suggestions: chest/arms trained yesterday are not suggested', !/Chest|Arms/.test(txt.replace(/Chest 2/g, '')) , txt);
+  check('suggestions: never a mismatched routine button (no routine covers legs)', !/Start (Chest|Push)/.test(txt), txt);
+  await page.locator('#suggestCard button', { hasText: /^Start$/ }).first().click();
+  const w = await page.evaluate(() => aw && { name: aw.name, ex: aw.exercises.map(e => e.exId) });
+  check('suggestions: no-routine Start seeds the group\'s own most-done exercises', w && w.name === 'Legs' && w.ex.includes('e-squat') && w.ex.includes('e-lp'), JSON.stringify(w));
+  check('suggestions: starting it saved no routine', (await page.evaluate(() => gR().length)) === 2);
+  check('suggestions: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+async function badgeLadders() {
+  // Badge ladders scale with profile sex and age; the male 18-39 (and no-birthday) ladders never move.
+  const ladders = async prof => {
+    const { page, ctx, errors } = await phone({ seed: { prof: { name: 'T', username: '@t', code: '@t', ...prof }, hist: [] }, now: new Date('2026-09-25T19:14:00-06:00') });
+    const r = await page.evaluate(() => { const T = badgeT(); return { T, how: BADGE_HOW['Pull-up-Maxing'], det: BADGE_DETAIL['Bench-Maxing'] }; });
+    await ctx.close(); return { ...r, errors };
+  };
+  const j = a => JSON.stringify(a);
+  const m = await ladders({ sex: 'male', birthday: '1995-01-01' });
+  check('badge ladders: male 30 keeps the original ladders', j(m.T.bench) === '[135,225,315]' && j(m.T.ohpFrac) === '[0.25,0.5,1]' && j(m.T.squatFrac) === '[1,1.5,2]' && j(m.T.pullup) === '[10,15,20]' && j(m.T.pushup) === '[30,50,80]' && j(m.T.cardio) === '[9,8,6.5]', j(m.T));
+  const none = await ladders({});
+  check('badge ladders: no sex or birthday set = male ladders', j(none.T) === j(m.T), j(none.T));
+  const f = await ladders({ sex: 'female', birthday: '1995-01-01' });
+  check('badge ladders: female 30 is lower on every strength ladder', f.T.bench.every((x, i) => x < m.T.bench[i]) && f.T.ohpFrac.every((x, i) => x < m.T.ohpFrac[i]) && f.T.squatFrac.every((x, i) => x < m.T.squatFrac[i]) && f.T.pullup.every((x, i) => x < m.T.pullup[i]) && f.T.pushup.every((x, i) => x < m.T.pushup[i]), j(f.T));
+  check('badge ladders: female 30 mile ladder is slower', f.T.cardio.every((x, i) => x > m.T.cardio[i]), j(f.T.cardio));
+  check('badge ladders: female ladders still ascend', f.T.bench[0] < f.T.bench[1] && f.T.bench[1] < f.T.bench[2] && f.T.pullup[0] < f.T.pullup[1] && f.T.pullup[1] < f.T.pullup[2], j(f.T));
+  const old = await ladders({ sex: 'male', birthday: '1960-01-01' });
+  check('badge ladders: male 65 is lower than male 30 (strength) and slower (mile)', old.T.bench.every((x, i) => x < m.T.bench[i]) && old.T.cardio.every((x, i) => x > m.T.cardio[i]), j(old.T));
+  const teen = await ladders({ sex: 'male', birthday: '2010-01-01' });
+  check('badge ladders: a 16-year-old is scaled down too', teen.T.bench[2] < m.T.bench[2], j(teen.T));
+  check('badge ladders: description text follows the ladder and says it is adjusted', /Bronze 5, Silver 8, Gold 10/.test(f.how) && /Adjusted for your profile/.test(f.how) && f.det.tiers[2][1] === f.T.bench[2] + ' lb', f.how + ' | ' + j(f.det));
+  check('badge ladders: male description has no adjusted note', !/Adjusted/.test(m.how), m.how);
+  check('badge ladders: no page errors', [m, none, f, old, teen].every(x => x.errors.length === 0), '');
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

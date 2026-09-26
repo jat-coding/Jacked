@@ -119,6 +119,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 @media (min-height:780px){.rc-tile{padding:14px 14px}.rc-tile .v{font-size:30px}.rc-row{padding:13px 12px;margin-bottom:9px}.rc-tiles,.rc-grid{gap:10px}.rc-b{padding:16px 4px}.rc-b .n{font-size:15px;margin-top:6px}.rc-b .c{font-size:12px}.rc-chips{margin:6px 0 12px}}
 #recapFullBody{display:flex;flex-direction:column;justify-content:center}
 #recapFull{overflow-y:auto;padding-top:calc(10px + var(--sat));padding-bottom:calc(10px + var(--sab))}
+#recapFull .bf-foot{display:flex;justify-content:center}#recapShareBtn{width:min(100%,280px)}
 #recapFull .bf-x{top:calc(8px + var(--sat))}
 .bgrp{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);opacity:.6;margin:12px 0 0}
 /* Jacked achievements box (always shown; .lock = greyed while not held): short crown + name box, gold outline, shimmer (Mr. Roni's pick, 2026-09-24). */
@@ -361,8 +362,9 @@ body.kb nav,body.kb .install-banner,body.kb #resumeBar{display:none!important}
 body.kb #restBar{display:none!important}
 /* When the rest bar is showing, lift the return-to-workout bar above it. */
 body.resting #resumeBar{bottom:calc(118px + var(--navB));z-index:98}
-::-webkit-scrollbar{width:3px}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+/* No visible scrollbar anywhere (Mr. Roni, 2026-09-25): a styled ::-webkit-scrollbar makes iOS draw a permanent scroll bar on every popup, even when nothing scrolls. Content still scrolls by touch. */
+*{scrollbar-width:none}
+::-webkit-scrollbar{display:none;width:0;height:0}
 
 /* install banner */
 .install-banner{position:fixed;bottom:80px;left:16px;right:16px;background:var(--bg2);border:1px solid rgba(32,211,194,.3);border-radius:var(--rl);padding:14px 16px;z-index:99;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
@@ -1033,8 +1035,8 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- Full-screen monthly recap (Home card / Metrics > Monthly Recaps) -->
 <div id="recapFull" role="dialog" aria-modal="true">
   <button class="cb bf-x" onclick="closeRecap()" aria-label="Close">✕</button>
-  <div id="recapFullBody" class="bf-wrap" style="padding-top:22px;flex:1 1 auto"></div>
-  <div class="bf-foot" style="display:flex;gap:10px;margin-top:10px"><button class="btn bp" style="flex:1" id="recapShareBtn" onclick="shareRecap()">Share</button><button class="btn bg" style="flex:1" onclick="closeRecap()">Close</button></div>
+  <div id="recapFullBody" class="bf-wrap" style="padding-top:0;flex:1 1 auto"></div>
+  <div class="bf-foot" style="margin-top:10px"><button class="btn bp" id="recapShareBtn" onclick="shareRecap()">Share</button></div>
 </div>
 
 <!-- Achievement popup: a metric-tier badge earned live during a workout -->
@@ -1319,11 +1321,27 @@ function genCode() { return 'JCKD-' + uid(); }
 // Stored lowercase with a leading '@'. Letters/numbers/underscore, 3–20 chars.
 function normU(s){ const h=String(s||'').trim().replace(/^@+/,'').toLowerCase().replace(/[^a-z0-9_]/g,''); return h?'@'+h:''; }
 function validU(u){ const h=normU(u).slice(1); if(h.length<3) return 'Username needs at least 3 letters/numbers'; if(h.length>20) return 'Username too long (max 20)'; return null; }
+// Stranger-safe profile lookup: username + avatar are the only public fields, and they come
+// from the public_profiles() RPC (signed in or not). A project that hasn't run
+// 20260925_profiles_public_username_avatar_only.sql has no such function, so fall back to
+// the old direct select (remembered for the page load).
+let _ppRpc=null;   // null untried · true works · false function missing
+async function publicProfile(code){
+  if(_ppRpc!==false){
+    const { data, error } = await SUPA.rpc('public_profiles',{p_codes:[code]});
+    if(!error){ _ppRpc=true; return (data&&data[0])||null; }
+    if(!isMissingFunction(error)) throw error;
+    _ppRpc=false;
+  }
+  const { data, error } = await SUPA.from('profiles').select('code').eq('code',code).maybeSingle();
+  if(error) throw error;
+  return data||null;
+}
 // Returns true if the username already belongs to someone else on Supabase.
 async function usernameTaken(u, exceptMine){
   if(!supaOnline()) return false;          // can't verify offline → allow
   try{
-    const { data } = await SUPA.from('profiles').select('code').eq('code',u).maybeSingle();
+    const data = await publicProfile(u);
     if(!data) return false;
     return exceptMine ? (data.code!==exceptMine) : true;
   }catch(e){ console.warn('usernameTaken',e); return false; }  // network error → don't block
@@ -1729,10 +1747,30 @@ function updateResumeBar(){
 // ============================================================
 // Suggest what to train today based on the most-neglected muscle group.
 const SUGNAME={chest:'chest',back:'back',shoulders:'shoulders',biceps:'arms',triceps:'arms',legs:'legs',glutes:'glutes',core:'core'};
-function bestRoutineFor(group){
-  let best=null,bc=0;
-  gR().forEach(r=>{ let c=0; (r.exercises||[]).forEach(id=>{ if(muscleGroup(byId(id).muscle)===group) c++; }); if(c>bc){bc=c;best=r;} });
-  return bc>0?best:null;
+// Groups behind a suggestion label ("arms" = biceps + triceps).
+const sugGroups=lbl=>MGROUPS.filter(g=>(SUGNAME[g]||g)===lbl);
+// A saved routine only counts as a match when at least half its exercises hit the
+// label's groups -- a Chest routine with one triceps move is not an "Arms" workout.
+function bestRoutineFor(lbl){
+  const gs=sugGroups(lbl); let best=null,bf=0;
+  gR().forEach(r=>{ const ids=r.exercises||[]; if(!ids.length) return;
+    const c=ids.filter(id=>gs.includes(muscleGroup(byId(id).muscle))).length, f=c/ids.length;
+    if(f>=0.5&&f>bf){bf=f;best=r;} });
+  return best;
+}
+// No matching routine: start an ad-hoc workout seeded with the exercises he has actually
+// done most for this label. Nothing is saved as a routine (see startCuratedRoutine).
+function startGroupWorkout(lbl){
+  const gs=sugGroups(lbl), n={};
+  gH().forEach(w=>(w.exercises||[]).forEach(ex=>{ if(ex.exId&&(ex.sets||[]).length&&gs.includes(muscleGroup(ex.muscle))) n[ex.exId]=(n[ex.exId]||0)+1; }));
+  const ids=Object.keys(n).sort((x,y)=>n[y]-n[x]).slice(0,5);
+  if(!ids.length){ startEmpty(); return; }
+  cm('qsModal'); cm('crModal');
+  awStart=Date.now();
+  aw={id:'w'+Date.now(), routineId:null, name:lbl.charAt(0).toUpperCase()+lbl.slice(1), date:new Date().toISOString(),
+    exercises:ids.map(id=>{ const ex=byId(id);
+      return {exId:id, name:ex.name, muscle:ex.muscle||'', equip:ex.equip||'', assist:ex.assist||false, tracking:ex.tracking||'weight_reps', imgUrl:imgUrl(ex)||null, sets:seedSets(id)}; })};
+  beginW();
 }
 function dismissSuggest(){ S.s('suggestDismiss', dayKey(new Date())); const el=document.getElementById('suggestCard'); if(el) el.style.display='none'; }
 // Pick (and cache per day) the trusted-program routine to feature today, cycling
@@ -1770,37 +1808,26 @@ function renderSuggest(){
     el.innerHTML=`<div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--blue)">Let's get started</div><div style="font-size:12px;color:var(--text2);margin-top:3px;line-height:1.4">Pick a routine, or start an empty workout.</div>${curatedPickHtml(curated)}</div><button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss">✕</button>`;
     return;
   }
+  // Rank by days since he last trained each group (biceps + triceps together as "Arms"),
+  // longest gap first, never-trained on top. No routine or rotation logic here: what he
+  // trained yesterday is last in line by construction. Recomputed every render so it
+  // reflects a workout finished today.
   const last={};
-  h.forEach(w=>{ const d=dayKey(w.date); (w.exercises||[]).forEach(ex=>{ const g=muscleGroup(ex.muscle); if(!g||!MGROUPS.includes(g)) return; if((ex.sets||[]).length){ if(!last[g]||d>last[g]) last[g]=d; } }); });
-  const since=g=> last[g]?Math.round((new Date(today)-new Date(last[g]))/864e5):999;
-  // Pick (and cache per day) up to 3 groups: most overdue first, but skip anything
-  // suggested in the last 2 days so the suggestions rotate instead of repeating.
-  let cache=S.g('sugToday');
-  if(!cache||cache.day!==today||!cache.groups){
-    const log=S.g('sugLog')||{};
-    const shownAgo=g=>{ const d=log[g]; return d?Math.round((new Date(today)-new Date(d))/864e5):999; };
-    const ranked=[...MGROUPS].sort((a,b)=>{
-      const ra=shownAgo(a)<2?1:0, rb=shownAgo(b)<2?1:0;   // recently shown → push down
-      if(ra!==rb) return ra-rb;
-      return since(b)-since(a);                            // else most overdue first
-    });
-    // Dedupe by display label (biceps & triceps both show as "Arms") and take 3.
-    const picks=[]; const usedLabels=new Set();
-    for(const g of ranked){ const lbl=SUGNAME[g]||g; if(usedLabels.has(lbl))continue; usedLabels.add(lbl); picks.push(g); if(picks.length>=3)break; }
-    const nlog={...log}; picks.forEach(g=>nlog[g]=today); S.s('sugLog',nlog);
-    cache={...cache,day:today,groups:picks}; S.s('sugToday',cache);
-  }
-  const item=g=>{ const nm=SUGNAME[g]||g, d=since(g), r=bestRoutineFor(g);
+  h.forEach(w=>{ const d=dayKey(w.date); (w.exercises||[]).forEach(ex=>{ const g=muscleGroup(ex.muscle); if(!g||!MGROUPS.includes(g)) return; const l=SUGNAME[g]||g; if((ex.sets||[]).length){ if(!last[l]||d>last[l]) last[l]=d; } }); });
+  const since=l=>last[l]?Math.round((new Date(today)-new Date(last[l]))/864e5):999;
+  const labels=[...new Set(MGROUPS.map(g=>SUGNAME[g]||g))];
+  const picks=labels.sort((a,b)=>since(b)-since(a)).slice(0,3);
+  const item=l=>{ const d=since(l), r=bestRoutineFor(l);
     const sub = d>=900?'not trained yet':d===0?'trained today':`${d}d since last`;
     return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--border)">
-        <div style="min-width:0"><span style="font-weight:700;text-transform:capitalize">${nm}</span> <span style="font-size:11px;color:var(--muted)">· ${sub}</span></div>
-        ${r?`<button class="btn ba sm" onclick="startRW('${r.id}')">Start ${esc(r.name)}</button>`:''}
+        <div style="min-width:0"><span style="font-weight:700;text-transform:capitalize">${l}</span> <span style="font-size:11px;color:var(--muted)">· ${sub}</span></div>
+        ${r?`<button class="btn ba sm" onclick="startRW('${r.id}')">Start ${esc(r.name)}</button>`:`<button class="btn ba sm" onclick="startGroupWorkout('${l}')">Start</button>`}
       </div>`;
   };
   el.innerHTML=`<div style="flex:1;min-width:0">
       <div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--blue)">Suggested today</div>
       <div style="font-size:12px;color:var(--text2);margin:3px 0 2px;line-height:1.4">A few good options — mix it up.</div>
-      ${cache.groups.map(item).join('')}
+      ${picks.map(item).join('')}
       ${curatedPickHtml(curated)}
     </div>
     <button class="btn bg ic xs" onclick="dismissSuggest()" aria-label="Dismiss" style="align-self:flex-start">✕</button>`;
@@ -2933,6 +2960,10 @@ function effWeight(ex,s){
 function setBWMode(ei,m){ if(!aw||!aw.exercises[ei]) return; aw.exercises[ei].bwMode=m; renderWS(); }
 // Only weight/bodyweight lifts contribute to "lbs lifted" volume and weight PRs.
 // Distance/duration/reps-only must NOT be counted as weight.
+// Plain or assisted bodyweight movement (push-up, pull-up, dip...): the logged "weight" is your own body, not
+// a load you lifted, so it never counts as a best lift. Added-weight variants still do (Mr. Roni, 2026-09-25).
+function isPlainBW(ex){ if(!ex||bwMode(ex)==='added') return false; const nm=(ex.name||'').toLowerCase();
+  return isBodyweightEx(ex)||bwCapable(ex)||(/bodyweight/.test(nm)&&!nm.includes('weighted')); }
 function isWT(ex){ const t=(ex&&ex.tracking)||'weight_reps'; return t==='weight_reps'||t==='bodyweight_reps'; }
 // Estimated one-rep max (Epley) — combines weight & reps into one strength number.
 // A PR is when this exceeds the previous PR's estimate.
@@ -3035,6 +3066,22 @@ const BADGE_TIER_THRESH={
   bench:[135,225,315], ohpFrac:[0.25,0.5,1.0], squatFrac:[1.0,1.5,2.0],
   pullup:[10,15,20], pushup:[30,50,80], cardio:[9,8,6.5]   // cardio: mile-equiv ceilings, lower=better
 };
+// The ladders above are the male, age 18-39 ladders. Profile sex and age scale them: a woman's ladder
+// is those values times BADGE_FEMALE (cardio: a slower pace, x1.11, about the men/women gap in mile
+// records); age scales every ladder by badgeAgeFactor (cardio: slower). These factors are set values,
+// not sourced -- edit here to tune. A male 18-39 profile, or one with no birthday, gets the ladders as written.
+const BADGE_FEMALE={bench:.6,ohp:.6,squat:.6,pullup:.5,pushup:.6,cardio:1.11};
+function badgeAgeFactor(age){ return age==null?1:age<16?.75:age<18?.85:age<40?1:age<50?.95:age<60?.88:age<70?.78:.68; }
+// One sentence appended to a ladder's description when the profile's sex or age moved it.
+function badgeAdjNote(){ const fem=((gProf()||{}).sex==='female'), a=badgeAgeFactor(gAge()); return (fem||a!==1)?' Adjusted for your profile'+(fem&&a!==1?' (sex and age)':fem?' (sex)':' (age)')+'.':''; }
+function badgeT(){
+  const fem=((gProf()||{}).sex==='female'), a=badgeAgeFactor(gAge()), B=BADGE_TIER_THRESH;
+  const sc=(arr,k,rd)=>arr.map(x=>rd(x*(fem?BADGE_FEMALE[k]:1)*a));
+  const r5=x=>Math.max(5,Math.round(x/5)*5), r2=x=>Math.round(x*100)/100, r1=x=>Math.max(1,Math.round(x));
+  return {bench:sc(B.bench,'bench',r5), ohpFrac:sc(B.ohpFrac,'ohp',r2), squatFrac:sc(B.squatFrac,'squat',r2),
+    pullup:sc(B.pullup,'pullup',r1), pushup:sc(B.pushup,'pushup',r1),
+    cardio:B.cardio.map(x=>Math.round(x*(fem?BADGE_FEMALE.cardio:1)/a*12)/12)};   // to the nearest 5 seconds
+}
 const BADGE_META={
   bench:{name:'Bench-Maxing',icon:'dumbbell',color:MCOL.chest}, ohp:{name:'Shoulder-Maxing',icon:'dumbbell',color:MCOL.shoulders},
   squat:{name:'Leg-Maxing',icon:'dumbbell',color:MCOL.legs}, pullup:{name:'Pull-up-Maxing',icon:'dumbbell',color:MCOL.back},
@@ -3057,16 +3104,17 @@ function badgeTierForKey(key,h){
     let best=0;
     h.forEach(w=>(w.exercises||[]).forEach(ex=>{ const nm=(ex.name||'').toLowerCase(); if(!pred(nm))return;
       (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); }));
-    if(key==='bench') return {tier:tierOfLive(best,BADGE_TIER_THRESH.bench), value:best};
+    const T=badgeT();
+    if(key==='bench') return {tier:tierOfLive(best,T.bench), value:best};
     const bwLb=gBW()*2.20462; if(!(bwLb>0)) return {tier:null,value:best};
-    const frac=key==='ohp'?BADGE_TIER_THRESH.ohpFrac:BADGE_TIER_THRESH.squatFrac;
+    const frac=key==='ohp'?T.ohpFrac:T.squatFrac;
     return {tier:tierOfLive(best,frac.map(f=>f*bwLb)), value:best};
   }
   if(key==='pullup'||key==='pushup'){
     const f = key==='pullup' ? n=>n.includes('pullup')||n.includes('chinup') : n=>n.includes('pushup');
     let best=0;
     h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!f(flatNm(ex.name)))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>best)best=s.reps||0; }); }));
-    return {tier:tierOfLive(best,BADGE_TIER_THRESH[key]), value:best};
+    return {tier:tierOfLive(best,badgeT()[key]), value:best};
   }
   if(key==='cardio'){
     // Cardio-Maxing resets every 3 months: current calendar quarter only (matches computeBadges).
@@ -3074,7 +3122,7 @@ function badgeTierForKey(key,h){
     let best=Infinity;
     h.forEach(w=>{ if(!(+new Date(w.date)>=qS)) return; (w.exercises||[]).forEach(ex=>{ if((ex.tracking||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<best)best=me; } }); }); });
     if(!isFinite(best)) return {tier:null,value:0};
-    const [b,s,g]=BADGE_TIER_THRESH.cardio;
+    const [b,s,g]=badgeT().cardio;
     return {tier: best<=g?'gold':best<=s?'silver':best<=b?'bronze':null, value:best};
   }
   return {tier:null,value:0};
@@ -3086,13 +3134,14 @@ function metricBadgeInfo(key,tier,value,exName){
   const achieved = key==='pullup'||key==='pushup' ? `${Math.round(value)} reps`
     : key==='cardio' ? `${fmtClock(value)}/mi`
     : `${Math.round(value)} lb`;
+  const T=badgeT();
   const rules={
-    bench:`Bronze / Silver / Gold — 1-rep bench: ${BADGE_TIER_THRESH.bench.join(' / ')} lb.`,
-    ohp:`Bronze / Silver / Gold — overhead press ×5: ${BADGE_TIER_THRESH.ohpFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
-    squat:`Bronze / Silver / Gold — squat ×5: ${BADGE_TIER_THRESH.squatFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
-    pullup:`Bronze / Silver / Gold — best set: ${BADGE_TIER_THRESH.pullup.join(' / ')} reps.`,
-    pushup:`Bronze / Silver / Gold — best set: ${BADGE_TIER_THRESH.pushup.join(' / ')} reps.`,
-    cardio:`Gold / Silver / Bronze — best mile pace: ${BADGE_TIER_THRESH.cardio.slice().reverse().map(fmtClock).join(' / ')} /mi.`,
+    bench:`Bronze / Silver / Gold — 1-rep bench: ${T.bench.join(' / ')} lb.`,
+    ohp:`Bronze / Silver / Gold — overhead press ×5: ${T.ohpFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
+    squat:`Bronze / Silver / Gold — squat ×5: ${T.squatFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
+    pullup:`Bronze / Silver / Gold — best set: ${T.pullup.join(' / ')} reps.`,
+    pushup:`Bronze / Silver / Gold — best set: ${T.pushup.join(' / ')} reps.`,
+    cardio:`Bronze / Silver / Gold — best mile pace: ${T.cardio.map(fmtClock).join(' / ')} /mi.`,
   };
   document.getElementById('achIcon').innerHTML=uic(meta.icon,meta.color,48);
   document.getElementById('achTier').innerHTML=`<span style="color:${TIERC[tier]}">${capW(tier)}</span>`;
@@ -3739,11 +3788,12 @@ function computeBadges() {
   const sqPred   =nm=>nm.includes('barbell')&&nm.includes('squat');
 
   const bench=bestLb(benchPred,1);
-  const benchT=tierOf(bench,[135,225,315]);
+  const TH=badgeT();
+  const benchT=tierOf(bench,TH.bench);
   const ohp=bestLb(ohpPred,5);
-  const ohpT=haveBW?tierOf(ohp,[0.25*bwLb,0.5*bwLb,1.0*bwLb]):null;
+  const ohpT=haveBW?tierOf(ohp,TH.ohpFrac.map(f=>f*bwLb)):null;
   const sq=bestLb(sqPred,5);
-  const sqT=haveBW?tierOf(sq,[1.0*bwLb,1.5*bwLb,2.0*bwLb]):null;
+  const sqT=haveBW?tierOf(sq,TH.squatFrac.map(f=>f*bwLb)):null;
   const r0=x=>Math.round(x);
   // Render the three tier thresholds, bolding (in accent) the ones unlocked.
   const tline=(best,thr)=>thr.map(x=>best>=x?`<b style="color:var(--accent)">${r0(x)}</b>`:`${r0(x)}`).join(' / ');
@@ -3754,14 +3804,14 @@ function computeBadges() {
   const flat=s=>(s||'').toLowerCase().replace(/[^a-z]/g,'');
   const bestSetReps=(pred,src=h3)=>{ let best=0; src.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!pred(flat(ex.name)))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>best)best=s.reps||0; }); })); return best; };
   const pullBest=bestSetReps(f=>f.includes('pullup')||f.includes('chinup'));
-  const pullT=tierOf(pullBest,[10,15,20]);
+  const pullT=tierOf(pullBest,TH.pullup);
   const pushBest=bestSetReps(f=>f.includes('pushup'));
-  const pushT=tierOf(pushBest,[30,50,80]);
+  const pushT=tierOf(pushBest,TH.pushup);
   // Cardio: lowest endurance-adjusted mile-equivalent (Riegel) across all logged runs.
   // Only runs from the last 3 months count (rolling, like the lifts).
   const cardioOver=src=>{ let b=Infinity; src.forEach(w=>{ (w.exercises||[]).forEach(ex=>{ if(((ex.tracking)||'')!=='distance')return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<b)b=me; } }); }); }); return b; };
   const cardioBest=cardioOver(h3), cardioAll=cardioOver(h);
-  const cardioT = cardioBest<=6.5?'gold':cardioBest<=8?'silver':cardioBest<=9?'bronze':null;
+  const cardioT = cardioBest<=TH.cardio[2]?'gold':cardioBest<=TH.cardio[1]?'silver':cardioBest<=TH.cardio[0]?'bronze':null;
 
   // Variety: distinct exercises actually logged. Imported history can lack exId,
   // so fall back to the flattened name to avoid double-counting the same lift.
@@ -3779,15 +3829,15 @@ function computeBadges() {
   const bestRun=bestStreak(h3), bestRunAll=bestStreak(h);   // Consistency-Maxing is also a 3-month-reset badge
 
   // All-time bests (kept even when the 3-month tier has dropped) -- shown in the popup.
-  const cardioTierOf=v=>v<=6.5?'gold':v<=8?'silver':v<=9?'bronze':null;
+  const cardioTierOf=v=>v<=TH.cardio[2]?'gold':v<=TH.cardio[1]?'silver':v<=TH.cardio[0]?'bronze':null;
   const pullF=f=>f.includes('pullup')||f.includes('chinup'), pushF=f=>f.includes('pushup');
   const bA=bestLb(benchPred,1,h), oA=bestLb(ohpPred,5,h), qA=bestLb(sqPred,5,h), puA=bestSetReps(pullF,h), psA=bestSetReps(pushF,h);
   const ALL={
-    'Bench-Maxing':bA>0&&{v:`${r0(bA)} lb`,tier:tierOf(bA,[135,225,315])},
-    'Shoulder-Maxing':haveBW&&oA>0&&{v:`${r0(oA)} lb x5`,tier:tierOf(oA,[0.25*bwLb,0.5*bwLb,1.0*bwLb])},
-    'Leg-Maxing':haveBW&&qA>0&&{v:`${r0(qA)} lb x5`,tier:tierOf(qA,[1.0*bwLb,1.5*bwLb,2.0*bwLb])},
-    'Pull-up-Maxing':puA>0&&{v:`${puA} reps`,tier:tierOf(puA,[10,15,20])},
-    'Push-up-Maxing':psA>0&&{v:`${psA} reps`,tier:tierOf(psA,[30,50,80])},
+    'Bench-Maxing':bA>0&&{v:`${r0(bA)} lb`,tier:tierOf(bA,TH.bench)},
+    'Shoulder-Maxing':haveBW&&oA>0&&{v:`${r0(oA)} lb x5`,tier:tierOf(oA,TH.ohpFrac.map(f=>f*bwLb))},
+    'Leg-Maxing':haveBW&&qA>0&&{v:`${r0(qA)} lb x5`,tier:tierOf(qA,TH.squatFrac.map(f=>f*bwLb))},
+    'Pull-up-Maxing':puA>0&&{v:`${puA} reps`,tier:tierOf(puA,TH.pullup)},
+    'Push-up-Maxing':psA>0&&{v:`${psA} reps`,tier:tierOf(psA,TH.pushup)},
     'Cardio-Maxing':isFinite(cardioAll)&&{v:`${fmtClock(cardioAll)} per mile`,tier:cardioTierOf(cardioAll)},
     'PR-Maxing':prBestAll>0&&{v:`${prBestAll} day${prBestAll!==1?'s':''} in a row`},
     'Consistency-Maxing':bestRunAll>0&&{v:`${bestRunAll} day${bestRunAll!==1?'s':''} in a row`}
@@ -3833,18 +3883,18 @@ function computeBadges() {
   // Jacked is the exception by request. tiered:true marks the Bronze/Silver/Gold badges.
   const list=[
     {icon:'dumbbell',color:MCOL.chest,name:'Bench-Maxing',tiered:true,tier:benchT,earned:!!benchT,
-      desc: `1-rep bench (lb): ${tline(bench,[135,225,315])}`},
+      desc: `1-rep bench (lb): ${tline(bench,TH.bench)}`},
     {icon:'dumbbell',color:MCOL.shoulders,name:'Shoulder-Maxing',tiered:true,tier:ohpT,earned:!!ohpT,needsWeight:!haveBW,
-      desc: !haveBW?'Enter body weight in Profile to unlock':`OHP ×5 (lb): ${tline(ohp,[0.25*bwLb,0.5*bwLb,1.0*bwLb])}`},
+      desc: !haveBW?'Enter body weight in Profile to unlock':`OHP ×5 (lb): ${tline(ohp,TH.ohpFrac.map(f=>f*bwLb))}`},
     {icon:'dumbbell',color:MCOL.legs,name:'Leg-Maxing',tiered:true,tier:sqT,earned:!!sqT,needsWeight:!haveBW,
-      desc: !haveBW?'Enter body weight in Profile to unlock':`Squat ×5 (lb): ${tline(sq,[1.0*bwLb,1.5*bwLb,2.0*bwLb])}`},
+      desc: !haveBW?'Enter body weight in Profile to unlock':`Squat ×5 (lb): ${tline(sq,TH.squatFrac.map(f=>f*bwLb))}`},
     {icon:'trophy',color:'#ffd700',name:'1000lb Club',desc: bestSingle>0?`Best single-session Big-3: ${r0(bestSingle)} lb / 1000`:'Bench + Squat + Deadlift ≥ 1000 lb in one workout',earned:club},
     {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tiered:true,tier:pullT,earned:!!pullT,
-      desc:`Best set: ${pullBest} reps — ${tline(pullBest,[10,15,20])}`},
+      desc:`Best set: ${pullBest} reps — ${tline(pullBest,TH.pullup)}`},
     {icon:'dumbbell',color:MCOL.triceps,name:'Push-up-Maxing',tiered:true,tier:pushT,earned:!!pushT,
-      desc:`Best set: ${pushBest} reps — ${tline(pushBest,[30,50,80])}`},
+      desc:`Best set: ${pushBest} reps — ${tline(pushBest,TH.pushup)}`},
     {icon:'heart',color:MCOL.cardio,name:'Cardio-Maxing',tiered:true,tier:cardioT,earned:!!cardioT,
-      desc: isFinite(cardioBest)?`Best mile pace: ${fmtClock(cardioBest)}/mi — ${tlineLow(cardioBest,[6.5,8,9])}`:'Log a run (miles + minutes) to unlock'},
+      desc: isFinite(cardioBest)?`Best mile pace: ${fmtClock(cardioBest)}/mi — ${tlineLow(cardioBest,[TH.cardio[0],TH.cardio[1],TH.cardio[2]])}`:'Log a run (miles + minutes) to unlock'},
     {icon:'target',color:'var(--blue)',name:'Variety-Maxing',earned:variety>=100,
       desc:`${variety} / 100 different exercises logged`},
     {icon:'flame',color:'var(--orange)',name:'PR-Maxing',threeMonth:true,desc:`PR 7 days in a row — best: ${prBest3} day${prBest3!==1?'s':''}`,earned:prWeek},
@@ -3886,17 +3936,17 @@ function computeBadges() {
 const TIERC={bronze:'#cd7f32',silver:'#b8b8c8',gold:'#ffd700'};
 // Tap-to-explain text for each badge.
 const BADGE_HOW={
-  'Bench-Maxing':'Barbell bench press, 1 rep. Bronze 135 lb, Silver 225 lb, Gold 315 lb.',
-  'Shoulder-Maxing':'Barbell overhead press for 5 reps. Bronze 25%, Silver 50%, Gold 100% of your body weight. Set your weight in Profile.',
-  'Leg-Maxing':'Barbell squat for 5 reps. Bronze 100%, Silver 150%, Gold 200% of your body weight. Set your weight in Profile.',
+  get 'Bench-Maxing'(){ const T=badgeT(); return `Barbell bench press, 1 rep. Bronze ${T.bench[0]} lb, Silver ${T.bench[1]} lb, Gold ${T.bench[2]} lb.`+badgeAdjNote(); },
+  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)); return `Barbell overhead press for 5 reps. Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}% of your body weight. Set your weight in Profile.`+badgeAdjNote(); },
+  get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)); return `Barbell squat for 5 reps. Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}% of your body weight. Set your weight in Profile.`+badgeAdjNote(); },
   '1000lb Club':'In a single workout, your best bench + squat + deadlift add up to 1000 lb or more.',
   'PR-Maxing':'Hit at least one personal record on 7 days in a row. Only the last 3 months count.',
   'Consistency-Maxing':'Finish at least one workout on 7 days in a row. Only the last 3 months count.',
   'Coward-Maxing':'Given after 7+ days off in a row this month. Resets monthly — train consistently this month to clear it.',
   'Jacked':'Earn every badge in the Monthly reset and 3-month reset groups, with every tiered badge at Gold. Permanent badges are not needed. Locked while you hold Coward-Maxing.',
-  'Pull-up-Maxing':'Most reps in a single pull-up/chin-up set. Bronze 10, Silver 15, Gold 20.',
-  'Push-up-Maxing':'Most reps in a single push-up set (one exercise, not summed). Bronze 30, Silver 50, Gold 80.',
-  'Cardio-Maxing':'Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze 9:00, Silver 8:00, Gold 6:30 per mile. Only runs from the last 3 months count.',
+  get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return `Most reps in a single pull-up/chin-up set. Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]}.`+badgeAdjNote(); },
+  get 'Push-up-Maxing'(){ const T=badgeT().pushup; return `Most reps in a single push-up set (one exercise, not summed). Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]}.`+badgeAdjNote(); },
+  get 'Cardio-Maxing'(){ const T=badgeT().cardio.map(fmtClock); return `Your best mile pace from a logged run — longer runs count for more (endurance-adjusted). Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]} per mile. Only runs from the last 3 months count.`+badgeAdjNote(); },
   'Challenge-Maxing':'Train your weakest muscle group (glutes left out) enough times this month. A new group every month.',
   'Comeback-Maxing':'Train on at least half the days of the month, or beat last month after a slow month.',
   'Variety-Maxing':'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'
@@ -3905,13 +3955,13 @@ const BADGE_HOW={
 function badgeShownName(n){ return n==='1000lb Club-Maxing' ? '1000lb Club' : n; }
 // Full-screen achievement popup: same icon as the list, title, then the summary in a text hierarchy.
 const BADGE_DETAIL={
-  'Bench-Maxing':{how:'Barbell bench press, 1 rep.',tiers:[['Bronze','135 lb'],['Silver','225 lb'],['Gold','315 lb']],note:'Your tier follows your best in the last 3 months.'},
-  'Shoulder-Maxing':{how:'Barbell overhead press for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','25% of body weight'],['Silver','50% of body weight'],['Gold','100% of body weight']],note:'Your tier follows your best in the last 3 months.'},
-  'Leg-Maxing':{how:'Barbell squat for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze','100% of body weight'],['Silver','150% of body weight'],['Gold','200% of body weight']],note:'Your tier follows your best in the last 3 months.'},
+  get 'Bench-Maxing'(){ const T=badgeT().bench; return {how:'Barbell bench press, 1 rep.',tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Barbell overhead press for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Barbell squat for 5 reps, measured against your body weight. Set your weight in Profile.',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
   '1000lb Club':{how:'In a single workout, your best bench + squat + deadlift add up to 1000 lb or more.'},
-  'Pull-up-Maxing':{how:'Most reps in a single pull-up or chin-up set.',tiers:[['Bronze','10 reps'],['Silver','15 reps'],['Gold','20 reps']],note:'Your tier follows your best in the last 3 months.'},
-  'Push-up-Maxing':{how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze','30 reps'],['Silver','50 reps'],['Gold','80 reps']],note:'Your tier follows your best in the last 3 months.'},
-  'Cardio-Maxing':{how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze','9:00 per mile'],['Silver','8:00 per mile'],['Gold','6:30 per mile']],note:'Your tier follows your best pace in the last 3 months.'},
+  get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return {how:'Most reps in a single pull-up or chin-up set.',tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  get 'Push-up-Maxing'(){ const T=badgeT().pushup; return {how:'Most reps in a single push-up set (one exercise, not summed).',tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  get 'Cardio-Maxing'(){ const T=badgeT().cardio.map(x=>fmtClock(x)+' per mile'); return {how:'Your best mile pace from a logged run. Longer runs count for more (endurance-adjusted).',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best pace in the last 3 months.'+badgeAdjNote()}; },
   'Challenge-Maxing':{how:'Every month you get a target on your weakest muscle group, based on last month (glutes are left out, and it is never the same group two months in a row). Train that group in the target number of different workouts.',note:'Resets monthly with a new muscle group.'},
   'Comeback-Maxing':{how:'Two ways to earn it. Steady: train on at least half the days of the month. Bounce back: log more sessions than last month, after a month below your usual.',note:'Resets monthly. Either one earns it, so a run of great months never locks you out.'},
   'Variety-Maxing':{how:'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'},
@@ -4087,7 +4137,7 @@ const STRENGTH_STD = {
   glutes:    {male:[.5,1.0,1.6,2.5],   female:[.4,.8,1.3,2.0]},
   biceps:    {male:[.25,.4,.55,.85],   female:[.15,.24,.33,.5]},
   triceps:   {male:[.6,.85,1.1,1.6],   female:[.36,.5,.66,1.0]},
-  core:      {male:[.3,.55,.8,1.2],    female:[.3,.5,.76,1.2]},
+  core:      {male:[.3,.55,.8,1.2],    female:[.18,.33,.48,.72]},
 };
 // How a group's strength ratio is built (Mr. Roni approved 2026-09-19):
 //  - last 90 days only, so an untrained group drops back down
@@ -4140,6 +4190,7 @@ function strengthScore(group,ratio){
   const std=STRENGTH_STD[group]; if(!std||!ratio) return 0;
   const sex=(gProf()||{}).sex==='female'?'female':'male';
   const [t1,t2,t3,t4]=std[sex];
+  ratio=ratio/badgeAgeFactor(gAge());   // same age scaling as the badges: an older lifter's ratio counts for more
   const pts=[[0,0],[t1,TIER_CUT[0]/2],[t2,TIER_CUT[0]],[t3,TIER_CUT[1]],[t4,TIER_CUT[2]],[t4*1.5,1]];
   for(let i=0;i<pts.length-1;i++){
     const [x0,y0]=pts[i],[x1,y1]=pts[i+1];
@@ -4262,7 +4313,7 @@ function recapData(y,m){
   const vol=hm.reduce((a,w)=>a+(w.totalVolume||0),0), prs=hm.reduce((a,w)=>a+(w.prCount||0),0);
   const days=new Set(hm.map(w=>dayKey(w.date))).size;
   let best=null;
-  hm.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!isWT(ex)) return; (ex.sets||[]).forEach(st=>{
+  hm.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!isWT(ex)||isPlainBW(ex)) return; (ex.sets||[]).forEach(st=>{
     if(!(st.weight>0&&st.reps>0)) return; const e=e1rm(st.weight,st.reps);
     if(!best||e>best.e) best={e,name:ex.name,w:st.weight,r:st.reps}; }); }));
   const wk={};
@@ -5000,7 +5051,8 @@ async function doAF() {
   if (supaEnabled()) {
     try{
       await syncMe(); // make sure my profile row exists
-      const { data: tgt } = await SUPA.from('profiles').select('code').eq('code',code).maybeSingle();
+      let tgt=null;
+      try { tgt = await publicProfile(code); } catch(e){ console.warn('doAF lookup',e); toast('Network error — try again','err'); return; }
       if (!tgt) { toast('No user with that username yet','err'); return; }
       // A request never self-accepts (server-enforced): the other person has to accept it.
       // The one exception is a request THEY already sent me -- adding them back accepts it.
@@ -5482,7 +5534,7 @@ async function refreshFriends() {
     }
     const byCode={}; profs.forEach(pr=>byCode[pr.code]=pr);
     const mk=(c)=>{ const pr=byCode[c]||{code:c}; const data=pr.data||{}; const m=data.m||{}; return {
-      id:c, code:c, name:pr.name||'Lifter', username:pr.username||'', avatarUrl:pr.avatar_url||'',
+      id:c, code:c, name:pr.name||pr.username||'Lifter', username:pr.username||'', avatarUrl:pr.avatar_url||'',
       totalVolume:pr.total_volume||0, workouts:pr.workouts||0, prs:pr.prs||0,
       streak:pr.streak||0, consistency:pr.consistency||0, badges:pr.badges||0,
       days:data.days||[], recent:data.recent||[], wd:data.wd||[], badgeList:data.badgeList||[],
@@ -6266,7 +6318,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.28';
+const BUILD = 'v1.10.29';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
