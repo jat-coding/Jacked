@@ -287,6 +287,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 09-25 | staging | v1.10.30: single-button confirm popups ("Got it") are centered at the bottom; phone-only, no watch change | PHONE-ONLY |
 | 09-25 | local (not pushed) | Profile privacy: strangers see username + avatar only (phone v1.10.29 uses `public_profiles()`; migration held) | APP-WIDE A14 |
 | 09-24 | local (not pushed) | Tap-to-clear set inputs; Coward-Maxing resets monthly; new Consistency-Maxing and Jacked badges | APP-WIDE A13 |
 | 09-19 | `5832e21` | Muscle-group tier rebuild: 90-day window, rep cap 10, per-exercise scaling, top-3 average, tier lines at the standards | APP-WIDE A9 |

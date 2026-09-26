@@ -910,10 +910,25 @@ async function badgeLadders() {
   check('badge ladders: no page errors', [m, none, f, old, teen].every(x => x.errors.length === 0), '');
 }
 
+// Single-button confirms ("Got it") sit centered at the bottom of the dialog (Mr. Roni, 2026-09-25).
+async function confirmCentered() {
+  for (const w of [390, 360]) {
+    const { page, ctx } = await phone({ width: w, height: 780, seed: {}, now: SEP15 });
+    await page.evaluate(() => crownInfo());
+    await page.waitForTimeout(250);
+    const m = await page.evaluate(() => {
+      const d = document.querySelector('#confirmModal .md').getBoundingClientRect(), b = document.getElementById('cfOk').getBoundingClientRect();
+      return { dc: d.left + d.width / 2, bc: b.left + b.width / 2, cancel: getComputedStyle(document.getElementById('cfCancel')).display, bottomGap: d.bottom - b.bottom };
+    });
+    check(`confirm: Got it is centered at ${w}px`, Math.abs(m.dc - m.bc) <= 1.5 && m.cancel === 'none', JSON.stringify(m));
+    await ctx.close();
+  }
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, badgeLadders, confirmCentered]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

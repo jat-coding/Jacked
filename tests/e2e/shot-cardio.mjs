@@ -1,0 +1,11 @@
+import { startServer, stopServer, launch, close, phone } from './harness.mjs';
+await startServer(); await launch();
+const ex=(name,sets,tracking)=>({name,exId:name,tracking:tracking||'weight',sets:sets.map(([w,r])=>({weight:w,reps:r,done:true}))});
+const wk=(d,exs)=>({id:'w'+d,date:d+'T10:00:00-06:00',exercises:exs,duration:3600});
+const { page, ctx } = await phone({ seed: { hist: [wk('2026-09-05',[ex('Run',[[1,8]],'distance')])], bw: 180/2.20462 }, now: new Date('2026-09-15T12:00:00-06:00') });
+await page.evaluate(() => { openAch(); });
+await page.waitForTimeout(500);
+await page.evaluate(()=>{ const e=[...document.querySelectorAll('#achFull *')].find(e=>e.children.length===0&&/Cardio-Maxing/.test(e.textContent)); e.scrollIntoView({block:'center'}); });
+await page.waitForTimeout(300);
+await page.screenshot({ path: process.argv[2] + '/ach.png' });
+await ctx.close(); await close(); stopServer();

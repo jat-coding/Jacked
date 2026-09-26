@@ -326,6 +326,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .es h3{font-family:var(--fh);font-size:22px;font-weight:700;color:var(--text2);margin-bottom:6px}
 .fg{margin-bottom:14px}
 .fr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fr.one{grid-template-columns:minmax(0,220px);justify-content:center}   /* single-button confirm (Got it): centered at the bottom, Mr. Roni 2026-09-25 */
 .sw{position:relative;margin-bottom:14px}
 .sw input{padding-left:36px}
 .sw-ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px;pointer-events:none}
@@ -1012,7 +1013,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="md">
     <div id="cfMsg" style="font-size:14px;line-height:1.5;white-space:pre-wrap"></div>
     <div class="fg" id="cfInputWrap" style="display:none;margin-top:12px"><input type="text" id="cfInput"></div>
-    <div class="fr" style="margin-top:16px">
+    <div class="fr" id="cfBtns" style="margin-top:16px">
       <button class="btn bg" id="cfCancel" onclick="_cfDone(null)">Cancel</button>
       <button class="btn ba" id="cfOk" onclick="_cfSubmit()">OK</button>
     </div>
@@ -6176,6 +6177,7 @@ function showConfirm(msg,{isPrompt=false,defaultValue='',okText='OK',cancelText=
     document.getElementById('cfOk').textContent=okText;
     document.getElementById('cfCancel').textContent=cancelText;
     document.getElementById('cfCancel').style.display=hideCancel?'none':'';
+    document.getElementById('cfBtns').classList.toggle('one',!!hideCancel);
     om('confirmModal');
   });
 }
@@ -6318,7 +6320,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.29';
+const BUILD = 'v1.10.30';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
