@@ -316,6 +316,21 @@ async function monthly() {
     await ctx.close();
   }
   {
+    // Streak box only shows while a streak is live; at 0 days the calendar is the first thing on Home.
+    const top = () => { const pg = document.getElementById('page-home'); const vis = [...pg.children].filter(e => e.offsetHeight > 0 && !e.classList.contains('ph')); return { streakShown: document.getElementById('streakBanner').offsetHeight > 0, first: vis[0] && (vis[0].className || vis[0].id) }; };
+    const dead = await phone({ seed: { hist: [wk('2026-09-05'), wk('2026-09-06')] }, now: SEP15 });
+    await dead.page.evaluate(() => renderHome());
+    const d = await dead.page.evaluate(top);
+    check('streak: hidden at 0 days even with a past best', !d.streakShown, JSON.stringify(d));
+    check('streak: calendar is the top block on Home at 0 days', /cw/.test(d.first || ''), JSON.stringify(d));
+    await dead.ctx.close();
+    const live = await phone({ seed: { hist: [wk('2026-09-14'), wk('2026-09-15')] }, now: SEP15 });
+    await live.page.evaluate(() => renderHome());
+    const l = await live.page.evaluate(() => ({ ...(({ streakShown }) => ({ streakShown }))({ streakShown: document.getElementById('streakBanner').offsetHeight > 0 }), txt: document.getElementById('streakBanner').innerText }));
+    check('streak: shows once a streak is live', l.streakShown && /2 days/.test(l.txt), JSON.stringify(l));
+    await live.ctx.close();
+  }
+  {
     const { page, ctx } = await phone({ seed: seed(), now: new Date('2026-10-15T12:00:00-06:00') });
     await page.evaluate(() => renderHome());
     check('recap: card hidden after day 7', await page.evaluate(() => document.getElementById('recapCard').style.display === 'none'));
@@ -1208,10 +1223,20 @@ async function tricepsTier() {
   await ctx.close();
 }
 
+async function lifetimeAvgMin() {
+  // Mr. Roni 2026-09-26: Lifetime Stats showed "3485" Avg min/session. duration is "MM:SS"; it was read as HH:MM (seconds).
+  const mk = (d, dur) => ({ ...wk(d, [ex('Barbell Bench Press', [[185, 5]])]), duration: dur });
+  const { page, ctx, errors } = await phone({ seed: { hist: [mk('2026-09-10', '45:00'), mk('2026-09-11', '60:30'), mk('2026-09-12', '\u2014')] }, now: SEP15 });
+  const avg = await page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = cardLifetime().html; return [...d.querySelectorAll('.sc')].map(c => [c.querySelector('.sl').textContent, c.querySelector('.sv').textContent]).find(x => /min\/session/i.test(x[0]))[1]; });
+  check('lifetime: avg min/session is minutes (45:00 + 60:30, unrecorded ignored = 53)', avg === '53', avg);
+  check('lifetime: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin]) {
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

@@ -1889,18 +1889,20 @@ function renderHome() {
   const ms=new Date(now.getFullYear(),now.getMonth(),1);
   const mw=h.filter(w=>new Date(w.date)>=ms);
   const streak=calcStreak(h);
+  // Streak box only exists while a streak is live (Mr. Roni, 2026-09-26): at 0 days it's hidden and the calendar leads.
   const sb=document.getElementById('streakBanner'), best=Math.max(bestStreak(h),streak);
-  if (best>0) {
+  if (streak>0) {
     sb.style.display='block';
     sb.innerHTML=`<div class="blk-t">Streak</div>
       <div style="display:flex;align-items:center;gap:14px">
-        <div>${uic('flame',streak>0?'var(--orange)':'var(--muted)',30)}</div>
-        <div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:30px;font-weight:900;line-height:1;color:${streak>0?'var(--text)':'var(--muted)'}">${streak} day${streak!==1?'s':''}</div>
-          <div class="sl" style="margin-top:4px">Current${streak>0?' — keep it alive':''}</div></div>
+        <div>${uic('flame','var(--orange)',30)}</div>
+        <div style="flex:1;min-width:0"><div style="font-family:var(--fh);font-size:30px;font-weight:900;line-height:1;color:var(--text)">${streak} day${streak!==1?'s':''}</div>
+          <div class="sl" style="margin-top:4px">Current — keep it alive</div></div>
         <span style="align-self:flex-start;font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--border2);border-radius:20px;padding:3px 9px;white-space:nowrap">Best ${best}d</span>
       </div>`;
   } else {
     sb.style.display='none';
+    sb.innerHTML='';
   }
   computeBadges();   // also switches the shimmering gold tab titles on/off when Jacked is gained or lost
   renderRecapCard();
@@ -4447,7 +4449,9 @@ function cardLifetime(){
   const h=gH(), prs=gPR();
   const tv=h.reduce((a,w)=>a+(w.totalVolume||0),0);
   const ts=h.reduce((a,w)=>a+(w.sets||0),0);
-  const avgMin=h.length?Math.round(h.reduce((a,w)=>{const p=(w.duration||'').split(':');return a+(p.length===2?+p[0]*60+ +p[1]:0);},0)/h.length):0;
+  // w.duration is "MM:SS" (minutes:seconds). Average only workouts that have one (imports without an end time store "—").
+  const durs=h.map(w=>{const p=(w.duration||'').split(':');return p.length===2&&p.every(x=>x!==''&&!isNaN(x))?(+p[0]*60+ +p[1])/60:0;}).filter(m=>m>0);
+  const avgMin=durs.length?Math.round(durs.reduce((a,m)=>a+m,0)/durs.length):0;
   const topPR=Object.entries(prs).sort((a,b)=>b[1].weight*b[1].reps-a[1].weight*a[1].reps)[0];
   const tEx=topPR?byId(topPR[0]):null;
   const html=`<div class="stats-g2">
@@ -6477,7 +6481,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.37';
+const BUILD = 'v1.10.38';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
