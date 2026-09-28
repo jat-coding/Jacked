@@ -1194,8 +1194,8 @@ async function tricepsTier() {
   const prof = { name: 'T', username: '@t', code: '@t', sex: 'male', birthday: '2000-07-10' };
   const { page, ctx, errors } = await phone({ seed: { hist: [wk('2026-09-20', [bench, pushdown])], bw: BW, prof }, now: NOW });
   await page.evaluate(async () => { for (let i = 0; i < 150 && (dbLoading || !dbLoaded); i++) await new Promise(r => setTimeout(r, 100)); });
-  const run = hist => page.evaluate(h => { S.s('hist', h); const p = musclePerf(), t = triStrength();
-    return { tri: strengthLabel(p.score.triceps).l, triScore: p.score.triceps, core: p.score.core, coreL: strengthLabel(p.score.core).l, best: t.best && t.best.key }; }, hist);
+  const run = hist => page.evaluate(h => { S.s('hist', h); const p = musclePerf(), t = triStrength(), c = creditStrength().triceps;   // presses credit triceps through exCredits since 2026-09-27
+    return { tri: strengthLabel(p.score.triceps).l, triScore: p.score.triceps, core: p.score.core, coreL: strengthLabel(p.score.core).l, best: c && c.score >= t.score ? c.key : t.best && t.best.key }; }, hist);
   let r = await run([wk('2026-09-20', [bench, pushdown])]);
   check('triceps-tier: solid bench + moderate pushdowns is not Needs Work (Strong)', r.tri === 'Strong', JSON.stringify(r));
   check('triceps-tier: the bench is the evidence that carries it', r.best === 'Barbell_Bench_Press_-_Medium_Grip', JSON.stringify(r));
@@ -1455,10 +1455,100 @@ async function exerciseAudit() {
   await ctx.close();
 }
 
+async function multiMuscleCredit() {
+  // Mr. Roni 2026-09-27: "Glutes say that they aren't worked out but squats ... incorporate glutes". A compound lift
+  // now also credits the groups it works as a prime mover (exCredits), converted to that group's reference lift, and
+  // a group scores the stronger of its direct and its credited evidence.
+  const BW = 229 / LB, NOW = new Date('2026-09-27T20:30:00-06:00'), d = '2026-09-20';
+  const lift = (id, name, muscle, sets, extra = {}) => ({ ...ex(name, sets, 'weight_reps', id), muscle, ...extra });
+  const squat = lift('Barbell_Squat', 'Squat (barbell)', 'quadriceps', [[315, 5]]);
+  const bench = lift('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press (barbell, med grip)', 'chest', [[225, 8]]);
+  const ohp = lift('Standing_Military_Press', 'Standing Military Press (barbell)', 'shoulders', [[135, 6]]);
+  const row = lift('Bent_Over_Barbell_Row', 'Bent Over Row (barbell)', 'middle back', [[185, 8]]);
+  const curl = lift('Barbell_Curl', 'Curl (barbell)', 'biceps', [[95, 10]]);
+  const thrust = lift('Barbell_Hip_Thrust', 'Hip Thrust (barbell)', 'glutes', [[405, 8]]);
+  const thrustLight = lift('Barbell_Hip_Thrust', 'Hip Thrust (barbell)', 'glutes', [[95, 8]]);
+  const pushups = lift('Pushups', 'Pushups (bodyweight)', 'chest', [[0, 40]], { equip: 'body only' });
+  const pullups = lift('Pullups', 'Pullups', 'lats', [[0, 10]], { equip: 'body only' });
+  const pullupsNoEquip = lift('Pullups', 'Pullups', 'lats', [[0, 10]]);
+  const bwSquat = { exId: 'wu_quads', name: 'Bodyweight Squat', muscle: 'quadriceps', tracking: 'reps_only', sets: [{ weight: 0, reps: 20, done: true }] };
+  const prof = { name: 'T', username: '@t', code: '@t', sex: 'male', birthday: '2000-07-10' };
+  const { page, ctx, errors } = await phone({ seed: { hist: [], bw: BW, prof }, now: NOW });
+  await dbReady(page);
+  const run = exs => page.evaluate(h => { S.s('hist', h); const p = musclePerf(), r = muscleStrengthRatio(), c = creditStrength(), sc = p.score;
+    const L = g => strengthLabel(sc[g]).l, std = g => STRENGTH_STD[g].male;
+    return { sc, L: Object.fromEntries(MGROUPS.map(g => [g, L(g)])), r, c, glutesLadder: std('glutes'), mode: p.mode }; }, [wk(d, exs)]);
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  // 1. Squats only: Glutes gets the tier the hip-thrust ladder gives a squat converted at 309 / 289, capped at the squat's own Legs tier.
+  let r = await run([squat]);
+  const expG = await page.evaluate(ratio => Math.min(strengthScore('legs', ratio), strengthScore('glutes', ratio * 309 / 289)), r.r.legs);
+  check('multi-credit: squats only -> Glutes has a real tier, not Untrained', r.L.glutes !== 'Untrained' && r.sc.glutes > 0, JSON.stringify(r.L));
+  check('multi-credit: squats only -> Glutes score = squat on the hip-thrust ladder (x1.07), capped at the Legs tier', near(r.sc.glutes, expG), `${r.sc.glutes} vs ${expG}`);
+  check('multi-credit: 315 x 5 squat at 229 lb -> Legs Strong, Glutes Strong', r.L.legs === 'Strong' && r.L.glutes === 'Strong', JSON.stringify(r.L));
+  check('multi-credit: squats do not credit Back (lower back is a stabiliser)', r.sc.back === 0, String(r.sc.back));
+  const map = await page.evaluate(() => { const c = cardBody(), el = document.createElement('div'); el.innerHTML = c.html;
+    const row = [...el.querySelectorAll('.mr-item')].map(e => e.innerText.replace(/\s+/g, ' ')).find(t => /Glutes/.test(t)) || '';
+    return { row, fill: heatColor(musclePerf().score.glutes), paths: c.html.includes(`fill="${heatColor(musclePerf().score.glutes)}"`) }; });
+  check('multi-credit: Muscle Map row and body map agree on the Glutes tier', /Strong/.test(map.row) && map.fill === '#4da3ff' && map.paths, JSON.stringify(map));
+  const sug = await page.evaluate(() => [...exGroups(gH()[0].exercises[0], gH()[0])].sort().join());
+  check('multi-credit: Suggested today reads the squat as Legs + Glutes too', sug === 'glutes,legs', sug);
+  // 2. Bench only: triceps as before (0.97 on the close-grip ladder), shoulders credited but never above the bench's own Chest tier.
+  r = await run([bench]);
+  const expT = await page.evaluate(ratio => [strengthScore('triceps', ratio * 206 / 212), strengthScore('triceps', ratio * 0.97)], r.r.chest);
+  check('multi-credit: bench only -> Triceps = bench x 206/212 on the close-grip ladder (old press credit, unrounded)', near(r.sc.triceps, expT[0]) && r.sc.triceps >= expT[1] && r.L.triceps === 'Strong', `${r.sc.triceps} vs ${expT} ${r.L.triceps}`);
+  check('multi-credit: bench only -> Shoulders credited, capped at the Chest tier', r.sc.shoulders > 0 && r.sc.shoulders <= r.sc.chest + 1e-12, JSON.stringify(r.sc));
+  check('multi-credit: bench does not credit Back or Biceps', r.sc.back === 0 && r.sc.biceps === 0, JSON.stringify(r.sc));
+  const sugB = await page.evaluate(() => [...exGroups(gH()[0].exercises[0], gH()[0])].join());
+  check('multi-credit: Suggested today still does not count a chest day as Arms/Shoulders', sugB === 'chest', sugB);
+  // Overhead press credits triceps at close-grip 206 / press 137 (was 0.97): never lower than the old number.
+  r = await run([ohp]);
+  const oldT = await page.evaluate(ratio => strengthScore('triceps', ratio * 0.97), r.r.shoulders);
+  check('multi-credit: overhead press -> Triceps at least the old press credit', r.sc.triceps >= oldT - 1e-12 && r.sc.triceps > 0, `${r.sc.triceps} vs old ${oldT}`);
+  // 3. Rows only: Biceps from the row converted to a barbell curl (99 / 192), capped at the row's Back tier.
+  r = await run([row]);
+  const expB = await page.evaluate(ratio => Math.min(strengthScore('back', ratio), strengthScore('biceps', ratio * 99 / 192)), r.r.back);
+  check('multi-credit: rows only -> Biceps has a real tier', r.sc.biceps > 0 && r.L.biceps !== 'Untrained', JSON.stringify(r.L));
+  check('multi-credit: rows only -> Biceps = row on the curl ladder (x0.52), capped at Back', near(r.sc.biceps, expB), `${r.sc.biceps} vs ${expB}`);
+  // 4. Isolation credits nothing.
+  r = await run([curl]);
+  check('multi-credit: curls do not credit Chest or Back (or anything)', r.sc.chest === 0 && r.sc.back === 0 && MGROUPS_ok(r.sc, 'biceps'), JSON.stringify(r.sc));
+  // 5. The audit's bodyweight rules still hold for credits.
+  r = await run([pushups]);
+  check('multi-credit: plain push-ups credit no Triceps / Shoulders (body weight is not the load)', r.sc.triceps === 0 && r.sc.shoulders === 0 && r.sc.chest === 0, JSON.stringify(r.sc));
+  r = await run([bwSquat]);
+  check('multi-credit: bodyweight squats credit no Glutes tier', r.sc.glutes === 0 && r.sc.legs === 0, JSON.stringify(r.sc));
+  r = await run([pullups]);
+  check('multi-credit: pull-ups (body weight is the load) credit Biceps', r.sc.biceps > 0 && r.sc.biceps <= r.sc.back + 1e-12, JSON.stringify(r.sc));
+  r = await run([pullupsNoEquip]);
+  check('multi-credit: an imported pull-up with no equipment saved scores Back from body weight and credits Biceps', r.sc.back > 0 && r.sc.biceps > 0, JSON.stringify(r.sc));
+  // 6. Direct evidence stronger than the credit is never lowered, and a stronger credit lifts a weak direct score.
+  const alone = await run([thrust]), both = await run([thrust, squat]);
+  check('multi-credit: a strong hip thrust is not lowered by a squat credit', near(both.sc.glutes, alone.sc.glutes) && alone.sc.glutes > 0, `${both.sc.glutes} vs ${alone.sc.glutes}`);
+  const weak = await run([thrustLight]), weakSq = await run([thrustLight, squat]);
+  check('multi-credit: a light hip thrust does not drag the squat credit down (stronger wins, no average)', near(weakSq.sc.glutes, expG) && weakSq.sc.glutes > weak.sc.glutes, `${weakSq.sc.glutes} vs ${expG}, light ${weak.sc.glutes}`);
+  // 7. Custom / imported names without exercise-db secondaries go by the name.
+  const cr = await page.evaluate(() => { S.s('cex', [{ id: 'cexSq', name: 'Back Squat', muscle: 'quadriceps', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
+    { id: 'cexCurl', name: 'Spider Curl', muscle: 'biceps', equip: 'dumbbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }]);
+    const k = o => Object.entries(exCredits(o)).filter(([, c]) => c.f > 0).map(([g, c]) => g + ':' + c.f.toFixed(2)).join();
+    return { sq: k({ exId: 'cexSq', name: 'Back Squat', muscle: 'quadriceps' }), curl: k({ exId: 'cexCurl', name: 'Spider Curl', muscle: 'biceps' }),
+      imp: k({ exId: 'imp_row', name: 'Bent Over Row (Barbell)', muscle: 'middle back' }), tgu: k({ exId: 'Kettlebell_Turkish_Get-Up_Squat_style', name: 'Turkish Get-Up (Squat style)', muscle: 'shoulders' }) }; });
+  check('multi-credit: custom "Back Squat" credits glutes at 1.07', cr.sq === 'glutes:1.07', cr.sq);
+  check('multi-credit: custom curl credits nothing', cr.curl === '', cr.curl);
+  check('multi-credit: imported "Bent Over Row" credits biceps', /^biceps:0\.52$/.test(cr.imp), cr.imp);
+  check('multi-credit: a Turkish get-up is not scored as a loaded squat', !/glutes/.test(cr.tgu), cr.tgu);
+  // 8. No body weight logged: the map ranks by sets, and a squat set counts half a set for glutes.
+  await page.evaluate(() => S.s('bw', 0));
+  r = await run([squat]);
+  check('multi-credit: without body weight, squats still show Glutes (half a set each)', r.mode === 'volume' && r.sc.glutes === 0.5 && r.L.glutes !== 'Untrained', JSON.stringify(r.sc));
+  check('multi-credit: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

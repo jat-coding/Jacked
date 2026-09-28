@@ -1,7 +1,7 @@
 // Exercise categorization audit (Mr. Roni, 2026-09-27): loads the real app + the real exercise-db, and for
 // EVERY library exercise (exercise-db + warm-ups + built-in machines) dumps how the app resolves it:
 // muscle -> group -> filter chip, cardio flag, Suggested-today groups, strength group + factor, bodyweight
-// handling, triceps press credit, which badge ladders its name can feed, and what the import guesser would say.
+// handling, triceps credit (exCredits), which badge ladders its name can feed, and what the import guesser would say.
 // Flags the classes of mistake the audit looks for. Not part of run.mjs; run on its own:
 //   JK_PORT=8797 PW=<playwright> node tests/e2e/audit-exercises.mjs [out.md]
 import fs from 'fs';
@@ -32,7 +32,7 @@ try {
         equip: (d && d.equipment) || e.equip || '', mech: (d && d.mechanic) || e.mechanic || '', cat: (d && d.category) || e.category || '',
         muscle: e.muscle, group: g, sug: SUGNAME[g] || '', chips: chips.filter(c => inChip(e, c)).join('/'),
         cardio: isCardioCat(e), exGroups: [...exGroups(log)].join('/'), strGroup: sg,
-        factor: sg ? +exStrengthFactor(e.id, sg).toFixed(2) : '', triPress: pressCreditsTriceps(e.id, e.name, sg),
+        factor: sg ? +exStrengthFactor(e.id, sg).toFixed(2) : '', triPress: ((exCredits(log).triceps || {}).f || 0) > 0,
         bw: isBodyweightEx(log), bwCap: bwCapable(log), plainBW: isPlainBW(log), feeds: feeds.join(' '), bwScores: typeof strLoad === 'function' ? strLoad(log, { weight: 0, reps: 10 }) > 0 : bwCapable(log) || isBodyweightEx(log),
         guess: guessMuscle(e.name), guessGroup: muscleGroup(guessMuscle(e.name)) || (guessMuscle(e.name) === 'cardio' ? 'cardio' : ''),
         resolve: resolveExercise(d ? d.name : e.name),

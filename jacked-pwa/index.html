@@ -1795,9 +1795,9 @@ function updateResumeBar(){
 const SUGNAME={chest:'chest',back:'back',shoulders:'shoulders',biceps:'arms',triceps:'arms',legs:'legs',glutes:'glutes',core:'core'};
 // Every group a logged (or routine) exercise trains, for the suggestion card. Sources, in
 // order: the muscle stored on the log, the library entry (custom / warm-up / exercise-db,
-// incl. exercise-db secondaryMuscles), then the routine or workout name it was done under.
-// Secondary muscles only add Glutes and Core: a chest day's triceps/shoulder secondaries
-// must not mark Arms/Shoulders as trained. Nothing with sets is skipped for a blank muscle.
+// incl. exercise-db secondaryMuscles, read through exCredits like the strength tiers), then the routine or
+// workout name it was done under. Secondary muscles only add Glutes and Core: a chest day's triceps/shoulder
+// secondaries must not mark Arms/Shoulders as trained (2026-09-25), even though they now credit the triceps tier. Nothing with sets is skipped for a blank muscle.
 const GLUTE_MOVE=/squat|deadlift|\brdl\b|lunge|hip thrust|glute bridge|leg press|step.?up|good ?morning|kettlebell swing/i;
 const CORE_MOVE=/plank|crunch|sit.?up|leg raise|knee raise|toes.?to.?bar|russian twist|ab wheel|roll.?out|hollow|dead ?bug|\bv.?ups?\b|oblique|woodchop|pallof|flutter/i;
 function exGroups(ex,w){
@@ -1807,7 +1807,7 @@ function exGroups(ex,w){
   const g0=muscleGroup(logMuscle(ex)), g1=muscleGroup(lib.muscle);
   const prim=[g0,g1,muscleGroup(mapMuscle(d&&d.primaryMuscles&&d.primaryMuscles[0]||''))].find(g=>MGROUPS.includes(g));
   if(prim) gs.add(prim);
-  ((d?d.secondaryMuscles:lib.secondary)||[]).forEach(m=>{ const g=muscleGroup(mapMuscle(m)); if(g==='glutes'||g==='core') gs.add(g); });
+  Object.keys(exCredits(ex)).forEach(g=>{ if(g==='glutes'||g==='core') gs.add(g); });   // same resolution as the strength tiers (exCredits)
   if(CORE_MOVE.test(name)&&!/(front|rear|side) leg raise|step.?up/i.test(name)) gs.add('core');
   if(GLUTE_MOVE.test(name)&&!/calf/i.test(name)) { gs.add('glutes'); if(!/hip thrust|glute bridge|swing/i.test(name)) gs.add('legs'); }   // hip-only moves are not a leg day
   if(!gs.size&&g0!=='cardio'&&g1!=='cardio'&&!/distance|duration/.test(ex.tracking||lib.tracking||'')&&w){
@@ -4229,11 +4229,17 @@ const MGROUPS=['chest','back','shoulders','biceps','triceps','legs','glutes','co
 const MGNAME={chest:'Chest',back:'Back',shoulders:'Shoulders',biceps:'Arms (Biceps)',triceps:'Arms (Triceps)',legs:'Legs',glutes:'Glutes',core:'Core'};
 
 // Aggregate training usage (completed sets) per muscle GROUP across all history.
-function muscleUsage(){
+// credit=true (Muscle Map without a body weight, Workout Summary): a set also counts as CREDIT_SET_SHARE of a set
+// for every group it credits (exCredits f > 0), so a squat day is glute work. 0.5 is a set value, the usual
+// "indirect set = half a set" convention in training-volume research; edit here to tune.
+const CREDIT_SET_SHARE=0.5;
+function muscleUsage(credit){
   const freq={}; MGROUPS.forEach(g=>freq[g]=0);
   gH().forEach(w=>(w.exercises||[]).forEach(ex=>{
     const g=logGroup(ex); if(!g||!(g in freq)) return;
-    freq[g]+=(ex.sets||[]).filter(s=>s.done).length || (ex.sets||[]).length;
+    const n=(ex.sets||[]).filter(s=>s.done).length || (ex.sets||[]).length;
+    freq[g]+=n;
+    if(credit&&isWT(ex)) Object.entries(exCredits(ex)).forEach(([c,v])=>{ if(v.f>0&&c in freq) freq[c]+=n*CREDIT_SET_SHARE; });
   }));
   return freq;
 }
@@ -4305,6 +4311,8 @@ const STRENGTH_STD = {
 //  - each set's estimate counts at most 10 reps (a light 30-rep set can't inflate it)
 //  - each exercise is scaled to a "barbell compound" equivalent (exStrengthFactor)
 //  - the group scores from the average of its best 3 different exercises, not one set
+// Every group also takes credit from compound lifts that work it as a secondary muscle (exCredits, 2026-09-27):
+// the group scores the STRONGER of its direct evidence and its best credit, never an average of the two.
 // Triceps and core are the exception (2026-09-26): they score from their single strongest piece of evidence
 // (triStrength; STR_BEST_ONLY). Averaging dragged both down: a 225 lb bench averaged with pushdowns, a 210 lb
 // ab-crunch-machine set averaged with a 10 lb knee raise. The other groups' tiers didn't move either way.
@@ -4347,17 +4355,87 @@ function logMuscle(ex){
   const m=(ex&&ex.muscle)||'';
   return m.toLowerCase()==='cardio'&&/^imp_/.test(ex.exId||'')&&!/distance|duration/.test(ex.tracking||'')?guessMuscle(ex.name):m;
 }
-// Pressing is triceps work too: a loaded bench/overhead/dip set is triceps evidence as well as
-// chest/shoulder evidence. Uses the DB's secondary muscles, else the exercise name.
-// TRI_PRESS_CREDIT is sourced (Strength Level, 2026-09-26): the average close-grip bench is 206 lb vs
-// 212 lb for the bench press (men), 111 vs 112 lb (women), so a press counts at 0.97 on the close-grip ladder.
-const TRI_PRESS_CREDIT=0.97;
-function pressCreditsTriceps(exId,name,group){
-  if(group!=='chest'&&group!=='shoulders') return false;
-  const db=allDB.find(e=>e.id===exId);
-  if(db&&(db.secondaryMuscles||[]).length) return db.secondaryMuscles.some(m=>/tricep/i.test(m));
-  const n=(name||'').toLowerCase();
-  return /bench|press|\bdip/.test(n)&&!/fly|flye|raise|pec deck|pullover|crossover/.test(n);
+// Compound credit (Mr. Roni, 2026-09-27: "squats use multiple muscle groups and incorporate glutes, so that should
+// place glutes at some tier"). A lift also counts for the other groups it works as a prime mover, converted into that
+// group's reference lift (the lift its STRENGTH_STD ladder is built on). Replaces the old triceps-only press credit.
+// Conversion = Strength Level's average lift for men (strengthlevel.com, read 2026-09-27) of the reference lift ÷ the
+// average of this lift. Squat -> glutes = hip thrust 309 lb ÷ squat 289 lb = 1.07; bench -> triceps = close-grip
+// bench 206 ÷ bench 212 = 0.97 (the old TRI_PRESS_CREDIT, unchanged). The lift is first scaled to its barbell version
+// by the same equipment factor as its direct score, unless the Strength Level lift is itself that machine (native).
+const CREDIT_REF={chest:212,shoulders:137,legs:289,back:192,glutes:309,biceps:99,triceps:206};   // bench, overhead press, squat, bent-over row, hip thrust, barbell curl, close-grip bench
+// Group -> group credit for a compound lift no named lift below matches, at CREDIT_REF[to] / CREDIT_REF[from].
+// Every other secondary (abs, forearms, traps, lower back on a squat, calves...) is a stabiliser: it counts as
+// trained on Suggested today where that card already said so, but never converts into a lift.
+const CREDIT_PAIR={chest:['triceps','shoulders'], shoulders:['triceps'], triceps:['chest'], back:['biceps'], legs:['glutes']};
+// Named lifts with their own Strength Level average. `to` is the complete list of groups the lift credits; `from` is the
+// groups the lift must score for itself (a Turkish get-up saved as shoulders is not a loaded squat).
+const LOWER=['legs','glutes','back'];
+const CREDIT_LIFTS=[
+  {n:'Romanian / stiff-leg deadlift', re:/romanian|\brdl\b|stiff.?leg/i, avg:270, from:LOWER, to:['glutes','back']},
+  {n:'Good morning',                  re:/good ?mornings?/i,              avg:190, from:LOWER, to:['glutes','back']},
+  {n:'Deadlift',                      re:/deadlift|rack pull/i,           avg:340, from:LOWER, to:['glutes','legs','back']},
+  {n:'Hip thrust / glute bridge',     re:/hip thrust|glute bridge|hip raise|\bbridges?\b/i, avg:309, from:LOWER, to:[]},   // hip-only: not a leg lift
+  {n:'Leg press',                     re:/leg press/i,                    avg:500, native:true, from:LOWER, to:['glutes']},
+  {n:'Hack squat',                    re:/hack squat/i,                   avg:335, native:true, from:LOWER, to:['glutes']},
+  {n:'Smith machine squat',           re:/smith.*squat/i,                 avg:246, native:true, from:LOWER, to:['glutes']},
+  {n:'Front squat',                   re:/front squat/i,                  avg:231, from:LOWER, to:['glutes']},
+  {n:'Lunge / split squat',           re:/lunges?|split squat/i,          avg:178, from:LOWER, to:['glutes']},
+  {n:'Squat',                         re:/squats?\b/i,                    avg:289, from:LOWER, to:['glutes']},
+  {n:'Push press',                    re:/push press/i,                   avg:180, from:['shoulders'], to:['triceps']},
+  {n:'Pull-up / pulldown',            re:/pulldown|pull.?downs?|pull.?ups?|chin.?ups?|\bchins?\b/i, avg:180, native:true, from:['back'], to:['biceps']},
+  {n:'Seated cable row',              re:/cable row|seated row|seated cable/i, avg:186, native:true, from:['back'], to:['biceps']},
+];
+// The name that makes the default pair apply: always for an exercise with no secondary-muscle list (your own,
+// imports); for an exercise-db lift the pair also applies when its secondaries list the group, except shoulders,
+// where only a press counts (a kettlebell halo or snatch lists triceps but is not a press). A row credits biceps even
+// where exercise-db leaves biceps out (Inverted Row lists lats only).
+const CREDIT_NAME={chest:/bench|press|push.?ups?|\bdips?\b/i, shoulders:/press|jerk/i, triceps:/close.?grip|\bdips?\b|jm press|floor press/i,
+  back:/^(?!.*upright).*\brows?\b/i, legs:/step.?ups?/i};
+const CREDIT_NAME_ONLY=new Set(['shoulders']);
+const CREDIT_NOT=/fl(y|ies|yes)\b|flye|raise|pec deck|pullover|crossover|calf|scapular|\bcurls?\b|extension|kickback|pushdown|shrug/i;
+// Every other group one logged exercise trains, as {group: {f, why}}. f = what one lb of it is worth on that group's
+// reference lift (0 = trains it, no strength credit). Isolation lifts, stabiliser secondaries and calf/scapular work
+// credit nothing. Suggested today (exGroups) reads the same list.
+function exCredits(ex){
+  const out={}, lib=ex&&ex.exId?byId(ex.exId):{}, name=(ex&&ex.name)||lib.name||'';
+  const src=strGroup(ex||{}); if(!MGROUPS.includes(src)) return out;
+  const db=ex.exId&&allDB.find(e=>e.id===ex.exId), sec=(db?db.secondaryMuscles:lib.secondary)||[];
+  const mech=(db&&db.mechanic)||lib.mechanic||'';
+  const lift=CREDIT_NOT.test(name)?null:CREDIT_LIFTS.find(l=>l.re.test(name)&&l.from.includes(src));
+  const compound=mech!=='isolation'&&!CREDIT_NOT.test(name)&&(mech==='compound'||!!lift||(!sec.length&&!!CREDIT_NAME[src]&&CREDIT_NAME[src].test(name))||(!!db&&!mech));
+  const eqF=()=>{ const f=STR_EQUIP_FACTOR[ex.exId?strEquip(ex.exId):String(lib.equip||'').toLowerCase()]; return f==null?1:f; };
+  const add=(g,f,why)=>{ if(g===src||!MGROUPS.includes(g)) return; if(!out[g]||f>out[g].f) out[g]={f,why}; };
+  sec.forEach(m=>{ if(/forearm|neck/i.test(m)) return; const g=muscleGroup(mapMuscle(m)); if(g) add(g,0,'stabiliser'); });
+  if(!compound) return out;
+  if(lift) lift.to.forEach(g=>add(g,(lift.native?1:eqF())*CREDIT_REF[g]/lift.avg,lift.n));
+  else { const byName=!!CREDIT_NAME[src]&&CREDIT_NAME[src].test(name);
+    (CREDIT_PAIR[src]||[]).forEach(g=>{ const listed=sec.some(m=>!/forearm|neck/i.test(m)&&muscleGroup(mapMuscle(m))===g);
+      if(CREDIT_NAME_ONLY.has(src)?byName:(listed||byName)) add(g,eqF()*CREDIT_REF[g]/CREDIT_REF[src],MGNAME[src]+' lift'); }); }
+  return out;
+}
+// Best credited score per group from the last 90 days. A credit can never rank a group above the tier the lift itself
+// earns on its own group (a 1.25x bench is Strong chest; it can't make shoulders Elite), and it never averages a
+// group's direct evidence down: musclePerf takes the stronger of the two.
+function creditStrength(){
+  const bw=gBW(), out={}; if(!(bw>0)) return out;
+  const since=Date.now()-STR_WINDOW_DAYS*864e5;
+  gH().forEach(w=>{
+    if(!(+new Date(w.date)>=since)) return;
+    (w.exercises||[]).forEach(ex=>{
+      if(!isWT(ex)) return;
+      const cr=Object.entries(exCredits(ex)).filter(([,c])=>c.f>0); if(!cr.length) return;
+      const lib=ex.exId?byId(ex.exId):{}, exn={...ex,name:ex.name||lib.name||'',equip:ex.equip||lib.equip};   // an import may carry no equipment: body-only comes from the library
+      const src=strGroup(ex), sf=exStrengthFactor(ex.exId,src), key=ex.exId||ex.name;
+      (ex.sets||[]).forEach(s=>{
+        if(!(s.done||s.weight>0)) return;
+        const v=e1rm(strLoad(exn,s), Math.min(s.reps||0,STR_REP_CAP)); if(!(v>0)) return;
+        const own=strengthScore(src,v*sf/bw);
+        cr.forEach(([g,c])=>{ const sc=Math.min(own,strengthScore(g,v*c.f/bw));
+          if(sc>((out[g]&&out[g].score)||0)) out[g]={score:sc,key,from:src,f:c.f,ratio:v*c.f/bw}; });
+      });
+    });
+  });
+  return out;
 }
 // Triceps isolation lifts are scored on their OWN Strength Level ladders (strengthlevel.com bodyweight-ratio
 // standards, read 2026-09-26; Beginner/Novice/Intermediate/Advanced -> the same four cut points as
@@ -4386,9 +4464,10 @@ function muscleStrengthRatio(){
     (w.exercises||[]).forEach(ex=>{
       const g=strGroup(ex); if(!g||!isWT(ex)) return;
       const key=ex.exId||ex.name, f=exStrengthFactor(ex.exId,g);
+      const lib=ex.exId?byId(ex.exId):{}, exn={...ex,name:ex.name||lib.name||'',equip:ex.equip||lib.equip};   // imports save no equipment (2026-09-27)
       (ex.sets||[]).forEach(s=>{
         if(!(s.done||s.weight>0)) return;
-        const v=e1rm(strLoad(ex,s), Math.min(s.reps||0,STR_REP_CAP))*f;
+        const v=e1rm(strLoad(exn,s), Math.min(s.reps||0,STR_REP_CAP))*f;
         if(v>0){ const m=best[g]||(best[g]={}); if(v>(m[key]||0)) m[key]=v; }
       });
     });
@@ -4402,9 +4481,8 @@ function muscleStrengthRatio(){
 // Triceps (Mr. Roni, 2026-09-26: "I think it's being calculated wrongly"). Every triceps-relevant exercise in
 // the window is scored on the ladder it belongs to, and the group takes the STRONGEST one; a heavy bench is
 // never averaged down by light pushdowns, or the other way round. Evidence:
-//   - loaded presses (bench, dips, overhead, close-grip...) on the close-grip ladder, at TRI_PRESS_CREDIT unless
-//     the lift is itself saved as triceps. Plain bodyweight reps (push-ups, unweighted dips) don't count,
-//     same rule as best lifts elsewhere (isPlainBW).
+//   - loaded triceps compounds (close-grip, dips...) on the close-grip ladder. Plain bodyweight reps don't count,
+//     same rule as best lifts elsewhere (isPlainBW). Presses saved as chest/shoulders count through exCredits.
 //   - isolation moves on their Strength Level ladder (TRI_ISO_STD).
 // Returns { score 0..1, best: {key, ladder, ratio, score} } for the body map and ranking.
 function triStrength(){
@@ -4425,9 +4503,6 @@ function triStrength(){
           const kind=/dumbbell|kettlebell/.test(equip)?'dumbbell':/barbell|e-z|ez/.test(equip)||/skull|lying/i.test(name)?'lying':'pushdown';
           ladder=TRI_ISO_STD[kind][sex]; f=kind==='pushdown'&&/one.?arm|single.?arm|unilateral/i.test(name)?TRI_ONE_ARM:1;
         }
-      } else if(pressCreditsTriceps(ex.exId,name,g)){
-        if(isPlainBW(exn)) return;
-        ladder=STRENGTH_STD.triceps[sex]; f=exStrengthFactor(ex.exId,g)*TRI_PRESS_CREDIT;
       } else return;
       (ex.sets||[]).forEach(s=>{
         if(!(s.done||s.weight>0)) return;
@@ -4470,9 +4545,10 @@ const strengthLabel=p=>p<=0?{l:'Untrained',b:'bm'}:p<TIER_CUT[0]?{l:'Needs Work'
 // without one — every score would silently read as 0/Untrained otherwise.
 function musclePerf(){
   const bw=gBW();
-  if(!bw){ const freq=muscleUsage(); const max=Math.max(1,...MGROUPS.map(g=>freq[g])); const score={}; MGROUPS.forEach(g=>score[g]=freq[g]/max); return {mode:'volume',score}; }
-  const ratio=muscleStrengthRatio(); const score={}; MGROUPS.forEach(g=>score[g]=strengthScore(g,ratio[g]));
+  if(!bw){ const freq=muscleUsage(true); const max=Math.max(1,...MGROUPS.map(g=>freq[g])); const score={}; MGROUPS.forEach(g=>score[g]=freq[g]/max); return {mode:'volume',score}; }
+  const ratio=muscleStrengthRatio(), cred=creditStrength(); const score={}; MGROUPS.forEach(g=>score[g]=strengthScore(g,ratio[g]));
   score.triceps=triStrength().score;
+  MGROUPS.forEach(g=>{ if(cred[g]&&cred[g].score>score[g]) score[g]=cred[g].score; });   // stronger of direct and credited, never an average
   return {mode:'strength',score};
 }
 
@@ -4513,7 +4589,7 @@ function cardSummary(){
   const insights=[];
   if(last7<3) insights.push({i:uic('warning','var(--orange)',20),c:'var(--orange)',t:`Only ${last7} session${last7!==1?'s':''} in 7 days — aim for 3–5.`});
   else insights.push({i:uic('checkcircle','var(--green)',20),c:'var(--green)',t:`${last7} sessions this week — great consistency!`});
-  const freq=muscleUsage(); const trained=MGROUPS.filter(g=>freq[g]>0).sort((a,b)=>freq[a]-freq[b]);
+  const freq=muscleUsage(true); const trained=MGROUPS.filter(g=>freq[g]>0).sort((a,b)=>freq[a]-freq[b]);
   if(trained.length) insights.push({i:uic('target','var(--blue)',20),c:'var(--blue)',t:`Least-trained group: <strong>${MGNAME[trained[0]]}</strong> — consider a dedicated session.`});
   const html=`<div class="stats-g2">
       <div class="sc"><div class="sv" style="font-size:22px">${last7}</div><div class="sl">Sessions / 7d</div></div>
@@ -6590,7 +6666,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.41';
+const BUILD = 'v1.10.42';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
