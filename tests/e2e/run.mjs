@@ -1233,10 +1233,44 @@ async function lifetimeAvgMin() {
   await ctx.close();
 }
 
+// Wait for the real exercise-db to load inside a test page.
+const dbReady = page => page.evaluate(async () => { loadDB(); for (let i = 0; i < 200 && (dbLoading || !dbLoaded); i++) await new Promise(r => setTimeout(r, 100)); return dbLoaded; });
+
+async function crunchRegex() {
+  // Mr. Roni 2026-09-27: "fix that crunch regex bug". The import muscle guesser tested /run/ as a substring, so every
+  // crunch it had to guess ("Cable Crunch", "Reverse Crunch"...) was saved as Cardio; same class: /chin/ in "machine",
+  // /lat/ in "Flat Bench", /ab/ in "Cable Day".
+  const imp = (n, sets) => ({ exId: 'imp_' + n.toLowerCase().replace(/[^a-z0-9]+/g, '_'), name: n, muscle: 'cardio', tracking: 'weight_reps', sets: sets.map(([lb, r]) => ({ weight: lb / LB, reps: r, done: true })) });
+  const { page, ctx, errors } = await phone({ seed: { prof: { name: 'T', username: '@t', code: '@t', sex: 'male' }, bw: 80,
+    hist: [wk('2026-09-10', [imp('Cable Crunch', [[120, 10]])])] }, now: SEP15 });
+  await dbReady(page);
+  const g = await page.evaluate(() => Object.fromEntries(['Cable Crunch', 'Reverse Crunch', 'Weighted Crunches', 'Crunch (Machine)', 'Bicycle Crunch', 'Running', 'Treadmill Run', 'Cycling', 'Walking',
+    'Walking Lunge', "Farmer's Walk", 'Air Bike', 'Preacher Curl (Machine)', 'Lateral Raise Machine', 'Tricep Kickback', 'Narrow Stance Squat', 'Rear Delt Fly (Machine)', 'Strap Row',
+    'Leg Raise', 'Close Grip Bench Press', 'Pallof Press', 'Floor Press'].map(n => [n, guessMuscle(n)])));
+  for (const n of ['Cable Crunch', 'Reverse Crunch', 'Weighted Crunches', 'Crunch (Machine)', 'Bicycle Crunch', 'Leg Raise', 'Pallof Press']) check(`crunch: "${n}" guessed as abs, not cardio`, g[n] === 'abdominals', g[n]);
+  for (const n of ['Running', 'Treadmill Run', 'Cycling', 'Walking']) check(`crunch: "${n}" still guessed as cardio`, g[n] === 'cardio', g[n]);
+  for (const [n, m] of [['Walking Lunge', 'quadriceps'], ['Preacher Curl (Machine)', 'biceps'], ['Lateral Raise Machine', 'shoulders'], ['Tricep Kickback', 'triceps'], ['Narrow Stance Squat', 'quadriceps'],
+    ['Rear Delt Fly (Machine)', 'shoulders'], ['Strap Row', 'lats'], ['Close Grip Bench Press', 'triceps'], ['Floor Press', 'chest']]) check(`crunch: "${n}" guessed ${m}`, g[n] === m, g[n]);
+  check("crunch: Farmer's Walk / Air Bike are not cardio", g["Farmer's Walk"] !== 'cardio' && g['Air Bike'] !== 'cardio', g["Farmer's Walk"] + ' ' + g['Air Bike']);
+  const dbCardio = await page.evaluate(() => allDB.filter(e => e.name !== 'Wind Sprints' && (guessMuscle(e.name) === 'cardio' || guessMuscle(prettyDB(e.name, e.equipment)) === 'cardio')).map(e => e.name));   // exercise-db files a hanging ab move as "Wind Sprints"
+  check('crunch: no exercise-db strength lift is guessed as cardio by name', dbCardio.length === 0, dbCardio.join(', '));
+  const crunchChip = await page.evaluate(() => allEx().filter(e => /crunch/i.test(e.name) && isCardioCat(e)).map(e => e.name));
+  check('crunch: no crunch shows under the Cardio chip', crunchChip.length === 0, crunchChip.join(', '));
+  const mg = await page.evaluate(() => Object.fromEntries(['Flat Bench', 'Cable Day', 'Tabata', 'Lateral Raise', 'Kickbacks', 'lats', 'middle back', 'lower back', 'abdominals', 'abductors', 'Leg Day', 'Back & Biceps', 'Abs', 'Pecs'].map(n => [n, muscleGroup(n)])));
+  check('crunch: routine names "Flat Bench" / "Cable Day" / "Tabata" / "Kickbacks" are not Back/Core', !mg['Flat Bench'] && !mg['Cable Day'] && !mg['Tabata'] && !mg['Kickbacks'], JSON.stringify(mg));
+  check('crunch: real muscle names still group right', mg.lats === 'back' && mg['middle back'] === 'back' && mg['lower back'] === 'back' && mg.abdominals === 'core' && mg.abductors === 'legs' && mg['Leg Day'] === 'legs' && mg['Back & Biceps'] === 'back' && mg.Abs === 'core' && mg.Pecs === 'chest', JSON.stringify(mg));
+  // A crunch imported before the fix (saved as cardio) now counts as core.
+  const old = await page.evaluate(() => { const e = gH()[0].exercises[0]; return { g: strGroup(e), sug: [...exGroups(e, gH()[0])], core: muscleStrengthRatio().core }; });
+  check('crunch: old imported "Cable Crunch" saved as cardio now counts for Core strength', old.g === 'core' && old.core > 0, JSON.stringify(old));
+  check('crunch: ...and for Suggested today', old.sug.includes('core'), old.sug.join('/'));
+  check('crunch: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin]) {
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

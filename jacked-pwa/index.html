@@ -1770,12 +1770,12 @@ const SUGNAME={chest:'chest',back:'back',shoulders:'shoulders',biceps:'arms',tri
 // Secondary muscles only add Glutes and Core: a chest day's triceps/shoulder secondaries
 // must not mark Arms/Shoulders as trained. Nothing with sets is skipped for a blank muscle.
 const GLUTE_MOVE=/squat|deadlift|\brdl\b|lunge|hip thrust|glute bridge|leg press|step.?up|good ?morning|kettlebell swing/i;
-const CORE_MOVE=/plank|crunch|sit.?up|leg raise|knee raise|toes.?to.?bar|russian twist|ab wheel|roll.?out|hollow|dead ?bug|v.?up|oblique|woodchop|pallof|flutter/i;
+const CORE_MOVE=/plank|crunch|sit.?up|leg raise|knee raise|toes.?to.?bar|russian twist|ab wheel|roll.?out|hollow|dead ?bug|\bv.?ups?\b|oblique|woodchop|pallof|flutter/i;
 function exGroups(ex,w){
   const gs=new Set(), lib=ex.exId?byId(ex.exId):{}, name=ex.name||lib.name||'';
   const d=ex.exId&&allDB.find(e=>e.id===ex.exId);
   // Primary: first source that names a real group wins (a muscle he re-tagged beats the library).
-  const g0=muscleGroup(ex.muscle), g1=muscleGroup(lib.muscle);
+  const g0=muscleGroup(logMuscle(ex)), g1=muscleGroup(lib.muscle);
   const prim=[g0,g1,muscleGroup(mapMuscle(d&&d.primaryMuscles&&d.primaryMuscles[0]||''))].find(g=>MGROUPS.includes(g));
   if(prim) gs.add(prim);
   if(d) (d.secondaryMuscles||[]).forEach(m=>{ const g=muscleGroup(mapMuscle(m)); if(g==='glutes'||g==='core') gs.add(g); });
@@ -2121,22 +2121,28 @@ function resolveExercise(keyword) {
 
 // Keyword-based muscle guess for exercises with no DB match, so muscle-group
 // rankings still work for imported data. Order matters (specific → generic).
+// Whole words only (Mr. Roni, 2026-09-27): a bare substring test read "crunch" as "run" and filed
+// every imported crunch under Cardio; "chin" hit "machine", "row" hit "narrow", "trap" hit "strap".
+// Loaded carries, walking lunges and the ab "air bike" are strength work even though they say walk/bike.
 function guessMuscle(name){
-  const n=(name||'').toLowerCase();
-  if(/run|tread|cycl|bike|spin|stair|elliptical|sauna|walk|danc|jog|cardio|battle rope/.test(n)) return 'cardio';
-  if(/calf|calves/.test(n)) return 'calves';
-  if(/forearm|wrist/.test(n)) return 'forearms';
-  if(/leg curl|hamstring|glute ham|lying leg curl|seated leg curl/.test(n)) return 'hamstrings';
-  if(/squat|leg press|lunge|leg extension|hack/.test(n)) return 'quadriceps';
-  if(/glute|kickback|hip thrust|hip abduction|hip adduction/.test(n)) return 'glutes';
-  if(/deadlift|hyperextension|back extension|good morning/.test(n)) return 'lower back';
-  if(/bench|chest|\bfly\b|flye|pec|push ?up/.test(n)) return 'chest';
-  if(/tricep|pushdown|skullcrusher|\bdip\b|close grip/.test(n)) return 'triceps';
-  if(/\bcurl\b/.test(n)) return 'biceps';
-  if(/row|pulldown|pull ?up|chin|\blat\b/.test(n)) return 'lats';
-  if(/shrug|trap/.test(n)) return 'traps';
-  if(/shoulder|press|delt|lateral raise|front raise|arnold|upright row|face pull|pull ?apart/.test(n)) return 'shoulders';
-  if(/crunch|plank|sit ?up|leg raise|knee raise|\bab\b|abs|oblique|flutter|jackknife|bicycle|torso|hanging/.test(n)) return 'abdominals';
+  const n=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const notCardio=/\b(lunges?|farmers?|yoke|carry|sled|monster|crunch(es)?|curls?|press|squats?|air bike|bicycle)\b/;
+  if(!notCardio.test(n)&&/\b(run|running|jog|jogging|treadmill|cycle|cycling|bike|biking|spin|spinning|stair ?master|stair climb(er|ing)?|stepper|elliptical|walk|walking|hike|hiking|swim|swimming|rowing machine|rower|erg|sauna|danc(e|ing)|cardio|battle ropes?|jump rope|skipping|sprints?)\b/.test(n)) return 'cardio';
+  if(/\bshrugs?\b|\btraps?\b/.test(n)) return 'traps';
+  if(/\bcalf\b|\bcalves\b/.test(n)) return 'calves';
+  if(/\bforearms?\b|\bwrists?\b/.test(n)) return 'forearms';
+  if(/\bcrunch(es)?\b|\bplanks?\b|\bsit.?ups?\b|\bleg raises?\b|\bknee raises?\b|\bab\b|\babs\b|ab wheel|\broll.?outs?\b|\bobliques?\b|\bflutter|jackknife|bicycle|russian twist|pallof|dead ?bugs?\b|\bhollow|\bv.?ups?\b|toes.?to.?bar|wood.?chop/.test(n)) return 'abdominals';
+  if(/\bleg curls?\b|hamstring|glute.?ham|\bnordic|romanian|\brdl\b|stiff.?leg|good ?mornings?\b/.test(n)) return 'hamstrings';
+  if(/\badduct/.test(n)) return 'adductors';
+  if(/tricep|pushdown|skull ?crusher|close.?grip (bench|press|push)|jm press|tate press|\bdips?\b/.test(n)) return 'triceps';
+  if(/\bglutes?\b|kickback|hip thrust|hip abduct|\bbridges?\b|donkey kick|fire hydrant/.test(n)) return 'glutes';
+  if(/\bsquats?\b|leg press|\blunges?\b|leg extensions?\b|\bhack\b|step.?ups?\b|\bpistol/.test(n)) return 'quadriceps';
+  if(/deadlift|hyperextension|back extension|rack pull/.test(n)) return 'lower back';
+  if(/rear delt|reverse fl(y|ies|yes)\b|face pulls?\b|upright rows?\b|lateral raises?\b|front raises?\b|shoulder|\bdelts?\b|deltoid|arnold|overhead press|military|push press/.test(n)) return 'shoulders';
+  if(/\bcurls?\b/.test(n)) return 'biceps';
+  if(/\brows?\b|pulldown|pull.?ups?\b|chin.?ups?\b|\bchins?\b|\blats?\b/.test(n)) return 'lats';
+  if(/bench|chest|\bfl(y|ies|yes)\b|flye|\bpecs?\b|pec deck|push.?ups?\b|floor press|butterfly|crossover|pullover/.test(n)) return 'chest';
+  if(/\bpress\b|pull.?apart/.test(n)) return 'shoulders';
   return '';
 }
 
@@ -4133,14 +4139,16 @@ function earnedBadgeCount(){ return computeBadges().filter(b=>b.earned).length; 
 // ── Muscle grouping: map any DB/Hevy sub-muscle to a top-level group ──
 function muscleGroup(m){
   m=(m||'').toLowerCase();
-  if(/quad|hamstring|calf|calve|\bleg|abductor|adductor/.test(m)) return 'legs';
+  // Whole words (2026-09-27): this also reads routine/workout names, where /lat/ turned "Flat Bench" into
+  // Back and /ab/ turned "Cable Day" or "Tabata" into Core.
+  if(/quad|hamstring|\bcalf\b|\bcalves\b|\blegs?\b|abductor|adductor/.test(m)) return 'legs';
   if(/glute/.test(m)) return 'glutes';
-  if(/chest|pec/.test(m)) return 'chest';
-  if(/lat|back|trap|spine|teres|rhomboid|erector/.test(m)) return 'back';
+  if(/chest|\bpecs?\b|pectoral/.test(m)) return 'chest';
+  if(/\blats?\b|latissimus|\bback\b|\btraps?\b|trapezius|spine|teres|rhomboid|erector/.test(m)) return 'back';
   if(/bicep|forearm/.test(m)) return 'biceps';
   if(/tricep/.test(m)) return 'triceps';
-  if(/shoulder|delt|neck/.test(m)) return 'shoulders';
-  if(/ab|core|oblique/.test(m)) return 'core';
+  if(/shoulder|\bdelts?\b|deltoid|\bneck\b/.test(m)) return 'shoulders';
+  if(/\babs?\b|abdominal|\bcore\b|oblique/.test(m)) return 'core';
   if(/cardio/.test(m)) return 'cardio';
   return '';
 }
@@ -4246,7 +4254,13 @@ function exStrengthFactor(exId,group){
 // (custom exercise, or exercise-db primary muscle). A blank or unmapped saved muscle is not skipped.
 function strGroup(ex){
   const lib=ex&&ex.exId?byId(ex.exId):{};
-  return [muscleGroup(ex&&ex.muscle),muscleGroup(lib.muscle)].find(g=>g in STRENGTH_STD)||'';
+  return [muscleGroup(logMuscle(ex)),muscleGroup(lib.muscle)].find(g=>g in STRENGTH_STD)||'';
+}
+// The muscle saved on a log. Imports before 2026-09-27 could save 'cardio' on a weight/rep lift the old guesser
+// misread ("Cable Crunch" has "run" in it), so an imported weight/rep log saved as cardio is re-read by name.
+function logMuscle(ex){
+  const m=(ex&&ex.muscle)||'';
+  return m.toLowerCase()==='cardio'&&/^imp_/.test(ex.exId||'')&&!/distance|duration/.test(ex.tracking||'')?guessMuscle(ex.name):m;
 }
 // Pressing is triceps work too: a loaded bench/overhead/dip set is triceps evidence as well as
 // chest/shoulder evidence. Uses the DB's secondary muscles, else the exercise name.
@@ -6481,7 +6495,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.38';
+const BUILD = 'v1.10.39';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
