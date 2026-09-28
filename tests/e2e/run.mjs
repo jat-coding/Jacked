@@ -1267,10 +1267,80 @@ async function crunchRegex() {
   await ctx.close();
 }
 
+async function builtinMachines() {
+  // Mr. Roni 2026-09-27: "add those and we'll do icon only" -- Lateral Raise, Hip Thrust, Assisted Pull-Up and Assisted Dip machines.
+  const IDS = ['bi_lateral_raise_machine', 'bi_hip_thrust_machine', 'bi_assisted_pullup_machine', 'bi_assisted_dip_machine'];
+  const lg = (exId, sets, extra = {}) => ({ exId, name: '', muscle: '', tracking: 'weight_reps', ...extra, sets: sets.map(([lb, r]) => ({ weight: lb / LB, reps: r, done: true })) });
+  const named = (exId, sets, extra) => { const e = lg(exId, sets, extra); return e; };
+  const hist = [wk('2026-09-12', [named('bi_lateral_raise_machine', [[100, 10]]), named('bi_hip_thrust_machine', [[300, 8]]),
+    named('bi_assisted_pullup_machine', [[40, 8], [20, 8]], { assist: true }), named('bi_assisted_dip_machine', [[250, 10]], { assist: true })])];
+  const { page, ctx, errors } = await phone({ seed: { prof: { name: 'T', username: '@t', code: '@t', sex: 'male' }, bw: 80, hist }, now: SEP15 });
+  await dbReady(page);
+  // give the logs their library names/muscles, the way the app saves them
+  await page.evaluate(() => { const h = gH(); h[0].exercises.forEach(e => { const b = byId(e.exId); e.name = b.name; e.muscle = b.muscle; e.equip = b.equip; }); S.s('hist', h); });
+  const lib = await page.evaluate(ids => ids.map(id => { const e = byId(id); return { id, name: e.name, muscle: e.muscle, assist: !!e.assist, img: imgUrl(e), thumb: thumbH(e), col: mc(e.muscle), instr: (e.instructions || []).length,
+    inAll: allEx().filter(x => x.id === id).length, custom: isCustomEx(id) }; }), IDS);
+  check('machines: all 4 are in the library exactly once', lib.every(e => e.inAll === 1), JSON.stringify(lib.map(e => e.inAll)));
+  check('machines: names', lib.map(e => e.name).join('|') === 'Lateral Raise (machine)|Hip Thrust (machine)|Assisted Pull-Up (machine)|Assisted Dip (machine)', lib.map(e => e.name).join('|'));
+  check('machines: muscles shoulders / glutes / lats / triceps', lib.map(e => e.muscle).join() === 'shoulders,glutes,lats,triceps', lib.map(e => e.muscle).join());
+  check('machines: icon only (no photo), line icon in the muscle color', lib.every(e => e.img === null && /<svg/.test(e.thumb) && !/<img/.test(e.thumb) && e.thumb.includes(e.col)));
+  check('machines: instructions present', lib.every(e => e.instr >= 3));
+  check('machines: built-in, not custom (Delete hides them)', lib.every(e => !e.custom));
+  check('machines: assisted ones carry assist, the others do not', lib.map(e => e.assist).join() === 'false,false,true,true');
+  const search = await page.evaluate(() => Object.fromEntries(['lat raise', 'lateral raise machine', 'hip thrust machine', 'assisted pull up', 'assisted pullup', 'assisted dip'].map(q => [q, allEx().filter(e => exSearchMatch(q, e)).map(e => e.id)])));
+  check('machines: search "lat raise" finds Lateral Raise (machine)', search['lat raise'].includes('bi_lateral_raise_machine'));
+  check('machines: search finds each one', search['lateral raise machine'].includes('bi_lateral_raise_machine') && search['hip thrust machine'].includes('bi_hip_thrust_machine') && search['assisted pull up'].includes('bi_assisted_pullup_machine') && search['assisted pullup'].includes('bi_assisted_pullup_machine') && search['assisted dip'].includes('bi_assisted_dip_machine'), JSON.stringify(search));
+  // Library chips (real DOM)
+  for (const [chip, id] of [['shoulders', 'bi_lateral_raise_machine'], ['glutes', 'bi_hip_thrust_machine'], ['lats', 'bi_assisted_pullup_machine'], ['triceps', 'bi_assisted_dip_machine']]) {
+    const shown = await page.evaluate(([chip, id]) => { sp('exercises'); mFlt = chip; document.getElementById('exSearch').value = byId(id).name.split(' (')[0]; renderEx(); return document.getElementById('exList').innerHTML.includes(`openExInfo('${id}')`); }, [chip, id]);
+    check(`machines: ${id} listed under the ${chip} chip`, shown);
+  }
+  const cardio = await page.evaluate(ids => ids.filter(id => isCardioCat(byId(id))), IDS);
+  check('machines: none under Cardio', cardio.length === 0, cardio.join());
+  const r = await page.evaluate(() => {
+    const h = gH()[0], ex = h.exercises, bw = gBW();
+    return { groups: ex.map(e => [...exGroups(e, h)].join('/')), str: ex.map(e => strGroup(e)), f: ex.map(e => +exStrengthFactor(e.exId, strGroup(e)).toFixed(2)),
+      eff: ex[2].sets.map(s => +effWeight(ex[2], s).toFixed(2)), bw, ratio: muscleStrengthRatio(), tri: triStrength(), plain: ex.map(e => isPlainBW(e)),
+      pr: prBest(ex[2]), keys: ex.map(e => exerciseBadgeKey(e)), big: computeBadges().find(b => b.name === 'Pull-up-Maxing') };
+  });
+  check('machines: Suggested today credits shoulders / glutes (not legs) / back / triceps', r.groups.join('|') === 'shoulders|glutes|back|triceps', r.groups.join('|'));
+  check('machines: strength groups', r.str.join() === 'shoulders,glutes,back,triceps', r.str.join());
+  check('machines: lateral raise scaled as a machine isolation lift (0.9 x 1.8), hip thrust as a machine (0.9), assisted as body weight (1)', r.f.join() === '1.62,0.9,1,1', r.f.join());
+  check('machines: assisted pull-up load = body weight minus counterweight', Math.abs(r.eff[0] - (r.bw - 40 / LB)) < 0.01 && Math.abs(r.eff[1] - (r.bw - 20 / LB)) < 0.01, r.eff.join());
+  check('machines: less assistance is the better (PR) set', r.pr && r.pr.si === 1, JSON.stringify(r.pr));
+  check('machines: assisted dip with counterweight over body weight = 0 load, never negative', r.ratio.triceps >= 0 && !isNaN(r.ratio.back), JSON.stringify(r.ratio));
+  check('machines: shoulders / glutes / back tiers fed', r.ratio.shoulders > 0 && r.ratio.glutes > 0 && r.ratio.back > 0, JSON.stringify(r.ratio));
+  check('machines: assisted lifts are not "best lifts" (plain/assisted body weight rule)', r.plain.join() === 'false,false,true,true', r.plain.join());
+  check('machines: assisted dip is not triceps tier evidence', !r.tri.best || r.tri.best.key !== 'bi_assisted_dip_machine', JSON.stringify(r.tri.best));
+  check('machines: no machine feeds a Maxing ladder (assisted pull-ups are not pull-ups)', r.keys.every(k => k === null), r.keys.join());
+  // 20 assisted reps must not earn Pull-up-Maxing; 12 real pull-ups do; 25 scapular pull-ups do not; -Assist toggle on a plain pull-up does not.
+  const pb = await page.evaluate(() => {
+    const mk = (id, name, reps, extra = {}) => ({ exId: id, name, muscle: 'lats', tracking: 'weight_reps', ...extra, sets: [{ weight: 0, reps, done: true }] });
+    const d = new Date('2026-09-14T12:00:00-06:00').toISOString();
+    const test = exs => { S.s('hist', [{ id: 'wx', name: 'W', date: d, exercises: exs, duration: '30:00', sets: 1, totalVolume: 0 }]); const b = computeBadges().find(b => b.name === 'Pull-up-Maxing'); return b.tier || null; };
+    return { assisted: test([mk('bi_assisted_pullup_machine', 'Assisted Pull-Up (machine)', 20, { assist: true })]), band: test([mk('Band_Assisted_Pull-Up', 'Band Assisted Pull-Up', 20)]),
+      scap: test([mk('wu_lats', 'Scapular Pull-Up', 25)]), toggle: test([mk('Pullups', 'Pullups', 20, { bwMode: 'assist' })]), real: test([mk('Pullups', 'Pullups', 12)]),
+      live: [exerciseBadgeKey(mk('Band_Assisted_Pull-Up', 'Band Assisted Pull-Up', 1)), exerciseBadgeKey(mk('Pullups', 'Pullups', 1)), exerciseBadgeKey(mk('x', 'Push-Up', 1))].join() };
+  });
+  check('machines: 20 assisted-machine reps earn no Pull-up-Maxing', pb.assisted === null, pb.assisted);
+  check('machines: 20 band-assisted reps earn no Pull-up-Maxing', pb.band === null, pb.band);
+  check('machines: 25 scapular pull-ups earn no Pull-up-Maxing', pb.scap === null, pb.scap);
+  check('machines: pull-ups logged with the -Assist toggle earn no Pull-up-Maxing', pb.toggle === null, pb.toggle);
+  check('machines: 12 real pull-ups still earn bronze', pb.real === 'bronze', pb.real);
+  check('machines: live badge chip keys', pb.live === ',pullup,pushup', pb.live);
+  // Add to a live workout: assist carried, icon thumb in the card, no page errors.
+  await page.evaluate(() => { S.s('hist', []); startEmpty(); addExToWorkout('bi_assisted_pullup_machine'); });
+  await page.waitForTimeout(200);
+  const live = await page.evaluate(() => ({ assist: aw.exercises[0].assist, cap: bwCapable(aw.exercises[0]), mode: bwMode(aw.exercises[0]) }));
+  check('machines: added to a workout it is assisted (-Assist mode)', live.assist === true && live.cap && live.mode === 'assist', JSON.stringify(live));
+  check('machines: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

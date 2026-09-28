@@ -1508,6 +1508,20 @@ const WARMUPS = [
   {id:'wu_core',     name:'Plank',                 muscle:'core',      equip:'Bodyweight', tracking:'duration',  instructions:['Forearms and toes on the floor, body in a straight line.','Brace your abs and squeeze your glutes.','Hold for 30–60 seconds.']},
   {id:'wu_forearms', name:'Wrist Circles',         muscle:'forearms',  equip:'Bodyweight', tracking:'duration',  instructions:['Extend your arms and make loose fists.','Circle the wrists slowly in both directions.','About 20–30 seconds to loosen the wrists and forearms.']},
 ].map(w=>({...w, category:'warmup', images:[], _c:true, _w:true}));
+// Built-in machines exercise-db doesn't have (Mr. Roni, 2026-09-27: "add those and we'll do icon only"). Full library
+// citizens like the exercise-db lifts: stable ids, secondary muscles, mechanic, their muscle chip, search, body map,
+// strength tiers and PRs. No photo, so they show the line icon in their muscle's color. The assisted ones carry
+// assist:true, so the counterweight is subtracted from body weight (effWeight), same as any assisted exercise.
+const MACHINES = [
+  {id:'bi_lateral_raise_machine', name:'Lateral Raise (machine)', muscle:'shoulders', secondary:['traps'], equip:'machine', mechanic:'isolation', tracking:'weight_reps',
+    instructions:['Set the seat so your shoulders line up with the machine\'s pivot points; rest the pads on the outside of your upper arms.','Raise your arms out to the sides, leading with the elbows, until your upper arms are level with your shoulders.','Pause, then lower slowly under control. Don\'t shrug or swing.']},
+  {id:'bi_hip_thrust_machine', name:'Hip Thrust (machine)', muscle:'glutes', secondary:['hamstrings'], equip:'machine', mechanic:'compound', tracking:'weight_reps',
+    instructions:['Sit with your upper back on the pad and the belt or pad across your hips, feet flat about hip-width apart.','Drive through your heels and push your hips up until your body is straight from knees to shoulders.','Squeeze your glutes at the top, then lower under control. Keep your chin tucked and ribs down.']},
+  {id:'bi_assisted_pullup_machine', name:'Assisted Pull-Up (machine)', muscle:'lats', secondary:['biceps','middle back'], equip:'machine', mechanic:'compound', tracking:'weight_reps', assist:true,
+    instructions:['Pick the counterweight: more weight means more help. Log that weight; it is taken off your body weight.','Kneel or stand on the platform, grip the handles a little wider than your shoulders, and hang with straight arms.','Pull your chest up toward the handles, driving your elbows down. Lower all the way under control.']},
+  {id:'bi_assisted_dip_machine', name:'Assisted Dip (machine)', muscle:'triceps', secondary:['chest','shoulders'], equip:'machine', mechanic:'compound', tracking:'weight_reps', assist:true,
+    instructions:['Pick the counterweight: more weight means more help. Log that weight; it is taken off your body weight.','Kneel or stand on the platform, grip the dip handles, and press up until your arms are straight.','Lower until your upper arms are about level with the floor, then press back up. Stay upright to keep it on the triceps.']},
+].map(e=>({...e, category:'strength', images:[], _b:true}));
 
 async function loadDB() {
   if (dbLoaded || dbLoading) return;
@@ -1618,7 +1632,7 @@ function byId(id) {
   const c = gCEx().find(e=>e.id===id);
   if (c) return { ...c, name:exName(id,c.name), _c:true };
   // built-in warm-ups
-  const w = WARMUPS.find(e=>e.id===id);
+  const w = WARMUPS.find(e=>e.id===id)||MACHINES.find(e=>e.id===id);
   if (w) return exOverride(id, { ...w, name:exName(id,w.name) });
   // check DB
   const d = allDB.find(e=>e.id===id);
@@ -1631,11 +1645,12 @@ function byId(id) {
 function allEx() {
   const cust = gCEx().map(e=>({...e,name:exName(e.id,e.name),_c:true}));
   const warm = WARMUPS.map(e=>exOverride(e.id,{...e,name:exName(e.id,e.name)}));
+  const mach = MACHINES.map(e=>exOverride(e.id,{...e,name:exName(e.id,e.name)}));
   const db   = allDB.map(e=>exOverride(e.id,{ id:e.id, name:exName(e.id,prettyDB(e.name,e.equipment)), muscle:mapMuscle(e.primaryMuscles?.[0]||''),
     equip:EQUIP_FIX[e.id]||e.equipment||'', images:e.images||[], tracking:'weight_reps', _d:true }));
   // Warm-ups go last so they don't crowd the top of the unfiltered library, but
   // still surface under the Warm-up chip, their muscle chip, and search.
-  return [...cust, ...db, ...warm];
+  return [...cust, ...mach, ...db, ...warm];
 }
 
 function imgUrl(ex) {
@@ -1778,7 +1793,7 @@ function exGroups(ex,w){
   const g0=muscleGroup(logMuscle(ex)), g1=muscleGroup(lib.muscle);
   const prim=[g0,g1,muscleGroup(mapMuscle(d&&d.primaryMuscles&&d.primaryMuscles[0]||''))].find(g=>MGROUPS.includes(g));
   if(prim) gs.add(prim);
-  if(d) (d.secondaryMuscles||[]).forEach(m=>{ const g=muscleGroup(mapMuscle(m)); if(g==='glutes'||g==='core') gs.add(g); });
+  ((d?d.secondaryMuscles:lib.secondary)||[]).forEach(m=>{ const g=muscleGroup(mapMuscle(m)); if(g==='glutes'||g==='core') gs.add(g); });
   if(CORE_MOVE.test(name)&&!/(front|rear|side) leg raise|step.?up/i.test(name)) gs.add('core');
   if(GLUTE_MOVE.test(name)&&!/calf/i.test(name)) { gs.add('glutes'); if(!/hip thrust|glute bridge|swing/i.test(name)) gs.add('legs'); }   // hip-only moves are not a leg day
   if(!gs.size&&g0!=='cardio'&&g1!=='cardio'&&!/distance|duration/.test(ex.tracking||lib.tracking||'')&&w){
@@ -2008,9 +2023,10 @@ function startEmptyOn(ds){
 function exSearchMatch(q,e){
   const words=String(q||'').toLowerCase().trim().split(/\s+/).filter(Boolean);
   if(!words.length) return true;
-  const hay=[e.name,e.muscle,e.equip,e.category].filter(Boolean).join(' ').toLowerCase();
+  const hay=[e.name,e.muscle,e.equip,e.category].filter(Boolean).join(' ').toLowerCase(), flat=hay.replace(/[^a-z0-9]/g,'');
   return words.every(w=>{
     if(hay.includes(w)) return true;
+    const fw=w.replace(/[^a-z0-9]/g,''); if(fw.length>2&&flat.includes(fw)) return true;   // 'pullup' finds 'Pull-Up'
     const stem=w.replace(/(es|s)$/,'');   // strip trailing plural
     return stem.length>1 && (hay.includes(stem)||hay.includes(stem+'s')||hay.includes(stem+'es'));
   });
@@ -3107,10 +3123,16 @@ function exerciseBadgeKey(ex){
   if(nm.includes('barbell')&&nm.includes('bench press')) return 'bench';
   if(nm.includes('barbell')&&(nm.includes('overhead press')||nm.includes('military press'))) return 'ohp';
   if(nm.includes('barbell')&&nm.includes('squat')) return 'squat';
-  const f=flatNm(ex.name);
-  if(f.includes('pullup')||f.includes('chinup')) return 'pullup';
-  if(f.includes('pushup')) return 'pushup';
+  if(repBadgeEx(ex,'pullup')) return 'pullup';
+  if(repBadgeEx(ex,'pushup')) return 'pushup';
   return null;
+}
+// Pull-up / Push-up-Maxing count your own reps (2026-09-27). An assisted set (the assisted machines, a band, or the
+// -Assist toggle) is not an unassisted pull-up, and a scapular pull-up is a shoulder-blade shrug, not a pull-up.
+function repBadgeEx(ex,kind){
+  const f=flatNm(ex&&ex.name);
+  if(!ex||ex.assist||bwMode(ex)==='assist'||f.includes('assist')) return false;
+  return kind==='pullup'?(f.includes('pullup')||f.includes('chinup'))&&!f.includes('scapular'):f.includes('pushup');
 }
 const BADGE_TIER_THRESH={
   bench:[135,225,315], ohpFrac:[0.25,0.5,1.0], squatFrac:[1.0,1.5,2.0],
@@ -3195,9 +3217,8 @@ function badgeTierForKey(key,h){
     return {tier:tierOfLive(best,frac.map(f=>f*bwLb)), value:best};
   }
   if(key==='pullup'||key==='pushup'){
-    const f = key==='pullup' ? n=>n.includes('pullup')||n.includes('chinup') : n=>n.includes('pushup');
     let best=0;
-    h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!f(flatNm(ex.name)))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>best)best=s.reps||0; }); }));
+    h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!repBadgeEx(ex,key))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>best)best=s.reps||0; }); }));
     return {tier:tierOfLive(best,badgeT()[key]), value:best};
   }
   if(key==='cardio'){
@@ -3886,10 +3907,10 @@ function computeBadges() {
 
   // Pull-up / push-up: best single SET (never summed across sets).
   const flat=s=>(s||'').toLowerCase().replace(/[^a-z]/g,'');
-  const bestSetReps=(pred,src=h3)=>{ let best=0; src.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!pred(flat(ex.name)))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>best)best=s.reps||0; }); })); return best; };
-  const pullBest=bestSetReps(f=>f.includes('pullup')||f.includes('chinup'));
+  const bestSetReps=(pred,src=h3)=>{ let best=0; src.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!pred(ex))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>best)best=s.reps||0; }); })); return best; };
+  const pullBest=bestSetReps(ex=>repBadgeEx(ex,'pullup'));
   const pullT=tierOf(pullBest,TH.pullup);
-  const pushBest=bestSetReps(f=>f.includes('pushup'));
+  const pushBest=bestSetReps(ex=>repBadgeEx(ex,'pushup'));
   const pushT=tierOf(pushBest,TH.pushup);
   // Cardio: lowest endurance-adjusted mile-equivalent (Riegel) across all logged runs.
   // Only runs from the last 3 months count (rolling, like the lifts).
@@ -3914,7 +3935,7 @@ function computeBadges() {
 
   // All-time bests (kept even when the 3-month tier has dropped) -- shown in the popup.
   const cardioTierOf=v=>v<=TH.cardio[2]?'gold':v<=TH.cardio[1]?'silver':v<=TH.cardio[0]?'bronze':null;
-  const pullF=f=>f.includes('pullup')||f.includes('chinup'), pushF=f=>f.includes('pushup');
+  const pullF=ex=>repBadgeEx(ex,'pullup'), pushF=ex=>repBadgeEx(ex,'pushup');
   const bA=bestLb(benchPred,1,h), oA=bestLb(ohpPred,5,h), qA=bestLb(sqPred,5,h), puA=bestSetReps(pullF,h), psA=bestSetReps(pushF,h);
   const ALL={
     'Bench-Maxing':bA>0&&{v:`${r0(bA)} lb`,tier:benchTierOf(h).tier},
@@ -4244,11 +4265,16 @@ const STR_EQUIP_FACTOR={barbell:1,'e-z curl bar':1,machine:0.9,cable:1.1,dumbbel
 // compound lift (a lateral raise is not a shoulder press). These factors are set values,
 // not sourced; edit here to tune. (Triceps no longer uses the 1.8x: see TRI_ISO_STD.)
 function exStrengthFactor(exId,group){
-  const db=allDB.find(e=>e.id===exId)||null;
-  const equip=String((db&&db.equipment)||byId(exId).equip||'').toLowerCase();
-  let f=STR_EQUIP_FACTOR[equip]; if(f==null) f=1;
-  if(db&&db.mechanic==='isolation'&&!STR_REF_ISOLATION.has(group)) f*=1.8;
+  const db=allDB.find(e=>e.id===exId)||null, lib=byId(exId);
+  let f=STR_EQUIP_FACTOR[strEquip(exId)]; if(f==null) f=1;
+  if(((db&&db.mechanic)||lib.mechanic)==='isolation'&&!STR_REF_ISOLATION.has(group)) f*=1.8;
   return f;
+}
+// Equipment key for STR_EQUIP_FACTOR. An assisted exercise's load is your own body (effWeight), not the machine.
+function strEquip(exId){
+  const db=allDB.find(e=>e.id===exId)||null, lib=byId(exId);
+  if(lib.assist) return 'body only';
+  return String((db&&db.equipment)||lib.equip||'').toLowerCase();
 }
 // The group a logged exercise counts for: the muscle saved on the log, else the library's
 // (custom exercise, or exercise-db primary muscle). A blank or unmapped saved muscle is not skipped.
@@ -5021,7 +5047,7 @@ function openFriendWorkout(code,idx){
 // entry here, else by name. Returns null for exercises the viewer doesn't have
 // (e.g. the friend's device-local custom exercises).
 function resolveSharedEx(e){
-  if(e.id && (allDB.some(x=>x.id===e.id) || (typeof WARMUPS!=='undefined'&&WARMUPS.some(x=>x.id===e.id)) || gCEx().some(x=>x.id===e.id)))
+  if(e.id && (allDB.some(x=>x.id===e.id) || (typeof WARMUPS!=='undefined'&&[...WARMUPS,...MACHINES].some(x=>x.id===e.id)) || gCEx().some(x=>x.id===e.id)))
     return byId(e.id);
   if(e.n){ const m=allEx().find(x=>(x.name||'').toLowerCase()===String(e.n).toLowerCase()); if(m) return m; }
   return null;
@@ -6495,7 +6521,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.39';
+const BUILD = 'v1.10.40';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
