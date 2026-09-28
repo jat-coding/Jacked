@@ -1136,7 +1136,9 @@ const AVC  = ['#20d3c2','#3ddc97','#5aa9ff','#ff9f4d','#b07cff','#ff5d6c','#4ad9
 // Categories we want to EXCLUDE from the library
 const EXCLUDED_CATS = new Set(['stretching','plyometrics','cardio','olympic weightlifting']);
 // Muscles we want to INCLUDE
-const ALLOWED_MUSCLES = new Set(['chest','back','shoulders','biceps','triceps','legs','quadriceps','hamstrings','calves','glutes','core','abdominals','lats','traps','forearms','lower back']);
+const ALLOWED_MUSCLES = new Set(['chest','back','shoulders','biceps','triceps','legs','quadriceps','hamstrings','calves','glutes','core','abdominals','lats','traps','forearms','lower back',
+  // exercise-db's own muscles that had no chip, so 39 lifts (every "middle back" row) could not be filtered to (2026-09-27 audit)
+  'middle back','neck','adductors','abductors','full body']);
 // free-exercise-db mis-tags a lot of bodyweight lifts' equipment as "other"/
 // blank instead of "body only", which silently hides the Bodyweight/+Added/
 // -Assist toggle (isBodyweightEx() below only recognises "body only"/
@@ -1178,6 +1180,17 @@ const EQUIP_FIX = {
   'Suspended_Reverse_Crunch':'body only',
   'Suspended_Row':'body only',
   'Suspended_Split_Squat':'body only',
+  // 2026-09-27 audit: push-ups tagged by what the hands/feet rest on, not the load
+  'Push-Ups_With_Feet_On_An_Exercise_Ball':'body only',
+  'Plyo_Kettlebell_Pushups':'body only',
+};
+// exercise-db mechanic tags that contradict the movement (2026-09-27 audit). Only matters for the strength ratio's
+// isolation scaling (exStrengthFactor): incline/decline dumbbell flyes were "compound" while flat flyes are "isolation",
+// and two rows were "isolation". Clear cases only; pullovers and the odd ones are left as the DB has them.
+const MECH_FIX = {
+  'Incline_Dumbbell_Flyes':'isolation', 'Incline_Dumbbell_Flyes_-_With_A_Twist':'isolation', 'Decline_Dumbbell_Flyes':'isolation',
+  'Back_Flyes_-_With_Bands':'isolation', 'Glute_Kickback':'isolation', 'Hip_Extension_with_Bands':'isolation',
+  'Alternating_Kettlebell_Row':'compound', 'Lying_Cambered_Barbell_Row':'compound',
 };
 
 // Curated programs from trusted lifting sources. Exercise entries are fuzzy
@@ -1537,7 +1550,7 @@ async function loadDB() {
       const muscle = (e.primaryMuscles?.[0]||'').toLowerCase();
       if (EXCLUDED_CATS.has(cat)) return false;
       return true; // keep everything that isn't explicitly excluded
-    });
+    }).map(e => MECH_FIX[e.id] ? { ...e, mechanic:MECH_FIX[e.id] } : e);
     dbLoaded = true; dbLoading = false;
     if (typeof renderSuggest==='function') renderSuggest();   // secondary muscles now known
     if (el) el.innerHTML = `${allDB.length} loaded ✓`;
@@ -1676,7 +1689,8 @@ let aeFlt = null;  // add-exercise modal filter
 function buildMuscleChips(containerId, handler, active) {
   let muscles;
   if (allDB.length) {
-    muscles = [...new Set(allDB.flatMap(e=>e.primaryMuscles||[]).map(mapMuscle))].filter(m=>ALLOWED_MUSCLES.has(m)).sort();
+    // Every muscle a library exercise uses, custom ones included (a custom "Back" or "Legs" lift had no chip).
+    muscles = [...new Set(allEx().map(e=>(e.muscle||'').toLowerCase()))].filter(m=>ALLOWED_MUSCLES.has(m)).sort();
   } else {
     muscles = ['chest','back','shoulders','biceps','triceps','legs','glutes','core'];
   }
@@ -2124,15 +2138,52 @@ function renderCurated() {
 
 // Resolve a fuzzy keyword to an exercise id (all words must appear in the name).
 // Normalise an exercise name: drop (equipment) parentheticals + punctuation.
-function normName(s){ return String(s).toLowerCase().replace(/\(.*?\)/g,' ').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+function normName(s){ return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\(.*?\)/g,' ').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
 
-// Match a name (Hevy-style "Bench Press (Barbell)") to a DB exercise id.
+// Match a name (Hevy-style "Bench Press (Barbell)") to a library exercise id.
+// Scored, whole words (2026-09-27 audit). It used to take the FIRST exercise whose name contained every word as a
+// substring: "Leg Raise" became a one-leg calf raise, "Pull Up" the band-assisted one, "Leg Press (Machine)" the calf
+// press, "Bench Press (Dumbbell)" the barbell bench, "Walking" a walking lunge, and "Décliné" matched "incline".
+// Now every word must match a whole word of the exercise (name, raw exercise-db name or equipment, plural-tolerant,
+// "Pull Up" = "Pullups"), and the closest one wins: fewest extra words in its name, the "(Equipment)" in the keyword
+// must match, grip/variant details cost a little, built-in machines only win when nothing plainer fits. A cardio
+// keyword only ever matches a cardio exercise.
+const RESOLVE_ALIAS=[[/\boverhead press\b/,'standing military press'],[/\bohp\b/,'standing military press'],[/\brdl\b/,'romanian deadlift'],[/\bskullcrushers?\b/,'skullcrusher']];
+const RESOLVE_SOFT=new Set(['grip','medium','med','standard','with','the','a','and','v','attachment']);
 function resolveExercise(keyword) {
-  const want=normName(keyword).split(' ').filter(w=>w.length>1);
-  if(!want.length) return null;
-  const inName=(n,w)=> n.includes(w) || (w.endsWith('s') && n.includes(w.slice(0,-1)));  // plural-tolerant
-  const hit=allEx().find(e=>{ const n=normName(e.name); return want.every(w=>inName(n,w)); });
-  return hit?hit.id:null;
+  const words=s=>normName(s).split(' ').filter(Boolean);
+  const paren=s=>{ const m=String(s||'').match(/\(([^)]*)\)/g); return m?m.map(x=>x.slice(1,-1)).join(' '):''; };
+  const flatEq=s=>{ const f=String(s||'').toLowerCase().replace(/[^a-z]/g,''); return ({bodyweight:'bodyonly',bands:'band',kettlebells:'kettlebell',ezcurlbar:'ezbar',ezbar:'ezbar',smithmachine:'machine'})[f]||f; };
+  const EQ=new Set(['barbell','dumbbell','machine','cable','bodyonly','band','kettlebell','ezbar','other','medicineball','exerciseball']);
+  const tokEq=(t,w)=>t===w||t===w+'s'||t===w+'es'||w===t+'s'||w===t+'es';
+  const flat=a=>a.join('').replace(/e?s$/,'');
+  const all=words(keyword).filter(w=>w.length>1);
+  if(!all.length) return null;
+  const hint=flatEq(paren(keyword)); const hintEq=EQ.has(hint)?hint:'';
+  const cardio=guessMuscle(keyword)==='cardio';
+  const lib=allEx().map(e=>{ const d=e._d?allDB.find(x=>x.id===e.id):null; const base=words(e.name);
+    return {e, base, detail:words(paren(e.name).replace(/,/g,' ')), hay:[...base, ...words(e.equip||''), ...(d?words(d.name):[]), ...words(paren(e.name).replace(/,/g,' '))], eq:flatEq(e.equip)}; });
+  const pick=want=>{
+    let best=null, bs=Infinity;
+    lib.forEach(c=>{
+      if(cardio&&!isCardioCat(c.e)) return;
+      const joined=flat(want)===flat(c.base);
+      if(!joined&&!want.every(w=>c.hay.some(t=>tokEq(t,w)))) return;
+      let sc=joined?0:c.base.filter(t=>!want.some(w=>tokEq(t,w))).reduce((a,t)=>a+(RESOLVE_SOFT.has(t)?0.5:1),0);
+      sc+=0.01*want.filter(w=>!c.base.includes(w)).length;   // "Crunches" prefers Crunches over Crunch
+      sc+=0.1*c.detail.filter(t=>!RESOLVE_SOFT.has(t)&&!EQ.has(flatEq(t))&&!want.some(w=>tokEq(t,w))).length;
+      if(hintEq&&c.eq!==hintEq) sc+=2;
+      if(c.e._b) sc+=0.5;
+      if(sc<bs){ bs=sc; best=c.e; }
+    });
+    return best&&{e:best,sc:bs};
+  };
+  // A grip/attachment word the library doesn't spell out ("Seated Cable Row - V Grip") shouldn't sink the match.
+  const tryAll=want=>pick(want)||pick(want.filter(w=>!RESOLVE_SOFT.has(w)&&!/^(wide|close|narrow|neutral|rope|single|one|arm|two)$/.test(w)));
+  // Names exercise-db spells differently ("Overhead Press (Barbell)" is its Standing Military Press).
+  const alias=RESOLVE_ALIAS.reduce((k,[re,to])=>k.replace(re,to),all.join(' '));
+  const hits=[tryAll(all), alias!==all.join(' ')?tryAll(alias.split(' ')):null].filter(Boolean).sort((a,b)=>a.sc-b.sc);
+  return hits.length?hits[0].e.id:null;
 }
 
 // Keyword-based muscle guess for exercises with no DB match, so muscle-group
@@ -2143,7 +2194,7 @@ function resolveExercise(keyword) {
 function guessMuscle(name){
   const n=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   const notCardio=/\b(lunges?|farmers?|yoke|carry|sled|monster|crunch(es)?|curls?|press|squats?|air bike|bicycle)\b/;
-  if(!notCardio.test(n)&&/\b(run|running|jog|jogging|treadmill|cycle|cycling|bike|biking|spin|spinning|stair ?master|stair climb(er|ing)?|stepper|elliptical|walk|walking|hike|hiking|swim|swimming|rowing machine|rower|erg|sauna|danc(e|ing)|cardio|battle ropes?|jump rope|skipping|sprints?)\b/.test(n)) return 'cardio';
+  if(!notCardio.test(n)&&/\b(run|running|jog|jogging|treadmill|cycle|cycling|bike|biking|spin|spinning|stair ?master|stair climb(er|ing)?|stepper|elliptical|walk|walking|hike|hiking|swim|swimming|rowing machine|rowing,? stationary|rower|erg|bicycling|skating|step ?mill|rope jumping|stationary|sauna|danc(e|ing)|cardio|battle ropes?|jump rope|skipping|sprints?)\b/.test(n)) return 'cardio';
   if(/\bshrugs?\b|\btraps?\b/.test(n)) return 'traps';
   if(/\bcalf\b|\bcalves\b/.test(n)) return 'calves';
   if(/\bforearms?\b|\bwrists?\b/.test(n)) return 'forearms';
@@ -3014,7 +3065,7 @@ function bwCapable(ex){ const t=(ex&&ex.tracking)||'weight_reps'; return t==='bo
 // Effective load for a set. Bodyweight + added → BW + plates; assisted →
 // BW − assist; plain bodyweight → your body weight; otherwise entered weight.
 function effWeight(ex,s){
-  const w=(s&&s.weight)||0, mode=bwMode(ex);
+  const w=Math.max(0,(s&&s.weight)||0), mode=bwMode(ex);   // a negative entry (typo, import) is no load, never extra load
   if(bwCapable(ex)){
     if(mode==='added')  return gBW()+w;
     if(mode==='assist') return Math.max(0,gBW()-w);
@@ -3033,7 +3084,8 @@ function isPlainBW(ex){ if(!ex||bwMode(ex)==='added') return false; const nm=(ex
 function isWT(ex){ const t=(ex&&ex.tracking)||'weight_reps'; return t==='weight_reps'||t==='bodyweight_reps'; }
 // Estimated one-rep max (Epley) — combines weight & reps into one strength number.
 // A PR is when this exceeds the previous PR's estimate.
-function e1rm(w,reps){ w=w||0; reps=reps||0; return reps<=1 ? w : w*(1+reps/30); }
+// 0 reps lifted nothing: it is not a 1RM (a checked 225 x 0 set used to count as a 225 lb max).
+function e1rm(w,reps){ w=w||0; reps=reps||0; return reps<=0 ? 0 : reps===1 ? w : w*(1+reps/30); }
 function prE1rm(pr){ return pr ? e1rm(pr.weight,pr.reps) : 0; }
 
 // ============================================================
@@ -3549,7 +3601,7 @@ function _finishWContinue(auto,ts) {
   // before the auto-trigger isn't counted; a manual finish ends now.
   const endTs = auto ? (awTouch||awStart||Date.now()) : Date.now();
   ws = Math.max(0, Math.floor((endTs - (awStart||endTs))/1000));
-  const vol=aw.exercises.reduce((a,e)=>a+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*s.reps),0):0),0);
+  const vol=aw.exercises.reduce((a,e)=>a+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*Math.max(0,s.reps||0)),0):0),0);
   const dur=String(Math.floor(ws/60)).padStart(2,'0')+':'+String(ws%60).padStart(2,'0');
   // Capture the PRE-workout progress signal (history through last time, not
   // tonight) for every trackable exercise before tonight's numbers land in
@@ -3804,7 +3856,7 @@ function saveWE(){
   if(dv){ const old=new Date(weDraft.date); const hh=isNaN(old)?12:old.getHours(), mm=isNaN(old)?0:old.getMinutes();
     weDraft.date=new Date(dv+'T'+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+':00').toISOString(); }
   const ts=weDraft.exercises.reduce((a,e)=>a+(e.sets||[]).filter(s=>s.done).length,0);
-  const vol=weDraft.exercises.reduce((a,e)=>a+(isWT(e)?(e.sets||[]).filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*s.reps),0):0),0);
+  const vol=weDraft.exercises.reduce((a,e)=>a+(isWT(e)?(e.sets||[]).filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*Math.max(0,s.reps||0)),0):0),0);
   weDraft.sets=ts; weDraft.totalVolume=Math.round(vol);
   const h=gH(); const idx=h.findIndex(x=>x.id===weId); if(idx>=0) h[idx]=weDraft; S.s('hist',h);
   cm('weModal'); renderHome(); if(typeof syncMe==='function') syncMe();
@@ -3967,12 +4019,12 @@ function computeBadges() {
   const comeback=bounce||steady;
   // Challenge-Maxing: your weakest muscle group (glutes left out), picked on the first look of the month from
   // last month's training, never the same group two months running. Train it in `target` different workouts.
-  const grpOf=w=>new Set((w.exercises||[]).map(e=>muscleGroup(e.muscle)).filter(Boolean));
+  const grpOf=w=>new Set((w.exercises||[]).map(e=>logGroup(e)).filter(Boolean));
   if(!mb[curYM]||!mb[curYM].group){
     const CAND=MGROUPS.filter(g=>g!=='glutes'&&g!==(mb[prevYM]&&mb[prevYM].group));
     let src=inMonth(mAt(-1)); if(!src.length) src=h3;
     const use={}; CAND.forEach(g=>use[g]=0);
-    src.forEach(w=>(w.exercises||[]).forEach(e=>{ const g=muscleGroup(e.muscle); if(g in use) use[g]+=(e.sets||[]).filter(x=>x.done).length||(e.sets||[]).length; }));
+    src.forEach(w=>(w.exercises||[]).forEach(e=>{ const g=logGroup(e); if(g in use) use[g]+=(e.sets||[]).filter(x=>x.done).length||(e.sets||[]).length; }));
     const low=Math.min(...CAND.map(g=>use[g])), ties=CAND.filter(g=>use[g]===low);
     const group=ties[(mAt(0).getMonth())%ties.length];
     const prevHits=inMonth(mAt(-1)).filter(w=>grpOf(w).has(group)).length;
@@ -4130,7 +4182,7 @@ function badgePlan(b){
     case 'Variety-Maxing': return {label:'Browse the library',page:'exercises',ids:[]};
     case 'Challenge-Maxing': {
       const g=b.group, use={};
-      gH().forEach(w=>(w.exercises||[]).forEach(e=>{ if(muscleGroup(e.muscle)===g&&e.exId) use[e.exId]=(use[e.exId]||0)+1; }));
+      gH().forEach(w=>(w.exercises||[]).forEach(e=>{ if(logGroup(e)===g&&e.exId) use[e.exId]=(use[e.exId]||0)+1; }));
       let ids=Object.keys(use).sort((x,y)=>use[y]-use[x]).slice(0,3);
       if(!ids.length) ids=allEx().filter(e=>muscleGroup(e.muscle)===g&&/barbell|dumbbell/i.test(e.equip||'')).slice(0,3).map(e=>e.id);
       return ex(`Train ${MGNAME[g]||'it'} now`,`${MGNAME[g]||'Challenge'} day`,...ids);
@@ -4180,7 +4232,7 @@ const MGNAME={chest:'Chest',back:'Back',shoulders:'Shoulders',biceps:'Arms (Bice
 function muscleUsage(){
   const freq={}; MGROUPS.forEach(g=>freq[g]=0);
   gH().forEach(w=>(w.exercises||[]).forEach(ex=>{
-    const g=muscleGroup(ex.muscle); if(!g||!(g in freq)) return;
+    const g=logGroup(ex); if(!g||!(g in freq)) return;
     freq[g]+=(ex.sets||[]).filter(s=>s.done).length || (ex.sets||[]).length;
   }));
   return freq;
@@ -4274,13 +4326,20 @@ function exStrengthFactor(exId,group){
 function strEquip(exId){
   const db=allDB.find(e=>e.id===exId)||null, lib=byId(exId);
   if(lib.assist) return 'body only';
-  return String((db&&db.equipment)||lib.equip||'').toLowerCase();
+  const e=String((db&&db.equipment)||lib.equip||'').toLowerCase();
+  return STR_EQUIP_ALIAS[e]||e;
 }
+// The custom-exercise form saves its own equipment names; a custom kettlebell lift is per hand like exercise-db's.
+const STR_EQUIP_ALIAS={kettlebell:'kettlebells',resistance_band:'bands',band:'bands',ez_bar:'e-z curl bar',bodyweight:'body only',trap_bar:'barbell'};
 // The group a logged exercise counts for: the muscle saved on the log, else the library's
 // (custom exercise, or exercise-db primary muscle). A blank or unmapped saved muscle is not skipped.
-function strGroup(ex){
+function strGroup(ex){ return logGroup(ex); }
+// Which of the 8 groups a logged exercise counts for, everywhere (strength, usage chart, Challenge-Maxing): the muscle
+// saved on the log, else the library's. The usage chart and Challenge-Maxing used to read the saved muscle only, so a
+// log with a blank muscle (older imports, edited workouts) counted nowhere.
+function logGroup(ex){
   const lib=ex&&ex.exId?byId(ex.exId):{};
-  return [muscleGroup(logMuscle(ex)),muscleGroup(lib.muscle)].find(g=>g in STRENGTH_STD)||'';
+  return [muscleGroup(logMuscle(ex)),muscleGroup(lib.muscle)].find(g=>MGROUPS.includes(g))||'';
 }
 // The muscle saved on a log. Imports before 2026-09-27 could save 'cardio' on a weight/rep lift the old guesser
 // misread ("Cable Crunch" has "run" in it), so an imported weight/rep log saved as cardio is re-read by name.
@@ -4329,7 +4388,7 @@ function muscleStrengthRatio(){
       const key=ex.exId||ex.name, f=exStrengthFactor(ex.exId,g);
       (ex.sets||[]).forEach(s=>{
         if(!(s.done||s.weight>0)) return;
-        const v=e1rm(effWeight(ex,s), Math.min(s.reps||0,STR_REP_CAP))*f;
+        const v=e1rm(strLoad(ex,s), Math.min(s.reps||0,STR_REP_CAP))*f;
         if(v>0){ const m=best[g]||(best[g]={}); if(v>(m[key]||0)) m[key]=v; }
       });
     });
@@ -4357,7 +4416,7 @@ function triStrength(){
     (w.exercises||[]).forEach(ex=>{
       const g=strGroup(ex); if(!isWT(ex)) return;
       const lib=ex.exId?byId(ex.exId):{}, name=ex.name||lib.name||'', exn={...ex,name,equip:ex.equip||lib.equip};
-      const db=ex.exId&&allDB.find(e=>e.id===ex.exId), equip=String((db&&db.equipment)||lib.equip||'').toLowerCase();
+      const db=ex.exId&&allDB.find(e=>e.id===ex.exId), equip=ex.exId?strEquip(ex.exId):String(lib.equip||'').toLowerCase();
       let ladder, f;
       if(g==='triceps'){
         const compound=db?db.mechanic==='compound':TRI_COMPOUND.test(name);
@@ -4378,6 +4437,16 @@ function triStrength(){
     });
   });
   return out;
+}
+// Load a set counts for in the strength ratio (2026-09-27 audit). effWeight scores a plain bodyweight set as your whole
+// body weight, which made 15 bodyweight crunches an Elite core lift (1.33x body weight) and glute kickbacks a Strong glutes
+// lift. Body weight is only the load on the hanging/supported lifts (pull-ups, chin-ups, dips, muscle-ups) and their
+// assisted versions; on anything else a plain bodyweight set scores nothing and a weighted one scores the added weight.
+const BW_IS_LOAD=/pull.?ups?|chin.?ups?|\bchins?\b|muscle.?ups?|\bdips?\b/i;
+function strLoad(ex,s){
+  const body=bwCapable(ex)||isBodyweightEx(ex);
+  if(!body||BW_IS_LOAD.test(ex.name||'')) return effWeight(ex,s);
+  return bwCapable(ex)&&bwMode(ex)==='added'?Math.max(0,(s&&s.weight)||0):0;
 }
 // 0..1 position on a [t1,t2,t3,t4] ladder, anchored so the label cutoffs (TIER_CUT) land exactly on the
 // standards: t2 -> Building starts, t3 -> Strong starts, t4 -> Elite starts, 1.5*t4 -> full.
@@ -6521,7 +6590,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.40';
+const BUILD = 'v1.10.41';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

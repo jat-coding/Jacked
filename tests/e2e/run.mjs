@@ -1254,6 +1254,12 @@ async function crunchRegex() {
   check("crunch: Farmer's Walk / Air Bike are not cardio", g["Farmer's Walk"] !== 'cardio' && g['Air Bike'] !== 'cardio', g["Farmer's Walk"] + ' ' + g['Air Bike']);
   const dbCardio = await page.evaluate(() => allDB.filter(e => e.name !== 'Wind Sprints' && (guessMuscle(e.name) === 'cardio' || guessMuscle(prettyDB(e.name, e.equipment)) === 'cardio')).map(e => e.name));   // exercise-db files a hanging ab move as "Wind Sprints"
   check('crunch: no exercise-db strength lift is guessed as cardio by name', dbCardio.length === 0, dbCardio.join(', '));
+  // Both directions against the real dataset (876 entries, fetched raw so the excluded cardio category is included).
+  const both = await page.evaluate(async () => { const raw = await (await fetch(DB_URL)).json();
+    return { total: raw.length, crunch: raw.filter(e => /crunch/i.test(e.name)).filter(e => guessMuscle(e.name) === 'cardio').map(e => e.name), nCrunch: raw.filter(e => /crunch/i.test(e.name)).length,
+      cardio: raw.filter(e => e.category === 'cardio').filter(e => guessMuscle(e.name) !== 'cardio').map(e => e.name), nCardio: raw.filter(e => e.category === 'cardio').length }; });
+  check(`crunch: none of the dataset's ${both.nCrunch} crunches guessed cardio`, both.nCrunch >= 17 && both.crunch.length === 0, both.crunch.join(', '));
+  check(`crunch: all ${both.nCardio} of the dataset's cardio exercises (Jogging, Treadmill, Stairmaster...) still guessed cardio`, both.nCardio > 10 && both.cardio.length === 0, both.cardio.join(', '));
   const crunchChip = await page.evaluate(() => allEx().filter(e => /crunch/i.test(e.name) && isCardioCat(e)).map(e => e.name));
   check('crunch: no crunch shows under the Cardio chip', crunchChip.length === 0, crunchChip.join(', '));
   const mg = await page.evaluate(() => Object.fromEntries(['Flat Bench', 'Cable Day', 'Tabata', 'Lateral Raise', 'Kickbacks', 'lats', 'middle back', 'lower back', 'abdominals', 'abductors', 'Leg Day', 'Back & Biceps', 'Abs', 'Pecs'].map(n => [n, muscleGroup(n)])));
@@ -1297,6 +1303,15 @@ async function builtinMachines() {
   }
   const cardio = await page.evaluate(ids => ids.filter(id => isCardioCat(byId(id))), IDS);
   check('machines: none under Cardio', cardio.length === 0, cardio.join());
+  // Mid-workout Add-Exercise picker renders them with the icon tile (no photo).
+  await page.evaluate(() => { startEmpty(); openAEModal ? openAEModal('workout') : null; });
+  await page.waitForTimeout(250);
+  await page.fill('#aeSearch', 'machine');
+  await page.waitForTimeout(250);
+  const ae = await page.evaluate(ids => ids.map(id => { const row = [...document.querySelectorAll('#aeList > *')].find(r => r.outerHTML.includes(`'${id}'`)); return !row ? 'missing' : row.querySelector('svg') && !row.querySelector('img') ? 'icon' : 'photo'; }), IDS);
+  check('machines: all 4 render in the Add-Exercise picker with the icon tile', ae.every(x => x === 'icon'), ae.join());
+  await page.screenshot({ path: SHOTS + '/machines-picker.png' });
+  await page.evaluate(() => { cm('aeModal'); aw = null; });
   const r = await page.evaluate(() => {
     const h = gH()[0], ex = h.exercises, bw = gBW();
     return { groups: ex.map(e => [...exGroups(e, h)].join('/')), str: ex.map(e => strGroup(e)), f: ex.map(e => +exStrengthFactor(e.exId, strGroup(e)).toFixed(2)),
@@ -1337,10 +1352,113 @@ async function builtinMachines() {
   await ctx.close();
 }
 
+async function exerciseAudit() {
+  // Mr. Roni 2026-09-27: audit how every exercise is categorized and follow it through the math. One check per bug class
+  // the audit found, plus stress cases (blank muscle, custom, imported Hevy names, odd/unicode names, counterweight over
+  // body weight, zero/negative weight, 0 and 100 reps).
+  const set = (lb, r) => ({ weight: lb / LB, reps: r, done: true });
+  const L = (exId, name, muscle, equip, sets, extra = {}) => ({ exId, name, muscle, equip, tracking: 'weight_reps', ...extra, sets });
+  const cex = [
+    { id: 'cexBack', name: 'Rack Chin Thing', muscle: 'Back', equip: 'machine', tracking: 'weight_reps', category: 'strength', images: [], _c: true },
+    { id: 'cexLegs', name: 'Sled Push', muscle: 'Legs', equip: 'other', tracking: 'weight_reps', category: 'strength', images: [], _c: true },
+    { id: 'cexFull', name: 'Burpee Thing', muscle: 'Full Body', equip: 'bodyweight', tracking: 'bodyweight_reps', category: 'strength', images: [], _c: true },
+    { id: 'cexKb', name: 'KB Press', muscle: 'Shoulders', equip: 'kettlebell', tracking: 'weight_reps', category: 'strength', images: [], _c: true },
+    { id: 'cexBand', name: 'Band Row', muscle: 'Back', equip: 'resistance_band', tracking: 'weight_reps', category: 'strength', images: [], _c: true },
+    { id: 'cexBlank', name: '', muscle: '', equip: '', tracking: 'weight_reps', category: 'strength', images: [], _c: true },
+    { id: 'cexOdd', name: '<b>Überkreuz</b> Curl ✨ "quoted"', muscle: 'Biceps', equip: 'dumbbell', tracking: 'weight_reps', category: 'strength', images: [], _c: true },
+  ];
+  const { page, ctx, errors } = await phone({ seed: { prof: { name: 'T', username: '@t', code: '@t', sex: 'male' }, bw: 80, cex }, now: SEP15 });
+  await dbReady(page);
+  // 1. Every library exercise is reachable from a filter chip (39 exercise-db lifts -- all "middle back" rows, neck, adductors, abductors -- were not).
+  await page.evaluate(() => { sp('exercises'); buildMuscleChips('muscleChips', handleMFChip, null); });
+  const chip = await page.evaluate(() => {
+    const chips = [...document.querySelectorAll('#muscleChips .chip')].map(b => b.dataset.muscle);
+    const inChip = (e, c) => c === 'warmup' ? (e.category || '').toLowerCase() === 'warmup' : c === 'cardio' ? isCardioCat(e) : (e.muscle || '').toLowerCase() === c;
+    return { chips, orphans: allEx().filter(e => e.muscle && !chips.some(c => inChip(e, c))).map(e => e.name) };
+  });
+  check('audit: every library exercise with a muscle sits under a filter chip', chip.orphans.length === 0, chip.orphans.slice(0, 10).join(', '));
+  check('audit: Middle Back / Neck / Adductors / Abductors chips exist', ['middle back', 'neck', 'adductors', 'abductors'].every(c => chip.chips.includes(c)), chip.chips.join());
+  check('audit: custom Back / Legs / Full Body exercises get their chip', ['back', 'legs', 'full body'].every(c => chip.chips.includes(c)), chip.chips.join());
+  const row = await page.evaluate(() => { mFlt = 'middle back'; document.getElementById('exSearch').value = 'bent over row'; renderEx(); return document.getElementById('exList').innerHTML.includes("openExInfo('Bent_Over_Barbell_Row')"); });
+  check('audit: Bent Over Row (barbell) listed under Middle Back', row);
+  const odd = await page.evaluate(() => { mFlt = 'biceps'; document.getElementById('exSearch').value = 'curl'; renderEx(); const h = document.getElementById('exList').innerHTML; return { esc: h.includes('&lt;b&gt;Überkreuz&lt;/b&gt;'), raw: h.includes('<b>Überkreuz</b>') }; });
+  check('audit: odd/unicode custom name is listed and escaped', odd.esc && !odd.raw, JSON.stringify(odd));
+  // 2. Strength math.
+  const run = hist => page.evaluate(h => { S.s('hist', h); return muscleStrengthRatio(); }, hist);
+  const d = '2026-09-12';
+  let r = await run([wk(d, [L('Crunches', 'Crunches (bodyweight)', 'core', 'body only', [set(0, 15)])])]);
+  check('audit: 15 bodyweight crunches do not score your body weight as a Core lift', r.core === 0, String(r.core));
+  r = await run([wk(d, [L('Crunches', 'Crunches (bodyweight)', 'core', 'body only', [set(25, 10)], { bwMode: 'added' })])]);
+  check('audit: weighted crunch (+25 lb) scores the 25 lb, not body weight + 25', Math.abs(r.core - 25 / LB * (1 + 10 / 30) / 80) < 0.001, String(r.core));
+  r = await run([wk(d, [L('Glute_Kickback', 'Glute Kickback (bodyweight)', 'glutes', 'body only', [set(0, 20)])])]);
+  check('audit: bodyweight glute kickbacks do not score a Glutes lift', r.glutes === 0, String(r.glutes));
+  r = await run([wk(d, [L('Pullups', 'Pullups', 'lats', 'body only', [set(0, 10)])])]);
+  check('audit: pull-ups still score body weight for Back', Math.abs(r.back - (1 + 10 / 30)) < 0.001, String(r.back));
+  r = await run([wk(d, [L('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press (barbell, med grip)', 'chest', 'barbell', [set(225, 0)])])]);
+  check('audit: a set with 0 reps is not a lift (no strength, 225 x 0)', r.chest === 0, String(r.chest));
+  r = await run([wk(d, [L('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press (barbell, med grip)', 'chest', 'barbell', [set(95, 100)])])]);
+  check('audit: 100 reps are capped at 10 for strength', Math.abs(r.chest - 95 / LB * (1 + 10 / 30) / 80) < 0.001, String(r.chest));
+  r = await run([wk(d, [L('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press (barbell, med grip)', 'chest', 'barbell', [set(-135, 5)])])]);
+  check('audit: negative weight scores nothing', r.chest === 0, String(r.chest));
+  const ew = await page.evaluate(() => { const bw = gBW(), a = { name: 'Assisted Pull-Up (machine)', tracking: 'weight_reps', assist: true, equip: 'machine' }, n = { name: 'Bench Press', tracking: 'weight_reps', equip: 'barbell' };
+    return { over: effWeight(a, { weight: bw + 30 }), negA: effWeight(a, { weight: -20 }), bw, negN: effWeight(n, { weight: -20 }), zero: effWeight(n, { weight: 0 }) }; });
+  check('audit: counterweight over body weight = 0 load', ew.over === 0, String(ew.over));
+  check('audit: negative counterweight never adds load above body weight', Math.abs(ew.negA - ew.bw) < 1e-9, JSON.stringify(ew));
+  check('audit: negative weight on a normal lift = 0 load', ew.negN === 0 && ew.zero === 0, JSON.stringify(ew));
+  const pr = await page.evaluate(() => { S.s('prs', {}); return [commitPRs({ exercises: [{ exId: 'Barbell_Bench_Press_-_Medium_Grip', name: 'Bench Press', tracking: 'weight_reps', equip: 'barbell', sets: [{ weight: 100, reps: 0, done: true }] }] }).length,
+    Object.keys(gPR()).length, e1rm(100, 0), e1rm(100, 1)]; });
+  check('audit: 100 kg x 0 reps is not a PR and not a 1RM', pr[0] === 0 && pr[1] === 0 && pr[2] === 0 && pr[3] === 100, JSON.stringify(pr));
+  const f = await page.evaluate(() => ({ kb: exStrengthFactor('cexKb', 'shoulders'), band: exStrengthFactor('cexBand', 'back'), incFly: exStrengthFactor('Incline_Dumbbell_Flyes', 'chest'), fly: exStrengthFactor('Dumbbell_Flyes', 'chest'),
+    row: exStrengthFactor('Lying_Cambered_Barbell_Row', 'back'), ball: byId('Push-Ups_With_Feet_On_An_Exercise_Ball').equip, plyo: byId('Plyo_Kettlebell_Pushups').equip }));
+  check('audit: custom kettlebell counts per hand (x2) like exercise-db kettlebells', f.kb === 2, String(f.kb));
+  check('audit: custom resistance band uses the bands factor (1.5)', f.band === 1.5, String(f.band));
+  check('audit: Incline Dumbbell Flyes scaled as isolation like flat Dumbbell Flyes', f.incFly === f.fly && f.fly > 3, JSON.stringify(f));
+  check('audit: Lying Cambered Row scaled as a compound row', f.row === 1, String(f.row));
+  check('audit: feet-on-ball / plyo kettlebell push-ups are bodyweight', f.ball === 'body only' && f.plyo === 'body only', JSON.stringify(f));
+  // 3. Blank saved muscle still counts (usage chart, Challenge-Maxing).
+  const u = await page.evaluate(() => { S.s('hist', [{ id: 'w1', name: 'Flat Bench', date: new Date('2026-09-12T12:00:00-06:00').toISOString(), exercises: [
+      { exId: 'Barbell_Bench_Press_-_Medium_Grip', name: 'Bench Press (barbell, med grip)', muscle: '', tracking: 'weight_reps', sets: [{ weight: 60, reps: 5, done: true }] },
+      { exId: 'imp_cable_crunch', name: 'Cable Crunch', muscle: 'cardio', tracking: 'weight_reps', sets: [{ weight: 40, reps: 10, done: true }] },
+      { exId: 'cexBlank', name: '', muscle: '', tracking: 'weight_reps', sets: [{ weight: 10, reps: 10, done: true }] }] }]);
+    return { use: muscleUsage(), groups: gH()[0].exercises.map(e => logGroup(e)), sug: gH()[0].exercises.map(e => [...exGroups(e, gH()[0])].join('/')) }; });
+  check('audit: blank saved muscle falls back to the library (bench -> chest usage)', u.use.chest === 1 && u.groups[0] === 'chest', JSON.stringify(u));
+  check('audit: old imported crunch saved as cardio counts as Core usage', u.use.core === 1 && u.groups[1] === 'core', JSON.stringify(u));
+  check('audit: blank custom exercise groups to nothing, no crash; routine name "Flat Bench" is not Back', u.groups[2] === '' && u.sug[2] === '', JSON.stringify(u));
+  // 4. Imported Hevy names resolve to the right exercise and muscle.
+  const csv = ['title,start_time,end_time,exercise_title,set_type,weight_lbs,reps',
+    ...['Leg Raise', 'Leg Press (Machine)', 'Bench Press (Dumbbell)', 'Bench Press (Barbell)', 'Hip Thrust (Machine)', 'Lateral Raise (Machine)', 'Assisted Pull Up', 'Assisted Dip', 'Pull Up', 'Push Up',
+      'Deadlift (Barbell)', 'Overhead Press (Barbell)', 'Cable Crunch', 'Walking', 'Décliné Préss', 'Überkreuz Curl', 'Seated Cable Row - V Grip (Cable)', 'Triceps Rope Pushdown'].map(n => `"Push","2026-09-11 18:00","2026-09-11 19:00","${n}","normal",50,10`),
+    '"Push","2026-09-11 18:00","2026-09-11 19:00","","normal",50,10'].join('\n');
+  const imp = await page.evaluate(async csv => { S.s('hist', []); await importWorkoutCsv(csv); const w = gH()[0]; return Object.fromEntries(w.exercises.map(e => [e.name, { id: e.exId, lib: byId(e.exId).name, muscle: e.muscle, g: logGroup(e) }])); }, csv);
+  const I = n => imp[n] || {};
+  check('audit: import "Leg Raise" is a core leg raise, not a calf raise', I('Leg Raise').g === 'core', JSON.stringify(I('Leg Raise')));
+  check('audit: import "Leg Press (Machine)" is the leg press, not the calf press', I('Leg Press (Machine)').id === 'Leg_Press', JSON.stringify(I('Leg Press (Machine)')));
+  check('audit: import "Bench Press (Dumbbell)" is a dumbbell bench, not the barbell one', /dumbbell/i.test(I('Bench Press (Dumbbell)').lib || '') && I('Bench Press (Dumbbell)').id !== I('Bench Press (Barbell)').id, JSON.stringify([I('Bench Press (Dumbbell)'), I('Bench Press (Barbell)')]));
+  check('audit: import "Bench Press (Barbell)" is the plain barbell bench', I('Bench Press (Barbell)').id === 'Barbell_Bench_Press_-_Medium_Grip', JSON.stringify(I('Bench Press (Barbell)')));
+  check('audit: import machine names land on the new built-ins', I('Hip Thrust (Machine)').id === 'bi_hip_thrust_machine' && I('Lateral Raise (Machine)').id === 'bi_lateral_raise_machine' && I('Assisted Pull Up').id === 'bi_assisted_pullup_machine' && I('Assisted Dip').id === 'bi_assisted_dip_machine', JSON.stringify([I('Hip Thrust (Machine)'), I('Lateral Raise (Machine)'), I('Assisted Pull Up'), I('Assisted Dip')]));
+  check('audit: import "Pull Up" is a pull-up, not the band-assisted one', I('Pull Up').id === 'Pullups', JSON.stringify(I('Pull Up')));
+  check('audit: import "Push Up" is a plain push-up', /^push.?ups?$/i.test((I('Push Up').lib || '').replace(/\s*\(.*\)$/, '')), JSON.stringify(I('Push Up')));
+  check('audit: import "Deadlift (Barbell)" is the barbell deadlift', I('Deadlift (Barbell)').id === 'Barbell_Deadlift', JSON.stringify(I('Deadlift (Barbell)')));
+  check('audit: import "Overhead Press (Barbell)" is not a Smith machine press', !/smith|machine/i.test(I('Overhead Press (Barbell)').lib || '') && I('Overhead Press (Barbell)').g === 'shoulders', JSON.stringify(I('Overhead Press (Barbell)')));
+  check('audit: import "Cable Crunch" is Core', I('Cable Crunch').g === 'core', JSON.stringify(I('Cable Crunch')));
+  check('audit: import "Walking" is not a walking lunge', !/lunge/i.test(I('Walking').lib || '') && I('Walking').muscle === 'cardio', JSON.stringify(I('Walking')));
+  check('audit: import "Décliné Préss" (accents) is not matched to Incline', !/incline/i.test(I('Décliné Préss').lib || ''), JSON.stringify(I('Décliné Préss')));
+  check('audit: import "Überkreuz Curl" (unicode) guessed biceps', I('Überkreuz Curl').g === 'biceps', JSON.stringify(I('Überkreuz Curl')));
+  check('audit: import blank exercise name is skipped', !('' in imp), Object.keys(imp).join('|'));
+  check('audit: every imported lift lands in a real group', Object.entries(imp).filter(([n, v]) => n !== 'Walking' && !v.g).length === 0, JSON.stringify(Object.entries(imp).filter(([n, v]) => !v.g)));
+  // 5. Starter programs still resolve every keyword.
+  const cur = await page.evaluate(() => CURATED.flatMap(p => p.routines.flatMap(r => r.exercises.map(k => [k, resolveExercise(k), (byId(resolveExercise(k)) || {}).name]))));
+  check('audit: every starter-program keyword resolves', cur.every(c => c[1]), JSON.stringify(cur.filter(c => !c[1])));
+  const cm = Object.fromEntries(cur.map(c => [c[0], c[1]]));
+  check('audit: starter "barbell squat" / "deadlift" / "pullup" / "leg press" / "leg raise" resolve to the plain lifts', cm['barbell squat'] === 'Barbell_Squat' && cm['deadlift'] === 'Barbell_Deadlift' && cm['pullup'] === 'Pullups' && cm['leg press'] === 'Leg_Press' && /leg_raise/i.test(cm['leg raise'] || '') && !/calf/i.test(cm['leg raise'] || ''), JSON.stringify(cm));
+  check('audit: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
