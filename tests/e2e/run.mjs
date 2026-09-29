@@ -967,6 +967,18 @@ async function portraitLock() {
     check('migration: routines tab renders with no crash', await page.locator('#page-routines').isVisible());
     check('migration: no page errors', errors.length === 0, errors.join(' | '));
     await ctx.close(); }
+
+  { // Routines added via "Add to Routines" (Trusted Programs) must get a real
+    // sectionId immediately, not fall into the orphan bucket until next reload.
+    const { page, ctx, errors } = await phone({});
+    await page.evaluate(() => addCurated(0));
+    await page.waitForTimeout(150);
+    const added = await page.evaluate(() => gR());
+    check('addCurated(): adds at least one routine', added.length > 0, String(added.length));
+    const bad = await page.evaluate(() => gR().filter(r => !r.sectionId || !gRS().some(s => s.id === r.sectionId)));
+    check('addCurated(): every added routine gets a real sectionId immediately', bad.length === 0, JSON.stringify(bad));
+    check('addCurated(): no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close(); }
   // Typing works in the rotated frame and the field is not hidden (keyboard bug must not regress).
   { const { page, ctx } = await phone({ width: 844, height: 390, angle: 90 });
     await page.evaluate(() => om('loginModal')); await page.waitForTimeout(150);

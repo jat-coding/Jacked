@@ -2237,7 +2237,9 @@ async function addCurated(i) {
   let added=0;
   prog.routines.forEach(rt=>{
     const ids=rt.exercises.map(resolveExercise).filter(Boolean);
-    rs.push({ id:'r'+Date.now()+'_'+added, name:rt.name, desc:prog.name+' · '+prog.source, exercises:ids });
+    const obj={ id:'r'+Date.now()+'_'+added, name:rt.name, desc:prog.name+' · '+prog.source, exercises:ids };
+    obj.sectionId=suggestSectionId(obj);
+    rs.push(obj);
     added++;
   });
   S.s('routines',rs);
@@ -2522,7 +2524,11 @@ function renderRoutines() {
     return sectionBlockHtml(s,list,false);
   }).join('');
   const orphans=all.filter(r=>!grouped.has(r.id)).sort((a,b)=>a.name.localeCompare(b.name));
-  if(orphans.length) html+=sectionBlockHtml({id:'',name:'Unsorted'},orphans,true);
+  // Distinct label from the real, persisted "Unsorted" section suggestSectionId() creates --
+  // this synthetic bucket only ever catches a sectionId that doesn't resolve to any real
+  // section (shouldn't happen post-migration; sections are never deleted), so it must not
+  // read the same on screen as an actual section someone can rename/reorder/pick.
+  if(orphans.length) html+=sectionBlockHtml({id:'',name:'Unfiled'},orphans,true);
   el.innerHTML=html;
 }
 
@@ -4356,6 +4362,11 @@ function renameSection(id,rawName){
   const name=(rawName||'').trim();
   const secs=gRS(), idx=secs.findIndex(s=>s.id===id);
   if(idx<0||!name||secs[idx].name===name){ renderRoutines(); return; }
+  if(secs.some((s,i)=>i!==idx&&s.name.toLowerCase()===name.toLowerCase())){
+    toast(`A section named "${name}" already exists`,'err');
+    renderRoutines();
+    return;
+  }
   secs[idx]={...secs[idx],name};
   saveRS(secs);
   renderRoutines();
