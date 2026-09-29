@@ -822,6 +822,28 @@ async function portraitLock() {
     check(`lock @${a}: reorder no page errors`, errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
+  // Reorder routines: same drag-grip pattern as Reorder Sections, plain portrait.
+  { const routines = [{ id: 'rA', name: 'Push Day', desc: '', exercises: ['e-bench'] }, { id: 'rB', name: 'Pull Day', desc: '', exercises: ['e-ohp'] }, { id: 'rC', name: 'Leg Day', desc: '', exercises: ['e-curl'] }];
+    const { page, ctx, errors } = await phone({ seed: { routines } });
+    await page.evaluate(() => openRoutineOrder()); await page.waitForTimeout(150);
+    const ids0 = await page.evaluate(() => [...document.querySelectorAll('#routineOrderList [data-id]')].map(e => e.dataset.id));
+    check('routine reorder: modal lists routines in saved order', JSON.stringify(ids0) === JSON.stringify(['rA', 'rB', 'rC']), JSON.stringify(ids0));
+    const h = await page.locator('#routineOrderList .cdrag').first().boundingBox();
+    const rows = await page.evaluate(() => [...document.querySelectorAll('#routineOrderList [data-id]')].slice(0, 2).map(e => { const b = e.getBoundingClientRect(); return { t: b.top, b: b.bottom }; }));
+    const step = rows[1].t - rows[0].t;
+    const cx = h.x + h.width / 2, cy = h.y + h.height / 2;
+    await page.mouse.move(cx, cy); await page.mouse.down();
+    await page.mouse.move(cx, cy + step * 0.6, { steps: 4 }); await page.mouse.move(cx, cy + step * 1.3, { steps: 4 });
+    await page.mouse.up(); await page.waitForTimeout(200);
+    const ids1 = await page.evaluate(() => [...document.querySelectorAll('#routineOrderList [data-id]')].map(e => e.dataset.id));
+    check('routine reorder: drag moves rA below rB in the modal', ids1[0] === 'rB' && ids1[1] === 'rA' && ids1[2] === 'rC', JSON.stringify(ids1));
+    const saved = await page.evaluate(() => gR().map(r => r.id));
+    check('routine reorder: new order is persisted to storage', JSON.stringify(saved) === JSON.stringify(ids1), JSON.stringify(saved));
+    await page.evaluate(() => cm('routineOrderModal'));
+    const listTxt = await page.evaluate(() => document.getElementById('routinesList').innerText);
+    check('routine reorder: My routines list reflects the new order', listTxt.indexOf('Pull Day') < listTxt.indexOf('Push Day') && listTxt.indexOf('Push Day') < listTxt.indexOf('Leg Day'), listTxt);
+    check('routine reorder: no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close(); }
   // Typing works in the rotated frame and the field is not hidden (keyboard bug must not regress).
   { const { page, ctx } = await phone({ width: 844, height: 390, angle: 90 });
     await page.evaluate(() => om('loginModal')); await page.waitForTimeout(150);
