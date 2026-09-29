@@ -171,7 +171,8 @@ custom-exercise creation, GPS/route tracking, body-weight logging.
 
 ## Wear `main`, not tagged yet (2026-09-29)
 
-- **Running volume in the workout header** (Phil's ask): "❤ HR · 🔥 kcal · 🏋 volume unit" on
+- **Running volume in the workout header** (Phil's ask): "❤ HR · 🔥 kcal · 🏋 volume", all red, on
   the list and in focus view. Sum of checked-off sets on weight-tracked exercises (effective
   weight × reps, the `finishW` volume rule), unrounded, in the user's unit, compact format
-  (`fmtV`). Heart rate and calories still show only while health tracking is on.
+  (`fmtV`, no unit label: the worst case "❤ 188 · 🔥 1888 · 🏋 999.9K" only fits the Galaxy
+  without it). Heart rate and calories still show only while health tracking is on.
