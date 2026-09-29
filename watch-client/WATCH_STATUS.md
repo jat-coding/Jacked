@@ -9,9 +9,9 @@ each editing only its own rows. Updated in the same push as the change it descri
 
 | Client | Version | Delivery | Verified |
 |---|---|---|---|
-| Wear OS (Galaxy Watch 8 Classic) | **v0.23** (wear vc122) | Play internal testing | tagged 2026-09-28: upload reliability (quick retries after Finish, bounded safety net, on-watch sync log) after a workout sat queued 7½ h; v0.22 (2026-09-25): live PR ★, "✎ Note" target (item 11), "How Jacked works" guide, ▼ Lighter on the card; v0.21 (2026-09-25): workout list opens top-aligned; v0.20 (2026-09-24): focus header = list header, back returns to the same exercise, no "›", centred confirms; v0.19 (2026-09-21): one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
+| Wear OS (Galaxy Watch 8 Classic) | **v0.24** (wear vc123) | Play internal testing | tagged 2026-09-29: running volume in the workout header (❤ · 🔥 · 🏋, all red); v0.23 (2026-09-28): upload reliability (quick retries after Finish, bounded safety net, on-watch sync log) after a workout sat queued 7½ h; v0.22 (2026-09-25): live PR ★, "✎ Note" target (item 11), "How Jacked works" guide, ▼ Lighter on the card; v0.21 (2026-09-25): workout list opens top-aligned; v0.20 (2026-09-24): focus header = list header, back returns to the same exercise, no "›", centred confirms; v0.19 (2026-09-21): one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
 | watchOS (Apple Watch) | **0.2.0 (24)** | TestFlight | build 22 field-tested; 24 adds overload nudges; Wear v0.15 parity items handed off 2026-09-20 |
-| Phone companion "Jacked Sync" (Android) | **v0.23** (phone vc22) | Play internal testing | no functional change since v0.14 |
+| Phone companion "Jacked Sync" (Android) | **v0.24** (phone vc23) | Play internal testing | no functional change since v0.14 |
 
 The companion is not a watch client: it reads the cloud blob and writes finished workouts into
 Android Health Connect, which is the only path into Samsung Health. It signs in like a watch.
@@ -169,7 +169,7 @@ custom-exercise creation, GPS/route tracking, body-weight logging.
 - **▼ Lighter** also shows on the exercise card (beside the PR line, like ▲ Go up) when the last
   session never reached min; clears once a done set today reaches min.
 
-## Wear `main`, not tagged yet (2026-09-29)
+## Wear v0.24 additions (2026-09-29)
 
 - **Running volume in the workout header** (Phil's ask): "❤ HR · 🔥 kcal · 🏋 volume", all red, on
   the list and in focus view. Sum of checked-off sets on weight-tracked exercises (effective
