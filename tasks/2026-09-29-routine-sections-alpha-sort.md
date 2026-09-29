@@ -49,7 +49,7 @@ routines into them. Follow-up to the routine drag-reorder shipped today (v1.10.4
   DB-sourced exercises classify correctly); e2e seeds 2 sectionId-less legacy
   routines and confirms both get a valid section, no errors, no data loss.
 - [x] `node tests/e2e/run.mjs` full suite passes, 0 failures, pass count reported.
-  **578/578 passed** (up from the pre-existing 538/538 baseline; 40 new checks
+  **581/581 passed** (up from the pre-existing 538/538 baseline; 43 new checks
   added for this feature, 2 pre-existing checks updated for the new modal shape).
 - [x] No new console errors. Every new/updated test block asserts
   `errors.length === 0`; all passed.
@@ -71,7 +71,11 @@ routines into them. Follow-up to the routine drag-reorder shipped today (v1.10.4
 5
 
 ## Status
-Done. Shipped as v1.10.44, commit f4b7bc2, pushed to `staging` (confirmed
-`PUSHED: origin/staging == local HEAD == f4b7bc2`; Netlify shows it enqueued as a
-staging branch-deploy). Not pushed to main/production -- needs his explicit go per
-standing rule. Full report: 2026-09-29-routine-sections-alpha-sort-REPORT.md.
+Done. Shipped as v1.10.44, final commit 309681e, pushed to `staging` (confirmed
+`PUSHED: origin/staging == local HEAD == 309681e`; Netlify was building it as a
+staging branch-deploy as of this writing). A same-session code review caught 3
+issues (addCurated() routines skipped sectionId; a synthetic-orphan-bucket label
+collision; no duplicate-name guard on section rename) -- all three fixed, a
+regression test added, full suite re-run (581/581) before this final push. Not
+pushed to main/production -- needs his explicit go per standing rule. Full
+report: 2026-09-29-routine-sections-alpha-sort-REPORT.md.
