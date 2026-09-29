@@ -464,6 +464,9 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 .blk-head>.blk-t{margin:0}
 .blk-head>:not(.blk-t){margin-top:-12px;margin-bottom:-12px}   /* actions up to 48px tall (44px tap targets) keep the row at title height */
 .blk-head+*{margin-top:0!important}
+.rsec+.rsec{margin-top:22px}
+.blk-t[contenteditable]{cursor:text;outline:none;border-bottom:1px dashed transparent}
+.blk-t[contenteditable]:focus{border-bottom-color:var(--border)}
 :is(.sec,.metric-card,.cw)>:last-child{margin-bottom:0!important}   /* the card's own 18px padding is the bottom space */
 .blk-act{display:inline-flex;align-items:center;gap:4px;font-family:var(--fb);font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted);cursor:pointer;padding:4px 0 4px 8px}
 .sec .stats-g,.sec .stats-g2{margin-bottom:0}
@@ -581,7 +584,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="blk-t"><svg viewBox='0 0 24 24' width='18' height='18' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
     <div class="chips" id="curatedList" style="gap:10px"></div>
   </div>
-  <div class="sec"><div class="blk-head"><div class="blk-t">My routines</div><button class="btn bg sm" onclick="openRoutineOrder()">Reorder</button></div><div id="routinesList"></div></div>
+  <div class="sec"><div class="blk-head"><div class="blk-t">My routines</div><div style="display:flex;gap:6px"><button class="btn bg sm" onclick="addSectionPrompt()">+ Section</button><button class="btn bg sm" onclick="openRoutineOrder()">Reorder</button></div></div><div id="routinesList"></div></div>
 </div>
 
 <!-- EXERCISES / LIBRARY -->
@@ -654,6 +657,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="mh"><div class="mt" id="crTitle">New Routine</div><button class="cb" onclick="cm('crModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="fg"><label>Routine Name</label><input type="text" id="rName" placeholder="e.g. Push Day"></div>
     <div class="fg"><label>Description</label><input type="text" id="rDesc" placeholder="e.g. Chest · Shoulders · Triceps"></div>
+    <div class="fg"><label>Section</label><select id="rSection" onchange="handleRSectionChange()"></select></div>
     <div class="blk-t">Exercises</div>
     <div id="rExPicker"></div>
     <button class="btn bg wf" onclick="openAEModal('routine')" style="margin-top:6px">+ Add Exercises</button>
@@ -1089,8 +1093,8 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="routineOrderModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div class="mt">Reorder Routines</div><button class="cb" onclick="cm('routineOrderModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Drag the grip to set the order.</div>
+    <div class="mh"><div class="mt">Reorder Sections &amp; Routines</div><button class="cb" onclick="cm('routineOrderModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Drag a section's grip to reorder sections. Drag a routine's grip to reorder it within its section.</div>
     <div id="routineOrderList" style="position:relative"></div>
     <button class="btn ba wf" onclick="cm('routineOrderModal')" style="margin-top:10px">Done</button>
   </div>
@@ -1380,7 +1384,7 @@ async function usernameTaken(u, exceptMine){
 // a wrong-typed value (returns null → the caller's default), and restoreKeys refuses to
 // write one (import / cloud restore). Keys not listed are free-form scalars.
 const KEY_SHAPE={
-  routines:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
+  routines:'a',routineSections:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
   prof:'o',prs:'o',settings:'o',exRename:'o',exOverride:'o',exNotes:'o',cardioPR:'o',metrics:'o',
   sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o'
 };
@@ -1395,6 +1399,8 @@ const S = {
 };
 const gCEx    = () => S.g('cex')      || [];
 const gR      = () => S.g('routines') || [];
+const gRS     = () => S.g('routineSections') || [];
+const saveRS  = arr => S.s('routineSections', arr);
 const gH      = () => S.g('hist')     || [];
 const gPR     = () => S.g('prs')      || {};
 const gProf   = () => S.g('prof')     || null;
@@ -2470,13 +2476,9 @@ function saveCE() {
 // ============================================================
 // ROUTINES
 // ============================================================
-function renderRoutines() {
-  renderCurated();
-  const rs=gR(), el=document.getElementById('routinesList');
-  if (!rs.length) { el.innerHTML='<div class="es"><h3>No routines</h3><p>Create your first routine.</p></div>'; return; }
-  el.innerHTML=rs.map(r=>{
-    const exs=(r.exercises||[]).map(id=>byId(id));
-    return `<div class="rc">
+function routineCardHtml(r){
+  const exs=(r.exercises||[]).map(id=>byId(id));
+  return `<div class="rc" data-id="${r.id}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
         <div style="min-width:0">
           <div class="rn">${esc(r.name)}</div>
@@ -2493,15 +2495,66 @@ function renderRoutines() {
       </div>
       <button class="rsb" onclick="startRW('${r.id}')">Start Workout</button>
     </div>`;
+}
+// Slim section header -- same visual weight as the Metrics page (.blk-t/.blk-head),
+// not a card. Name is inline-editable (contenteditable); readonly=true is the
+// synthetic "Unsorted" fallback bucket shown only if a routine's section vanished.
+function sectionBlockHtml(s,list,readonly){
+  const head=readonly
+    ? `<div class="blk-head"><div class="blk-t">${esc(s.name)}</div></div>`
+    : `<div class="blk-head"><div class="blk-t" contenteditable="true" spellcheck="false"
+         onblur="renameSection('${s.id}',this.textContent)"
+         onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${esc(s.name)}</div></div>`;
+  const body=list.length?list.map(routineCardHtml).join('')
+    :'<div style="font-size:12px;color:var(--muted);padding:0 0 10px">No routines yet — edit a routine to move it here.</div>';
+  return `<div class="rsec" data-secid="${s.id}">${head}${body}</div>`;
+}
+function renderRoutines() {
+  renderCurated();
+  const el=document.getElementById('routinesList');
+  const all=gR();
+  if (!all.length) { el.innerHTML='<div class="es"><h3>No routines</h3><p>Create your first routine.</p></div>'; return; }
+  const secs=gRS();
+  const grouped=new Set();
+  let html=secs.map(s=>{
+    const list=routinesInSection(s.id);
+    list.forEach(r=>grouped.add(r.id));
+    return sectionBlockHtml(s,list,false);
   }).join('');
+  const orphans=all.filter(r=>!grouped.has(r.id)).sort((a,b)=>a.name.localeCompare(b.name));
+  if(orphans.length) html+=sectionBlockHtml({id:'',name:'Unsorted'},orphans,true);
+  el.innerHTML=html;
 }
 
-let eRid=null, rExs=[];
+let eRid=null, rExs=[], _rSectionPrev='';
+// Section picker: "Auto-suggest" (value '') defers to saveR()'s majority-muscle-group
+// guess; existing sections list below it; "+ New section…" prompts for a name.
+function renderRSectionOptions(selectedId){
+  const sel=document.getElementById('rSection'); if(!sel) return;
+  const secs=gRS();
+  sel.innerHTML=`<option value="">Auto-suggest from exercises</option>`
+    +secs.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')
+    +`<option value="__new__">+ New section…</option>`;
+  sel.value=selectedId&&secs.some(s=>s.id===selectedId)?selectedId:'';
+  _rSectionPrev=sel.value;
+}
+function handleRSectionChange(){
+  const sel=document.getElementById('rSection');
+  if(sel.value!=='__new__'){ _rSectionPrev=sel.value; return; }
+  const prev=_rSectionPrev;
+  showConfirm('New section name:',{isPrompt:true}).then(nm=>{
+    const name=(nm||'').trim();
+    if(!name){ renderRSectionOptions(prev); return; }
+    const id=findOrCreateSection(name);
+    renderRSectionOptions(id);
+  });
+}
 function openCR() {
   eRid=null; rExs=[];
   document.getElementById('crTitle').textContent='New Routine';
   document.getElementById('rName').value='';
   document.getElementById('rDesc').value='';
+  renderRSectionOptions(null);
   renderREP(); om('crModal');
 }
 function editR(id) {
@@ -2510,6 +2563,7 @@ function editR(id) {
   document.getElementById('crTitle').textContent='Edit Routine';
   document.getElementById('rName').value=r.name;
   document.getElementById('rDesc').value=r.desc||'';
+  renderRSectionOptions(r.sectionId||null);
   renderREP(); om('crModal');
 }
 function delR(id) {
@@ -2544,7 +2598,9 @@ function saveR() {
   const n=document.getElementById('rName').value.trim();
   if (!n) { toast('Enter a routine name','err'); return; }
   const rs=gR();
+  const picked=document.getElementById('rSection').value;
   const obj={name:n,desc:document.getElementById('rDesc').value.trim(),exercises:[...rExs]};
+  obj.sectionId=picked||suggestSectionId(obj);
   if (eRid) { const idx=rs.findIndex(r=>r.id===eRid); rs[idx]={...rs[idx],...obj}; }
   else rs.push({id:'r'+Date.now(),...obj});
   S.s('routines',rs); cm('crModal'); renderRoutines(); toast('Routine saved ✓','ok');
@@ -4239,6 +4295,79 @@ function muscleGroup(m){
 const MGROUPS=['chest','back','shoulders','biceps','triceps','legs','glutes','core'];
 const MGNAME={chest:'Chest',back:'Back',shoulders:'Shoulders',biceps:'Arms (Biceps)',triceps:'Arms (Triceps)',legs:'Legs',glutes:'Glutes',core:'Core'};
 
+// ============================================================
+// ROUTINE SECTIONS (v1.10.44) — routines list groups routines under editable,
+// reorderable section headers. Sections are lazy: created the first time a routine
+// auto-suggests into one, or via "+ Section". routineSections order IS section order;
+// a section's own `order` (array of routine ids, or null) is its manual routine order --
+// null means "alphabetical by name", the default until a drag touches it.
+// ============================================================
+const SECTION_LABEL={chest:'Chest',back:'Back',shoulders:'Shoulders',biceps:'Biceps',triceps:'Triceps',legs:'Legs',glutes:'Glutes',core:'Core'};
+function findOrCreateSection(name){
+  const secs=gRS();
+  const hit=secs.find(s=>s.name.toLowerCase()===name.toLowerCase());
+  if(hit) return hit.id;
+  const sec={id:'sec'+Date.now()+Math.random().toString(36).slice(2,7),name,order:null};
+  saveRS([...secs,sec]);
+  return sec.id;
+}
+// The group most of a routine's exercises train, restricted to the 8 tracked groups.
+// Null (not 'core' or anything else) on a tie or no exercises -- callers fall back to Unsorted.
+function majorityGroupForRoutine(r){
+  const counts={};
+  (r.exercises||[]).forEach(id=>{
+    const g=muscleGroup(byId(id).muscle);
+    if(MGROUPS.includes(g)) counts[g]=(counts[g]||0)+1;
+  });
+  const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length) return null;
+  if(entries.length>1&&entries[0][1]===entries[1][1]) return null;
+  return entries[0][0];
+}
+function suggestSectionId(r){
+  const g=majorityGroupForRoutine(r);
+  return findOrCreateSection(g?SECTION_LABEL[g]:'Unsorted');
+}
+// One-time upgrade path: any routine saved before sections existed (or whose sectionId
+// no longer resolves) gets auto-filed. Idempotent -- a routine that already has a valid
+// sectionId is left alone, so this is safe to call again (e.g. once the exercise DB finishes
+// loading and majority-group classification becomes accurate for DB-sourced exercises).
+function migrateRoutineSections(){
+  const rs=gR();
+  let changed=false;
+  rs.forEach(r=>{
+    if(!r.sectionId||!gRS().some(s=>s.id===r.sectionId)){ r.sectionId=suggestSectionId(r); changed=true; }
+  });
+  if(changed) S.s('routines',rs);
+}
+// Routines in a section, in display order: the section's saved manual order if it has
+// one (new/removed routines land after it, alphabetically), else alphabetical by name.
+function routinesInSection(secId){
+  const rs=gR().filter(r=>r.sectionId===secId);
+  const sec=gRS().find(s=>s.id===secId);
+  const manual=sec&&sec.order;
+  if(!manual) return rs.sort((a,b)=>a.name.localeCompare(b.name));
+  const map=new Map(rs.map(r=>[r.id,r]));
+  const ordered=manual.map(id=>map.get(id)).filter(Boolean);
+  const extra=rs.filter(r=>!manual.includes(r.id)).sort((a,b)=>a.name.localeCompare(b.name));
+  return [...ordered,...extra];
+}
+function renameSection(id,rawName){
+  const name=(rawName||'').trim();
+  const secs=gRS(), idx=secs.findIndex(s=>s.id===id);
+  if(idx<0||!name||secs[idx].name===name){ renderRoutines(); return; }
+  secs[idx]={...secs[idx],name};
+  saveRS(secs);
+  renderRoutines();
+}
+function addSectionPrompt(){
+  showConfirm('New section name:',{isPrompt:true}).then(nm=>{
+    const name=(nm||'').trim(); if(!name) return;
+    findOrCreateSection(name);
+    renderRoutines();
+  });
+}
+
 // Aggregate training usage (completed sets) per muscle GROUP across all history.
 // credit=true (Muscle Map without a body weight, Workout Summary): a set also counts as CREDIT_SET_SHARE of a set
 // for every group it credits (exCredits f > 0), so a squat day is glute work. 0.5 is a set value, the usual
@@ -4888,8 +5017,15 @@ function cardDragStart(e){
       renderReorder(); renderWS(); saveAW(); return;
     }
     if(cont.id==='routineOrderList'){
-      const old=gR();
-      S.s('routines',ids.map(id=>old.find(r=>r.id===id)).filter(Boolean));
+      // Section headers: ids are section ids, this container's order IS section order.
+      const old=gRS();
+      saveRS(ids.map(id=>old.find(s=>s.id===id)).filter(Boolean));
+      renderRoutineOrderList(); renderRoutines(); return;
+    }
+    if(cont.id.startsWith('secROList-')){
+      // Routines within one section: save this section's manual order.
+      const secId=cont.id.slice('secROList-'.length), secs=gRS(), idx=secs.findIndex(s=>s.id===secId);
+      if(idx>=0){ secs[idx]={...secs[idx],order:ids}; saveRS(secs); }
       renderRoutineOrderList(); renderRoutines(); return;
     }
     const s=gSet();
@@ -4900,13 +5036,25 @@ function cardDragStart(e){
   raf=requestAnimationFrame(tick); place();
 }
 function openRoutineOrder(){ renderRoutineOrderList(); om('routineOrderModal'); }
+const _GRIP_SVG=`<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>`;
 function renderRoutineOrderList(){
   const el=document.getElementById('routineOrderList'); if(!el) return;
-  el.innerHTML=gR().map(r=>`
-    <div data-id="${r.id}" style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;background-clip:padding-box">
-      <div style="font-weight:600;font-size:14px">${esc(r.name)}</div>
-      <div class="cdrag" aria-label="Drag to reorder" onpointerdown="cardDragStart(event)"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg></div>
-    </div>`).join('');
+  el.innerHTML=gRS().map(s=>{
+    const list=routinesInSection(s.id);
+    return `<div data-id="${s.id}" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;background-clip:padding-box">
+        <div class="rosec-name" style="font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.4px">${esc(s.name)}</div>
+        <div class="cdrag sec-cdrag" aria-label="Drag to reorder section" onpointerdown="cardDragStart(event)">${_GRIP_SVG}</div>
+      </div>
+      <div id="secROList-${s.id}" style="position:relative;padding-top:8px">
+        ${list.map(r=>`
+        <div data-id="${r.id}" style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin:0 0 10px 18px;background-clip:padding-box">
+          <div style="font-weight:600;font-size:14px">${esc(r.name)}</div>
+          <div class="cdrag" aria-label="Drag to reorder" onpointerdown="cardDragStart(event)">${_GRIP_SVG}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
 }
 function openCardOrder(){ renderCardOrderList(); om('cardOrderModal'); }
 function renderCardOrderList(){
@@ -6691,7 +6839,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.43';
+const BUILD = 'v1.10.44';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
@@ -6739,6 +6887,15 @@ healBareStrings();
 checkOnboarding();
 // Kick off DB load in background so it's ready when the user first opens Library/exercises
 setTimeout(loadDB, 500);
+// One-time routine-sections migration: waits for the exercise DB (same wait pattern as
+// badgeStart()) so a majority-muscle-group guess for DB-sourced exercises isn't made blind,
+// then files any routine saved before sections existed. Safe to have run again by
+// migrateRoutineSections() itself -- it only touches routines still missing a valid sectionId.
+(async function(){
+  if(!dbLoaded){ loadDB(); for(let i=0;i<50&&dbLoading;i++) await new Promise(r=>setTimeout(r,100)); }
+  migrateRoutineSections();
+  if(document.getElementById('page-routines').classList.contains('active')) renderRoutines();
+})();
 </script>
 </div><!-- /#jkRoot -->
 </body>

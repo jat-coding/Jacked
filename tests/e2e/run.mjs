@@ -822,27 +822,150 @@ async function portraitLock() {
     check(`lock @${a}: reorder no page errors`, errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
-  // Reorder routines: same drag-grip pattern as Reorder Sections, plain portrait.
-  { const routines = [{ id: 'rA', name: 'Push Day', desc: '', exercises: ['e-bench'] }, { id: 'rB', name: 'Pull Day', desc: '', exercises: ['e-ohp'] }, { id: 'rC', name: 'Leg Day', desc: '', exercises: ['e-curl'] }];
-    const { page, ctx, errors } = await phone({ seed: { routines } });
+  // Routine sections (2026-09-29): grouping, alphabetical default, section CRUD,
+  // and the extended drag machinery -- section headers reorder, routines reorder
+  // within their own section, cross-section drag is not attempted (not required).
+  { const cex = [
+      { id: 'cexChest', name: 'Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
+      { id: 'cexBack', name: 'Row', muscle: 'back', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
+    ];
+    const routines = [
+      { id: 'rA', name: 'Push Day', desc: '', exercises: ['cexChest'] },
+      { id: 'rB', name: 'Bench Day', desc: '', exercises: ['cexChest'] },
+      { id: 'rC', name: 'Pull Day', desc: '', exercises: ['cexBack'] },
+      { id: 'rD', name: 'Row Day', desc: '', exercises: ['cexBack'] },
+    ];
+    const { page, ctx, errors } = await phone({ seed: { cex, routines } });
+    // Force the migration synchronously instead of waiting on the app's own DB-load-gated
+    // boot timer -- these are custom exercises, so classification doesn't depend on the DB.
+    await page.evaluate(() => migrateRoutineSections());
+    await page.evaluate(() => sp('routines')); await page.waitForTimeout(150);
+
+    const secNames0 = await page.evaluate(() => [...document.querySelectorAll('#routinesList .rsec')].map(e => e.querySelector('.blk-t').textContent.trim()));
+    check('sections: auto-suggest grouped routines into Chest and Back', JSON.stringify(secNames0) === JSON.stringify(['Chest', 'Back']), JSON.stringify(secNames0));
+    const mainOrder0 = await page.evaluate(() => [...document.querySelectorAll('#routinesList .rc .rn')].map(e => e.textContent.trim()));
+    check('sections: routines list alphabetical within each section by default', JSON.stringify(mainOrder0) === JSON.stringify(['Bench Day', 'Push Day', 'Pull Day', 'Row Day']), JSON.stringify(mainOrder0));
+    fs.mkdirSync(SHOTS, { recursive: true });
+    await page.screenshot({ path: `${SHOTS}/routine-sections.png`, fullPage: true });
+
     await page.evaluate(() => openRoutineOrder()); await page.waitForTimeout(150);
-    const ids0 = await page.evaluate(() => [...document.querySelectorAll('#routineOrderList [data-id]')].map(e => e.dataset.id));
-    check('routine reorder: modal lists routines in saved order', JSON.stringify(ids0) === JSON.stringify(['rA', 'rB', 'rC']), JSON.stringify(ids0));
-    const h = await page.locator('#routineOrderList .cdrag').first().boundingBox();
-    const rows = await page.evaluate(() => [...document.querySelectorAll('#routineOrderList [data-id]')].slice(0, 2).map(e => { const b = e.getBoundingClientRect(); return { t: b.top, b: b.bottom }; }));
+    const secNamesM0 = await page.evaluate(() => [...document.querySelectorAll('#routineOrderList > [data-id]')].map(e => e.querySelector('.rosec-name').textContent.trim()));
+    check('routine reorder modal: sections listed Chest then Back (creation order)', JSON.stringify(secNamesM0) === JSON.stringify(['Chest', 'Back']), JSON.stringify(secNamesM0));
+    const chestSecId = await page.evaluate(() => gRS()[0].id), backSecId = await page.evaluate(() => gRS()[1].id);
+    const chestIds0 = await page.evaluate(id => [...document.querySelectorAll(`#secROList-${id} [data-id]`)].map(e => e.dataset.id), chestSecId);
+    check('routine reorder modal: Chest routines alphabetical (Bench Day, Push Day)', JSON.stringify(chestIds0) === JSON.stringify(['rB', 'rA']), JSON.stringify(chestIds0));
+    const backIds0 = await page.evaluate(id => [...document.querySelectorAll(`#secROList-${id} [data-id]`)].map(e => e.dataset.id), backSecId);
+    check('routine reorder modal: Back routines alphabetical (Pull Day, Row Day)', JSON.stringify(backIds0) === JSON.stringify(['rC', 'rD']), JSON.stringify(backIds0));
+
+    // Drag within the Chest section: swap Bench Day / Push Day.
+    const h = await page.locator(`#secROList-${chestSecId} .cdrag`).first().boundingBox();
+    const rows = await page.evaluate(id => [...document.querySelectorAll(`#secROList-${id} [data-id]`)].slice(0, 2).map(e => { const b = e.getBoundingClientRect(); return { t: b.top, b: b.bottom }; }), chestSecId);
     const step = rows[1].t - rows[0].t;
     const cx = h.x + h.width / 2, cy = h.y + h.height / 2;
     await page.mouse.move(cx, cy); await page.mouse.down();
     await page.mouse.move(cx, cy + step * 0.6, { steps: 4 }); await page.mouse.move(cx, cy + step * 1.3, { steps: 4 });
     await page.mouse.up(); await page.waitForTimeout(200);
-    const ids1 = await page.evaluate(() => [...document.querySelectorAll('#routineOrderList [data-id]')].map(e => e.dataset.id));
-    check('routine reorder: drag moves rA below rB in the modal', ids1[0] === 'rB' && ids1[1] === 'rA' && ids1[2] === 'rC', JSON.stringify(ids1));
-    const saved = await page.evaluate(() => gR().map(r => r.id));
-    check('routine reorder: new order is persisted to storage', JSON.stringify(saved) === JSON.stringify(ids1), JSON.stringify(saved));
+    const chestIds1 = await page.evaluate(id => [...document.querySelectorAll(`#secROList-${id} [data-id]`)].map(e => e.dataset.id), chestSecId);
+    check('routine reorder modal: drag moves Push Day above Bench Day within Chest', JSON.stringify(chestIds1) === JSON.stringify(['rA', 'rB']), JSON.stringify(chestIds1));
+    const chestOrderSaved = await page.evaluate(id => gRS().find(s => s.id === id).order, chestSecId);
+    check('routine reorder modal: manual within-section order persisted', JSON.stringify(chestOrderSaved) === JSON.stringify(['rA', 'rB']), JSON.stringify(chestOrderSaved));
+    const backOrderUntouched = await page.evaluate(id => gRS().find(s => s.id === id).order, backSecId);
+    check('routine reorder modal: dragging one section does not touch another', backOrderUntouched === null, JSON.stringify(backOrderUntouched));
+
+    // Drag the Chest section header below Back.
+    const h2 = await page.locator('#routineOrderList .sec-cdrag').first().boundingBox();
+    const secBoxes = await page.evaluate(() => [...document.querySelectorAll('#routineOrderList > [data-id]')].map(e => { const b = e.getBoundingClientRect(); return { t: b.top, b: b.bottom }; }));
+    const stepSec = secBoxes[1].t - secBoxes[0].t;
+    const cx2 = h2.x + h2.width / 2, cy2 = h2.y + h2.height / 2;
+    await page.mouse.move(cx2, cy2); await page.mouse.down();
+    await page.mouse.move(cx2, cy2 + stepSec * 0.6, { steps: 4 }); await page.mouse.move(cx2, cy2 + stepSec * 1.3, { steps: 4 });
+    await page.mouse.up(); await page.waitForTimeout(250);
+    const secNamesM1 = await page.evaluate(() => [...document.querySelectorAll('#routineOrderList > [data-id]')].map(e => e.querySelector('.rosec-name').textContent.trim()));
+    check('routine reorder modal: drag moves Back above Chest', JSON.stringify(secNamesM1) === JSON.stringify(['Back', 'Chest']), JSON.stringify(secNamesM1));
+    const secOrderSaved = await page.evaluate(() => gRS().map(s => s.name));
+    check('routine reorder modal: section order persisted to storage', JSON.stringify(secOrderSaved) === JSON.stringify(['Back', 'Chest']), JSON.stringify(secOrderSaved));
+
     await page.evaluate(() => cm('routineOrderModal'));
-    const listTxt = await page.evaluate(() => document.getElementById('routinesList').innerText);
-    check('routine reorder: My routines list reflects the new order', listTxt.indexOf('Pull Day') < listTxt.indexOf('Push Day') && listTxt.indexOf('Push Day') < listTxt.indexOf('Leg Day'), listTxt);
-    check('routine reorder: no page errors', errors.length === 0, errors.join(' | '));
+    // textContent, not innerText: .blk-t renders section names UPPERCASE via CSS, textContent doesn't.
+    const secNamesMain = () => page.evaluate(() => [...document.querySelectorAll('#routinesList .rsec .blk-t')].map(e => e.textContent.trim()));
+    const routineNamesMain = () => page.evaluate(() => [...document.querySelectorAll('#routinesList .rc .rn')].map(e => e.textContent.trim()));
+    check('sections: My routines list reflects the new section order', JSON.stringify(await secNamesMain()) === JSON.stringify(['Back', 'Chest']), JSON.stringify(await secNamesMain()));
+    const routineOrderNames = await routineNamesMain();
+    check('sections: My routines list reflects the new in-section order', routineOrderNames.indexOf('Push Day') < routineOrderNames.indexOf('Bench Day'), JSON.stringify(routineOrderNames));
+
+    // Inline rename + add section.
+    await page.evaluate(id => renameSection(id, 'Push/Pull'), backSecId);
+    const secNamesRenamed = await secNamesMain();
+    check('sections: inline rename persists and re-renders', secNamesRenamed.includes('Push/Pull') && !secNamesRenamed.includes('Back'), JSON.stringify(secNamesRenamed));
+    await page.evaluate(() => addSectionPrompt());
+    await page.waitForTimeout(100);
+    await page.fill('#cfInput', 'Cardio');
+    await page.click('#cfOk');
+    await page.waitForTimeout(100);
+    const cardioExists = await page.evaluate(() => gRS().some(s => s.name === 'Cardio'));
+    check('sections: "+ Section" creates a new (empty) section', cardioExists);
+
+    check('sections: no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close(); }
+
+  // Routine sections: auto-suggest at save time, section-picker override, and the
+  // one-time migration of legacy routines saved before sections existed.
+  { const cexLegs = { id: 'cexLegs', name: 'Squat', muscle: 'legs', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true };
+    const { page, ctx, errors } = await phone({ seed: { cex: [cexLegs] } });
+    await page.evaluate(() => { openCR(); document.getElementById('rName').value = 'Squat Day'; rExs.push('cexLegs'); });
+    const defaultSel = await page.evaluate(() => document.getElementById('rSection').value);
+    check('routine picker: new routine defaults to Auto-suggest', defaultSel === '', defaultSel);
+    await page.evaluate(() => saveR());
+    const savedLegs = await page.evaluate(() => gR().find(r => r.name === 'Squat Day'));
+    const legsSecName = await page.evaluate(id => (gRS().find(s => s.id === id) || {}).name, savedLegs.sectionId);
+    check('saveR(): auto-suggests the Legs section from the routine\'s exercises', legsSecName === 'Legs', legsSecName);
+
+    const chestId = await page.evaluate(() => findOrCreateSection('Chest'));
+    await page.evaluate(() => { openCR(); document.getElementById('rName').value = 'Odd One'; rExs.push('cexLegs'); });
+    await page.evaluate(id => { document.getElementById('rSection').value = id; }, chestId);
+    await page.evaluate(() => saveR());
+    const savedOdd = await page.evaluate(() => gR().find(r => r.name === 'Odd One'));
+    check('routine picker: explicit section choice overrides the auto-suggestion', savedOdd.sectionId === chestId, savedOdd.sectionId);
+
+    // "+ New section..." from inside the edit-routine modal.
+    await page.evaluate(() => { openCR(); document.getElementById('rName').value = 'New Sec Day'; });
+    await page.evaluate(() => { document.getElementById('rSection').value = '__new__'; document.getElementById('rSection').dispatchEvent(new Event('change')); });
+    await page.waitForTimeout(100);
+    await page.fill('#cfInput', 'Cardio Blast');
+    await page.click('#cfOk');
+    await page.waitForTimeout(100);
+    const pickedNewTxt = await page.evaluate(() => document.getElementById('rSection').selectedOptions[0].textContent);
+    check('routine picker: "+ New section" creates and selects it', pickedNewTxt === 'Cardio Blast', pickedNewTxt);
+    await page.evaluate(() => saveR());
+    const savedNew = await page.evaluate(() => gR().find(r => r.name === 'New Sec Day'));
+    const newSecName = await page.evaluate(id => (gRS().find(s => s.id === id) || {}).name, savedNew.sectionId);
+    check('routine picker: routine saved into the section created via the picker', newSecName === 'Cardio Blast', newSecName);
+
+    // Editing an already-sectioned routine defaults the picker to its current section
+    // (does not silently re-suggest and move it).
+    await page.evaluate(() => editR(gR().find(r => r.name === 'Squat Day').id));
+    const editSel = await page.evaluate(() => document.getElementById('rSection').value);
+    check('routine picker: editing preselects the routine\'s current section', editSel === savedLegs.sectionId, editSel);
+    await page.evaluate(() => saveR());
+    const reSaved = await page.evaluate(() => gR().find(r => r.name === 'Squat Day'));
+    check('saveR(): re-saving without touching the picker keeps the same section', reSaved.sectionId === savedLegs.sectionId);
+    check('routine picker: no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close(); }
+
+  { // Migration: routines saved before this feature (no sectionId at all) get filed
+    // into a sane section on first load, with no crash and no data loss.
+    const routines = [{ id: 'legacy1', name: 'Legacy A', desc: '', exercises: [] }, { id: 'legacy2', name: 'Legacy B', desc: '', exercises: [] }];
+    const { page, ctx, errors } = await phone({ seed: { routines } });
+    for (let i = 0; i < 50; i++) { if (await page.evaluate(() => gR().every(r => r.sectionId))) break; await page.waitForTimeout(100); }
+    const migrated = await page.evaluate(() => gR().map(r => ({ name: r.name, sectionId: r.sectionId })));
+    check('migration: every legacy routine gets a sectionId', migrated.every(r => r.sectionId), JSON.stringify(migrated));
+    const resolves = await page.evaluate(ids => { const s = gRS(); return ids.every(id => s.some(x => x.id === id)); }, migrated.map(r => r.sectionId));
+    check('migration: assigned sectionIds resolve to real sections', resolves);
+    const names = await page.evaluate(() => gR().map(r => r.name).sort());
+    check('migration: no data loss -- both legacy routines still present', JSON.stringify(names) === JSON.stringify(['Legacy A', 'Legacy B']), JSON.stringify(names));
+    await page.evaluate(() => sp('routines'));
+    check('migration: routines tab renders with no crash', await page.locator('#page-routines').isVisible());
+    check('migration: no page errors', errors.length === 0, errors.join(' | '));
     await ctx.close(); }
   // Typing works in the rotated frame and the field is not hidden (keyboard bug must not regress).
   { const { page, ctx } = await phone({ width: 844, height: 390, angle: 90 });
