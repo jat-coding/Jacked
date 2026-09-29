@@ -125,9 +125,9 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   `jk_settings.targetSets`/`repMin`/`repMax`. **Go up** = all sets **≥ max** for 3
   consecutive workouts at the same weight. **Go down** = no set reaches **min** in a
   **single** workout, immediately. Suppressed when the exercise sets a PR that session.
-  Wear implements this as of v0.15; the phone matches from build v1.8.17 (A10). Known
-  residue: the watches also require **≥ `targetSets` (default 3) done sets** per qualifying
-  workout; the phone has no `targetSets`.
+  Wear implements this as of v0.15; the phone matches from build v1.8.17 (A10). The
+  watches also require **≥ `targetSets` (default 3) done sets** per qualifying workout;
+  the phone adopts the same 3-set floor (Mr. Roni, 2026-09-28; phone-side build queued).
 - **Duration sets** store seconds in the set's `weight` field (A6). Wear wrote `reps`
   until 2026-09-20; it now writes `weight` and falls back to `reps` when reading older
   sessions.
@@ -168,3 +168,10 @@ custom-exercise creation, GPS/route tracking, body-weight logging.
   `jacked-wear/USER_GUIDE.md`.
 - **▼ Lighter** also shows on the exercise card (beside the PR line, like ▲ Go up) when the last
   session never reached min; clears once a done set today reaches min.
+
+## Wear `main`, not tagged yet (2026-09-29)
+
+- **Running volume in the workout header** (Phil's ask): "❤ HR · 🔥 kcal · 🏋 volume unit" on
+  the list and in focus view. Sum of checked-off sets on weight-tracked exercises (effective
+  weight × reps, the `finishW` volume rule), unrounded, in the user's unit, compact format
+  (`fmtV`). Heart rate and calories still show only while health tracking is on.
