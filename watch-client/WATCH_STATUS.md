@@ -9,9 +9,9 @@ each editing only its own rows. Updated in the same push as the change it descri
 
 | Client | Version | Delivery | Verified |
 |---|---|---|---|
-| Wear OS (Galaxy Watch 8 Classic) | **v0.22** (wear vc121) | Play internal testing | tagged 2026-09-25: live PR ★, "✎ Note" target (item 11), "How Jacked works" guide, ▼ Lighter on the card; v0.21 (2026-09-25): workout list opens top-aligned; v0.20 (2026-09-24): focus header = list header, back returns to the same exercise, no "›", centred confirms; v0.19 (2026-09-21): one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
+| Wear OS (Galaxy Watch 8 Classic) | **v0.25** (wear vc124) | Play internal testing | tagged 2026-09-29: note editor — Save with unchanged text no longer writes (an idle Save could overwrite a newer phone note); v0.24 (2026-09-29): running volume in the workout header (❤ · 🔥 · 🏋, all red); v0.23 (2026-09-28): upload reliability (quick retries after Finish, bounded safety net, on-watch sync log) after a workout sat queued 7½ h; v0.22 (2026-09-25): live PR ★, "✎ Note" target (item 11), "How Jacked works" guide, ▼ Lighter on the card; v0.21 (2026-09-25): workout list opens top-aligned; v0.20 (2026-09-24): focus header = list header, back returns to the same exercise, no "›", centred confirms; v0.19 (2026-09-21): one-line confirms, "Discard workout?" wording, long-press Resume → confirm directly; v0.18 = DEV_NOTES 6–10; v0.17 = feelable dial haptic + password masking; v0.16 = Discard-from-focus fix; v0.15 = the feature batch |
 | watchOS (Apple Watch) | **0.2.0 (24)** | TestFlight | build 22 field-tested; 24 adds overload nudges; Wear v0.15 parity items handed off 2026-09-20 |
-| Phone companion "Jacked Sync" (Android) | **v0.22** (phone vc21) | Play internal testing | no functional change since v0.14 |
+| Phone companion "Jacked Sync" (Android) | **v0.25** (phone vc24) | Play internal testing | no functional change since v0.14 |
 
 The companion is not a watch client: it reads the cloud blob and writes finished workouts into
 Android Health Connect, which is the only path into Samsung Health. It signs in like a watch.
@@ -125,9 +125,9 @@ Android Health Connect, which is the only path into Samsung Health. It signs in 
   `jk_settings.targetSets`/`repMin`/`repMax`. **Go up** = all sets **≥ max** for 3
   consecutive workouts at the same weight. **Go down** = no set reaches **min** in a
   **single** workout, immediately. Suppressed when the exercise sets a PR that session.
-  Wear implements this as of v0.15; the phone matches from build v1.8.17 (A10). Known
-  residue: the watches also require **≥ `targetSets` (default 3) done sets** per qualifying
-  workout; the phone has no `targetSets`.
+  Wear implements this as of v0.15; the phone matches from build v1.8.17 (A10). The
+  watches also require **≥ `targetSets` (default 3) done sets** per qualifying workout;
+  the phone adopts the same 3-set floor (Mr. Roni, 2026-09-28; phone-side build queued).
 - **Duration sets** store seconds in the set's `weight` field (A6). Wear wrote `reps`
   until 2026-09-20; it now writes `weight` and falls back to `reps` when reading older
   sessions.
@@ -168,3 +168,11 @@ custom-exercise creation, GPS/route tracking, body-weight logging.
   `jacked-wear/USER_GUIDE.md`.
 - **▼ Lighter** also shows on the exercise card (beside the PR line, like ▲ Go up) when the last
   session never reached min; clears once a done set today reaches min.
+
+## Wear v0.24 additions (2026-09-29)
+
+- **Running volume in the workout header** (Phil's ask): "❤ HR · 🔥 kcal · 🏋 volume", all red, on
+  the list and in focus view. Sum of checked-off sets on weight-tracked exercises (effective
+  weight × reps, the `finishW` volume rule), unrounded, in the user's unit, compact format
+  (`fmtV`, no unit label: the worst case "❤ 188 · 🔥 1888 · 🏋 999.9K" only fits the Galaxy
+  without it). Heart rate and calories still show only while health tracking is on.
