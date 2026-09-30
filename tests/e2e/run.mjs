@@ -1925,13 +1925,49 @@ async function benchSubstitutes() {
   const pop = await page.evaluate(() => { const el = document.getElementById('badgeFullBody'); const rows = [...el.querySelectorAll('.bf-tier')].map(r => r.textContent.replace(/\s+/g, ' ').trim()); return { txt: el.textContent, rows }; });
   const T = r.T, dbT = tierOf(241, T);
   const dbRow = pop.rows.find(x => x.toLowerCase().startsWith(dbT)), belowRow = pop.rows.find(x => x.startsWith('Below Bronze'));
-  check('bench popup: the dumbbell lift sits in its tier row with its value and the dumbbells used', !!dbRow && /Dumbbell bench\s*241 lb from 2 × 100 lb dumbbells/.test(dbRow), JSON.stringify(pop.rows));
+  check('bench popup: the dumbbell lift sits in its tier row with just exercise + value, no "from X" aside', !!dbRow && /Dumbbell bench\s*241 lb/.test(dbRow) && !/from/i.test(dbRow), JSON.stringify(pop.rows));
   check('bench popup: a barbell lift under Bronze shows as Below Bronze', !!belowRow && /Barbell bench\s*120 lb/.test(belowRow), JSON.stringify(pop.rows));
+  check('bench popup: no tier row anywhere has a "from X" aside', pop.rows.every(x => !/\bfrom\b/i.test(x)), JSON.stringify(pop.rows));
+  check('bench popup: the dumbbell conversion sourcing moved to the how-to-earn-it text, not the tier row', /÷\s*0\.83/.test(pop.txt) && /Saeterbakken/i.test(pop.txt), pop.txt.slice(0, 600));
+  check('bench popup: shows a per-exercise section for the dumbbell substitute', /No barbell bench\? Dumbbell counts too/.test(pop.txt), pop.txt.slice(0, 600));
   check('bench popup: the tier thresholds are still there', T.every(x => pop.txt.includes(x + ' lb')), T.join());
   check('bench popup: no GOODLIFT points shown', !/GOODLIFT|points/i.test(pop.txt), pop.txt.slice(0, 300));
   await page.screenshot({ path: `${SHOTS}/bench-subs-popup.png` });
   check('bench subs: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
+}
+async function badgePopupSections() {
+  // Cardio-Maxing and 1000lb Club also split their "how to earn it" into per-exercise sections (Mr. Roni, 2026-09-30):
+  // Cardio gets one section per run type (alternatives, no conversion needed); 1000lb Club gets one section per lift
+  // plus the combined total (the three SUM together, they are not alternatives like the others).
+  const hist = [
+    wk('2026-09-05', [ex('Run', [[3, 21]], 'distance')]),
+    wk('2026-09-06', [ex('Treadmill Run', [[3, 24]], 'distance', 'Running_Treadmill')]),
+  ];
+  const { page, ctx, errors } = await phone({ seed: { hist, bw: 180 / LB }, now: SEP15 });
+  await page.evaluate(() => badgeInfo('Cardio-Maxing')); await page.waitForTimeout(200);
+  const cardioPop = await page.evaluate(() => { const el = document.getElementById('badgeFullBody'); return { txt: el.textContent, rows: [...el.querySelectorAll('.bf-tier')].map(r => r.textContent.replace(/\s+/g, ' ').trim()) }; });
+  check('cardio popup: has its own section for outdoor running', /Running \(outdoor\)/.test(cardioPop.txt), cardioPop.txt.slice(0, 500));
+  check('cardio popup: has its own section for treadmill running', /Running \(treadmill\)/.test(cardioPop.txt), cardioPop.txt.slice(0, 500));
+  check('cardio popup: outdoor run sits in a tier row with exercise + pace only', cardioPop.rows.some(x => /Running \(outdoor\)/.test(x) && /\d:\d\d\/mi/.test(x)), JSON.stringify(cardioPop.rows));
+  check('cardio popup: treadmill run sits in its own tier row', cardioPop.rows.some(x => /Running \(treadmill\)/.test(x) && /\d:\d\d\/mi/.test(x)), JSON.stringify(cardioPop.rows));
+  check('cardio popup: no tier row has a "from X" aside', cardioPop.rows.every(x => !/\bfrom\b/i.test(x)), JSON.stringify(cardioPop.rows));
+  await page.evaluate(() => closeBadgeFull());
+  check('badge popup sections: cardio no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+
+  // 1000lb Club: a qualifying single-session Big-3 -- popup shows each lift's own contribution, then the total.
+  const club = [wk('2026-09-10', [ex('Barbell Bench Press', [[315, 1]]), ex('Barbell Squat', [[405, 1]]), ex('Barbell Deadlift', [[455, 1]])])];
+  const c = await phone({ seed: { hist: club, bw: 180 / LB }, now: SEP15 });
+  await c.page.evaluate(() => badgeInfo('1000lb Club')); await c.page.waitForTimeout(200);
+  const clubPop = await c.page.evaluate(() => { const el = document.getElementById('badgeFullBody'); return { txt: el.textContent, rows: [...el.querySelectorAll('.bf-tier')].map(r => r.textContent.replace(/\s+/g, ' ').trim()) }; });
+  check('1000lb club popup: shows a Bench section with its own contribution', /Bench/.test(clubPop.txt) && clubPop.rows.some(x => /315 lb/.test(x)), JSON.stringify(clubPop.rows));
+  check('1000lb club popup: shows a Squat section with its own contribution', /Squat/.test(clubPop.txt) && clubPop.rows.some(x => /405 lb/.test(x)), JSON.stringify(clubPop.rows));
+  check('1000lb club popup: shows a Deadlift section with its own contribution', /Deadlift/.test(clubPop.txt) && clubPop.rows.some(x => /455 lb/.test(x)), JSON.stringify(clubPop.rows));
+  check('1000lb club popup: shows the combined total against 1000, marked met', clubPop.rows.some(x => /1175 lb \/ 1000/.test(x)), JSON.stringify(clubPop.rows));
+  check('1000lb club popup: no section row has a "from X" aside', clubPop.rows.every(x => !/\bfrom\b/i.test(x)), JSON.stringify(clubPop.rows));
+  check('badge popup sections: 1000lb club no page errors', c.errors.length === 0, c.errors.join(' | '));
+  await c.ctx.close();
 }
 async function timedHolds() {
   // Planks and the other static holds are timed, not counted (Mr. Roni, 2026-09-29 7:42pm). Old rep-logged planks stay readable.
@@ -2139,7 +2175,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, timedHolds, avatarLightbox, exercisePhoto].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
