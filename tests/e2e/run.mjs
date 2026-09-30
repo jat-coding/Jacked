@@ -1700,12 +1700,35 @@ async function multiMuscleCredit() {
   check('multi-credit: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function profileTabs() {
+  // 2026-09-29 his pick "folder A": the active tab and its fields are one card; Save inside, Data & Backup outside.
+  const { page, ctx, errors } = await phone();
+  await page.evaluate(() => openProf()); await page.waitForTimeout(300);
+  const st = () => page.evaluate(() => { const w = document.getElementById('profTabs'), panel = w.querySelector('.ptabs-panel');
+    const save = [...document.querySelectorAll('#profModal button')].find(b => /Save Profile/.test(b.textContent));
+    const backup = [...document.querySelectorAll('#profModal .blk-t')].find(e => /Data & Backup/.test(e.textContent));
+    return { tab: w.dataset.tab, pv: w.dataset.pv || null, main: getComputedStyle(document.getElementById('profTab-main')).display, body: getComputedStyle(document.getElementById('profTab-body')).display,
+      saveIn: panel.contains(save), backupOut: !!backup && !w.contains(backup), fieldsIn: panel.contains(document.getElementById('profTab-main')) && panel.contains(document.getElementById('profTab-body')),
+      activeOp: getComputedStyle(w.querySelector('.ptabs-tog button.active')).opacity, idleOp: getComputedStyle(w.querySelector('.ptabs-tog button:not(.active)')).opacity }; });
+  let s = await st();
+  check('profile tabs: opens on Profile, card attached to it', s.tab === 'main' && s.main === 'block' && s.body === 'none', JSON.stringify(s));
+  check('profile tabs: both tabs\' fields live inside the card', s.fieldsIn);
+  check('profile tabs: Save Profile is inside the card, Data & Backup is outside', s.saveIn && s.backupOut, JSON.stringify(s));
+  check('profile tabs: inactive tab recedes (dimmer than the active one)', +s.idleOp < +s.activeOp, `${s.idleOp} vs ${s.activeOp}`);
+  await page.locator('#profTabTog button[data-v=body]').click();
+  s = await st();
+  check('profile tabs: one tap switches to Body Metrics and the card follows', s.tab === 'body' && s.main === 'none' && s.body === 'block', JSON.stringify(s));
+  const left = await page.evaluate(() => ({ html: document.documentElement.innerHTML.includes('jkui_ptv'), ls: localStorage.getItem('jkui_ptv') }));
+  check('profile tabs: mockup switch (?ptv / jkui_ptv) and variant B/C are gone', !left.html && left.ls === null && s.pv === null, JSON.stringify(left));
+  check('profile tabs: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

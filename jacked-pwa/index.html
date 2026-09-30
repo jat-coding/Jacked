@@ -342,6 +342,18 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .unit-tog{display:flex;background:var(--bg4);border-radius:8px;padding:3px;gap:3px;margin-bottom:16px}
 .unit-tog button{flex:1;padding:7px;border:none;border-radius:6px;background:transparent;color:var(--muted);font-family:var(--fb);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
 .unit-tog button.active{background:var(--accent);color:var(--on-accent)}
+
+/* Profile modal tabs (2026-09-29, his pick "folder A"): the active tab rises into the card that
+   holds its fields; the other tab sits behind, blended into the modal so it doesn't look cut off. */
+.ptabs-panel>#profTab-main>:last-child,.ptabs-panel>#profTab-body>:last-child{margin-bottom:14px}
+.ptabs-after{margin-top:22px}
+.ptabs .ptabs-tog{background:none;padding:0;gap:6px;margin:0;align-items:flex-end;position:relative;z-index:1}
+.ptabs .ptabs-tog button{border-radius:14px 14px 0 0;padding:11px 7px 10px;background:var(--bg2);color:var(--muted);border:1px solid transparent;border-bottom:none;margin-top:9px;opacity:.55}
+.ptabs .ptabs-tog button.active{background:#0d0d12;color:var(--text);border-color:var(--border2);margin-top:0;padding-top:14px;margin-bottom:-1px;padding-bottom:11px;opacity:1;box-shadow:inset 0 3px 0 var(--accent)}
+.ptabs .ptabs-panel{background:#0d0d12;border:1px solid var(--border2);border-radius:18px;padding:18px}
+.ptabs[data-tab=main] .ptabs-panel{border-top-left-radius:0}
+.ptabs[data-tab=body] .ptabs-panel{border-top-right-radius:0}
+:root[data-jacked] .ptabs :is(.ptabs-panel,.ptabs-tog button.active){border-color:rgba(255,215,0,.5)}
 .prog{height:12px;background:var(--bg4);border-radius:6px;position:relative;overflow:hidden;margin:12px 0 4px}
 .prog-fill{height:12px;border-radius:6px;transition:width .8s ease}
 /* Add-exercise picker: fixed-height sheet, search pinned at top, list scrolls,
@@ -874,10 +886,14 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
          the strength-ranking math (body weight, sex, birthday). Kept as one
          profile object / one Save button underneath — this is a display split
          only, not a second save flow. -->
-    <div class="unit-tog" id="profTabTog" style="margin-bottom:16px">
+    <!-- The active tab and its fields are one connected card ("folder" look, 2026-09-29).
+         Save Profile lives inside the card; Data & Backup stays outside it. -->
+    <div class="ptabs" id="profTabs" data-tab="main">
+    <div class="unit-tog ptabs-tog" id="profTabTog">
       <button type="button" data-v="main" onclick="switchProfTab(this)">Profile</button>
       <button type="button" data-v="body" onclick="switchProfTab(this)">Body Metrics</button>
     </div>
+    <div class="ptabs-panel">
 
     <div id="profTab-main">
       <div class="blk-t">Preferences</div>
@@ -928,8 +944,10 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     </div>
 
     <button class="btn ba wf" onclick="saveProf()">Save Profile</button>
+    </div>
+    </div>
 
-    <div class="sep"></div>
+    <div class="sep ptabs-after"></div>
     <div class="blk-t">Data & Backup</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Changes sync to the cloud automatically, and your watch picks them up from there. Export any time for an offline copy. Import a Jacked backup, or a Hevy CSV export (.csv/.txt) to bring in your history.</div>
     <div class="fr">
@@ -6220,6 +6238,11 @@ function switchProfTab(btn){
   const v=btn.dataset.v;
   document.getElementById('profTab-main').style.display = v==='main'?'block':'none';
   document.getElementById('profTab-body').style.display = v==='body'?'block':'none';
+  profTabsMark(v);
+}
+// Which tab the connected card is attached to (squares off that top corner).
+function profTabsMark(v){
+  const w=document.getElementById('profTabs'); if(w) w.dataset.tab=v;
 }
 function segSet(id,v){ const p=document.getElementById(id); if(!p)return; p.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.v===v)); }
 function segVal(id){ const a=document.querySelector('#'+id+' button.active'); return a?a.dataset.v:''; }
@@ -6299,6 +6322,7 @@ function openProf() {
   segSet('profTabTog','main');
   document.getElementById('profTab-main').style.display='block';
   document.getElementById('profTab-body').style.display='none';
+  profTabsMark('main');
   om('profModal');
 }
 // Age is derived from the stored birthday, never stored itself, so it stays
@@ -6850,7 +6874,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.44';
+const BUILD = 'v1.10.45';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
