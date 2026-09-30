@@ -1913,12 +1913,62 @@ async function timedHolds() {
   check('holds: import has no page errors', p2.errors.length === 0, p2.errors.join(' | '));
   await p2.ctx.close();
 }
+async function avatarLightbox() {
+  // Friend avatar enlarge (Mr. Roni, 2026-09-30): tapping a friend's PHOTO in the profile popup
+  // (fpAv only) opens it enlarged; initials-only avatars have nothing to enlarge and aren't clickable.
+  const { page, ctx, errors } = await phone({ now: SEP15 });
+  await page.evaluate(() => {
+    window.friendSrc = () => [
+      { code: '@bob', id: '@bob', name: 'Bob', username: '@bob', avatarUrl: 'x?v=1', days: [], recent: [], wd: [] },
+      { code: '@dan', id: '@dan', name: 'Dan', username: '@dan', avatarUrl: '', days: [], recent: [], wd: [] },
+    ];
+  });
+  const expectedUrl = await page.evaluate(() => cleanAvatar('x?v=1', '@bob'));
+  check('avatar lightbox: test photo cleans to a real url', !!expectedUrl, expectedUrl);
+
+  await page.evaluate(() => openFriend('@bob'));
+  await page.waitForTimeout(150);
+  const closedBefore = await page.evaluate(() => document.getElementById('avLightbox').classList.contains('open'));
+  check('avatar lightbox: closed before any tap', !closedBefore);
+  const cursor = await page.evaluate(() => getComputedStyle(document.querySelector('#fpAv .av')).cursor);
+  check('avatar lightbox: a friend with a photo gets a pointer cursor on their avatar', cursor === 'pointer', cursor);
+  await page.locator('#fpAv .av').tap();
+  const opened = await page.evaluate(() => ({ open: document.getElementById('avLightbox').classList.contains('open'), src: document.getElementById('avLightboxImg').src }));
+  check('avatar lightbox: tapping a friend\'s photo opens it enlarged', opened.open, JSON.stringify(opened));
+  check('avatar lightbox: shows the same photo', opened.src === expectedUrl, `${opened.src} vs ${expectedUrl}`);
+
+  // Backdrop tap closes it (tapping the image itself must not).
+  await page.evaluate(() => document.getElementById('avLightboxImg').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const stillOpenAfterImgTap = await page.evaluate(() => document.getElementById('avLightbox').classList.contains('open'));
+  check('avatar lightbox: tapping the photo itself does not close it', stillOpenAfterImgTap);
+  await page.evaluate(() => document.getElementById('avLightbox').click());
+  const closedByBackdrop = await page.evaluate(() => document.getElementById('avLightbox').classList.contains('open'));
+  check('avatar lightbox: tapping the backdrop closes it', !closedByBackdrop);
+
+  // X button closes it too.
+  await page.locator('#fpAv .av').tap();
+  await page.locator('#avLightbox .cb').tap();
+  const closedByX = await page.evaluate(() => document.getElementById('avLightbox').classList.contains('open'));
+  check('avatar lightbox: tapping the X closes it', !closedByX);
+
+  // Initials-only avatar (Dan): no photo, not clickable, tapping it does nothing.
+  await page.evaluate(() => { cm('fpModal'); openFriend('@dan'); });
+  await page.waitForTimeout(150);
+  const danBefore = await page.evaluate(() => { const el = document.querySelector('#fpAv .av'); return { hasImg: /url\(/.test(getComputedStyle(el).backgroundImage), cursor: getComputedStyle(el).cursor }; });
+  check('avatar lightbox: initials-only avatar has no photo and no pointer cursor', !danBefore.hasImg && danBefore.cursor !== 'pointer', JSON.stringify(danBefore));
+  await page.locator('#fpAv .av').tap();
+  const danAfter = await page.evaluate(() => document.getElementById('avLightbox').classList.contains('open'));
+  check('avatar lightbox: tapping an initials-only avatar opens nothing', !danAfter, String(danAfter));
+
+  check('avatar lightbox: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, timedHolds].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, timedHolds, avatarLightbox].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
