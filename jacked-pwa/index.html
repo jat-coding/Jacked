@@ -481,6 +481,9 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 .rsec+.rsec{margin-top:22px}
 .blk-t[contenteditable]{cursor:text;outline:none;border-bottom:1px dashed transparent}
 .blk-t[contenteditable]:focus{border-bottom-color:var(--border)}
+.rsec>.blk-head{cursor:pointer}
+.blk-chev{display:inline-flex;flex-shrink:0;color:var(--muted);transition:transform .16s ease}
+.rsec.collapsed>.blk-head .blk-chev{transform:rotate(-90deg)}
 :is(.sec,.metric-card,.cw)>:last-child{margin-bottom:0!important}   /* the card's own 18px padding is the bottom space */
 .blk-act{display:inline-flex;align-items:center;gap:4px;font-family:var(--fb);font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted);cursor:pointer;padding:4px 0 4px 8px}
 .sec .stats-g,.sec .stats-g2{margin-bottom:0}
@@ -1281,7 +1284,8 @@ const _ICON={
   replace:`<path d='M3 4a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4'/><path d='M15 16a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4'/><path d='M21 11v-3a2 2 0 0 0 -2 -2h-6l3 3m0 -6l-3 3'/><path d='M3 13v3a2 2 0 0 0 2 2h6l-3 -3m0 6l3 -3'/>`,
   calendarCheck:`<path d='M11.5 21h-5.5a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v6'/><path d='M16 3v4'/><path d='M8 3v4'/><path d='M4 11h16'/><path d='M15 19l2 2l4 -4'/>`,
   crown:`<path d='M12 6l4 6l5 -4l-2 10h-14l-2 -10l5 4l4 -6'/>`,
-  trash:`<path d='M4 7l16 0'/><path d='M10 11l0 6'/><path d='M14 11l0 6'/><path d='M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12'/><path d='M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3'/>`
+  trash:`<path d='M4 7l16 0'/><path d='M10 11l0 6'/><path d='M14 11l0 6'/><path d='M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12'/><path d='M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3'/>`,
+  chevron:`<path d='M6 9l6 6l6 -6'/>`
 };
 function exIcon(muscle,size=24){
   const m=(muscle||'').toLowerCase();
@@ -1404,7 +1408,7 @@ async function usernameTaken(u, exceptMine){
 // a wrong-typed value (returns null → the caller's default), and restoreKeys refuses to
 // write one (import / cloud restore). Keys not listed are free-form scalars.
 const KEY_SHAPE={
-  routines:'a',routineSections:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
+  routines:'a',routineSections:'a',collapsedSections:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
   prof:'o',prs:'o',settings:'o',exRename:'o',exOverride:'o',exNotes:'o',cardioPR:'o',holdPR:'o',metrics:'o',
   sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o'
 };
@@ -1421,6 +1425,7 @@ const gCEx    = () => S.g('cex')      || [];
 const gR      = () => S.g('routines') || [];
 const gRS     = () => S.g('routineSections') || [];
 const saveRS  = arr => S.s('routineSections', arr);
+const gCollapsedSecs = () => S.g('collapsedSections') || [];
 const gH      = () => S.g('hist')     || [];
 const gPR     = () => S.g('prs')      || {};
 const gProf   = () => S.g('prof')     || null;
@@ -2541,14 +2546,26 @@ function routineCardHtml(r){
 // not a card. Name is inline-editable (contenteditable); readonly=true is the
 // synthetic "Unsorted" fallback bucket shown only if a routine's section vanished.
 function sectionBlockHtml(s,list,readonly){
+  const collapsed=gCollapsedSecs().includes(s.id);
+  const chev=`<span class="blk-chev" aria-hidden="true">${uic('chevron','currentColor',18)}</span>`;
   const head=readonly
-    ? `<div class="blk-head"><div class="blk-t">${esc(s.name)}</div></div>`
-    : `<div class="blk-head"><div class="blk-t" contenteditable="true" spellcheck="false"
+    ? `<div class="blk-head" onclick="toggleSectionCollapsed('${s.id}',event)"><div class="blk-t">${esc(s.name)}</div>${chev}</div>`
+    : `<div class="blk-head" onclick="toggleSectionCollapsed('${s.id}',event)"><div class="blk-t" contenteditable="true" spellcheck="false"
          onblur="renameSection('${s.id}',this.textContent)"
-         onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${esc(s.name)}</div></div>`;
+         onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${esc(s.name)}</div>${chev}</div>`;
   const body=list.length?list.map(routineCardHtml).join('')
     :'<div style="font-size:12px;color:var(--muted);padding:0 0 10px">No routines yet — edit a routine to move it here.</div>';
-  return `<div class="rsec" data-secid="${s.id}">${head}${body}</div>`;
+  return `<div class="rsec${collapsed?' collapsed':''}" data-secid="${s.id}">${head}${collapsed?'':body}</div>`;
+}
+// Whole header row toggles collapse, except a click landing on the editable title itself --
+// that must reach the contenteditable (focus/caret/rename) undisturbed, so we bail there.
+function toggleSectionCollapsed(id,ev){
+  if(ev && ev.target.closest('.blk-t[contenteditable]')) return;
+  const cs=gCollapsedSecs();
+  const i=cs.indexOf(id);
+  i<0?cs.push(id):cs.splice(i,1);
+  S.s('collapsedSections',cs);
+  renderRoutines();
 }
 function renderRoutines() {
   renderCurated();
