@@ -479,6 +479,12 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 .blk-head>:not(.blk-t){margin-top:-12px;margin-bottom:-12px}   /* actions up to 48px tall (44px tap targets) keep the row at title height */
 .blk-head+*{margin-top:0!important}
 .rsec+.rsec{margin-top:22px}
+/* Routine section headers (sectionBlockHtml(), My routines list) are one scale down from the
+   shared .blk-t (24px -- see the rulebook comment above; Home/Metrics/etc. must stay untouched)
+   with a thin rule under the row. Scoped to .rsec so no other .blk-t is affected. Size matches
+   .rosec-name (~5147), the same section label's look in the Reorder modal. */
+.rsec .blk-head{border-bottom:1px solid var(--border);padding-bottom:8px}
+.rsec .blk-head>.blk-t{font-size:13px;font-weight:700;letter-spacing:.4px}
 .blk-t[contenteditable]{cursor:text;outline:none;border-bottom:1px dashed transparent}
 .blk-t[contenteditable]:focus{border-bottom-color:var(--border)}
 :is(.sec,.metric-card,.cw)>:last-child{margin-bottom:0!important}   /* the card's own 18px padding is the bottom space */
@@ -2659,9 +2665,10 @@ function routineCardHtml(r){
       <button class="rsb" onclick="startRW('${r.id}')">Start Workout</button>
     </div>`;
 }
-// Slim section header -- same visual weight as the Metrics page (.blk-t/.blk-head),
-// not a card. Name is inline-editable (contenteditable); readonly=true is the
-// synthetic "Unsorted" fallback bucket shown only if a routine's section vanished.
+// Slim section header -- .blk-t/.blk-head like the rest of the app, but scoped smaller
+// with a rule under the row (see the .rsec .blk-head override above), not a card. Name is
+// inline-editable (contenteditable); readonly=true is the synthetic "Unsorted" fallback
+// bucket shown only if a routine's section vanished.
 function sectionBlockHtml(s,list,readonly){
   const head=readonly
     ? `<div class="blk-head"><div class="blk-t">${esc(s.name)}</div></div>`
