@@ -905,6 +905,22 @@ async function portraitLock() {
     const cardioExists = await page.evaluate(() => gRS().some(s => s.name === 'Cardio'));
     check('sections: "+ Section" creates a new (empty) section', cardioExists);
 
+    // "+ Section" lives inside the Reorder popup (moved out of the My routines header,
+    // Mr. Roni 2026-09-30) -- creating one there must show up in the drag list live,
+    // without closing/reopening the modal.
+    await page.evaluate(() => openRoutineOrder()); await page.waitForTimeout(150);
+    const secCountBefore = await page.evaluate(() => document.querySelectorAll('#routineOrderList > [data-id]').length);
+    await page.evaluate(() => addSectionPrompt());
+    await page.waitForTimeout(100);
+    await page.fill('#cfInput', 'Mobility');
+    await page.click('#cfOk');
+    await page.waitForTimeout(100);
+    const modalStillOpen = await page.evaluate(() => document.getElementById('routineOrderModal').classList.contains('open'));
+    check('routine reorder modal: stays open after adding a section from inside it', modalStillOpen);
+    const secNamesAfterAdd = await page.evaluate(() => [...document.querySelectorAll('#routineOrderList > [data-id]')].map(e => e.querySelector('.rosec-name').textContent.trim()));
+    check('routine reorder modal: "+ Section" adds the new section to the live drag list without reopening', secNamesAfterAdd.length === secCountBefore + 1 && secNamesAfterAdd.includes('Mobility'), JSON.stringify(secNamesAfterAdd));
+    await page.evaluate(() => cm('routineOrderModal'));
+
     check('sections: no page errors', errors.length === 0, errors.join(' | '));
     await ctx.close(); }
 
