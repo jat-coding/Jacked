@@ -7,6 +7,7 @@ import { createRequire } from 'module';
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import zlib from 'zlib';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW || 'playwright');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -88,3 +89,22 @@ export function ex(name, sets, tracking = 'weight_reps', exId) {
   return { exId: exId || STD_ID[name] || name.toLowerCase().replace(/[^a-z]+/g, '-'), name, muscle: 'chest', tracking, sets: sets.map(([lb, reps]) => ({ weight: tracking === 'distance' ? lb : lb / LB, reps, done: true })) };
 }
 export function days(start, n) { const out = []; const d = new Date(start + 'T12:00:00'); for (let i = 0; i < n; i++) { out.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 1); } return out; }
+
+// Minimal valid 1x1 RGB PNG, built by hand (no deps beyond zlib) so tests can
+// drive a real <input type=file> upload without any fixture files on disk.
+const CRC_TABLE = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; } return t; })();
+function crc32(buf) { let crc = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) crc = CRC_TABLE[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8); return (crc ^ 0xFFFFFFFF) >>> 0; }
+function pngChunk(type, data) {
+  const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0);
+  const typeBuf = Buffer.from(type, 'ascii');
+  const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+  return Buffer.concat([len, typeBuf, data, crc]);
+}
+export function pngPixel(r, g, b) {
+  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4);
+  ihdr[8] = 8; ihdr[9] = 2; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;   // 8-bit RGB, no interlace
+  const raw = Buffer.from([0, r, g, b]);   // filter-none + one RGB pixel
+  return Buffer.concat([sig, pngChunk('IHDR', ihdr), pngChunk('IDAT', zlib.deflateSync(raw)), pngChunk('IEND', Buffer.alloc(0))]);
+}
