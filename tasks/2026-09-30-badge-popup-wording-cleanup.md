@@ -41,9 +41,13 @@ ANSWERED (Mr. Roni, 2026-09-30 4:21-4:23pm):
 
 ## Done-when
 - [x] Scope answered (2026-09-30 4:23pm): all multi-exercise badges, achievement popups only
-- [ ] Bench-Maxing, Cardio-Maxing, 1000lb Club "How to earn it" split into per-exercise
+- [x] Bench-Maxing, Cardio-Maxing, 1000lb Club "How to earn it" split into per-exercise
       sections (1000lb Club: per-exercise contribution + running total)
-- [ ] Tier/section rows show exercise + weight only, no "from X" or other asides
-- [ ] Every `BADGE_HOW`/`BADGE_DETAIL` "how" string rewritten shorter and concrete —
+- [x] Tier/section rows show exercise + weight only, no "from X" or other asides
+- [x] Every `BADGE_HOW`/`BADGE_DETAIL` "how" string rewritten shorter and concrete —
       spot-check against his complaint (too much text, vague instructions) before shipping
-- [ ] Tested at 390x844, staging push, version bumped
+- [x] Tested (670/670), staging push (v1.10.54, commit c281b50, merged 37d1c1e), version bumped
+
+This was the most structurally invasive of the 6 (touches computeBadges() core scoring,
+not just popup markup) — worth Mr. Roni actually opening the 1000lb Club and Cardio-Maxing
+popups on staging before this goes to prod.

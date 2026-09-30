@@ -20,6 +20,6 @@ re-rendering `renderRoutineOrderList()`).
 
 ## Done-when
 - [x] Scope answered (2026-09-30 4:16pm): move, don't duplicate
-- [ ] "+ Section" reachable from the Reorder popup; new section appears in the drag list
+- [x] "+ Section" reachable from the Reorder popup; new section appears in the drag list
       immediately without closing the modal
-- [ ] Tested at 390x844, staging push, version bumped
+- [x] Tested (657/657), staging push (v1.10.49, commit 9b93ecb, merged 37d1c1e), version bumped

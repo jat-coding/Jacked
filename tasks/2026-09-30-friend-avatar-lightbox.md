@@ -26,5 +26,5 @@ list rows.
 
 ## Done-when
 - [x] Scope answered (2026-09-30 10:59am): popup-only
-- [ ] Tap opens enlarged photo, tap-away/X closes, no dead-click on initials-only avatars
-- [ ] Tested at 390x844, staging push, version bumped
+- [x] Tap opens enlarged photo, tap-away/X closes, no dead-click on initials-only avatars
+- [x] Tested (666/666), staging push (v1.10.50, commit bf38478, merged 37d1c1e), version bumped

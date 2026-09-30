@@ -28,5 +28,9 @@ ANSWERED (Mr. Roni, 2026-09-30 4:17pm):
 
 ## Done-when
 - [x] Scope answered (2026-09-30 4:17pm): list-only, persisted, whole-row tap
-- [ ] Section collapses/expands per answer; routine cards hidden when collapsed
-- [ ] Tested at 390x844, staging push, version bumped
+- [x] Section collapses/expands per answer; routine cards hidden when collapsed
+- [x] Tested (664/664), staging push (v1.10.53, commit 97937c0, merged 37d1c1e), version bumped
+
+Flag for Mr. Roni: the synthetic readonly "Unfiled" bucket (orphaned routines) is also
+collapsible since it renders through the same `sectionBlockHtml()` — spec didn't exclude
+it, but worth a quick confirm that's wanted.

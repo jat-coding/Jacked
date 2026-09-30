@@ -28,5 +28,5 @@ Routine sections (My routines).
   working under the new style.
 
 ## Done-when
-- [ ] Routine section headers render smaller with a line; Home/Metrics block titles unchanged
-- [ ] Tested at 390x844, staging push, version bumped
+- [x] Routine section headers render smaller with a line; Home/Metrics block titles unchanged
+- [x] Tested (655/655 baseline held), staging push (v1.10.52, commit c10c747, merged 37d1c1e), version bumped

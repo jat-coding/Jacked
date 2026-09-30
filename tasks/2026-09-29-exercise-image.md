@@ -17,20 +17,26 @@ existing profile-photo upload, applied to exercises instead of the user.
    second device keeps the icon-placeholder until photographed there too.
 
 ## Done when
-- [ ] Editing an exercise (Edit Exercise form) has an image field: shows current
+- [x] Editing an exercise (Edit Exercise form) has an image field: shows current
   photo or the existing icon-placeholder, with a way to change/remove it.
-- [ ] Tapping the image control lets him pick a photo or take one with the camera
+- [x] Tapping the image control lets him pick a photo or take one with the camera
   (native picker, same UX as profile photo).
-- [ ] New/changed photo is resized/compressed client-side before storing (reuse
+- [x] New/changed photo is resized/compressed client-side before storing (reuse
   `resizeAvatar`-style center-crop, don't keep multi-MB phone photos raw).
-- [ ] Stored locally (IndexedDB/localStorage, not Supabase) keyed by exercise id — persists
+- [x] Stored locally (IndexedDB/localStorage, not Supabase) keyed by exercise id — persists
   across reload on the same device; a second device shows the placeholder, not an error.
-- [ ] Photo renders in all four places: library list, add-exercise picker, exercise info,
+- [x] Photo renders in all four places: library list, add-exercise picker, exercise info,
   in-workout.
-- [ ] Removing the photo falls back cleanly to the existing icon-placeholder
+- [x] Removing the photo falls back cleanly to the existing icon-placeholder
   convention (`exIcon()`/`_ICON`/`MCOL`) — no broken image, no blank tile.
-- [ ] `node tests/e2e/run.mjs` full suite passes, 0 failures, pass count reported.
-- [ ] No new console errors.
+- [x] `node tests/e2e/run.mjs` full suite passes, 0 failures: 687/687 at merge, 711/711 final.
+- [x] No new console errors.
+
+Staging push: v1.10.51, commit 1943b6f, merged 37d1c1e.
+
+Flag: found (didn't touch) a pre-existing bug where built-in warm-up exercises carry the
+same `_c:true` flag as real custom exercises, so editing a warm-up shows the full
+create/edit form instead of the locked-down one. Unrelated to this task.
 
 ## Not doing
 - Touching built-in DB exercise demo photos from free-exercise-db (scope is custom
