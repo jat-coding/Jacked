@@ -1129,7 +1129,7 @@ async function badgeLadders() {
   check('badge ladders: a 16-year-old is scaled down on the hand-set ladders', teen.T.pullup[2] < m.T.pullup[2], j(teen.T));
   check('badge ladders: bench has no youth factor (Foster skipped)', j(teen.T.bench) === j(m.T.bench), j(teen.T.bench));
   check('badge ladders: description text follows the ladder and says it is adjusted', /Bronze 5, Silver 8, Gold 10/.test(f.how) && /Adjusted for your profile/.test(f.how) && f.det.tiers[2][1] === f.T.bench[2] + ' lb', f.how + ' | ' + j(f.det));
-  check('badge ladders: bench popup says it is the standard ladder when body weight is missing', /1 rep\. Standard numbers: set your sex and body weight in Profile/.test(f.det.how), f.det.how);
+  check('badge ladders: bench popup says it is the standard ladder when body weight is missing', /1 rep\..*Standard numbers: set your sex and body weight in Profile/.test(f.det.how), f.det.how);
   check('badge ladders: male description has no adjusted note', !/Adjusted/.test(m.how), m.how);
   check('badge ladders: no page errors', [m, none, f, old, teen].every(x => x.errors.length === 0), '');
 }
@@ -1156,7 +1156,7 @@ async function benchGoodlift() {
     errs.push(...r.errors); await r.ctx.close();
   }
   const f = await run({ prof: { sex: 'female', birthday: '1981-01-01' }, lb: 148 });
-  check('bench goodlift: popup says how it was worked out', f.det.how === 'Barbell bench press, 1 rep. Worked out from IPF GOODLIFT points (30 / 50 / 70) at your 148 lb body weight, eased for age 45.', f.det.how);
+  check('bench goodlift: popup says how it was worked out', /^Barbell flat bench press .*1 rep\..* Worked out from IPF GOODLIFT points \(30 \/ 50 \/ 70\) at your 148 lb body weight, eased for age 45\.$/.test(f.det.how), f.det.how);
   check('bench goodlift: tap text says the same', /IPF GOODLIFT/.test(f.how) && !/Adjusted for your profile/.test(f.how), f.how);
   const bf = await f.page.evaluate(() => JSON.stringify(BADGE_FEMALE));
   check('bench goodlift: bench factor gone from BADGE_FEMALE, the others unchanged', bf === '{"ohp":0.6,"squat":0.6,"pullup":0.5,"pushup":0.6,"cardio":1.11}', bf);
@@ -1492,7 +1492,7 @@ async function builtinMachines() {
     const test = exs => { S.s('hist', [{ id: 'wx', name: 'W', date: d, exercises: exs, duration: '30:00', sets: 1, totalVolume: 0 }]); const b = computeBadges().find(b => b.name === 'Pull-up-Maxing'); return b.tier || null; };
     return { assisted: test([mk('bi_assisted_pullup_machine', 'Assisted Pull-Up (machine)', 20, { assist: true })]), band: test([mk('Band_Assisted_Pull-Up', 'Band Assisted Pull-Up', 20)]),
       scap: test([mk('wu_lats', 'Scapular Pull-Up', 25)]), toggle: test([mk('Pullups', 'Pullups', 20, { bwMode: 'assist' })]), real: test([mk('Pullups', 'Pullups', 12)]),
-      live: [exerciseBadgeKey(mk('Band_Assisted_Pull-Up', 'Band Assisted Pull-Up', 1)), exerciseBadgeKey(mk('Pullups', 'Pullups', 1)), exerciseBadgeKey(mk('x', 'Push-Up', 1))].join() };
+      live: [exerciseBadgeKey(mk('Band_Assisted_Pull-Up', 'Band Assisted Pull-Up', 1)), exerciseBadgeKey(mk('Pullups', 'Pullups', 1)), exerciseBadgeKey(mk('Pushups', 'Push-Up', 1))].join() };
   });
   check('machines: 20 assisted-machine reps earn no Pull-up-Maxing', pb.assisted === null, pb.assisted);
   check('machines: 20 band-assisted reps earn no Pull-up-Maxing', pb.band === null, pb.band);
@@ -1723,12 +1723,109 @@ async function profileTabs() {
   check('profile tabs: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function badgeStandard() {
+  // One standard exercise per badge (Mr. Roni, 2026-09-29), pinned to exact library ids; customs never count; Hevy imports count
+  // when they map to the same exercise. Real exercise-db loaded.
+  const { page, ctx, errors } = await phone({ seed: { bw: 180 / LB, prof: { name: 'T', username: '@t', code: '@t', sex: 'male', birthday: '1995-01-01' } }, now: SEP15 });
+  await page.evaluate(async () => { loadDB(); for (let i = 0; i < 100 && !dbLoaded; i++) await new Promise(r => setTimeout(r, 100)); });
+  const tiers = (exs, wid = 'wlive') => page.evaluate(([exs, wid]) => { S.s('hist', [{ id: wid, name: 'W', date: new Date('2026-09-12T12:00:00-06:00').toISOString(), exercises: exs, duration: '30:00', sets: 1, totalVolume: 0 }]);
+    const o = {}; computeBadges().forEach(b => { o[b.name] = b.tier || (b.earned ? 'earned' : null); }); return o; }, [exs, wid]);
+  const E = (exId, name, sets, tracking = 'weight_reps') => ({ exId, name, muscle: 'chest', tracking, sets: sets.map(([w, r]) => ({ weight: tracking === 'distance' ? w : w / LB, reps: r, done: true })) });
+  let t;
+  // Cardio-Maxing: running only.
+  t = await tiers([E('cex1', 'Stationary Bike', [[6, 20]], 'distance')]);
+  check('standard: a custom bike ride earns no Cardio-Maxing', t['Cardio-Maxing'] === null, JSON.stringify(t['Cardio-Maxing']));
+  t = await tiers([E('cex2', 'Running', [[3, 18]], 'distance')]);
+  check('standard: a run logged under a user-made "Running" exercise does not count', t['Cardio-Maxing'] === null, t['Cardio-Maxing']);
+  t = await tiers([E('Walking_Treadmill', 'Walking, Treadmill', [[3, 18]], 'distance')]);
+  check('standard: a treadmill walk does not count', t['Cardio-Maxing'] === null, t['Cardio-Maxing']);
+  t = await tiers([E('bi_run_outdoor', 'Running (outdoor)', [[3, 21]], 'distance')]);
+  check('standard: Running (outdoor) counts for Cardio-Maxing', !!t['Cardio-Maxing'], t['Cardio-Maxing']);
+  t = await tiers([E('Running_Treadmill', 'Running (treadmill)', [[3, 21]], 'distance')]);
+  check('standard: Running (treadmill) counts for Cardio-Maxing', !!t['Cardio-Maxing'], t['Cardio-Maxing']);
+  // Pull-ups: strict only.
+  t = await tiers([E('Chin-Up', 'Chin-Up', [[0, 25]], 'bodyweight_reps')]);
+  check('standard: 25 chin-ups earn no Pull-up-Maxing', t['Pull-up-Maxing'] === null, t['Pull-up-Maxing']);
+  t = await tiers([E('Pullups', 'Pullups', [[0, 20]], 'bodyweight_reps')]);
+  check('standard: 20 strict pull-ups earn Gold', t['Pull-up-Maxing'] === 'gold', t['Pull-up-Maxing']);
+  t = await tiers([E('cex3', 'Pull-up', [[0, 20]], 'bodyweight_reps')]);
+  check('standard: a custom exercise named "Pull-up" earns nothing', t['Pull-up-Maxing'] === null, t['Pull-up-Maxing']);
+  // Legs: barbell back squat only.
+  t = await tiers([E('Front_Barbell_Squat', 'Front Squat (barbell)', [[400, 5]])]);
+  check('standard: a front squat earns no Leg-Maxing', t['Leg-Maxing'] === null, t['Leg-Maxing']);
+  t = await tiers([E('Smith_Machine_Squat', 'Smith Machine Squat', [[400, 5]])]);
+  check('standard: a Smith machine squat earns no Leg-Maxing', t['Leg-Maxing'] === null, t['Leg-Maxing']);
+  t = await tiers([E('Barbell_Squat', 'Squat (barbell)', [[360, 5]])]);
+  check('standard: barbell back squat 2x body weight earns Gold', t['Leg-Maxing'] === 'gold', t['Leg-Maxing']);
+  // Bench / OHP / push-ups.
+  t = await tiers([E('cex4', 'Barbell Bench Press', [[405, 1]])]);
+  check('standard: a custom "Barbell Bench Press" earns no Bench-Maxing', t['Bench-Maxing'] === null, t['Bench-Maxing']);
+  t = await tiers([E('Barbell_Incline_Bench_Press_-_Medium_Grip', 'Incline Bench Press (barbell)', [[405, 1]])]);
+  check('standard: incline bench earns no Bench-Maxing', t['Bench-Maxing'] === null, t['Bench-Maxing']);
+  t = await tiers([E('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press (barbell)', [[405, 1]])]);
+  check('standard: barbell flat bench earns Gold', t['Bench-Maxing'] === 'gold', t['Bench-Maxing']);
+  t = await tiers([E('Seated_Barbell_Military_Press', 'Seated Military Press (barbell)', [[185, 5]]), E('Standing_Military_Press', 'Standing Military Press (barbell)', [[95, 5]])]);
+  check('standard: seated press ignored, standing barbell press counts (95 x5 at 180 lb = Silver)', t['Shoulder-Maxing'] === 'silver', t['Shoulder-Maxing']);
+  t = await tiers([E('Incline_Push-Up', 'Incline Push-Up', [[0, 90]], 'bodyweight_reps'), E('Pushups', 'Pushups', [[0, 35]], 'bodyweight_reps')]);
+  check('standard: incline push-ups ignored, standard push-ups count (35 = Bronze)', t['Push-up-Maxing'] === 'bronze', t['Push-up-Maxing']);
+  // 1000lb Club: the three standard barbell lifts only.
+  const big = b => [E(b, 'bench', [[400, 1]]), E('Barbell_Squat', 'Squat (barbell)', [[400, 1]]), E('Barbell_Deadlift', 'Deadlift (barbell)', [[400, 1]])];
+  t = await tiers(big('Smith_Machine_Bench_Press'));
+  check('standard: Smith machine bench does not count toward the 1000lb Club', t['1000lb Club'] === null, t['1000lb Club']);
+  t = await tiers(big('Dumbbell_Bench_Press'));
+  check('standard: dumbbell bench does not count toward the 1000lb Club', t['1000lb Club'] === null, t['1000lb Club']);
+  t = await tiers([...big('Barbell_Bench_Press_-_Medium_Grip').slice(0, 2), E('Sumo_Deadlift', 'Sumo Deadlift', [[400, 1]])]);
+  check('standard: sumo deadlift does not count toward the 1000lb Club', t['1000lb Club'] === null, t['1000lb Club']);
+  t = await tiers(big('Barbell_Bench_Press_-_Medium_Grip'));
+  check('standard: barbell bench + back squat + deadlift = 1200 lb earns the 1000lb Club', t['1000lb Club'] === 'earned', t['1000lb Club']);
+  // An old import filed under a custom id is judged by its real name; a live workout's custom never is.
+  t = await tiers([E('cex9', 'Bench Press (Barbell)', [[405, 1]])], 'w1789000000000_0');
+  check('standard: an imported "Bench Press (Barbell)" counts even if it was filed under a custom', t['Bench-Maxing'] === 'gold', t['Bench-Maxing']);
+  t = await tiers([E('Pullups', 'Pull Up (Assisted)', [[0, 25]], 'bodyweight_reps'), E('Pullups', 'Pull Up (Band)', [[0, 25]], 'bodyweight_reps')], 'w1789000000000_0');
+  check('standard: imported assisted / band pull-ups do not count even when filed under Pullups', t['Pull-up-Maxing'] === null, t['Pull-up-Maxing']);
+  // Live chip in the workout logger.
+  const live = await page.evaluate(() => [exerciseBadgeKey({ exId: 'cex4', name: 'Barbell Bench Press' }), exerciseBadgeKey({ exId: 'Barbell_Bench_Press_-_Medium_Grip', name: 'Bench Press (barbell)' }),
+    exerciseBadgeKey({ exId: 'Chin-Up', name: 'Chin-Up' }), exerciseBadgeKey({ exId: 'bi_run_outdoor', name: 'Running (outdoor)', tracking: 'distance' }), exerciseBadgeKey({ exId: 'cex1', name: 'Running', tracking: 'distance' })].join());
+  check('standard: live badge chip only on the standard exercises', live === ',bench,,cardio,', live);
+  // Popup button starts that exact exercise; the text names it.
+  const plan = await page.evaluate(() => Object.fromEntries(['Bench-Maxing', 'Shoulder-Maxing', 'Leg-Maxing', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing', '1000lb Club'].map(n => [n, badgePlan({ name: n }).ids.join('+')])));
+  check('standard: start-workout buttons start the exact standard exercises', JSON.stringify(plan) === JSON.stringify({ 'Bench-Maxing': 'Barbell_Bench_Press_-_Medium_Grip', 'Shoulder-Maxing': 'Standing_Military_Press', 'Leg-Maxing': 'Barbell_Squat',
+    'Pull-up-Maxing': 'Pullups', 'Push-up-Maxing': 'Pushups', 'Cardio-Maxing': 'bi_run_outdoor', '1000lb Club': 'Barbell_Bench_Press_-_Medium_Grip+Barbell_Squat+Barbell_Deadlift' }), JSON.stringify(plan));
+  const how = await page.evaluate(() => ['Bench-Maxing', 'Shoulder-Maxing', 'Leg-Maxing', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing', '1000lb Club'].map(n => BADGE_DETAIL[n].how + ' || ' + BADGE_HOW[n]));
+  const want = [/barbell flat bench/i, /standing barbell overhead press/i, /barbell back squat/i, /strict pull-ups/i, /standard push-ups/i, /Running \(outdoor\) or Running \(treadmill\)/, /barbell flat bench press \+ barbell back squat \+ conventional barbell deadlift/i];
+  check('standard: every badge\'s how-to text names its exercise (list and popup)', how.every((h, i) => h.split(' || ').every(x => want[i].test(x))), how.filter((h, i) => !h.split(' || ').every(x => want[i].test(x))).join(' ## '));
+  const run = await page.evaluate(() => { const e = byId('bi_run_outdoor'), t = byId('Running_Treadmill'); return [e.name, e.tracking, isCardioCat(e), isCustomEx(e.id), t.name, t.tracking, !!imgUrl(t)]; });
+  check('standard: the two runs are built into the library, distance-tracked, under Cardio, with the treadmill photo', JSON.stringify(run) === JSON.stringify(['Running (outdoor)', 'distance', true, false, 'Running (treadmill)', 'distance', true]), JSON.stringify(run));
+  await page.evaluate(async () => { const b = computeBadges().find(x => x.name === 'Cardio-Maxing'); _badgeOpen = b; S.s('hist', []); await badgeStart(); });
+  await page.waitForTimeout(300);
+  const aw1 = await page.evaluate(() => aw && aw.exercises.map(e => e.exId + ':' + e.tracking).join());
+  check('standard: Cardio-Maxing button opens a workout with Running (outdoor), distance-tracked', aw1 === 'bi_run_outdoor:distance', aw1);
+  check('standard: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+  // Hevy CSV import: the standard lifts count, the look-alikes don't.
+  const imp = async rows => { const { page, ctx, errors } = await phone({ seed: { bw: 180 / LB, prof: { name: 'T', username: '@t', code: '@t', sex: 'male', birthday: '1995-01-01' } }, now: SEP15 });
+    const csv = ['title,start_time,end_time,exercise_title,set_index,set_type,weight_lbs,reps,distance_km,duration_seconds', ...rows.map(r => `"Push","12 Sep 2026, 10:00","12 Sep 2026, 11:00",${r}`)].join('\n');
+    await page.evaluate(async csv => { await importWorkoutCsv(csv); }, csv);
+    const o = await page.evaluate(() => { const o = {}; computeBadges().forEach(b => { o[b.name] = b.tier || (b.earned ? 'earned' : null); }); o._ex = gH().flatMap(w => w.exercises.map(e => e.exId + ':' + e.tracking)); return o; });
+    await ctx.close(); return { o, errors }; };
+  let r = await imp(['"Bench Press (Barbell)",0,normal,405,1,,', '"Squat (Barbell)",0,normal,405,5,,', '"Deadlift (Barbell)",0,normal,405,1,,', '"Overhead Press (Barbell)",0,normal,185,5,,', '"Pull Up",0,normal,0,20,,', '"Push Up",0,normal,0,80,,', '"Running",0,normal,,,5,1200']);
+  check('standard: Hevy "Bench Press (Barbell)" counts for Bench-Maxing', r.o['Bench-Maxing'] === 'gold', JSON.stringify(r.o));
+  check('standard: Hevy "Squat (Barbell)" counts for Leg-Maxing', r.o['Leg-Maxing'] === 'gold', r.o['Leg-Maxing']);
+  check('standard: Hevy "Overhead Press (Barbell)" counts for Shoulder-Maxing', r.o['Shoulder-Maxing'] === 'gold', r.o['Shoulder-Maxing']);
+  check('standard: Hevy "Pull Up" and "Push Up" count', r.o['Pull-up-Maxing'] === 'gold' && r.o['Push-up-Maxing'] === 'gold', `${r.o['Pull-up-Maxing']} ${r.o['Push-up-Maxing']}`);
+  check('standard: Hevy bench + squat + deadlift make the 1000lb Club', r.o['1000lb Club'] === 'earned', r.o['1000lb Club']);
+  check('standard: a Hevy "Running" with distance and time imports as a run and counts for Cardio-Maxing', r.o._ex.includes('bi_run_outdoor:distance') && !!r.o['Cardio-Maxing'], JSON.stringify(r.o._ex) + ' ' + r.o['Cardio-Maxing']);
+  check('standard: Hevy import has no page errors', r.errors.length === 0, r.errors.join(' | '));
+  r = await imp(['"Bench Press (Smith Machine)",0,normal,405,1,,', '"Front Squat",0,normal,405,5,,', '"Sumo Deadlift",0,normal,405,1,,', '"Chin Up",0,normal,0,25,,', '"Pull Up (Assisted)",0,normal,0,25,,', '"Pull Up (Band)",0,normal,0,25,,', '"Knee Push Up",0,normal,0,90,,', '"Cycling",0,normal,,,30,1800']);
+  check('standard: Hevy Smith bench, front squat, sumo, chin-ups, assisted/band pull-ups, knee push-ups and cycling earn nothing',
+    ['Bench-Maxing', 'Leg-Maxing', '1000lb Club', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing'].every(n => r.o[n] === null), JSON.stringify(r.o));
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

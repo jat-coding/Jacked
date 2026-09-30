@@ -80,7 +80,11 @@ export function wk(d, exercises = [], extra = {}) {
   return { id: 'w' + d + (extra.hour ?? 12) + Math.random().toString(36).slice(2, 6), name: 'W', date: iso, exercises, duration: '30:00', sets: 1, totalVolume: 0, prCount: extra.pr ? 1 : 0 };
 }
 export const LB = 2.20462;
+// Badges count one standard library exercise each (2026-09-30), so the plain names the suites use for those lifts
+// get the real library ids; anything else keeps a made-up slug id.
+export const STD_ID = { 'Barbell Bench Press': 'Barbell_Bench_Press_-_Medium_Grip', 'Barbell Squat': 'Barbell_Squat', 'Barbell Deadlift': 'Barbell_Deadlift',
+  'Barbell Overhead Press': 'Standing_Military_Press', 'Pull-up': 'Pullups', 'Push-up': 'Pushups', 'Run': 'bi_run_outdoor' };
 export function ex(name, sets, tracking = 'weight_reps', exId) {
-  return { exId: exId || name.toLowerCase().replace(/[^a-z]+/g, '-'), name, muscle: 'chest', tracking, sets: sets.map(([lb, reps]) => ({ weight: tracking === 'distance' ? lb : lb / LB, reps, done: true })) };
+  return { exId: exId || STD_ID[name] || name.toLowerCase().replace(/[^a-z]+/g, '-'), name, muscle: 'chest', tracking, sets: sets.map(([lb, reps]) => ({ weight: tracking === 'distance' ? lb : lb / LB, reps, done: true })) };
 }
 export function days(start, n) { const out = []; const d = new Date(start + 'T12:00:00'); for (let i = 0; i < n; i++) { out.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 1); } return out; }

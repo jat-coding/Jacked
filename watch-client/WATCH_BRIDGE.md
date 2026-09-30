@@ -55,6 +55,17 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ## APP-WIDE (watch must mirror)
 
+### A15. Each badge counts ONE standard exercise, by library id — build v1.10.46 (staging)
+Mr. Roni, 2026-09-29/30. **Rule:** a badge counts only its own exercise-db id; names are never matched; a
+user-made exercise (`cex...` id) never counts. Bench-Maxing `Barbell_Bench_Press_-_Medium_Grip`;
+Shoulder-Maxing `Standing_Military_Press`; Leg-Maxing `Barbell_Squat`; Pull-up-Maxing `Pullups` (not with the
+-Assist toggle); Push-up-Maxing `Pushups`; Cardio-Maxing the built-in runs `bi_run_outdoor` and
+`Running_Treadmill` (distance-tracked); 1000lb Club = `Barbell_Bench_Press_-_Medium_Grip` + `Barbell_Squat` +
+`Barbell_Deadlift`. Hevy-imported workouts (id `w<ms>_<n>`) are re-matched by exercise name against the library
+(customs excluded); a "(...)" qualifier other than barbell/bodyweight/weighted, or assist/band/smith/machine/knee
+in the name, never counts. The Hevy importer now reads `distance_km|distance_miles` + `duration_seconds` for
+runs. Watch: log runs and badge lifts under these ids for them to count.
+
 ### A14. Profile privacy: strangers see only username + avatar — server change HELD until the watch answers
 Mr. Roni, 2026-09-25. **Rule:** the only public profile fields are username and avatar. Name, volume,
 workouts, PRs, streak, consistency, badges, `updated_at` and `data` are readable by the owner and
@@ -296,6 +307,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 09-30 | staging | v1.10.46: every badge counts one standard exercise by library id (A15); customs never count; built-in Running (outdoor) / Running (treadmill); Hevy import keeps run distance+time | APP-WIDE A15 |
 | 09-30 | staging | v1.10.45: Profile popup tabs are folder tabs joined to one card holding that tab's fields and Save Profile (his pick "A"); the other tab sits dimmed behind; Data & Backup stays outside; phone-only, no watch change | PHONE-ONLY |
 | 09-26 | staging | v1.10.37: every popup close button (21) now uses one shared drawn X, centered in its circle at any size (was a text glyph that sat off-center) | PHONE-ONLY |
 | 09-26 | staging | v1.10.36: Muscle Map triceps and core score from their strongest lift, not an average; triceps isolation on sourced Strength Level ladders, presses at 0.97; blank stored muscle falls back to the library (A9 rule 7); phone-only, no watch change | PHONE-ONLY |
