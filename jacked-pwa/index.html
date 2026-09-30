@@ -3376,12 +3376,31 @@ function benchTierOf(h){
     (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=1){ const lb=(s.weight||0)*2.20462, v=BENCH_SUBS[i].conv(lb);
       if(v>lifts[i].v){ lifts[i].v=v; lifts[i].rawLb=lb; }
       if(pre&&i===0&&lb>old) old=lb; } }); }); });
-  lifts.forEach((l,i)=>{ l.tier=tierOfLive(l.v,T); l.raw=l.v>0?BENCH_SUBS[i].raw(l.rawLb):''; });
+  lifts.forEach((l,i)=>{ l.tier=tierOfLive(l.v,T); l.raw=l.v>0?BENCH_SUBS[i].raw(l.rawLb):''; l.disp=l.v>0?Math.round(l.v)+' lb':''; });
   const got=lifts.filter(l=>l.v>0);
   const top=got.slice().sort((a,b)=>((TIER_RANK[b.tier]||0)-(TIER_RANK[a.tier]||0))||(b.v-a.v))[0]||null;
   const t=top?top.tier:null, tOld=tierOfLive(old,benchLegacyT()), kept=(TIER_RANK[tOld]||0)>(TIER_RANK[t]||0);
   if(kept) lifts[0].tier=tOld;
   return {tier:kept?tOld:t, value:kept?old:(top?top.v:0), by:kept?lifts[0]:top, lifts:got, kept};
+}
+// Cardio-Maxing substitutes (Mr. Roni, 2026-09-30): outdoor and treadmill running are plain alternatives, same unit,
+// no conversion. Tracked separately so the popup can give each its own section; the badge still takes whichever pace
+// is faster. Uses tierOfLiveLow (below): for cardio, a LOWER value is the better one.
+const CARDIO_LEGS=[
+  {key:'cardio', id:'bi_run_outdoor', label:'Running (outdoor)'},
+  {key:'cardioTread', id:'Running_Treadmill', label:'Running (treadmill)'},
+];
+function cardioBreakdown(src){
+  const T=badgeT().cardio, legs=CARDIO_LEGS.map(x=>({key:x.key,label:x.label,v:Infinity}));
+  src.forEach(w=>(w.exercises||[]).forEach(ex=>{
+    if(!stdRun(ex,w)) return;
+    const id=badgeStdId(ex,w), i=CARDIO_LEGS.findIndex(x=>x.id===id); if(i<0) return;
+    (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<legs[i].v) legs[i].v=me; } });
+  }));
+  legs.forEach(l=>{ l.tier=isFinite(l.v)?tierOfLiveLow(l.v,T):null; l.disp=isFinite(l.v)?fmtClock(l.v)+'/mi':''; });
+  const got=legs.filter(l=>isFinite(l.v));
+  const top=got.slice().sort((a,b)=>((TIER_RANK[b.tier]||0)-(TIER_RANK[a.tier]||0))||(a.v-b.v))[0]||null;
+  return {tier:top?top.tier:null, value:top?top.v:Infinity, lifts:got};
 }
 // One sentence appended to a ladder's description when the profile's sex or age moved it.
 function badgeAdjNote(){ const fem=((gProf()||{}).sex==='female'), a=badgeAgeFactor(gAge()); return (fem||a!==1)?' Adjusted for your profile'+(fem&&a!==1?' (sex and age)':fem?' (sex)':' (age)')+'.':''; }
@@ -3400,6 +3419,7 @@ const BADGE_META={
 };
 const TIER_RANK={bronze:1,silver:2,gold:3};   // undefined/null keys read as 0
 function tierOfLive(v,thr){ return v>=thr[2]?'gold':v>=thr[1]?'silver':v>=thr[0]?'bronze':null; }
+function tierOfLiveLow(v,thr){ return v<=thr[2]?'gold':v<=thr[1]?'silver':v<=thr[0]?'bronze':null; }   // lower is better (cardio pace)
 // One badge's tier AND the raw stat that earned it, from a given history
 // array -- pass gH() for "as of last time", or gH() plus today's in-progress
 // exercise appended as one extra pseudo-workout for "as of right now,
@@ -4093,7 +4113,7 @@ function computeBadges() {
 
   // 3) 1000 lb club — barbell flat bench + barbell back squat + conventional barbell deadlift (the standard ids, no
   // substitutes) must all happen in ONE workout, summing the heaviest set of each, ≥ 1000 lb.
-  let bestSingle=0, club=false;
+  let bestSingle=0, club=false, bestParts=null;
   h.forEach(w=>{
     let bench=0,squat=0,dead=0;
     (w.exercises||[]).forEach(ex=>{
@@ -4102,7 +4122,7 @@ function computeBadges() {
       else if(isStdEx(ex,'squat',w))  squat=Math.max(squat,lb);
       else if(isStdEx(ex,'deadlift',w)) dead=Math.max(dead,lb);
     });
-    if(bench>0&&squat>0&&dead>0){ const t=bench+squat+dead; if(t>bestSingle) bestSingle=t; if(t>=1000) club=true; }
+    if(bench>0&&squat>0&&dead>0){ const t=bench+squat+dead; if(t>bestSingle){ bestSingle=t; bestParts={bench,squat,dead}; } if(t>=1000) club=true; }
   });
 
   // 4) Tiered lift badges. Best weight (lb) at >= minReps among matching lifts.
@@ -4134,10 +4154,11 @@ function computeBadges() {
   const pushBest=bestSetReps((ex,w)=>repBadgeEx(ex,'pushup',w));
   const pushT=tierOf(pushBest,TH.pushup);
   // Cardio: lowest endurance-adjusted mile-equivalent (Riegel) across the standard runs (outdoor or treadmill).
-  // Only runs from the last 3 months count (rolling, like the lifts).
-  const cardioOver=src=>{ let b=Infinity; src.forEach(w=>{ (w.exercises||[]).forEach(ex=>{ if(!stdRun(ex,w))return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<b)b=me; } }); }); }); return b; };
-  const cardioBest=cardioOver(h3), cardioAll=cardioOver(h);
-  const cardioT = cardioBest<=TH.cardio[2]?'gold':cardioBest<=TH.cardio[1]?'silver':cardioBest<=TH.cardio[0]?'bronze':null;
+  // Only runs from the last 3 months count (rolling, like the lifts). Each run type is tracked separately so the
+  // popup can give it its own section (Mr. Roni, 2026-09-30); the badge still takes whichever is faster.
+  const cardioR=cardioBreakdown(h3), cardioAllR=cardioBreakdown(h);
+  const cardioBest=cardioR.value, cardioAll=cardioAllR.value;
+  const cardioT=cardioR.tier;
 
   // Variety: distinct exercises actually logged. Imported history can lack exId,
   // so fall back to the flattened name to avoid double-counting the same lift.
@@ -4215,13 +4236,20 @@ function computeBadges() {
       desc: !haveBW?'Enter body weight in Profile to unlock':`OHP ×5 (lb): ${tline(ohp,TH.ohpFrac.map(f=>f*bwLb))}`},
     {icon:'dumbbell',color:MCOL.legs,name:'Leg-Maxing',tiered:true,tier:sqT,earned:!!sqT,needsWeight:!haveBW,
       desc: !haveBW?'Enter body weight in Profile to unlock':`Squat ×5 (lb): ${tline(sq,TH.squatFrac.map(f=>f*bwLb))}`},
-    {icon:'trophy',color:'#ffd700',name:'1000lb Club',desc: bestSingle>0?`Best single-session Big-3: ${r0(bestSingle)} lb / 1000`:'Barbell bench + back squat + deadlift ≥ 1000 lb in one workout',earned:club},
+    {icon:'trophy',color:'#ffd700',name:'1000lb Club',desc: bestSingle>0?`Best single-session Big-3: ${r0(bestSingle)} lb / 1000`:'Barbell bench + back squat + deadlift ≥ 1000 lb in one workout',earned:club,
+      sections: bestParts?[
+        {t:'Bench',rows:[['Your best in that workout',r0(bestParts.bench)+' lb']]},
+        {t:'Squat',rows:[['Your best in that workout',r0(bestParts.squat)+' lb']]},
+        {t:'Deadlift',rows:[['Your best in that workout',r0(bestParts.dead)+' lb']]},
+        {t:'Total',met:club,rows:[['Combined',r0(bestSingle)+' lb / 1000']]}
+      ]:undefined},
     {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tiered:true,tier:pullT,earned:!!pullT,
       desc:`Best set: ${pullBest} reps — ${tline(pullBest,TH.pullup)}`},
     {icon:'dumbbell',color:MCOL.triceps,name:'Push-up-Maxing',tiered:true,tier:pushT,earned:!!pushT,
       desc:`Best set: ${pushBest} reps — ${tline(pushBest,TH.pushup)}`},
     {icon:'heart',color:MCOL.cardio,name:'Cardio-Maxing',tiered:true,tier:cardioT,earned:!!cardioT,
-      desc: isFinite(cardioBest)?`Best mile pace: ${fmtClock(cardioBest)}/mi — ${tlineLow(cardioBest,[TH.cardio[0],TH.cardio[1],TH.cardio[2]])}`:'Log a Running exercise (miles + minutes) to unlock'},
+      desc: isFinite(cardioBest)?`Best mile pace: ${fmtClock(cardioBest)}/mi — ${tlineLow(cardioBest,[TH.cardio[0],TH.cardio[1],TH.cardio[2]])}`:'Log a Running exercise (miles + minutes) to unlock',
+      lifts:cardioR.lifts},
     {icon:'target',color:'var(--blue)',name:'Variety-Maxing',earned:variety>=100,
       desc:`${variety} / 100 different exercises logged`},
     {icon:'flame',color:'var(--orange)',name:'PR-Maxing',threeMonth:true,desc:`PR 7 days in a row — best: ${prBest3} day${prBest3!==1?'s':''}`,earned:prWeek},
@@ -4263,39 +4291,43 @@ function computeBadges() {
 const TIERC={bronze:'#cd7f32',silver:'#b8b8c8',gold:'#ffd700'};
 // Tap-to-explain text for each badge.
 const BADGE_HOW={
-  get 'Bench-Maxing'(){ const T=badgeT(); return `Barbell flat bench press, 1 rep (no barbell bench? a flat dumbbell bench press counts, converted). Bronze ${T.bench[0]} lb, Silver ${T.bench[1]} lb, Gold ${T.bench[2]} lb. `+benchHowNote(); },
-  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)); return `Standing barbell overhead press (Standing Military Press) for 5 reps. Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}% of your body weight. Set your weight in Profile.`+badgeAdjNote(); },
-  get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)); return `Barbell back squat (Barbell Squat) for 5 reps. Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}% of your body weight. Set your weight in Profile.`+badgeAdjNote(); },
-  '1000lb Club':'In a single workout, your best barbell flat bench press + barbell back squat + conventional barbell deadlift add up to 1000 lb or more. No Smith machine or other variations.',
-  'PR-Maxing':'Hit at least one personal record on 7 days in a row. Only the last 3 months count.',
-  'Consistency-Maxing':'Finish at least one workout on 7 days in a row. Only the last 3 months count.',
-  'Coward-Maxing':'Given after 7+ days off in a row this month. Resets monthly — train consistently this month to clear it.',
-  'Jacked':'Earn every badge in the Monthly reset and 3-month reset groups, with every tiered badge at Gold. Permanent badges are not needed. Locked while you hold Coward-Maxing.',
-  get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return `Most reps in a single set of strict pull-ups (palms facing away). Chin-ups, assisted and band pull-ups don't count. Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]}.`+badgeAdjNote(); },
-  get 'Push-up-Maxing'(){ const T=badgeT().pushup; return `Most reps in a single set of standard push-ups (not summed across sets). Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]}.`+badgeAdjNote(); },
-  get 'Cardio-Maxing'(){ const T=badgeT().cardio.map(fmtClock); return `Your best mile pace from Running (outdoor) or Running (treadmill); bike, elliptical, rower and walking don't count. Longer runs count for more (endurance-adjusted). Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]} per mile. Only runs from the last 3 months count.`+badgeAdjNote(); },
-  'Challenge-Maxing':'Train your weakest muscle group (glutes left out) enough times this month. A new group every month.',
-  'Comeback-Maxing':'Train on at least half the days of the month, or beat last month after a slow month.',
-  'Variety-Maxing':'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'
+  get 'Bench-Maxing'(){ const T=badgeT(); return `Barbell flat bench, 1 rep (dumbbell bench also counts, converted). Bronze ${T.bench[0]}, Silver ${T.bench[1]}, Gold ${T.bench[2]} lb. `+benchHowNote(); },
+  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)); return `Standing barbell overhead press, 5 reps, vs your body weight (set it in Profile). Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}%.`+badgeAdjNote(); },
+  get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)); return `Barbell back squat, 5 reps, vs your body weight (set it in Profile). Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}%.`+badgeAdjNote(); },
+  '1000lb Club':'Barbell flat bench press + barbell back squat + conventional barbell deadlift from one workout, summed to 1000 lb or more. No Smith machine, dumbbell or other variations.',
+  'PR-Maxing':'Hit a personal record 7 days in a row. Only the last 3 months count.',
+  'Consistency-Maxing':'Finish a workout 7 days in a row. Only the last 3 months count.',
+  'Coward-Maxing':'Given after 7+ days off in a row this month. Resets monthly.',
+  'Jacked':'Every Monthly and 3-month badge earned, every tier at Gold. Permanent badges not needed. Locked while you hold Coward-Maxing.',
+  get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return `Most reps in one set of strict pull-ups. Chin-ups, assisted and band pull-ups don't count. Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]}.`+badgeAdjNote(); },
+  get 'Push-up-Maxing'(){ const T=badgeT().pushup; return `Most reps in one set of standard push-ups (not summed). Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]}.`+badgeAdjNote(); },
+  get 'Cardio-Maxing'(){ const T=badgeT().cardio.map(fmtClock); return `Best mile pace from Running (outdoor) or Running (treadmill); other cardio doesn't count. Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]} per mile.`+badgeAdjNote(); },
+  'Challenge-Maxing':'Train your weakest muscle group (glutes excluded) enough times this month. New group every month.',
+  'Comeback-Maxing':'Train half the days this month, or beat last month after a slow one.',
+  'Variety-Maxing':'Log one real set on 100 different library exercises. Each counts once, forever.'
 };
 // Name shown for a badge; older builds stored '1000lb Club-Maxing' in friends' badge lists.
 function badgeShownName(n){ return n==='1000lb Club-Maxing' ? '1000lb Club' : n; }
 // Full-screen achievement popup: same icon as the list, title, then the summary in a text hierarchy.
 const BADGE_DETAIL={
-  get 'Bench-Maxing'(){ const T=badgeT().bench; return {how:'Barbell flat bench press (Barbell Bench Press, medium grip), 1 rep. No flat barbell bench? A flat Dumbbell Bench Press counts too: log the weight of one dumbbell, and both together count as a barbell number (pair ÷ 0.83, from a study where dumbbells came out 17% lower than the barbell). Each lift is placed on the ladder below and the badge takes the highest. Incline, decline, Smith machine and other variations don\'t count, and neither do exercises you created. '+benchHowNote(),tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'}; },
-  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Standing barbell overhead press (Standing Military Press) for 5 reps, measured against your body weight. Set your weight in Profile.'+' Only this exercise counts: not its variations, and not exercises you created.',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
-  get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Barbell back squat (Barbell Squat) for 5 reps, measured against your body weight. Set your weight in Profile. Front squats, Smith machine and other variations don\'t count, and neither do exercises you created.',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
-  '1000lb Club':{how:'In a single workout, your best barbell flat bench press + barbell back squat + conventional barbell deadlift add up to 1000 lb or more. Only those three count: no Smith machine, dumbbell, front squat, sumo or other variations, and no exercises you created.'},
-  get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return {how:'Most reps in a single set of strict pull-ups (Pullups, palms facing away). Chin-ups, assisted, band and scapular pull-ups don\'t count, and neither do exercises you created.',tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
-  get 'Push-up-Maxing'(){ const T=badgeT().pushup; return {how:'Most reps in a single set of standard push-ups (Pushups), not summed across sets. Incline, knee and other variations don\'t count, and neither do exercises you created.',tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
-  get 'Cardio-Maxing'(){ const T=badgeT().cardio.map(x=>fmtClock(x)+' per mile'); return {how:'Your best mile pace from Running (outdoor) or Running (treadmill), logged in miles and minutes. Longer runs count for more (endurance-adjusted). Bike, elliptical, rower and walking don\'t count, and neither do exercises you created.',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best pace in the last 3 months.'+badgeAdjNote()}; },
-  'Challenge-Maxing':{how:'Every month you get a target on your weakest muscle group, based on last month (glutes are left out, and it is never the same group two months in a row). Train that group in the target number of different workouts.',note:'Resets monthly with a new muscle group.'},
-  'Comeback-Maxing':{how:'Two ways to earn it. Steady: train on at least half the days of the month. Bounce back: log more sessions than last month, after a month below your usual.',note:'Resets monthly. Either one earns it, so a run of great months never locks you out.'},
-  'Variety-Maxing':{how:'Log at least one real set on 100 different exercises from the library. Every new exercise you try counts once, forever.'},
-  'PR-Maxing':{how:'Hit at least one personal record on 7 days in a row.',note:'Resets every 3 months. Only the last 3 months count.'},
-  'Consistency-Maxing':{how:'Finish at least one workout on 7 calendar days in a row. Two workouts on the same day still count as one day.',note:'Resets every 3 months. Only the last 3 months count.'},
-  'Coward-Maxing':{how:'Given after 7+ days off in a row this month. Holding it locks the Jacked badge.',note:'Resets monthly. Only days off in the current month count, and the badge starts fresh on the 1st.'},
-  'Jacked':{how:'Earn every badge in the Monthly reset group and every badge in the 3-month reset group, with every tiered badge at Gold. The Permanent badges are not needed. You also cannot have Coward-Maxing: while you hold it, Jacked stays locked.',note:'Checked every month. If a 3-month badge falls below Gold (no Gold-level result in the last 3 months) or a monthly badge is not earned yet this month, Jacked is lost until you get it back.'}
+  get 'Bench-Maxing'(){ const T=badgeT().bench; return {how:'Barbell flat bench press (Barbell Bench Press, medium grip), 1 rep. Other bench variations, Smith machine and custom exercises don\'t count. '+benchHowNote(),
+    exHow:[{t:'No barbell bench? Dumbbell counts too',body:'Log one dumbbell\'s weight — the pair converts to a barbell number (÷ 0.83: dumbbells run about 17% lighter at 1 rep, Saeterbakken et al. 2011). Whichever lift reaches the higher tier sets the badge.'}],
+    tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'}; },
+  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Standing barbell overhead press (Standing Military Press), 5 reps, measured against your body weight — set it in Profile. Variations and custom exercises don\'t count.',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Barbell back squat (Barbell Squat), 5 reps, measured against your body weight — set it in Profile. Front squats, Smith machine and custom exercises don\'t count.',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  '1000lb Club':{how:'Your best barbell flat bench press + barbell back squat + conventional barbell deadlift, all from the same workout, added together to 1000 lb or more. No Smith machine, dumbbell, front squat, sumo or custom exercises.'},
+  get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return {how:'Most reps in one set of strict pull-ups (Pullups, palms facing away). Chin-ups, assisted, band, scapular and custom exercises don\'t count.',tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  get 'Push-up-Maxing'(){ const T=badgeT().pushup; return {how:'Most reps in one set of standard push-ups (Pushups), not summed across sets. Incline, knee, other variations and custom exercises don\'t count.',tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  get 'Cardio-Maxing'(){ const T=badgeT().cardio.map(x=>fmtClock(x)+' per mile'); return {how:'Your best mile pace from Running (outdoor) or Running (treadmill), endurance-adjusted for distance. Bike, elliptical, rower, walking and custom exercises don\'t count.',
+    exHow:[{t:'Running (outdoor)',body:'Log miles and minutes; placed on the ladder below.'},{t:'Running (treadmill)',body:'Same ladder, no conversion — whichever run is faster sets the badge.'}],
+    tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best pace in the last 3 months.'+badgeAdjNote()}; },
+  'Challenge-Maxing':{how:'Your weakest muscle group each month (glutes excluded, never repeated). Train it in the target number of different workouts.',note:'Resets monthly with a new muscle group.'},
+  'Comeback-Maxing':{how:'Two ways in: Steady (train at least half the days this month) or Bounce back (more sessions than a slow last month).',note:'Resets monthly. Either one earns it.'},
+  'Variety-Maxing':{how:'Log a real set on 100 different exercises from the library. Each new one counts once, forever.'},
+  'PR-Maxing':{how:'Hit a personal record 7 days in a row.',note:'Resets every 3 months. Only the last 3 months count.'},
+  'Consistency-Maxing':{how:'Finish a workout on 7 calendar days in a row. Same day twice still counts as one.',note:'Resets every 3 months. Only the last 3 months count.'},
+  'Coward-Maxing':{how:'Given after 7+ days off in a row this month. Holding it locks Jacked.',note:'Resets monthly. Starts fresh on the 1st.'},
+  'Jacked':{how:'Earn every Monthly reset and 3-month reset badge, every tiered badge at Gold. Permanent badges are not needed. You also cannot have Coward-Maxing: holding it locks Jacked.',note:'Checked every month. Losing Gold on a 3-month badge, or missing a monthly badge, loses Jacked until you earn it back.'}
 };
 function badgeInfo(name){
   const b=computeBadges().find(x=>x.name===name); if(!b) return;
@@ -4303,9 +4335,12 @@ function badgeInfo(name){
   const teal=b.earned&&!b.tier&&b.name!=='Coward-Maxing'&&b.name!=='Jacked';   // earned non-tiered badges wear teal, worded "Earned" (Mr. Roni, 2026-09-24); Coward is a penalty, Jacked stays gold
   const col=b.tier?TIERC[b.tier]:(b.name==='Jacked'&&b.earned?TIERC.gold:(teal?'#20d3c2':(b.earned?'#3ddc97':'#70707f')));
   const status=b.tier?b.tier:(b.earned?'earned':'locked');
-  // Bench-Maxing: each lift (barbell / dumbbell) shows on the tier it reached, with its converted value (Mr. Roni, 2026-09-30).
-  const liftsAt=k=>(b.lifts||[]).filter(l=>(l.tier||null)===k).map(l=>`<div class="bf-lift"><span>${l.label}</span><span>${Math.round(l.v)} lb${l.key!=='bench'?` <span style="color:var(--muted);font-weight:500">from ${l.raw}</span>`:''}</span></div>`).join('');
+  // Multi-exercise badges (Bench-Maxing, Cardio-Maxing): each lift/run shows on the tier it reached, exercise + value
+  // only -- no "from X" raw-value aside (Mr. Roni, 2026-09-30; that sourcing lives in the how-to-earn-it prose instead).
+  const liftsAt=k=>(b.lifts||[]).filter(l=>(l.tier||null)===k).map(l=>`<div class="bf-lift"><span>${l.label}</span><span>${l.disp}</span></div>`).join('');
   const below=b.lifts&&liftsAt(null);
+  // Per-exercise "how to earn it" sections (Bench-Maxing's dumbbell substitute, Cardio-Maxing's two run types).
+  const exHow=(d.exHow||[]).map(x=>`<div class="bf-h">${esc(x.t)}</div><div class="bf-body">${x.body}</div>`).join('');
   const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v])=>{const k=t.toLowerCase(),on=b.tier===k,li=b.lifts?liftsAt(k):'';return `<div class="bf-tier${on?' on':''}${li?' wl':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span>${li}</div>`;}).join('')}${below?`<div class="bf-tier wl" style="opacity:.7"><span style="color:var(--muted);font-weight:800;letter-spacing:.5px">Below Bronze</span>${below}</div>`:''}</div>`:'';
   const note=d.note?`<div class="bf-h">Resets</div><div class="bf-body">${d.note}</div>`:'';
   const allT=b.all?`<div class="bf-h">Highest ever</div><div class="bf-tiers"><div class="bf-tier" style="opacity:.55;filter:grayscale(1)"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:700;text-transform:capitalize;color:var(--muted)">${b.all.tier===undefined?'':(b.all.tier||'no tier')}</span></div></div><div class="bf-body" style="font-size:12px;color:var(--muted);margin-top:6px">Your best in all of history. It never resets. The badge above only counts the last 3 months.</div>`:'';
@@ -4318,7 +4353,7 @@ function badgeInfo(name){
     <div class="bf-title">${esc(b.name)}</div>
     <div class="bf-stat">${b.detail||b.desc}</div>
     <div class="bf-sep"></div>
-    <div class="bf-h">How to earn it</div><div class="bf-body">${d.how}</div>
+    <div class="bf-h">How to earn it</div><div class="bf-body">${d.how}</div>${exHow}
     ${tiers}${secs}${allT}${ever}${teaser}${note}`;
   _badgeOpen=b;
   const sb=document.getElementById('badgeStartBtn'), plan=badgePlan(b);
