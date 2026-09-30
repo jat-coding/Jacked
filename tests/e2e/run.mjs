@@ -1860,12 +1860,65 @@ async function benchSubstitutes() {
   check('bench subs: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function timedHolds() {
+  // Planks and the other static holds are timed, not counted (Mr. Roni, 2026-09-29 7:42pm). Old rep-logged planks stay readable.
+  const oldPlank = { ...wk('2026-09-01', [{ exId: 'Plank', name: 'Plank', muscle: 'abdominals', tracking: 'weight_reps', sets: [{ weight: 0, reps: 30, done: true }] }]), id: 'wold' };
+  const { page, ctx, errors } = await phone({ seed: { hist: [oldPlank], prs: { Plank: { weight: 0, reps: 30, date: oldPlank.date } } }, now: SEP15 });
+  await page.evaluate(async () => { loadDB(); for (let i = 0; i < 100 && !dbLoaded; i++) await new Promise(r => setTimeout(r, 100)); });
+  const HOLDS = ['Plank', 'Side_Bridge', 'Isometric_Neck_Exercise_-_Front_And_Back', 'Isometric_Neck_Exercise_-_Sides', 'Plate_Pinch', 'Crucifix', 'Downward_Facing_Balance'];
+  const tr = await page.evaluate(ids => ids.map(id => byId(id).tracking + '|' + (allEx().find(e => e.id === id) || {}).tracking), [...HOLDS, 'Pushups', 'wu_core']);
+  check('holds: every static hold in the library is duration-tracked (byId and the library list)', tr.slice(0, HOLDS.length).every(t => t === 'duration|duration'), tr.join());
+  check('holds: a normal lift stays weight + reps; the warm-up plank was already timed', tr[HOLDS.length] === 'weight_reps|weight_reps' && tr[HOLDS.length + 1] === 'duration|duration', tr.slice(-2).join());
+  // Logging: a new plank is a seconds box, not reps, and the old rep plank doesn't seed it.
+  await page.evaluate(() => { startEmpty(); addExToWorkout('Plank'); });
+  await page.waitForTimeout(200);
+  const setup = await page.evaluate(() => ({ tr: aw.exercises[0].tracking, set: aw.exercises[0].sets[0], inputs: document.querySelectorAll('#wSession input.si').length, head: document.getElementById('wSession').textContent }));
+  check('holds: adding a plank to a workout logs time (one Secs box, no reps box)', setup.tr === 'duration' && setup.inputs === 1 && /Secs/.test(setup.head), JSON.stringify({ tr: setup.tr, inputs: setup.inputs }));
+  check('holds: the old rep-logged plank does not seed its reps as seconds', !(setup.set.pw > 0) && !(setup.set.pr > 0), JSON.stringify(setup.set));
+  const box = page.locator('#wSession input.si').nth(0);
+  await box.tap(); await page.keyboard.type('75');
+  await page.locator('#wSession .sd').first().tap();
+  const st = await page.evaluate(() => aw.exercises[0].sets[0]);
+  check('holds: typed 75 is stored as 75 seconds', st.weight === 75 && !(st.reps > 0) && st.done, JSON.stringify(st));
+  await page.evaluate(() => { cm('restModal'); finishW(true); }); await page.waitForTimeout(300);
+  let r = await page.evaluate(() => { const w = gH().find(x => x.id !== 'wold'); return { tr: w.exercises[0].tracking, sec: w.exercises[0].sets[0].weight, prCount: w.prCount, hold: gHoldPR().Plank, oldPR: gPR().Plank, pr: prsOf(w).list.map(prSetText) }; });
+  check('holds: history saves the plank as a timed set', r.tr === 'duration' && r.sec === 75, JSON.stringify(r));
+  check('holds: first timed plank is a hold PR (1:15), old rep PR left alone', r.hold && r.hold.sec === 75 && r.prCount === 1 && r.pr.join() === '1:15 hold' && r.oldPR && r.oldPR.reps === 30, JSON.stringify(r));
+  // A shorter hold is not a PR, a longer one is (commit rule and history replay agree).
+  r = await page.evaluate(() => { const mk = sec => ({ exId: 'Plank', name: 'Plank', tracking: 'duration', sets: [{ weight: sec, reps: 0, done: true }] });
+    const a = commitPRs({ exercises: [mk(60)] }).length, b = commitPRs({ exercises: [mk(95)] }).map(p => p.label).join();
+    return { a, b, hold: gHoldPR().Plank.sec }; });
+  check('holds: 60s after 75s is not a PR; 95s is (1:35 hold)', r.a === 0 && r.b === '1:35 hold' && r.hold === 95, JSON.stringify(r));
+  // Old rep plank still reads as reps in history; the new one as time.
+  await page.evaluate(() => openWD('wold')); await page.waitForTimeout(150);
+  const oldTxt = await page.evaluate(() => document.getElementById('wdContent').textContent);
+  await page.evaluate(() => { cm('wdModal'); openWD(gH().find(x => x.id !== 'wold').id); }); await page.waitForTimeout(150);
+  const newTxt = await page.evaluate(() => document.getElementById('wdContent').textContent);
+  check('holds: an old rep-logged plank still reads as reps in history', /× 30 reps/.test(oldTxt), oldTxt.replace(/\s+/g, ' ').slice(0, 200));
+  check('holds: the new plank reads as seconds in history', /75s/.test(newTxt), newTxt.replace(/\s+/g, ' ').slice(0, 200));
+  const lib = await page.evaluate(() => { sp('exercises'); document.getElementById('exSearch').value = 'plank'; renderEx(); const row = [...document.querySelectorAll('#exList .eli')].find(e => e.getAttribute('onclick').includes("'Plank'")); return row ? row.textContent.replace(/\s+/g, ' ') : ''; });
+  check('holds: library row says Duration and shows the hold PR', /Duration/.test(lib) && /1:35\s*hold PR/.test(lib), lib);
+  const info = await page.evaluate(() => { openExInfo('Plank'); return document.getElementById('exInfoContent').textContent.replace(/\s+/g, ' '); });
+  check('holds: exercise chart shows longest holds only', /Recent longest hold/.test(info) && /1:15/.test(info), info.slice(0, 200));
+  check('holds: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+  // Hevy import: a plank with duration_seconds imports as a timed set with a hold PR.
+  const p2 = await phone({ now: SEP15 });
+  const csv = ['title,start_time,end_time,exercise_title,set_index,set_type,weight_lbs,reps,distance_km,duration_seconds',
+    '"Core","12 Sep 2026, 10:00","12 Sep 2026, 10:30","Plank",0,normal,,,,90', '"Core","12 Sep 2026, 10:00","12 Sep 2026, 10:30","Plank",1,normal,,,,120'].join('\n');
+  r = await p2.page.evaluate(async csv => { await importWorkoutCsv(csv); const w = gH()[0]; return { ex: w.exercises.map(e => e.exId + ':' + e.tracking + ':' + e.sets.map(s => s.weight).join('/')).join(), hold: gHoldPR().Plank, prCount: w.prCount, replay: prReplay().get(w.id).n, vol: w.totalVolume }; }, csv);
+  check('holds: Hevy plank imports as timed sets (90s, 120s) with a 2:00 hold PR, no fake volume', r.ex === 'Plank:duration:90/120' && r.hold && r.hold.sec === 120 && r.prCount === 1 && r.replay === 1 && r.vol === 0, JSON.stringify(r));
+  const sp2 = await p2.page.evaluate(async () => { loadDB(); for (let i = 0; i < 100 && !dbLoaded; i++) await new Promise(r => setTimeout(r, 100)); return [resolveExercise('Side Plank'), resolveExercise('Plank')].join(); });
+  check('holds: Hevy "Side Plank" maps to the Side Bridge hold, "Plank" to Plank', sp2 === 'Side_Bridge,Plank', sp2);
+  check('holds: import has no page errors', p2.errors.length === 0, p2.errors.join(' | '));
+  await p2.ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, timedHolds].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

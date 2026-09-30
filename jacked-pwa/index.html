@@ -1405,7 +1405,7 @@ async function usernameTaken(u, exceptMine){
 // write one (import / cloud restore). Keys not listed are free-form scalars.
 const KEY_SHAPE={
   routines:'a',routineSections:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
-  prof:'o',prs:'o',settings:'o',exRename:'o',exOverride:'o',exNotes:'o',cardioPR:'o',metrics:'o',
+  prof:'o',prs:'o',settings:'o',exRename:'o',exOverride:'o',exNotes:'o',cardioPR:'o',holdPR:'o',metrics:'o',
   sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o'
 };
 function shapeOk(k,v){
@@ -1582,6 +1582,14 @@ const RUNS = [
     instructions:['Log the distance in miles and the time in minutes, as shown on the treadmill.','Run it, don\'t walk it: walking is not counted toward Cardio-Maxing.']},
 ].map(e=>({...e, category:'cardio', mechanic:'compound', _b:true}));
 
+// Static holds are timed, not counted (Mr. Roni, 2026-09-29: "Plank bodyweight should be timed not how many reps").
+// Every exercise-db entry held for time: the ones it marks force "static" outside the excluded categories.
+// Their seconds are stored in the set's "weight" field like every duration exercise (see uSet). Sets logged as reps
+// before this keep their own tracking in history and still read as reps.
+const TIMED_HOLDS=new Set(['Plank','Side_Bridge','Isometric_Neck_Exercise_-_Front_And_Back','Isometric_Neck_Exercise_-_Sides',
+  'Plate_Pinch','Crucifix','Downward_Facing_Balance']);
+const dbTracking=id=>TIMED_HOLDS.has(id)?'duration':'weight_reps';
+
 async function loadDB() {
   if (dbLoaded || dbLoading) return;
   dbLoading = true;
@@ -1696,7 +1704,7 @@ function byId(id) {
   // check DB
   const d = allDB.find(e=>e.id===id);
   if (d) return exOverride(id, { id:d.id, name:exName(d.id,prettyDB(d.name,d.equipment)), muscle:mapMuscle(d.primaryMuscles?.[0]||''), equip:EQUIP_FIX[d.id]||d.equipment||'',
-    images:d.images||[], instructions:d.instructions||[], tracking:'weight_reps', _d:true });
+    images:d.images||[], instructions:d.instructions||[], tracking:dbTracking(d.id), _d:true });
   // fallback: humanise the slug so users see a name not an ID
   return { id, name:exName(id, id.replace(/_/g,' ').replace(/-/g,' ')), muscle:'', equip:'', images:[], tracking:'weight_reps' };
 }
@@ -1706,7 +1714,7 @@ function allEx() {
   const warm = WARMUPS.map(e=>exOverride(e.id,{...e,name:exName(e.id,e.name)}));
   const mach = [...MACHINES, ...RUNS].map(e=>exOverride(e.id,{...e,name:exName(e.id,e.name)}));
   const db   = allDB.map(e=>exOverride(e.id,{ id:e.id, name:exName(e.id,prettyDB(e.name,e.equipment)), muscle:mapMuscle(e.primaryMuscles?.[0]||''),
-    equip:EQUIP_FIX[e.id]||e.equipment||'', images:e.images||[], tracking:'weight_reps', _d:true }));
+    equip:EQUIP_FIX[e.id]||e.equipment||'', images:e.images||[], tracking:dbTracking(e.id), _d:true }));
   // Warm-ups go last so they don't crowd the top of the unfiltered library, but
   // still surface under the Warm-up chip, their muscle chip, and search.
   return [...cust, ...mach, ...db, ...warm];
@@ -2102,7 +2110,7 @@ function renderEx() {
     exSearchMatch(q,e)&&
     (!mFlt||(mFlt==='warmup'?(e.category||'').toLowerCase()==='warmup':mFlt==='cardio'?isCardioCat(e):(e.muscle||'').toLowerCase()===mFlt.toLowerCase()))
   ).sort(exRankCmp).slice(0,80);   // favourites → used-before → rest
-  const prs=gPR();
+  const prs=gPR(), hp=gHoldPR();
   const el=document.getElementById('exList');
   if (!filt.length) { el.innerHTML='<div class="es"><h3>No results</h3></div>'; return; }
   el.innerHTML=filt.map(e=>{
@@ -2115,7 +2123,8 @@ function renderEx() {
         <div style="font-weight:600;font-size:13px">${isFav(e.id)?'<span style="color:#ffd700">★</span> ':''}${esc(e.name)}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">${capW(e.muscle)} ${e.equip?'· '+capW(e.equip):''} ${e.category?'· '+capW(e.category):''} ${trackLabel?'· '+trackLabel:''}</div>
       </div>
-      ${pr?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${dW(pr.weight)}${uL()}<div style="font-size:9px;color:var(--muted);font-weight:400">${pr.reps}r PR</div></div>`:''}
+      ${e.tracking==='duration'?(hp[e.id]?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${fmtHold(hp[e.id].sec)}<div style="font-size:9px;color:var(--muted);font-weight:400">hold PR</div></div>`:'')
+        :pr?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${dW(pr.weight)}${uL()}<div style="font-size:9px;color:var(--muted);font-weight:400">${pr.reps}r PR</div></div>`:''}
     </div>`;
   }).join('');
 }
@@ -2125,16 +2134,17 @@ function renderEx() {
 function openExInfo(exId){
   const ex=byId(exId);
   document.getElementById('exInfoName').textContent=ex.name;
-  const pts=[];
-  gH().forEach(w=>(w.exercises||[]).forEach(e=>{ if(e.exId===exId){ const top=(e.sets||[]).reduce((m,s)=>Math.max(m,s.weight||0),0); if(top>0) pts.push({d:w.date,v:top}); } }));
+  const pts=[], hold=ex.tracking==='duration';
+  // A timed hold charts its longest hold per workout; sets logged as reps before holds were timed are left out.
+  gH().forEach(w=>(w.exercises||[]).forEach(e=>{ if(e.exId===exId&&(!hold||isHold(e))){ const top=(e.sets||[]).reduce((m,s)=>Math.max(m,s.weight||0),0); if(top>0) pts.push({d:w.date,v:top}); } }));
   const recent=pts.slice(-8);
   let chart;
   if(recent.length){
     const max=Math.max(...recent.map(p=>p.v));
-    chart=`<div class="blk-t">Recent top weight (${uL()})</div>
+    chart=`<div class="blk-t">${hold?'Recent longest hold':`Recent top weight (${uL()})`}</div>
       <div style="display:flex;align-items:flex-end;gap:6px;height:120px">
       ${recent.map(p=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
-        <div style="font-size:9px;color:var(--muted);margin-bottom:3px">${dW(p.v)}</div>
+        <div style="font-size:9px;color:var(--muted);margin-bottom:3px">${hold?fmtHold(p.v):dW(p.v)}</div>
         <div style="width:100%;max-width:26px;background:var(--accent);border-radius:4px 4px 0 0;height:${Math.max(6,Math.round(p.v/max*90))}%"></div>
         <div style="font-size:8px;color:var(--muted);margin-top:3px">${new Date(p.d).toLocaleDateString('en-US',{month:'numeric',day:'numeric'})}</div>
       </div>`).join('')}
@@ -2194,7 +2204,7 @@ function normName(s){ return String(s).normalize('NFD').replace(/[\u0300-\u036f]
 // "Pull Up" = "Pullups"), and the closest one wins: fewest extra words in its name, the "(Equipment)" in the keyword
 // must match, grip/variant details cost a little, built-in machines only win when nothing plainer fits. A cardio
 // keyword only ever matches a cardio exercise.
-const RESOLVE_ALIAS=[[/\boverhead press\b/,'standing military press'],[/\bohp\b/,'standing military press'],[/\brdl\b/,'romanian deadlift'],[/\bskullcrushers?\b/,'skullcrusher']];
+const RESOLVE_ALIAS=[[/\boverhead press\b/,'standing military press'],[/\bohp\b/,'standing military press'],[/\brdl\b/,'romanian deadlift'],[/\bside plank\b/,'side bridge'],[/\bskullcrushers?\b/,'skullcrusher']];
 const RESOLVE_SOFT=new Set(['grip','medium','med','standard','with','the','a','and','v','attachment']);
 function resolveExercise(keyword, noCustom) {
   const words=s=>normName(s).split(' ').filter(Boolean);
@@ -2840,9 +2850,10 @@ function openQS() {
 // Recreate the set layout from the most recent time this exercise was logged,
 // so a started routine is "mapped out" with the previous sets/numbers visible.
 function seedSets(exId){
-  const h=gH();
+  const h=gH(), want=byId(exId).tracking||'weight_reps';
   for(let i=h.length-1;i>=0;i--){
-    const ex=(h[i].exercises||[]).find(e=>e.exId===exId);
+    // A plank logged as reps before holds were timed must not seed its reps/weight as seconds.
+    const ex=(h[i].exercises||[]).find(e=>e.exId===exId&&(e.tracking||'weight_reps')===want);
     if(ex&&ex.sets&&ex.sets.length){
       const done=ex.sets.filter(s=>s.done); const src=done.length?done:ex.sets;
       // Seed the LAYOUT only: inputs stay blank (so they render greyed, like any
@@ -2926,8 +2937,9 @@ function renderWS() {
     const cardio=isCardio(ex);
     const cprev=cardio?(gCardioPR()[ex.exId]||{}):null;
     const cBest=cardio?mileEquiv(cprev.dist||0,cprev.time||0):Infinity;   // lower = faster
-    const score=s=> cardio ? -mileEquiv(s.weight,s.reps) : e1rm(effWeight(ex,s),s.reps);
-    const beatsPR=s=> cardio ? (s.weight>0&&s.reps>0&&mileEquiv(s.weight,s.reps)<cBest) : (isW&&e1rm(effWeight(ex,s),s.reps)>prMax);
+    const score=s=> cardio ? -mileEquiv(s.weight,s.reps) : isDur ? s.weight : e1rm(effWeight(ex,s),s.reps);
+    const hBest=isDur?((gHoldPR()[ex.exId]||{}).sec||0):0;
+    const beatsPR=s=> cardio ? (s.weight>0&&s.reps>0&&mileEquiv(s.weight,s.reps)<cBest) : isDur ? s.weight>hBest : (isW&&e1rm(effWeight(ex,s),s.reps)>prMax);
     // Only ONE PR per exercise per workout — the single best beating set.
     let prIdx=-1, prScore=-Infinity;
     ex.sets.forEach((s,i)=>{ if(s.done&&beatsPR(s)){ const sc=score(s); if(sc>prScore){ prScore=sc; prIdx=i; } } });
@@ -3111,7 +3123,7 @@ function updPaceLine(ei,si){ const s=aw.exercises[ei].sets[si], el=document.getE
 // The greyed placeholder a set should show: the most recent KNOWN weight/reps
 // from earlier sets (cascading), else the stored PR.
 function setSuggestion(ex,si){
-  const pr=gPR()[ex.exId]||{};
+  const pr=(ex.tracking||'')==='duration'?{weight:(gHoldPR()[ex.exId]||{}).sec||0,reps:0}:(gPR()[ex.exId]||{});
   let w=pr.weight||0, r=pr.reps||0;
   for(let i=0;i<si;i++){ const s=ex.sets[i]; if(s.weight>0) w=s.weight; if(s.reps>0) r=s.reps; }
   // A set seeded from the last session carries its own previous numbers (pw/pr);
@@ -3522,6 +3534,10 @@ function fmtClock(min){ if(!isFinite(min)||min<=0) return '—'; const m=Math.fl
 // Sustaining a pace over a longer distance yields a faster equivalent, so distance counts.
 function mileEquiv(d,t){ return (d>0&&t>0) ? t/Math.pow(d,1.06) : Infinity; }
 
+// Timed holds keep their own record, like cardio, so a hold never overwrites (or is judged against) an old rep PR.
+const gHoldPR=()=>S.g('holdPR')||{};   // {exId:{sec,date}} longest hold
+const isHold=ex=>((ex&&ex.tracking)||'')==='duration';
+function fmtHold(sec){ sec=Math.round(sec||0); return sec>=60?`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`:`${sec}s`; }
 // The one PR rule, shared by commitPRs (live, at finish) and prReplay (history) so they cannot drift.
 // Returns the exercise's best PR-eligible set as {si,weight,reps} (si = index in ex.sets), or null.
 //  • Weight lifts: best = highest estimated 1RM (weight × reps); weight is the effective load.
@@ -3536,7 +3552,11 @@ function prBest(ex){
     });
     return best;
   }
-  if(!isWT(ex)) return null;   // duration/reps-only don't set PRs
+  if(isHold(ex)){   // timed hold: best = longest (seconds live in "weight")
+    (ex.sets||[]).forEach((s,si)=>{ if(s.done&&s.weight>0&&(!best||s.weight>best.weight)) best={si,weight:s.weight,reps:0}; });
+    return best;
+  }
+  if(!isWT(ex)) return null;   // reps-only doesn't set PRs
   (ex.sets||[]).forEach((s,si)=>{
     if(!(s.done&&(s.weight>0||s.reps>0))) return;
     const w=effWeight(ex,s), reps=s.reps||0;
@@ -3550,10 +3570,17 @@ function prBest(ex){
 //  • Cardio (distance): PR = a faster pace (distance ÷ minutes).
 // Each returned entry also carries exId/ei/si (exercise + set index) so finish can store prSets.
 function commitPRs(workout) {
-  const prs=gPR(), cardio=gCardioPR(), list=[]; let prsDirty=false, cDirty=false;
+  const prs=gPR(), cardio=gCardioPR(), hold=gHoldPR(), list=[]; let prsDirty=false, cDirty=false, hDirty=false;
   (workout.exercises||[]).forEach((ex,ei)=>{
     const exId=ex.exId; if(!exId||exId==='?') return;
     const best=prBest(ex); if(!best) return;
+    if(isHold(ex)){
+      if(best.weight>((hold[exId]||{}).sec||0)){
+        hold[exId]={sec:best.weight,date:new Date().toISOString()}; hDirty=true;
+        list.push({exId,ei,si:best.si,name:ex.name,weight:best.weight,reps:0,hold:true,label:`${fmtHold(best.weight)} hold`});
+      }
+      return;
+    }
     if(isCardio(ex)){
       const done=ex.sets.filter(s=>s.done&&(s.weight>0&&s.reps>0));
       const prev=cardio[exId]||{};
@@ -3575,6 +3602,7 @@ function commitPRs(workout) {
   });
   if(prsDirty) S.s('prs',prs);
   if(cDirty) S.s('cardioPR',cardio);
+  if(hDirty) S.s('holdPR',hold);
   return list;
 }
 
@@ -3602,15 +3630,18 @@ let _prMemo=null;
 function prReplay(){
   const raw=localStorage.getItem('jk_hist')||'', bw=gBW();
   if(_prMemo&&_prMemo.raw===raw&&_prMemo.bw===bw) return _prMemo.map;
-  const rec=new Map(), bestC=new Map(), map=new Map();
+  const rec=new Map(), bestC=new Map(), bestH=new Map(), map=new Map();
   gH().map((w,i)=>({w,i})).sort((a,b)=>(new Date(a.w.date)-new Date(b.w.date))||(a.i-b.i)).forEach(({w})=>{
     const list=[], imported=IMPORTED_ID.test(w.id||'');
     (w.exercises||[]).forEach((ex,ei)=>{
       const exId=ex.exId; if(!exId||exId==='?') return;
-      const cardio=isCardio(ex);
-      const b=(imported&&!cardio)?importBest(ex):prBest(ex); if(!b) return;
+      const cardio=isCardio(ex), hold=isHold(ex);
+      const b=(imported&&!cardio&&!hold)?importBest(ex):prBest(ex); if(!b) return;
       let isPR;
-      if(cardio){
+      if(hold){
+        isPR=b.weight>(bestH.get(exId)||0);
+        if(isPR) bestH.set(exId,b.weight);
+      } else if(cardio){
         const cur=mileEquiv(b.weight,b.reps);
         isPR=cur<(bestC.has(exId)?bestC.get(exId):Infinity);   // no prior record: same start as commitPRs
         if(isPR) bestC.set(exId,cur);
@@ -3619,7 +3650,7 @@ function prReplay(){
         isPR=imported ? (b.weight>prev.weight||(b.weight===prev.weight&&b.reps>prev.reps)) : e1rm(b.weight,b.reps)>prE1rm(prev);
         if(isPR) rec.set(exId,{weight:b.weight,reps:b.reps});
       }
-      if(isPR) list.push({exId,name:ex.name,ei,si:b.si,weight:b.weight,reps:b.reps,cardio});
+      if(isPR) list.push({exId,name:ex.name,ei,si:b.si,weight:b.weight,reps:b.reps,cardio,hold});
     });
     map.set(w.id,{n:list.length,list,at:new Set(list.map(p=>p.ei+':'+p.si))});
   });
@@ -3640,7 +3671,7 @@ function prsOf(w){
     for(const p of w.prSets){
       const ex=(w.exercises||[])[p.ei];
       if(!ex||ex.exId!==p.exId||!(ex.sets||[])[p.si]) return hidden();
-      list.push({exId:p.exId,name:ex.name,ei:p.ei,si:p.si,weight:p.weight,reps:p.reps,cardio:isCardio(ex)});
+      list.push({exId:p.exId,name:ex.name,ei:p.ei,si:p.si,weight:p.weight,reps:p.reps,cardio:isCardio(ex),hold:isHold(ex)});
     }
     if(stored!==undefined&&stored!==list.length) return hidden();
     return {n:list.length,list,at:new Set(list.map(p=>p.ei+':'+p.si))};
@@ -3660,7 +3691,7 @@ function prAudit(){
   });
   return {total,match,mismatches};
 }
-const prSetText=p=>p.cardio?`${p.weight} mi · ${fmtPace(pacePerMile(p.weight,p.reps))}`:`${dW(p.weight)}${uL()} × ${p.reps}`;
+const prSetText=p=>p.cardio?`${p.weight} mi · ${fmtPace(pacePerMile(p.weight,p.reps))}`:p.hold?`${fmtHold(p.weight)} hold`:`${dW(p.weight)}${uL()} × ${p.reps}`;
 const PR_STAR=(sp='')=>`<span style="color:#ffd700">${sp}★</span>`;
 
 function finishW(auto) {
@@ -3789,7 +3820,7 @@ function showFinishSummary(o) {
     ${prList.length?`<div class="blk-t">New PRs</div>`+prList.map(p=>
       `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
         <span style="font-size:13px;font-weight:600">★ ${esc(p.name)}</span>
-        <span style="font-family:var(--fh);font-weight:700;color:var(--accent)">${p.cardio?p.label:dW(p.weight)+uL()+' × '+p.reps}</span>
+        <span style="font-family:var(--fh);font-weight:700;color:var(--accent)">${p.cardio||p.hold?p.label:dW(p.weight)+uL()+' × '+p.reps}</span>
       </div>`).join(''):''}
     ${progressNotes.length?progressNotes.map(n=>
       `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:var(--r);padding:9px 12px;margin-bottom:6px;font-size:12.5px;color:${n.type==='up'?'var(--accent-bright)':'var(--muted)'}">
@@ -5863,6 +5894,13 @@ function mergePRs(a,b){
 // Union two cardio-PR maps ({exId:{dist,time,date,maxDist,maxDate}}). Best effort
 // = lower mileEquiv (faster pace); longest distance tracked independently. The
 // faster record is kept WHOLE so any unknown fields survive.
+// Timed holds: the longer hold wins, per exercise.
+function mergeHoldPRs(a,b){
+  a=(a&&typeof a==='object')?a:{}; b=(b&&typeof b==='object')?b:{};
+  const out={};
+  new Set([...Object.keys(a),...Object.keys(b)]).forEach(exId=>{ const x=a[exId]||{}, y=b[exId]||{}; out[exId]=(y.sec||0)>(x.sec||0)?{...y}:{...x}; });
+  return out;
+}
 function mergeCardioPRs(a,b){
   a=(a&&typeof a==='object')?a:{}; b=(b&&typeof b==='object')?b:{};
   const out={};
@@ -5959,6 +5997,7 @@ function mergeBackup(cloud, local, pendingNotes){
 
   if(cloud.jk_prs||local.jk_prs)           out.jk_prs=mergePRs(cloud.jk_prs, local.jk_prs);
   if(cloud.jk_cardioPR||local.jk_cardioPR) out.jk_cardioPR=mergeCardioPRs(cloud.jk_cardioPR, local.jk_cardioPR);
+  if(cloud.jk_holdPR||local.jk_holdPR)     out.jk_holdPR=mergeHoldPRs(cloud.jk_holdPR, local.jk_holdPR);
   return out;
 }
 
@@ -6726,12 +6765,15 @@ async function importWorkoutCsv(text) {
       const id=resolveExercise(name)||('imp_'+name.toLowerCase().replace(/[^a-z0-9]+/g,'_'));
       const meta=byId(id);
       // A run (distance-tracked in the library) keeps its distance and time when the file has them.
-      const tracking=meta.tracking==='distance'&&sets.some(x=>x._mi>0&&x._sec>0)?'distance':'weight_reps';
-      sets=sets.map(({_mi,_sec,...x})=>tracking==='distance'?{weight:Math.round(_mi*100)/100, reps:Math.round(_sec/60*100)/100, done:true}:x);
+      // A timed hold (plank etc.) keeps its seconds, stored in "weight" like every duration set.
+      const tracking=meta.tracking==='distance'&&sets.some(x=>x._mi>0&&x._sec>0)?'distance'
+        :meta.tracking==='duration'&&sets.some(x=>x._sec>0)?'duration':'weight_reps';
+      sets=sets.map(({_mi,_sec,...x})=>tracking==='distance'?{weight:Math.round(_mi*100)/100, reps:Math.round(_sec/60*100)/100, done:true}
+        :tracking==='duration'?{weight:Math.round(_sec), reps:0, done:true}:x);
       return {exId:id, name, muscle:meta.muscle||guessMuscle(name), equip:meta.equip||'', tracking, imgUrl:imgUrl(meta)||null, sets};
     });
     const ts=exercises.reduce((a,e)=>a+e.sets.length,0);
-    const vol=exercises.reduce((a,e)=>a+(e.tracking==='distance'?0:e.sets.reduce((b,s)=>b+s.weight*s.reps,0)),0);
+    const vol=exercises.reduce((a,e)=>a+(e.tracking==='distance'||e.tracking==='duration'?0:e.sets.reduce((b,s)=>b+s.weight*s.reps,0)),0);
     let dur='—';
     if (g.end){ const sec=Math.max(0,Math.round((parseImportDate(g.end)-d)/1000)); if(sec) dur=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0'); }
     built.push({id:'w'+(+d)+'_'+built.length, name:g.title, date:iso, exercises, duration:dur, sets:ts, totalVolume:Math.round(vol)});
@@ -6740,10 +6782,14 @@ async function importWorkoutCsv(text) {
 
   built.sort((a,b)=>new Date(a.date)-new Date(b.date));
   // Recompute PRs chronologically so 1000lb-club / PR-Maxing badges can unlock.
-  const prs=gPR();
+  const prs=gPR(), hold=gHoldPR();
   built.forEach(w=>{
     let n=0;
     w.exercises.forEach(ex=>{
+      if(ex.tracking==='duration'){   // longest hold, same rule as prReplay
+        const b=prBest(ex); if(b&&b.weight>((hold[ex.exId]||{}).sec||0)){ hold[ex.exId]={sec:b.weight,date:w.date}; n++; }
+        return;
+      }
       const done=ex.sets.filter(s=>s.weight>0||s.reps>0); if(!done.length) return;
       const best=done.slice().sort((a,b)=>(b.weight-a.weight)||(b.reps-a.reps))[0];
       const prev=prs[ex.exId]||{weight:0,reps:0};
@@ -6752,7 +6798,7 @@ async function importWorkoutCsv(text) {
     w.prCount=n;
   });
   const merged=[...hist,...built].sort((a,b)=>new Date(a.date)-new Date(b.date));
-  S.s('hist',merged); S.s('prs',prs);
+  S.s('hist',merged); S.s('prs',prs); S.s('holdPR',hold);
   if(typeof syncMe==='function') syncMe();
   cm('profModal');
   toast(`Imported ${built.length} workout${built.length!==1?'s':''} ✓`,'ok');
@@ -6925,7 +6971,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.47';
+const BUILD = 'v1.10.48';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

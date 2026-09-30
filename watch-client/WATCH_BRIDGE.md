@@ -55,6 +55,13 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ## APP-WIDE (watch must mirror)
 
+### A16. Static holds are timed — build v1.10.48 (staging)
+Mr. Roni, 2026-09-29. **Rule:** exercise-db ids Plank, Side_Bridge, Isometric_Neck_Exercise_-_Front_And_Back,
+Isometric_Neck_Exercise_-_Sides, Plate_Pinch, Crucifix, Downward_Facing_Balance use `tracking:'duration'`
+(seconds in the set's `weight`, `reps` 0). PR = longest hold, stored in `jk_holdPR` `{exId:{sec,date}}` (not
+`jk_prs`); backup merge keeps the longer hold. History entries keep their own `tracking`, so planks logged as reps
+before this still read as reps. Watch: log these as time.
+
 ### A15. Each badge counts ONE standard exercise, by library id — build v1.10.46 (staging)
 Mr. Roni, 2026-09-29/30. **Rule:** a badge counts only its own exercise-db id; names are never matched; a
 user-made exercise (`cex...` id) never counts. Bench-Maxing `Barbell_Bench_Press_-_Medium_Grip`;
@@ -308,6 +315,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 09-30 | staging | v1.10.48: static holds (Plank, Side_Bridge, both Isometric Neck, Plate_Pinch, Crucifix, Downward_Facing_Balance) are duration-tracked (seconds in `weight`); hold PRs in new `jk_holdPR` {exId:{sec,date}}, longest wins; old rep-logged planks unchanged | APP-WIDE A16 |
 | 09-30 | staging | v1.10.47: Bench-Maxing (only) also counts a flat Dumbbell_Bench_Press as (2 x per-hand lb) / 0.83 (Saeterbakken 2011); each lift shown on its tier, badge = highest, labelled; GOODLIFT points no longer shown; Smith machine not added (sources contradict a discount) | APP-WIDE A15 |
 | 09-30 | staging | v1.10.46: every badge counts one standard exercise by library id (A15); customs never count; built-in Running (outdoor) / Running (treadmill); Hevy import keeps run distance+time | APP-WIDE A15 |
 | 09-30 | staging | v1.10.45: Profile popup tabs are folder tabs joined to one card holding that tab's fields and Save Profile (his pick "A"); the other tab sits dimmed behind; Data & Backup stays outside; phone-only, no watch change | PHONE-ONLY |
