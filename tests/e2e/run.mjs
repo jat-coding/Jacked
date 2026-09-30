@@ -2,7 +2,7 @@
 // 2026-09-24 changes (tap-to-clear set inputs, monthly Coward-Maxing,
 // Consistency-Maxing, Jacked). Screenshots go to $SHOTS (default /tmp/jk16/shots).
 import fs from 'fs';
-import { startServer, stopServer, launch, close, phone, check, results, wk, ex, days, LB, URL } from './harness.mjs';
+import { startServer, stopServer, launch, close, phone, check, results, wk, ex, days, LB, URL, pngPixel } from './harness.mjs';
 const SHOTS = process.env.SHOTS || '/tmp/jk16/shots';
 fs.mkdirSync(SHOTS, { recursive: true });
 const badges = page => page.evaluate(() => computeBadges().map(b => ({ name: b.name, earned: b.earned, tier: b.tier || null, desc: b.desc, detail: b.detail })));
@@ -1913,12 +1913,110 @@ async function timedHolds() {
   check('holds: import has no page errors', p2.errors.length === 0, p2.errors.join(' | '));
   await p2.ctx.close();
 }
+async function exercisePhoto() {
+  // Custom exercises only (Mr. Roni, 2026-09-30 — tasks/2026-09-29-exercise-image.md):
+  // an image field on Edit Exercise, native picker to change/remove it, resized/
+  // compressed client-side, stored local-to-device (never jk_*, never synced or
+  // exported), shown everywhere the exercise appears — library list, add-exercise
+  // picker, exercise info, in-workout — and falling back to the icon-placeholder
+  // (never a broken image or a blank tile) when there's no photo.
+  const cex = [{ id: 'cex1', name: 'Barbell Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }];
+  const { page, ctx, errors } = await phone({ seed: { cex } });
+
+  // No photo yet: the library row shows the icon-placeholder, not a broken/blank tile.
+  await page.evaluate(() => { sp('exercises'); document.getElementById('exSearch').value = 'Barbell Bench Press'; renderEx(); });
+  let row = await page.evaluate(() => document.querySelector('#exList .eli').innerHTML);
+  check('ex photo: no photo yet shows the icon-placeholder in the library (no img)', /class="etp"/.test(row) && !/<img/.test(row), row.slice(0, 150));
+
+  // Attach a photo through the real Edit Exercise UI — a file input stands in for the native picker.
+  await page.evaluate(() => openEditEx('cex1'));
+  check('ex photo: photo control shown when editing a custom exercise', await page.locator('#cePhotoRow').isVisible());
+  await page.locator('#cePhotoFile').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: pngPixel(255, 0, 0) });
+  await page.waitForFunction(() => !!_cePhotoData);
+  await page.locator('#ceSaveBtn').tap();
+  await page.waitForTimeout(150);
+  const stored1 = await page.evaluate(() => getExPhoto('cex1'));
+  check('ex photo: saved photo is a resized/compressed local JPEG data URL', /^data:image\/jpeg;base64,/.test(stored1), String(stored1).slice(0, 40));
+
+  // Shows in all four places the exercise appears.
+  await page.evaluate(() => { document.getElementById('exSearch').value = 'Barbell Bench Press'; renderEx(); });
+  row = await page.evaluate(() => document.querySelector('#exList .eli').innerHTML);
+  check('ex photo: shows in the library list', row.includes(`src="${stored1}"`));
+
+  await page.evaluate(() => openAEModal('workout'));
+  const aeRowHtml = await page.evaluate(() => document.getElementById('esr-cex1').innerHTML);
+  check('ex photo: shows in the add-exercise picker', aeRowHtml.includes(`src="${stored1}"`));
+  await page.evaluate(() => cm('aeModal'));
+
+  await page.evaluate(() => openExInfo('cex1'));
+  let infoHtml = await page.evaluate(() => document.getElementById('exInfoContent').innerHTML);
+  check('ex photo: shows on the exercise info screen', infoHtml.includes(`src="${stored1}"`));
+  await page.evaluate(() => cm('exInfoModal'));
+
+  await page.evaluate(() => { startEmpty(); addExToWorkout('cex1'); });
+  const wsHtml = await page.evaluate(() => document.getElementById('wSession').innerHTML);
+  check('ex photo: shows in-workout', wsHtml.includes(`src="${stored1}"`));
+  const cachedUrl = await page.evaluate(() => aw.exercises[0].imgUrl);
+  check('ex photo: in-workout state caches the local photo url', cachedUrl === stored1);
+  await page.evaluate(() => { cm('restModal'); finishW(true); });
+  await page.waitForTimeout(300);
+
+  // Replace: picking a new photo overwrites the first.
+  await page.evaluate(() => openEditEx('cex1'));
+  await page.locator('#cePhotoFile').setInputFiles({ name: 'photo2.png', mimeType: 'image/png', buffer: pngPixel(0, 0, 255) });
+  await page.waitForFunction(() => !!_cePhotoData);
+  await page.locator('#ceSaveBtn').tap();
+  await page.waitForTimeout(150);
+  const stored2 = await page.evaluate(() => getExPhoto('cex1'));
+  check('ex photo: replacing the photo stores a different image', /^data:image\/jpeg;base64,/.test(stored2) && stored2 !== stored1);
+
+  // Remove: falls back cleanly to the icon-placeholder everywhere, no broken/blank image.
+  await page.evaluate(() => openEditEx('cex1'));
+  check('ex photo: Remove button shown once a photo exists', await page.locator('#cePhotoRmBtn').isVisible());
+  await page.locator('#cePhotoRmBtn').tap();
+  await page.locator('#ceSaveBtn').tap();
+  await page.waitForTimeout(150);
+  check('ex photo: removing clears local storage for this exercise', await page.evaluate(() => getExPhoto('cex1')) === null);
+  await page.evaluate(() => { document.getElementById('exSearch').value = 'Barbell Bench Press'; renderEx(); });
+  row = await page.evaluate(() => document.querySelector('#exList .eli').innerHTML);
+  check('ex photo: library row falls back to the icon-placeholder after removal (no broken/blank tile)', /class="etp"/.test(row) && !/<img/.test(row), row.slice(0, 150));
+  await page.evaluate(() => openExInfo('cex1'));
+  infoHtml = await page.evaluate(() => document.getElementById('exInfoContent').innerHTML);
+  check('ex photo: exercise info falls back to the icon-placeholder after removal', !infoHtml.includes('<img') && /<svg/.test(infoHtml), infoHtml.slice(0, 150));
+  await page.evaluate(() => cm('exInfoModal'));
+
+  // Scope: built-in/warm-up exercises never get the photo control (custom exercises only).
+  await page.evaluate(() => openEditEx('wu_core'));
+  check('ex photo: photo control hidden when editing a built-in exercise', !(await page.locator('#cePhotoRow').isVisible()));
+  await page.evaluate(() => cm('ceModal'));
+
+  // Local-device-only: never under jk_*, so collectBackup() (cloud sync + JSON export/import) never sees it.
+  const localOnly = await page.evaluate(() => {
+    setExPhoto('cex1', 'data:image/jpeg;base64,AAAA');
+    const backup = JSON.stringify(collectBackup());
+    const jkVals = Object.keys(localStorage).filter(k => k.startsWith('jk_')).map(k => localStorage.getItem(k)).join('');
+    return { stored: getExPhoto('cex1') === 'data:image/jpeg;base64,AAAA', inBackup: backup.includes('AAAA'), inJkKeys: jkVals.includes('AAAA') };
+  });
+  check('ex photo: local photo store round-trips', localOnly.stored);
+  check('ex photo: never appears in collectBackup() (no cloud sync, no JSON export)', !localOnly.inBackup);
+  check('ex photo: never held under any jk_* key', !localOnly.inJkKeys);
+
+  // Orphan cleanup: deleting the custom exercise deletes its photo too.
+  await page.evaluate(() => openExInfo('cex1'));
+  await page.evaluate(() => deleteEx('cex1'));
+  await page.click('#cfOk');
+  await page.waitForTimeout(150);
+  check('ex photo: deleting the exercise removes its orphaned local photo', await page.evaluate(() => getExPhoto('cex1')) === null);
+
+  check('ex photo: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, timedHolds].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, timedHolds, exercisePhoto].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

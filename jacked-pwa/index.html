@@ -688,6 +688,17 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="md">
     <div class="drag-handle"></div>
     <div class="mh"><div class="mt" id="ceTitle">Create Exercise</div><button class="cb" onclick="cm('ceModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <!-- Photo: custom exercises only (built-in DB exercises keep their official demo
+         photos) — same native-picker UX as the profile photo, stored local-to-device. -->
+    <div id="cePhotoRow" style="display:none;align-items:center;gap:14px;margin-bottom:16px">
+      <div id="cePhotoPreview" style="width:64px;height:64px;border-radius:10px;overflow:hidden;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <button type="button" class="btn bg xs" onclick="document.getElementById('cePhotoFile').click()">Change Photo</button>
+        <button type="button" class="btn bd xs" id="cePhotoRmBtn" style="display:none;margin-left:6px" onclick="ceRemovePhoto()">Remove</button>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">This device only — not synced or backed up.</div>
+      </div>
+      <input type="file" id="cePhotoFile" accept="image/*" style="display:none" onchange="cePickPhoto(this)">
+    </div>
     <div id="ceMuscleLocked" style="display:none;font-size:12px;color:var(--muted);margin:-6px 0 10px">Muscle group is set by the exercise database and can't be changed here.</div>
     <div class="fg"><label>Exercise Name</label><input type="text" id="ceName" placeholder="e.g. EZ Bar Curl"></div>
     <div class="fr">
@@ -1640,6 +1651,13 @@ function toggleFav(id){ const f=new Set(gFav()); f.has(id)?f.delete(id):f.add(id
 // from the public dataset, so "deleting" one just hides it everywhere it's browsed.
 const gHidden=()=>S.g('hiddenEx')||[];
 function isCustomEx(id,ex){ ex=ex||byId(id); return !!(ex&&ex._c)||String(id).startsWith('cex'); }
+// True only for an exercise the USER created (id always starts 'cex' — see saveCE).
+// Built-in warm-ups also carry _c:true so they get the same full edit form as a
+// custom exercise (see WARMUPS above), but they're still built-in library
+// content, not his — the photo feature is scoped to real custom exercises only
+// (Mr. Roni, 2026-09-30): built-in DB exercises AND built-in warm-ups keep
+// their fixed demo art / icon, no upload control.
+function isUserCustomEx(id,ex){ ex=ex||byId(id); return isCustomEx(id,ex) && !(ex&&ex._w); }
 function deleteEx(id){
   const finish=()=>{
     // Clean up favourite + rename overrides for the removed exercise.
@@ -1655,6 +1673,7 @@ function deleteEx(id){
       const rs=gR(); let changed=false;
       rs.forEach(r=>{ const n=(r.exercises||[]).filter(x=>x!==id); if(n.length!==(r.exercises||[]).length){ r.exercises=n; changed=true; } });
       if(changed) S.s('routines',rs);
+      removeExPhoto(id);   // drop the orphaned local photo along with the exercise
       finish();
     });
   } else {
@@ -1720,10 +1739,48 @@ function allEx() {
   return [...cust, ...mach, ...db, ...warm];
 }
 
+// ── Custom exercise photos (local-device only) ──────────────────────────────
+// Deliberately NOT stored under the jk_* namespace: collectBackup() (cloud sync
+// + JSON export/import) sweeps every jk_ key verbatim, and Mr. Roni (2026-09-30
+// answers) wants exercise photos local-to-this-device only — never synced across
+// devices and never carried by a backup file. A restored backup or a second
+// device shows the icon-placeholder until photographed there too.
+const EXPHOTO_KEY = 'jacked_exPhotos_v1';
+function gExPhotos() { try { return JSON.parse(localStorage.getItem(EXPHOTO_KEY)) || {}; } catch(e) { return {}; } }
+function sExPhotos(o) { try { localStorage.setItem(EXPHOTO_KEY, JSON.stringify(o)); } catch(e) { console.warn('Storage full?',e); } }
+function getExPhoto(id) { return id ? (gExPhotos()[id] || null) : null; }
+function setExPhoto(id, dataUrl) { const p=gExPhotos(); p[id]=dataUrl; sExPhotos(p); }
+function removeExPhoto(id) { const p=gExPhotos(); if (p[id]) { delete p[id]; sExPhotos(p); } }
+
+// Same centre-crop approach as resizeAvatar, but resolves straight to a data
+// URL (no Supabase upload leg — exercise photos never leave this device).
+function resizeExPhoto(file) {
+  return new Promise((res,rej)=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      const S2=256, c=document.createElement('canvas'); c.width=c.height=S2;
+      const side=Math.min(img.width,img.height);
+      c.getContext('2d').drawImage(img,(img.width-side)/2,(img.height-side)/2,side,side,0,0,S2,S2);
+      try { res(c.toDataURL('image/jpeg',0.82)); } catch(e){ rej(e); }
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('unreadable image')); };
+    img.src=url;
+  });
+}
+
 function imgUrl(ex) {
-  if (!ex || ex._c || !ex.images?.length) return null;
+  if (!ex) return null;
+  if (ex._c && !ex._w) return getExPhoto(ex.id) || null;   // user custom exercise: local photo only, never the free-exercise-db path (warm-ups are built-in, not his — see isUserCustomEx)
+  if (!ex.images?.length) return null;
   return IMG_BASE + ex.images[0];
 }
+// The subset of imgUrl() safe to write into history (jk_hist rides along on
+// both Supabase sync and the JSON export/import file) — a custom exercise's
+// local photo is a data: URL and must never leave this device. Live views
+// (library, add-exercise picker, exercise info, the ACTIVE workout screen)
+// call imgUrl()/getExPhoto() directly and are unaffected.
+function histImgUrl(ex) { const u=imgUrl(ex); return (u && String(u).startsWith('data:')) ? null : u; }
 
 // Unified thumb HTML — handles onerror cleanly without eval
 function thumbH(ex, sz=52) {
@@ -2161,9 +2218,13 @@ function openExInfo(exId){
     </div>
     <button class="btn bd sm wf" style="margin-bottom:4px" onclick="deleteEx('${exId}')">${isCustomEx(exId,ex)?'Delete Exercise':'Hide from Library'}</button>`;
   // Show the demonstration photo(s) at the top. DB exercises ship start/end
-  // frames; custom/warm-up moves have none and fall back to the emoji tile.
+  // frames; a custom exercise shows its own local photo (if any) instead;
+  // anything else (custom with no photo yet, warm-ups) falls back to the icon tile.
+  const custPhoto = (ex._c && !ex._w) ? getExPhoto(ex.id) : null;
   const imgs=(ex.images||[]).map(im=>IMG_BASE+im);
-  const photo = imgs.length
+  const photo = custPhoto
+    ? `<div style="margin-bottom:14px"><img src="${custPhoto}" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;background:var(--bg4)" loading="lazy" onerror="this.style.display='none'"></div>`
+    : imgs.length
     ? `<div style="display:flex;gap:8px;margin-bottom:14px">${imgs.slice(0,2).map(u=>`<img src="${u}" style="flex:1;min-width:0;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;background:var(--bg4)" loading="lazy" onerror="this.style.display='none'">`).join('')}</div>`
     : `<div style="margin-bottom:14px;display:flex;align-items:center;justify-content:center;height:120px;border-radius:12px;background:var(--bg3)">${exIcon(ex.muscle,120)}</div>`;
   document.getElementById('exInfoContent').innerHTML=photo+meta+actions+chart+how;
@@ -2326,6 +2387,9 @@ async function startCuratedRoutine(pi,ri){
 // ============================================================
 let _ceReturn = null;   // 'ae' when the create form was opened from inside the exercise picker
 let _ceEditId = null;   // exercise id being edited, or null when creating a new one
+let _cePhotoData = null;    // pending new photo (data URL), applied to the exercise id on Save
+let _cePhotoRemoved = false; // pending photo removal, applied on Save
+let _cePhotoEligible = false; // true only for a real user custom exercise (see isUserCustomEx) — gates both the UI row and saveCE()
 // Fine DB muscle keys (see ALLOWED_MUSCLES) collapsed to the coarse groups this
 // form offers, so editing a DB/warmup exercise can still show its muscle group
 // (read-only — see ceApplyEditMode) without corrupting the finer taxonomy the
@@ -2347,8 +2411,11 @@ function openCE(fromAe) {
   document.getElementById('trkWR').textContent=`Weight + Reps (e.g. ${wUnit()==='lb'?'135 lb':'60 kg'} × 8)`;
   document.getElementById('ceBodyweightTog').classList.remove('on');
   document.getElementById('bwAssistTog').classList.remove('on');
+  _cePhotoData=null; _cePhotoRemoved=false;
+  ceSetPhotoRow(true);   // brand new exercise is always a real custom one
   ceApplyEditMode(true);
   updateEquipFields();
+  renderCePhoto();
   om('ceModal');
 }
 
@@ -2372,10 +2439,22 @@ function openEditEx(id){
   document.getElementById('ceDurUnit').value=ex.durUnit||'sec';
   document.getElementById('ceBodyweightTog').classList.toggle('on',isBW);
   document.getElementById('bwAssistTog').classList.toggle('on',!!ex.assist);
+  _cePhotoData=null; _cePhotoRemoved=false;
+  ceSetPhotoRow(isUserCustomEx(id,ex));
   ceApplyEditMode(custom);
   ceRecompute();
+  renderCePhoto();
   cm('exInfoModal');
   om('ceModal');
+}
+
+// Shows/hides the photo control and remembers whether THIS edit session may
+// write a photo — a real user custom exercise only, never a built-in warm-up
+// (see isUserCustomEx). saveCE() reads _cePhotoEligible so a stray pending
+// pick/remove from a previous open can never land on the wrong exercise.
+function ceSetPhotoRow(eligible){
+  _cePhotoEligible=eligible;
+  document.getElementById('cePhotoRow').style.display=eligible?'flex':'none';
 }
 
 // Toggles which fields are editable: full form when creating or editing a
@@ -2386,6 +2465,32 @@ function ceApplyEditMode(fullyEditable){
   document.getElementById('ceTrackingRow').style.display=fullyEditable?'block':'none';
   document.getElementById('gripRow').style.display='none';   // grip is baked into the name at creation; never re-derivable on edit
   if(!fullyEditable) document.getElementById('ceDurUnitRow').style.display='none';
+}
+
+// Preview shows: a pending new photo, else a pending removal (→ icon), else
+// whatever's already stored for this exercise id, else the icon-placeholder.
+function renderCePhoto(){
+  const el=document.getElementById('cePhotoPreview'); if(!el) return;
+  const existing=_ceEditId?getExPhoto(_ceEditId):null;
+  const url=_cePhotoRemoved?null:(_cePhotoData||existing);
+  const muscle=document.getElementById('ceMuscle').value;
+  el.innerHTML=url?`<img src="${url}" style="width:100%;height:100%;object-fit:cover">`:exIcon(muscle,64);
+  const rm=document.getElementById('cePhotoRmBtn'); if(rm) rm.style.display=url?'':'none';
+}
+
+async function cePickPhoto(input){
+  const file=input.files&&input.files[0]; input.value='';   // reset so re-picking the same file fires
+  if(!file) return;
+  if(!/^image\//.test(file.type)){ toast('Pick an image file','err'); return; }
+  try{
+    _cePhotoData=await resizeExPhoto(file);
+    _cePhotoRemoved=false;
+    renderCePhoto();
+  }catch(e){ console.warn('cePickPhoto',e); toast('Could not read that photo — try again','err'); }
+}
+function ceRemovePhoto(){
+  _cePhotoData=null; _cePhotoRemoved=true;
+  renderCePhoto();
 }
 
 // Grip / variant options that actually make sense for the chosen equipment.
@@ -2439,6 +2544,7 @@ function updateMuscleFields() {
       document.getElementById('ceEquip').value='other';
   }
   ceRecompute();
+  renderCePhoto();   // icon-placeholder colour follows the muscle group when no photo is set
 }
 
 function saveCE() {
@@ -2463,6 +2569,12 @@ function saveCE() {
           category:document.getElementById('ceCategory').value, notes, assist:!!assist, durUnit });
         S.s('cex',c);
       }
+      // Photo: real custom exercises only — a warm-up shares this branch (it's
+      // also isCustomEx) but _cePhotoEligible is false for it, so it's a no-op.
+      if (_cePhotoEligible) {
+        if (_cePhotoRemoved) removeExPhoto(id);
+        else if (_cePhotoData) setExPhoto(id,_cePhotoData);
+      }
     } else {
       // Built-in DB/warm-up exercise: name still rides the existing rename
       // map, everything else goes in a small override layer (see gExOverride)
@@ -2474,6 +2586,7 @@ function saveCE() {
       ov[id]={ equip, category:document.getElementById('ceCategory').value, notes, assist:!!assist };
       S.s('exOverride',ov);
     }
+    _cePhotoData=null; _cePhotoRemoved=false;
     cm('ceModal'); renderEx(); toast('Exercise updated ✓','ok');
     return;
   }
@@ -2496,6 +2609,8 @@ function saveCE() {
     images:[],_c:true
   });
   S.s('cex',c);
+  if (_cePhotoEligible && _cePhotoData) setExPhoto(newId,_cePhotoData);
+  _cePhotoData=null; _cePhotoRemoved=false;
   cm('ceModal');
   // If we came from the exercise picker, drop the new exercise straight into whatever's being edited.
   if (_ceReturn==='ae') {
@@ -2916,7 +3031,7 @@ function renderWS() {
     const pr=prs[ex.exId];
     const ih=ex.imgUrl
       ?`<img class="ebi" src="${ex.imgUrl}" onerror="this.style.display='none'" loading="lazy">`
-      :`<div class="ebi"></div>`;
+      :`<div class="ebi" style="display:flex;align-items:center;justify-content:center">${exIcon(ex.muscle,58)}</div>`;
     const cab=ex.cable||'pulley';
     const tracking=ex.tracking||'weight_reps';
     // Weight-tracked lifts use the user's chosen unit; duration/distance reuse
@@ -3784,8 +3899,15 @@ function _finishWContinue(auto,ts) {
   const rec={...aw,duration:dur,sets:ts,totalVolume:Math.round(vol),prCount:prList.length,prSets:prList.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps}))};
   // Snapshot the note that was actually in effect for each exercise tonight
   // onto the saved record -- history should show what note applied to THAT
-  // workout, not just whatever the note happens to say today.
-  rec.exercises=rec.exercises.map(e=>{ const n=exNote(e.exId); return n?{...e,note:n}:e; });
+  // workout, not just whatever the note happens to say today. Also strip any
+  // custom exercise's local photo (a data: URL cached onto aw.exercises for the
+  // active-workout screen) — history syncs to Supabase and rides the JSON
+  // export/import file, and that photo must never leave this device.
+  rec.exercises=rec.exercises.map(e=>{
+    const n=exNote(e.exId);
+    const e2=(e.imgUrl&&String(e.imgUrl).startsWith('data:'))?{...e,imgUrl:null}:e;
+    return n?{...e2,note:n}:e2;
+  });
   if(!rec.name || rec.name==='Quick Workout') rec.name=autoNameWorkout(rec.exercises);
   // Detect if the workout's exercises differ from its source routine.
   let rid=null,rname='',ids=aw.exercises.map(e=>e.exId);
@@ -3936,7 +4058,7 @@ function openWD(id) {
     }
     h+=`<div class="card-dark" style="margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        ${ex.imgUrl?`<img src="${ex.imgUrl}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'" loading="lazy">`:`<div style="width:44px;height:44px;border-radius:8px;background:var(--bg4);flex-shrink:0"></div>`}
+        ${ex.imgUrl?`<img src="${ex.imgUrl}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'" loading="lazy">`:`<div style="width:44px;height:44px;border-radius:8px;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0">${exIcon(ex.muscle,44)}</div>`}
         <div><div style="font-family:var(--fh);font-size:17px;font-weight:700;color:var(--accent)">${esc(ex.name)}${ex.cable?` <span style="font-size:11px;color:var(--muted);font-weight:500">· ${ex.cable}</span>`:''}</div>${sub}</div>
       </div>
       ${ex.note?`<div style="font-size:12px;color:var(--text2);background:var(--bg3);border-radius:7px;padding:7px 9px;margin-bottom:8px">${ex.note.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`:''}
@@ -6770,7 +6892,7 @@ async function importWorkoutCsv(text) {
         :meta.tracking==='duration'&&sets.some(x=>x._sec>0)?'duration':'weight_reps';
       sets=sets.map(({_mi,_sec,...x})=>tracking==='distance'?{weight:Math.round(_mi*100)/100, reps:Math.round(_sec/60*100)/100, done:true}
         :tracking==='duration'?{weight:Math.round(_sec), reps:0, done:true}:x);
-      return {exId:id, name, muscle:meta.muscle||guessMuscle(name), equip:meta.equip||'', tracking, imgUrl:imgUrl(meta)||null, sets};
+      return {exId:id, name, muscle:meta.muscle||guessMuscle(name), equip:meta.equip||'', tracking, imgUrl:histImgUrl(meta)||null, sets};
     });
     const ts=exercises.reduce((a,e)=>a+e.sets.length,0);
     const vol=exercises.reduce((a,e)=>a+(e.tracking==='distance'||e.tracking==='duration'?0:e.sets.reduce((b,s)=>b+s.weight*s.reps,0)),0);
