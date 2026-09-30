@@ -61,7 +61,8 @@ user-made exercise (`cex...` id) never counts. Bench-Maxing `Barbell_Bench_Press
 Shoulder-Maxing `Standing_Military_Press`; Leg-Maxing `Barbell_Squat`; Pull-up-Maxing `Pullups` (not with the
 -Assist toggle); Push-up-Maxing `Pushups`; Cardio-Maxing the built-in runs `bi_run_outdoor` and
 `Running_Treadmill` (distance-tracked); 1000lb Club = `Barbell_Bench_Press_-_Medium_Grip` + `Barbell_Squat` +
-`Barbell_Deadlift`. Hevy-imported workouts (id `w<ms>_<n>`) are re-matched by exercise name against the library
+`Barbell_Deadlift`. Bench-Maxing only (v1.10.47) also takes `Dumbbell_Bench_Press` as (2 x per-hand) / 0.83,
+highest tier wins. Hevy-imported workouts (id `w<ms>_<n>`) are re-matched by exercise name against the library
 (customs excluded); a "(...)" qualifier other than barbell/bodyweight/weighted, or assist/band/smith/machine/knee
 in the name, never counts. The Hevy importer now reads `distance_km|distance_miles` + `duration_seconds` for
 runs. Watch: log runs and badge lifts under these ids for them to count.
@@ -307,6 +308,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 09-30 | staging | v1.10.47: Bench-Maxing (only) also counts a flat Dumbbell_Bench_Press as (2 x per-hand lb) / 0.83 (Saeterbakken 2011); each lift shown on its tier, badge = highest, labelled; GOODLIFT points no longer shown; Smith machine not added (sources contradict a discount) | APP-WIDE A15 |
 | 09-30 | staging | v1.10.46: every badge counts one standard exercise by library id (A15); customs never count; built-in Running (outdoor) / Running (treadmill); Hevy import keeps run distance+time | APP-WIDE A15 |
 | 09-30 | staging | v1.10.45: Profile popup tabs are folder tabs joined to one card holding that tab's fields and Save Profile (his pick "A"); the other tab sits dimmed behind; Data & Backup stays outside; phone-only, no watch change | PHONE-ONLY |
 | 09-26 | staging | v1.10.37: every popup close button (21) now uses one shared drawn X, centered in its circle at any size (was a text glyph that sat off-center) | PHONE-ONLY |
