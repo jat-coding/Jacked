@@ -924,6 +924,63 @@ async function portraitLock() {
     check('sections: no page errors', errors.length === 0, errors.join(' | '));
     await ctx.close(); }
 
+  // Routine sections collapsible (2026-09-30): whole header row toggles, chevron rotates,
+  // collapsed state hides the section's routine cards and persists across a reload; renaming
+  // a section (contenteditable title, onblur) still works -- a click landing on the title
+  // itself must not be swallowed as a collapse toggle.
+  { const cex = [{ id: 'cexChestC', name: 'Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }];
+    const routines = [{ id: 'rC1', name: 'Push Day', desc: '', exercises: ['cexChestC'] }];
+    const { page, ctx, errors } = await phone({ seed: { cex, routines } });
+    await page.evaluate(() => migrateRoutineSections());
+    await page.evaluate(() => sp('routines')); await page.waitForTimeout(150);
+
+    const secId = await page.evaluate(() => gRS()[0].id);
+    const cardCount0 = await page.evaluate(() => document.querySelectorAll('#routinesList .rsec .rc').length);
+    check('collapsible: section starts expanded with its routine card visible', cardCount0 === 1, cardCount0);
+    const chevRot0 = await page.evaluate(() => getComputedStyle(document.querySelector('#routinesList .rsec .blk-chev')).transform);
+
+    // Tap the header row itself (not the title) to collapse.
+    await page.evaluate(() => document.querySelector('#routinesList .rsec .blk-head').click());
+    await page.waitForTimeout(50);
+    const collapsedNow = await page.evaluate(() => document.querySelector('#routinesList .rsec').classList.contains('collapsed'));
+    const cardsHidden = await page.evaluate(() => document.querySelectorAll('#routinesList .rsec .rc').length);
+    check('collapsible: tapping the header row collapses the section and hides its routine card', collapsedNow && cardsHidden === 0, JSON.stringify({ collapsedNow, cardsHidden }));
+    const chevRot1 = await page.evaluate(() => getComputedStyle(document.querySelector('#routinesList .rsec .blk-chev')).transform);
+    check('collapsible: chevron glyph rotates to show the collapsed state', chevRot1 !== chevRot0, JSON.stringify({ chevRot0, chevRot1 }));
+    const storedCollapsed = await page.evaluate(() => S.g('collapsedSections'));
+    check('collapsible: collapsed section id saved under collapsedSections', Array.isArray(storedCollapsed) && storedCollapsed.length === 1, JSON.stringify(storedCollapsed));
+
+    // Reload the page (simulates a later visit) -- collapsed state must persist.
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('nav') && document.querySelector('nav').style.display === 'flex');
+    await page.evaluate(() => sp('routines')); await page.waitForTimeout(150);
+    const collapsedAfterReload = await page.evaluate(() => document.querySelector('#routinesList .rsec').classList.contains('collapsed'));
+    const cardsAfterReload = await page.evaluate(() => document.querySelectorAll('#routinesList .rsec .rc').length);
+    check('collapsible: collapsed state persists across a reload', collapsedAfterReload && cardsAfterReload === 0, JSON.stringify({ collapsedAfterReload, cardsAfterReload }));
+
+    // Tap again to expand.
+    await page.evaluate(() => document.querySelector('#routinesList .rsec .blk-head').click());
+    await page.waitForTimeout(50);
+    const expandedAgain = await page.evaluate(() => !document.querySelector('#routinesList .rsec').classList.contains('collapsed'));
+    const cardsExpanded = await page.evaluate(() => document.querySelectorAll('#routinesList .rsec .rc').length);
+    check('collapsible: tapping the header row again expands the section', expandedAgain && cardsExpanded === 1, JSON.stringify({ expandedAgain, cardsExpanded }));
+
+    // Renaming the section must still work post-change.
+    await page.evaluate(id => renameSection(id, 'Chest Renamed'), secId);
+    const nameAfterRename = await page.evaluate(() => document.querySelector('#routinesList .rsec .blk-t').textContent.trim());
+    const stillExpandedAfterRename = await page.evaluate(() => !document.querySelector('#routinesList .rsec').classList.contains('collapsed'));
+    check('collapsible: renaming a section still works and does not toggle collapse', nameAfterRename === 'Chest Renamed' && stillExpandedAfterRename, JSON.stringify({ nameAfterRename, stillExpandedAfterRename }));
+
+    // A click landing directly on the editable title (not the row background) must not
+    // collapse the section -- it has to reach the contenteditable for focus/editing instead.
+    await page.evaluate(() => document.querySelector('#routinesList .rsec .blk-t').click());
+    await page.waitForTimeout(50);
+    const stillExpandedAfterTitleClick = await page.evaluate(() => !document.querySelector('#routinesList .rsec').classList.contains('collapsed'));
+    check('collapsible: clicking the editable title itself does not collapse the section', stillExpandedAfterTitleClick);
+
+    check('collapsible: no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close(); }
+
   // Routine sections: auto-suggest at save time, section-picker override, and the
   // one-time migration of legacy routines saved before sections existed.
   { const cexLegs = { id: 'cexLegs', name: 'Squat', muscle: 'legs', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true };
