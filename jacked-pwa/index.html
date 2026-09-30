@@ -1139,6 +1139,12 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   </div>
 </div>
 
+<!-- Friend profile photo, enlarged (only wired when there's a real photo, see openFriend) -->
+<div class="mo ctr" id="avLightbox" style="z-index:730;background:rgba(0,0,0,.9)" role="dialog" aria-modal="true" aria-label="Enlarged photo" onclick="if(event.target===this)cm('avLightbox')">
+  <button class="cb" onclick="cm('avLightbox')" style="position:absolute;top:calc(16px + var(--sat));right:18px;background:rgba(0,0,0,.55);color:#fff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <img id="avLightboxImg" src="" alt="" style="width:min(92vw,480px);max-height:80vh;aspect-ratio:1;object-fit:cover;border-radius:20px;display:block">
+</div>
+
 <!-- Calendar day detail -->
 <div class="mo ctr" id="dayModal">
   <div class="md">
@@ -4369,6 +4375,7 @@ async function badgeStart(){
 }
 let _badgeOpen=null;
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeBadgeFull(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') cm('avLightbox'); });
 
 // Count how many badges are currently earned (used by the leaderboard too).
 function earnedBadgeCount(){ return computeBadges().filter(b=>b.earned).length; }
@@ -5365,6 +5372,12 @@ function openFriend(code){
   document.getElementById('fpName').textContent=p.name+(p.isYou?' (You)':'');
   document.getElementById('fpUser').textContent=p.username||'';
   document.getElementById('fpAv').innerHTML=avHTML(p,48);
+  // Only a real photo is tappable-to-enlarge; an initials disc has nothing to enlarge.
+  const fpAvUrl=cleanAvatar(p.avatarUrl,p.code), fpAvEl=document.getElementById('fpAv').firstElementChild;
+  if(fpAvEl){
+    if(fpAvUrl){ fpAvEl.style.cursor='pointer'; fpAvEl.onclick=()=>openAvatarLightbox(fpAvUrl); }
+    else { fpAvEl.style.cursor=''; fpAvEl.onclick=null; }
+  }
   const days=new Set(p.days||[]);
   const jkTile=hasJacked(p)?`<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:12px;border-radius:var(--r);border:1px solid rgba(255,215,0,.55);background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(255,215,0,.03) 60%)"><span style="display:flex;filter:drop-shadow(0 0 6px rgba(255,215,0,.6))">${uic('crown','#ffd700',30)}</span><div><div style="font-family:var(--fh);font-weight:800;font-size:17px;letter-spacing:1px;color:#ffd700;text-transform:uppercase">Jacked</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${p.isYou?'You hold':'Holds'} every monthly and 3-month badge, with every tiered badge at Gold.</div></div></div>`:'';
   let h=jkTile+`<div class="stats-g" style="margin-bottom:10px">
@@ -5410,6 +5423,13 @@ function openFriend(code){
     <button class="btn bd wf" onclick="cm('fpModal');rmFr('${p.code}')">Remove Friend</button>`;
   document.getElementById('fpContent').innerHTML=h;
   om('fpModal');
+}
+
+// Enlarge a friend's profile photo (fpAv only; wired in openFriend when a real photo exists).
+function openAvatarLightbox(url){
+  if(!url) return;
+  document.getElementById('avLightboxImg').src=url;
+  om('avLightbox');
 }
 
 // Open the workout a friend did on a given day (from their tappable calendar).
