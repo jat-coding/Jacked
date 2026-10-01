@@ -1,7 +1,7 @@
 ---
 project: Jacked
 date: 2026-10-01
-status: proposed -- NOT APPLIED, needs Mr. Roni's go
+status: built -- v1.10.56 on staging (8565a62); runs on Dad's phone the first time he opens a build that has it; production needs Mr. Roni's go
 ---
 
 # Repair plan: Dad (@dad) back-extension numbers
@@ -26,3 +26,19 @@ Effect he'll see: Top PR becomes Leg Press / Calf Press on the leg press 275 lb 
 Not part of this repair, flagged only: his pre-9/27 Hevy import kept the old wrong matches (e.g. "Leg Press
 (Machine)" filed as Calf Press on the leg press, "Bench Press (Dumbbell)" and "(Smith Machine)" as barbell bench,
 "Bicep Curl (Machine)" as dumbbell curl). No weights are wrong; only which exercise they count toward.
+
+## Approved and built (2026-10-01)
+Mr. Roni 4:08pm topic 620: "your suggestion and repair, let's do that". Built as a one-shot in-app repair, v1.10.56,
+commit 8565a62 on staging. Nothing written to Dad's cloud row from here; his phone does it.
+- repairBackExtBW() at launch, before any cloud pull/backup: any account, any workout whose Hyperextensions entry is
+  equip 'body only' + bwMode 'added' (weight_reps): totalVolume minus that day's body weight (jk_bwlog) x done reps,
+  prCount = stored - old-rule PR + new-rule PR (prSets rebuilt if present), entry -> equip 'other', bwMode dropped;
+  jk_prs record rebuilt from prReplay, stamped repaired. Sets untouched. Logs "[repair] ..." to the console.
+- Device flag jacked_repairBackExt1 (not backed up); applyBundle (login/import) clears it so restored data is checked.
+- jk_prRepair {exId: ISO} rides the backup; mergePRs drops pre-repair, unstamped records for those exIds, so the
+  cloud's 325 or a stale device/watch can't resurrect it. enforcePRRepairs() at each launch replaces a stale record.
+- Verified on a fixture from his backup (read-only): PR 75 x 12, totals 21,723 / 21,024 / 22,104 kg (-9,000 lb each),
+  9/22 prCount 3 -> 2, Top PR Leg Press / Calf Press 275 x 12. Unaffected user byte-identical.
+- e2e backExtRepair 28 checks; full suite 785/785.
+- Watch: WATCH_BRIDGE + SYNC_PLAYBOOK say to keep jk_prRepair and honour it in the jk_prs merge.
+Still not done (separate, unapproved): Top PR ranking, Mr. Roni's 9/25 dip "+ Added 230", Dad's old Hevy label matches.
