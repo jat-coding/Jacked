@@ -4513,8 +4513,9 @@ function badgeInfo(name){
   sb.textContent=(aw&&!plan.page)?(plan.ids.length?'Add to my current workout':'Back to my workout'):plan.label; sb.style.display=plan.none?'none':'';
   document.getElementById('badgeFull').classList.add('open');
   document.getElementById('badgeFull').scrollTop=0;
+  lockScroll(true);
 }
-function closeBadgeFull(){ document.getElementById('badgeFull').classList.remove('open'); }
+function closeBadgeFull(){ document.getElementById('badgeFull').classList.remove('open'); lockScroll(false); }
 
 // "Take me to the workout for this badge" button in the badge popup (Mr. Roni, 2026-09-24).
 function badgePlan(b){
@@ -5145,8 +5146,9 @@ function openRecap(y,m){
     <div class="rc-grid">${tiered.map(b=>{const tc=b.tier?TIERC[b.tier]:'var(--muted)'; return `<div class="rc-b" style="${b.tier?`border-color:${TIERC[b.tier]}66`:''}"><div style="display:flex;justify-content:center">${uic(b.icon,b.color,22)}</div><div class="n">${TIER_SHORT[b.name]||b.name}</div><div class="t" style="color:${tc}">${b.tier||'—'}</div><div class="c">${b.curV||'&nbsp;'}</div></div>`;}).join('')}</div>`;
   document.getElementById('recapFull').classList.add('open');
   document.getElementById('recapFull').scrollTop=0;
+  lockScroll(true);
 }
-function closeRecap(){ document.getElementById('recapFull').classList.remove('open'); }
+function closeRecap(){ document.getElementById('recapFull').classList.remove('open'); lockScroll(false); }
 function cardRecaps(){
   const n=new Date(), rows=[];
   for(let k=1;k<=12;k++){ const dt=new Date(n.getFullYear(),n.getMonth()-k,1), d=recapData(dt.getFullYear(),dt.getMonth()); if(d) rows.push(d); }
@@ -5253,8 +5255,9 @@ function openAch(){
   haptic();
   document.getElementById('achFullBody').innerHTML=achPageHtml();
   const f=document.getElementById('achFull'); f.classList.add('open'); f.scrollTop=0;
+  lockScroll(true);
 }
-function closeAch(){ document.getElementById('achFull').classList.remove('open'); }
+function closeAch(){ document.getElementById('achFull').classList.remove('open'); lockScroll(false); }
 
 // Saved section order (settings.cardOrder = array of card ids). Unknown/new ids sort last in default order.
 function metricsOrdered(){
@@ -7011,9 +7014,20 @@ async function importWorkoutCsv(text) {
 // ============================================================
 // MODALS
 // ============================================================
-function om(id) { const el=document.getElementById(id); if(el) el.classList.add('open'); }
-function cm(id) { const el=document.getElementById(id); if(el) el.classList.remove('open'); }
-document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+// Every popup/full-screen page is fixed+inset:0, so it visually covers the
+// page -- but the body underneath was still in normal flow, so a short
+// popup (nothing to scroll inside it) let a touch-drag bubble through to
+// the page behind it (Mr. Roni, 2026-10-01: noticed on the recap page, but
+// the same gap existed on every popup). Counted, not boolean, so two
+// popups open at once (e.g. a confirm over a modal) don't unlock early.
+let _scrollLockN=0;
+function lockScroll(open){
+  if(open){ if(_scrollLockN++===0) document.body.style.overflow='hidden'; }
+  else if(_scrollLockN>0 && --_scrollLockN===0) document.body.style.overflow='';
+}
+function om(id) { const el=document.getElementById(id); if(el){ el.classList.add('open'); lockScroll(true); } }
+function cm(id) { const el=document.getElementById(id); if(el){ el.classList.remove('open'); lockScroll(false); } }
+document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m){m.classList.remove('open'); lockScroll(false);}}));
 
 // In-app replacement for window.confirm()/window.prompt(). iOS Safari drops
 // those silently once the app is installed to the home screen — the call
