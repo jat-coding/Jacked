@@ -2170,12 +2170,118 @@ async function exercisePhoto() {
   check('ex photo: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+
+async function backExtLoad() {
+  // Mr. Roni 2026-10-01: Dad's Top PR read "Hyperextensions (Back Extensions) 325lb x 12". Real cause (his cloud
+  // backup): 75 lb machine sets logged in the app on 9/22, 9/26, 9/29 with "+ Added" after the lift was tagged
+  // bodyweight on 9/8, so his ~250 lb body weight was added on top. Not the Hevy import (his Hevy rows say
+  // "Back Extension (Machine)", max 70 lb). Seeded exactly as his saved workouts are shaped.
+  const set = (lb, r) => ({ weight: lb / LB, reps: r, done: true });
+  const dadEx = lb => ({ exId: 'Hyperextensions_Back_Extensions', name: 'Hyperextensions (Back Extensions)', muscle: 'lower back', equip: 'body only', tracking: 'weight_reps', bwMode: 'added', sets: [set(lb, 12), set(lb, 12), set(lb, 12)] });
+  const hist = [wk('2026-09-22', [dadEx(70)]), wk('2026-09-26', [dadEx(75)]), wk('2026-09-29', [dadEx(75)])];
+  const { page, ctx, errors } = await phone({ seed: { hist, bw: 250 / LB }, now: new Date('2026-10-01T12:00:00-06:00') });
+  const r = await page.evaluate(() => { const h = gH(); const e = h[1].exercises[0];
+    return { eff: effWeight(e, e.sets[0]) * 2.20462, cap: bwCapable(e), best: prBest(e).weight * 2.20462,
+      replay: [...prReplay().values()].flatMap(x => x.list).map(p => Math.round(p.weight * 2.20462)) }; });
+  check('back ext: a 75 lb set on a saved "body only / + Added" workout counts as 75 lb, not 75 + body weight', Math.round(r.eff) === 75, JSON.stringify(r));
+  check('back ext: no Body/+Added/-Assist switch for back extensions', !r.cap, String(r.cap));
+  check('back ext: PR replay over his history = 70 then 75 lb', r.replay.join() === '70,75', r.replay.join());
+  // Live: log 75 x 12 the way he does, finish, the stored PR and Top PR card say 75 lb.
+  await page.evaluate(async () => { S.s('prs', {}); loadDB(); for (let i = 0; i < 100 && !dbLoaded; i++) await new Promise(r => setTimeout(r, 100)); });
+  const lib = await page.evaluate(() => { const e = byId('Hyperextensions_Back_Extensions'); return { equip: e.equip, bw: isBodyweightEx(e) }; });
+  check('back ext: library entry is no longer tagged bodyweight', !lib.bw, JSON.stringify(lib));
+  await page.evaluate(() => { startEmpty && startEmpty(); });
+  await page.evaluate(() => { aw.exercises.push({ exId: 'Hyperextensions_Back_Extensions', name: 'Hyperextensions (Back Extensions)', muscle: 'lower back', equip: 'body only', tracking: 'weight_reps', sets: [{ weight: 75 / 2.20462, reps: 12, done: true }] }); renderWS(); finishW(true); });
+  await page.waitForTimeout(300);
+  const pr = await page.evaluate(() => Math.round(gPR()['Hyperextensions_Back_Extensions'].weight * 2.20462));
+  check('back ext: finishing 75 x 12 stores a 75 lb PR', pr === 75, String(pr));
+  const card = await page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = cardLifetime().html; return d.textContent; });
+  check('back ext: Top PR card shows 75lb x 12, never 325', /75lb × 12/.test(card) && !/325/.test(card), card.slice(-80));
+  check('back ext: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+
+  // Hevy import with the exact names from Dad's and Mr. Roni's exports: weights land as logged, never + body weight.
+  const p2 = await phone({ seed: { bw: 250 / LB }, now: new Date('2026-10-01T12:00:00-06:00') });
+  const csv = ['title,start_time,end_time,exercise_title,set_type,weight_lbs,reps',
+    '"Legs and Back","7 Aug 2026, 13:00","7 Aug 2026, 14:00","Back Extension (Machine)",normal,70,12',
+    '"Legs and Back","7 Aug 2026, 13:00","7 Aug 2026, 14:00","Back Extension (Machine)",normal,70,12',
+    '"Pull","27 Mar 2025, 21:07","27 Mar 2025, 22:00","Back Extension (Weighted Hyperextension)",normal,25,12',
+    '"Pull","27 Mar 2025, 21:07","27 Mar 2025, 22:00","Back Extension (Hyperextension)",normal,0,15'].join('\n');
+  const imp = await p2.page.evaluate(async csv => { await importWorkoutCsv(csv);
+    return gH().flatMap(w => w.exercises.map(e => ({ n: e.name, id: e.exId, lb: Math.round(Math.max(...e.sets.map(s => s.weight)) * 2.20462), eff: Math.round(Math.max(...e.sets.map(s => effWeight(e, s))) * 2.20462) }))); }, csv);
+  const by = n => imp.find(x => x.n === n) || {};
+  check('back ext import: "Back Extension (Machine)" 70 lb stays 70 lb', by('Back Extension (Machine)').lb === 70 && by('Back Extension (Machine)').eff === 70, JSON.stringify(imp));
+  check('back ext import: "Back Extension (Weighted Hyperextension)" 25 lb stays 25 lb', by('Back Extension (Weighted Hyperextension)').eff === 25, JSON.stringify(imp));
+  check('back ext import: no imported back extension is worth body weight', imp.every(x => x.eff < 100), JSON.stringify(imp));
+  const prs = await p2.page.evaluate(() => Object.values(gPR()).map(p => Math.round(p.weight * 2.20462)));
+  check('back ext import: no imported PR over 70 lb', prs.every(x => x <= 70), prs.join());
+  await p2.ctx.close();
+}
+
+async function popupScrollLock() {
+  // Mr. Roni 2026-10-01: "when on the recap page you are able to scroll the background page. That shouldn't be
+  // allowed on any popup screen". Every popup pins the page; wheel and touch over it can't move the page; closing
+  // puts you back where you were; nested popups keep the lock until the last one closes; long popups still scroll.
+  const hist = days('2026-08-01', 40).map(d => wk(d, [ex('Barbell Bench Press', [[185, 5]])]));
+  const { page, ctx, errors } = await phone({ seed: { hist, bw: 180 / LB }, now: SEP15 });
+  await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
+  const Y = 600;
+  const pageTop = () => page.evaluate(() => document.querySelector('.page.active').getBoundingClientRect().top);
+  const OPEN = {
+    recap: () => openRecap(2026, 7), badge: () => badgeInfo(computeBadges()[0].name), achievements: () => openAch(),
+    profile: () => om('profModal'), friendProfile: () => om('fpModal'), workoutDetail: () => om('wdModal'), lightbox: () => om('avLightbox'),
+    confirm: () => { showConfirm('Delete it?'); }, exInfo: () => om('exInfoModal'), cardOrder: () => om('cardOrderModal'),
+  };
+  const CLOSE = { recap: 'closeRecap()', badge: 'closeBadgeFull()', achievements: 'closeAch()', profile: "cm('profModal')", friendProfile: "cm('fpModal')",
+    workoutDetail: "cm('wdModal')", lightbox: "cm('avLightbox')", confirm: "document.getElementById('cfCancel')?document.getElementById('cfCancel').click():cm('confirmModal')", exInfo: "cm('exInfoModal')", cardOrder: "cm('cardOrderModal')" };
+  for (const [name, open] of Object.entries(OPEN)) {
+    await page.evaluate(y => window.scrollTo(0, y), Y); await page.waitForTimeout(50);
+    const y0 = await page.evaluate(() => window.scrollY), t0 = await pageTop();
+    await page.evaluate(`(${open.toString()})()`); await page.waitForTimeout(150);
+    const yOpen = await page.evaluate(() => window.scrollY);
+    await page.mouse.move(195, 420); await page.mouse.wheel(0, 900); await page.waitForTimeout(150);
+    const c = await ctx.newCDPSession(page);
+    await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 195, y: 600 }] });
+    for (let k = 1; k <= 8; k++) await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 195, y: 600 - k * 50 }] });
+    await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await c.detach();
+    await page.waitForTimeout(250);
+    const yAfter = await page.evaluate(() => window.scrollY), t1 = await pageTop();
+    check(`scroll lock: ${name}: wheel + swipe over the popup leave window.scrollY unchanged`, yAfter === yOpen, `${yOpen} -> ${yAfter}`);
+    check(`scroll lock: ${name}: the page behind doesn't move`, Math.abs(t1 - t0) < 1, `${t0} -> ${t1}`);
+    await page.evaluate(CLOSE[name]); await page.waitForTimeout(150);
+    const yClosed = await page.evaluate(() => window.scrollY);
+    check(`scroll lock: ${name}: closing puts the page back where it was`, yClosed === y0 && y0 > 0, `${y0} -> ${yClosed}`);
+  }
+  // Nested: a confirm over the profile popup; closing the confirm keeps the lock until the profile closes too.
+  await page.evaluate(y => window.scrollTo(0, y), Y);
+  await page.evaluate(() => { om('profModal'); showConfirm('Sure?'); }); await page.waitForTimeout(100);
+  await page.evaluate(() => { const b = document.getElementById('cfCancel'); b ? b.click() : cm('confirmModal'); }); await page.waitForTimeout(100);
+  const mid = await page.evaluate(() => ({ fixed: document.body.style.position, open: !!document.querySelector('#profModal.open') }));
+  check('scroll lock: nested: closing the confirm keeps the page pinned while the profile is open', mid.fixed === 'fixed' && mid.open, JSON.stringify(mid));
+  await page.evaluate(() => cm('profModal')); await page.waitForTimeout(100);
+  const end = await page.evaluate(() => ({ fixed: document.body.style.position, y: window.scrollY }));
+  check('scroll lock: nested: closing the last popup releases it and restores the spot', end.fixed === '' && end.y === Y, JSON.stringify(end));
+  // Backdrop tap closes and releases too.
+  await page.evaluate(() => om('profModal')); await page.waitForTimeout(100);
+  await page.mouse.click(195, 30); await page.waitForTimeout(150);
+  const bd = await page.evaluate(() => ({ open: !!document.querySelector('.mo.open'), fixed: document.body.style.position, y: window.scrollY }));
+  check('scroll lock: backdrop tap closes and unpins', !bd.open && bd.fixed === '' && bd.y === Y, JSON.stringify(bd));
+  // A long popup still scrolls its own content.
+  await page.evaluate(() => openAch()); await page.waitForTimeout(150);
+  const s0 = await page.evaluate(() => document.getElementById('achFull').scrollTop);
+  await page.mouse.move(195, 500); await page.mouse.wheel(0, 600); await page.waitForTimeout(250);
+  const s1 = await page.evaluate(() => ({ st: document.getElementById('achFull').scrollTop, max: document.getElementById('achFull').scrollHeight - document.getElementById('achFull').clientHeight }));
+  check('scroll lock: Achievements page still scrolls its own list', s1.max > 0 && s1.st > s0, JSON.stringify({ s0, ...s1 }));
+  await page.evaluate(() => closeAch());
+  check('scroll lock: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, popupScrollLock].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

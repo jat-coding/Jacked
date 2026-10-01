@@ -85,6 +85,8 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 /* MODAL */
 .mo{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:200;display:none;align-items:flex-end;justify-content:center}
 .mo.open{display:flex}
+html.popup-lock,html.popup-lock body{overscroll-behavior:none}
+.mo,.mo .md,#achFull,#badgeFull,#recapFull{overscroll-behavior:contain}
 #achFull{position:fixed;inset:0;z-index:700;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch}
 #achFull.open{display:flex;animation:pageIn .2s ease-out}
 .agrow{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--border);cursor:pointer}
@@ -1220,7 +1222,6 @@ const EQUIP_FIX = {
   'Decline_Push-Up':'body only',
   'Floor_Glute-Ham_Raise':'body only',
   'Gironda_Sternum_Chins':'body only',
-  'Hyperextensions_Back_Extensions':'body only',
   'Inverted_Row':'body only',
   'Inverted_Row_with_Straps':'body only',
   'Kipping_Muscle_Up':'body only',
@@ -3307,8 +3308,12 @@ function setCable(ei,v) { if(aw){ aw.exercises[ei].cable=v; saveAW(); renderWS()
 // Pure bodyweight movement (pull-up, push-up, leg raise, dip…) — uses your body
 // weight as the load, with NO weight input. "Weighted ..." variants and assisted
 // machines are excluded (they keep/handle their own weight).
+// Back extensions are logged by the weight on the machine stack or the plate you hold, never body weight + that
+// (Mr. Roni, 2026-10-01: Dad's 75 lb machine sets became a 325 lb x 12 Top PR once this lift was tagged bodyweight
+// on 9/8 and "+ Added" put his 250 lb body on top). Keyed by id so workouts already saved with the old tag read right.
+const NOT_BW_IDS=new Set(['Hyperextensions_Back_Extensions']);
 function isBodyweightEx(ex){
-  if(!ex||ex.assist) return false;
+  if(!ex||ex.assist||NOT_BW_IDS.has(ex.exId||ex.id)) return false;
   const nm=(ex.name||'').toLowerCase();
   if(nm.includes('weighted')) return false;
   if((ex.tracking||'')==='bodyweight_reps') return true;
@@ -4513,9 +4518,8 @@ function badgeInfo(name){
   sb.textContent=(aw&&!plan.page)?(plan.ids.length?'Add to my current workout':'Back to my workout'):plan.label; sb.style.display=plan.none?'none':'';
   document.getElementById('badgeFull').classList.add('open');
   document.getElementById('badgeFull').scrollTop=0;
-  lockScroll(true);
 }
-function closeBadgeFull(){ document.getElementById('badgeFull').classList.remove('open'); lockScroll(false); }
+function closeBadgeFull(){ document.getElementById('badgeFull').classList.remove('open'); }
 
 // "Take me to the workout for this badge" button in the badge popup (Mr. Roni, 2026-09-24).
 function badgePlan(b){
@@ -5146,9 +5150,8 @@ function openRecap(y,m){
     <div class="rc-grid">${tiered.map(b=>{const tc=b.tier?TIERC[b.tier]:'var(--muted)'; return `<div class="rc-b" style="${b.tier?`border-color:${TIERC[b.tier]}66`:''}"><div style="display:flex;justify-content:center">${uic(b.icon,b.color,22)}</div><div class="n">${TIER_SHORT[b.name]||b.name}</div><div class="t" style="color:${tc}">${b.tier||'—'}</div><div class="c">${b.curV||'&nbsp;'}</div></div>`;}).join('')}</div>`;
   document.getElementById('recapFull').classList.add('open');
   document.getElementById('recapFull').scrollTop=0;
-  lockScroll(true);
 }
-function closeRecap(){ document.getElementById('recapFull').classList.remove('open'); lockScroll(false); }
+function closeRecap(){ document.getElementById('recapFull').classList.remove('open'); }
 function cardRecaps(){
   const n=new Date(), rows=[];
   for(let k=1;k<=12;k++){ const dt=new Date(n.getFullYear(),n.getMonth()-k,1), d=recapData(dt.getFullYear(),dt.getMonth()); if(d) rows.push(d); }
@@ -5255,9 +5258,8 @@ function openAch(){
   haptic();
   document.getElementById('achFullBody').innerHTML=achPageHtml();
   const f=document.getElementById('achFull'); f.classList.add('open'); f.scrollTop=0;
-  lockScroll(true);
 }
-function closeAch(){ document.getElementById('achFull').classList.remove('open'); lockScroll(false); }
+function closeAch(){ document.getElementById('achFull').classList.remove('open'); }
 
 // Saved section order (settings.cardOrder = array of card ids). Unknown/new ids sort last in default order.
 function metricsOrdered(){
@@ -7014,20 +7016,38 @@ async function importWorkoutCsv(text) {
 // ============================================================
 // MODALS
 // ============================================================
-// Every popup/full-screen page is fixed+inset:0, so it visually covers the
-// page -- but the body underneath was still in normal flow, so a short
-// popup (nothing to scroll inside it) let a touch-drag bubble through to
-// the page behind it (Mr. Roni, 2026-10-01: noticed on the recap page, but
-// the same gap existed on every popup). Counted, not boolean, so two
-// popups open at once (e.g. a confirm over a modal) don't unlock early.
-let _scrollLockN=0;
-function lockScroll(open){
-  if(open){ if(_scrollLockN++===0) document.body.style.overflow='hidden'; }
-  else if(_scrollLockN>0 && --_scrollLockN===0) document.body.style.overflow='';
+function om(id) { const el=document.getElementById(id); if(el) el.classList.add('open'); }
+function cm(id) { const el=document.getElementById(id); if(el) el.classList.remove('open'); }
+document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+// Page behind a popup never scrolls (Mr. Roni, 2026-10-01: "when on the recap page you are able to scroll the
+// background page. That shouldn't be allowed on any popup screen"). Every popup is position:fixed over the page, but
+// a drag with nothing left to scroll inside it chained through to the page. The lock follows the DOM, not open/close
+// calls: whenever any popup (.mo, achievements, badge, recap) has class "open" the page is pinned, and it is released
+// when the last one closes -- so nested popups and every close path (X, backdrop, Escape, code) agree. Pinned with
+// body position:fixed at -scrollY, the one lock iOS Safari (also home-screen) honours; the scroll spot comes back on
+// close unless a popup moved you to another tab. In the rotated landscape frame #jkRoot is the scroller instead.
+const SCROLL_LOCK_SEL='.mo.open,#achFull.open,#badgeFull.open,#recapFull.open';
+let _sl=null;   // {y, page, rot} while pinned
+function syncScrollLock(){
+  const want=!!document.querySelector(SCROLL_LOCK_SEL), b=document.body, html=document.documentElement;
+  if(want===!!_sl) return;
+  const root=document.getElementById('jkRoot'), pg=(document.querySelector('.page.active')||{}).id;
+  if(want){
+    const rot=html.hasAttribute('data-rot');
+    _sl={y:window.scrollY||0, page:pg, rot};
+    if(rot){ if(root) root.style.overflow='hidden'; }
+    else Object.assign(b.style,{position:'fixed',top:-_sl.y+'px',left:'0',right:'0',width:'100%',overflow:'hidden'});
+    html.classList.add('popup-lock');
+  } else {
+    const s=_sl; _sl=null;
+    if(root) root.style.overflow='';
+    ['position','top','left','right','width','overflow'].forEach(k=>b.style[k]='');
+    html.classList.remove('popup-lock');
+    if(!s.rot) window.scrollTo(0, s.page===pg?s.y:0);
+  }
 }
-function om(id) { const el=document.getElementById(id); if(el){ el.classList.add('open'); lockScroll(true); } }
-function cm(id) { const el=document.getElementById(id); if(el){ el.classList.remove('open'); lockScroll(false); } }
-document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m){m.classList.remove('open'); lockScroll(false);}}));
+new MutationObserver(syncScrollLock).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
 
 // In-app replacement for window.confirm()/window.prompt(). iOS Safari drops
 // those silently once the app is installed to the home screen — the call
@@ -7188,7 +7208,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.54';
+const BUILD = 'v1.10.55';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
