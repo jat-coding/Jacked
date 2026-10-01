@@ -315,6 +315,8 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 10-01 | staging | v1.10.55: `Hyperextensions_Back_Extensions` is no longer bodyweight: removed from `EQUIP_FIX` and never body-weight-loaded by id (`NOT_BW_IDS`), even in saved workouts that still carry `equip:"body only"`/`bwMode:"added"`; its `weight` is the stack/plate load. Watch: apply the same exclusion wherever it adds body weight (Dad's 75 lb machine sets were reading 325 lb) | APP-WIDE |
+| 10-01 | staging | v1.10.55: the page behind any open popup (.mo, Achievements, badge, recap) is pinned and can't scroll; scroll spot restored on close; phone-only, no watch change | PHONE-ONLY |
 | 09-30 | staging | v1.10.48: static holds (Plank, Side_Bridge, both Isometric Neck, Plate_Pinch, Crucifix, Downward_Facing_Balance) are duration-tracked (seconds in `weight`); hold PRs in new `jk_holdPR` {exId:{sec,date}}, longest wins; old rep-logged planks unchanged | APP-WIDE A16 |
 | 09-30 | staging | v1.10.47: Bench-Maxing (only) also counts a flat Dumbbell_Bench_Press as (2 x per-hand lb) / 0.83 (Saeterbakken 2011); each lift shown on its tier, badge = highest, labelled; GOODLIFT points no longer shown; Smith machine not added (sources contradict a discount) | APP-WIDE A15 |
 | 09-30 | staging | v1.10.46: every badge counts one standard exercise by library id (A15); customs never count; built-in Running (outdoor) / Running (treadmill); Hevy import keeps run distance+time | APP-WIDE A15 |
