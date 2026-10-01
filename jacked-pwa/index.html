@@ -1435,7 +1435,7 @@ async function usernameTaken(u, exceptMine){
 const KEY_SHAPE={
   routines:'a',routineSections:'a',collapsedSections:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
   prof:'o',prs:'o',settings:'o',exRename:'o',exOverride:'o',exNotes:'o',cardioPR:'o',holdPR:'o',metrics:'o',
-  sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o'
+  sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o',prRepair:'o'
 };
 function shapeOk(k,v){
   const t=KEY_SHAPE[k];
@@ -3862,6 +3862,128 @@ function prAudit(){
   });
   return {total,match,mismatches};
 }
+// ── One-shot repair: back extensions saved with body weight added (v1.10.56) ──────────────────
+// Mr. Roni approved 2026-10-01. Before v1.10.55, Hyperextensions_Back_Extensions was tagged bodyweight and
+// "+ Added" counted body weight + the machine weight, so Dad's 75 lb x 12 was saved as a 325 lb record and his
+// 9/22, 9/26, 9/29 totals each carried 9,000 lb of body weight. v1.10.55 reads those sets right; this fixes what
+// was STORED from them: the exercise's jk_prs record (from prReplay), each affected workout's totalVolume and
+// prCount (+ prSets), and the entry itself (equip 'other', bwMode dropped). Set weights/reps are never touched.
+// Runs once per device (flag below, device-local: never rides the backup); applyBundle clears the flag so data
+// restored by login/import is checked too. Idempotent anyway: a tidied entry no longer matches wasBWAdded().
+const BACKEXT_REPAIR_FLAG='jacked_repairBackExt1';
+// Saved under the pre-v1.10.55 rule as body weight + the typed weight (old isBodyweightEx + 'added'), and read
+// as the typed weight alone since v1.10.55 (weight_reps only: a bodyweight_reps entry still loads body weight).
+function wasBWAdded(ex){
+  if(!ex||!NOT_BW_IDS.has(ex.exId)||ex.bwMode!=='added'||ex.assist) return false;
+  if((ex.name||'').toLowerCase().includes('weighted')) return false;
+  const eq=(ex.equip||'').toLowerCase();
+  return (ex.tracking||'weight_reps')==='weight_reps'&&(eq==='body only'||eq==='bodyweight');
+}
+// Body weight in effect on a workout's day: the last body-weight log entry on or before it (the earliest one
+// if the workout predates the log), else the current body weight.
+function bwOnDay(iso){
+  const log=gBWlog().filter(e=>e&&e.d&&e.kg>0).sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0), k=dayKey(iso);
+  if(!log.length) return gBW();
+  let kg=log[0].kg; log.forEach(e=>{ if(e.d<=k) kg=e.kg; });
+  return kg;
+}
+// Was the entry at (w.id, ei) a PR under the OLD rule (its sets loaded with that day's body weight)? Same order and
+// rules as prReplay, for one exercise only.
+function oldRulePRs(hist, exId){
+  const out=new Set(); let rec={weight:0,reps:0};
+  hist.map((w,i)=>({w,i})).sort((a,b)=>(new Date(a.w.date)-new Date(b.w.date))||(a.i-b.i)).forEach(({w})=>{
+    const imported=IMPORTED_ID.test(w.id||'');
+    (w.exercises||[]).forEach((ex,ei)=>{
+      if(ex.exId!==exId) return;
+      const bw=wasBWAdded(ex)?bwOnDay(w.date):0;
+      const ex2=bw?{...ex,sets:(ex.sets||[]).map(s=>({...s,weight:bw+Math.max(0,s.weight||0)}))}:ex;
+      const b=imported?importBest(ex2):prBest(ex2); if(!b) return;
+      const isPR=imported?(b.weight>rec.weight||(b.weight===rec.weight&&b.reps>rec.reps)):e1rm(b.weight,b.reps)>prE1rm(rec);
+      if(isPR){ rec={weight:b.weight,reps:b.reps}; out.add(w.id+':'+ei); }
+    });
+  });
+  return out;
+}
+// The running record prReplay ends on for one exercise, dated by the workout that set it (or null).
+function replayRecord(exId){
+  let last=null;
+  const byId=new Map(gH().map(w=>[w.id,w]));
+  prReplay().forEach((r,wid)=>r.list.forEach(p=>{ if(p.exId===exId&&!p.cardio&&!p.hold) last={weight:p.weight,reps:p.reps,w:byId.get(wid)}; }));
+  return last;
+}
+// Replace jk_prs[exId] with the replayed record, stamped `repaired` so the cloud merge accepts it even when it is
+// LOWER than a stale copy, and record the repair in jk_prRepair (merge rule: mergePRs).
+function setRepairedPR(prs, exId, at){
+  const old=prs[exId], r=replayRecord(exId);
+  if(!r){ delete prs[exId]; return {old,now:null}; }
+  // Keep the old record's date when it was set by that same workout (it is the finish time); else the workout's.
+  const wd=r.w&&r.w.date, od=old&&old.date;
+  const sameWorkout=wd&&od&&(+new Date(od)>=+new Date(wd))&&(+new Date(od)-new Date(wd)<864e5);
+  prs[exId]={weight:r.weight,reps:r.reps,date:sameWorkout?od:(wd||at),repaired:at};
+  return {old,now:prs[exId]};
+}
+function repairBackExtBW(){
+  try{
+    if(localStorage.getItem(BACKEXT_REPAIR_FLAG)) return null;
+    const at=new Date().toISOString(), hist=gH(), log={at,build:BUILD,workouts:[],prs:{}};
+    const exIds=new Set();
+    hist.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(wasBWAdded(ex)) exIds.add(ex.exId); }));
+    if(exIds.size){
+      const oldPR=new Map([...exIds].map(id=>[id,oldRulePRs(hist,id)]));
+      // Tidy first so prReplay below reads the history as it is now stored.
+      const touched=[];
+      const hist2=hist.map(w=>{
+        const fix=(w.exercises||[]).map((ex,ei)=>wasBWAdded(ex)?ei:-1).filter(ei=>ei>=0);
+        if(!fix.length) return w;
+        const bw=bwOnDay(w.date);
+        let reps=0;
+        fix.forEach(ei=>{ const ex=w.exercises[ei]; if(isWT(ex)) (ex.sets||[]).forEach(s=>{ if(s.done) reps+=Math.max(0,s.reps||0); }); });
+        const exercises=w.exercises.map((ex,ei)=>{ if(!fix.includes(ei)) return ex; const {bwMode:_m,...rest}=ex; return {...rest,equip:'other'}; });
+        const w2={...w,exercises};
+        if(typeof w.totalVolume==='number') w2.totalVolume=Math.max(0,Math.round(w.totalVolume-bw*reps));
+        touched.push({w2,fix});
+        log.workouts.push({id:w.id,date:w.date,bodyWeightKg:bw,reps,totalVolume:[w.totalVolume,w2.totalVolume],prCount:[w.prCount]});
+        return w2;
+      });
+      S.s('hist',hist2);
+      const rp=prReplay();
+      touched.forEach(({w2,fix},i)=>{
+        const now=(rp.get(w2.id)||NO_PRS).list;
+        let delta=0;
+        fix.forEach(ei=>{
+          const exId=w2.exercises[ei].exId;
+          delta+=(now.some(p=>p.ei===ei&&p.exId===exId)?1:0)-(oldPR.get(exId).has(w2.id+':'+ei)?1:0);
+        });
+        if(Array.isArray(w2.prSets)){
+          const keep=w2.prSets.filter(p=>!fix.includes(p.ei));
+          now.filter(p=>fix.includes(p.ei)).forEach(({exId,ei,si,weight,reps})=>keep.push({exId,ei,si,weight,reps}));
+          w2.prSets=keep;
+        }
+        if(typeof w2.prCount==='number') w2.prCount=Math.max(0,w2.prCount+delta);
+        log.workouts[i].prCount.push(w2.prCount);
+      });
+      S.s('hist',hist2);
+      const prs=gPR(), cut=S.g('prRepair')||{};
+      exIds.forEach(id=>{ log.prs[id]=setRepairedPR(prs,id,at); if(!cut[id]||cut[id]>at) cut[id]=at; });
+      S.s('prs',prs); S.s('prRepair',cut);
+      console.info('[repair] back extensions saved with body weight added — fixed',log);
+    } else console.info('[repair] back extensions: nothing to fix on this device');
+    localStorage.setItem(BACKEXT_REPAIR_FLAG, JSON.stringify({build:BUILD,at,workouts:log.workouts.length}));
+    return log;
+  }catch(e){ console.warn('[repair] back extensions failed, will retry next launch',e); return null; }
+}
+// Every launch, cheap: a record for a repaired exercise that predates the repair and is not itself a repaired
+// record is a stale copy (e.g. restored by login, or a watch's best-wins merge) — rebuild it from history.
+function prOkAfterRepair(r, cutIso){ return !r||!!r.repaired||+new Date(r.date||0)>=+new Date(cutIso); }
+function enforcePRRepairs(){
+  try{
+    const cut=S.g('prRepair'); if(!cut) return 0;
+    const prs=gPR(); let n=0;
+    Object.keys(cut).forEach(id=>{ if(!prOkAfterRepair(prs[id],cut[id])){ const r=setRepairedPR(prs,id,cut[id]); console.info('[repair] stale record replaced',id,r); n++; } });
+    if(n) S.s('prs',prs);
+    return n;
+  }catch(e){ console.warn('[repair] enforce failed',e); return 0; }
+}
 const prSetText=p=>p.cardio?`${p.weight} mi · ${fmtPace(pacePerMile(p.weight,p.reps))}`:p.hold?`${fmtHold(p.weight)} hold`:`${dW(p.weight)}${uL()} × ${p.reps}`;
 const PR_STAR=(sp='')=>`<span style="color:#ffd700">${sp}★</span>`;
 
@@ -6090,11 +6212,16 @@ async function syncMe() {
 
 // ── Merge helpers (pure) ─────────────────────────────────────────────────────
 // Union two PR maps ({exId:{weight,reps,date}}) keeping the higher Epley e1rm.
-function mergePRs(a,b){
+// `repairs` ({exId:ISO}, jk_prRepair): for a repaired exercise, a record dated before the repair that is not
+// itself a repaired record is a stale copy and loses, even when heavier (Dad's 325 lb back extension, v1.10.56).
+function mergePRs(a,b,repairs){
   a=(a&&typeof a==='object')?a:{}; b=(b&&typeof b==='object')?b:{};
-  const out={...a};
+  const ok=(exId,r)=>!repairs||!repairs[exId]||prOkAfterRepair(r,repairs[exId]);
+  const out={};
+  Object.keys(a).forEach(exId=>{ if(ok(exId,a[exId])) out[exId]=a[exId]; });
   Object.keys(b).forEach(exId=>{
     const cur=out[exId], nw=b[exId];
+    if(!ok(exId,nw)) return;
     if(!cur || e1rm((nw&&nw.weight)||0,(nw&&nw.reps)||0) > e1rm((cur.weight)||0,(cur.reps)||0)) out[exId]=nw;
   });
   return out;
@@ -6102,6 +6229,14 @@ function mergePRs(a,b){
 // Union two cardio-PR maps ({exId:{dist,time,date,maxDist,maxDate}}). Best effort
 // = lower mileEquiv (faster pace); longest distance tracked independently. The
 // faster record is kept WHOLE so any unknown fields survive.
+// jk_prRepair: union per exercise, the EARLIEST repair time wins (a later repair on a second device then still
+// accepts PRs logged between the two).
+function mergePRRepair(a,b){
+  a=(a&&typeof a==='object')?a:{}; b=(b&&typeof b==='object')?b:{};
+  const out={...a};
+  Object.keys(b).forEach(k=>{ if(!out[k]||+new Date(b[k])<+new Date(out[k])) out[k]=b[k]; });
+  return Object.keys(out).length?out:undefined;
+}
 // Timed holds: the longer hold wins, per exercise.
 function mergeHoldPRs(a,b){
   a=(a&&typeof a==='object')?a:{}; b=(b&&typeof b==='object')?b:{};
@@ -6203,7 +6338,9 @@ function mergeBackup(cloud, local, pendingNotes){
     out.jk_hist=[...byId.values()].filter(w=>!delSet.has(w.id));
   }
 
-  if(cloud.jk_prs||local.jk_prs)           out.jk_prs=mergePRs(cloud.jk_prs, local.jk_prs);
+  const repairs=mergePRRepair(cloud.jk_prRepair, local.jk_prRepair);
+  if(repairs) out.jk_prRepair=repairs;
+  if(cloud.jk_prs||local.jk_prs)           out.jk_prs=mergePRs(cloud.jk_prs, local.jk_prs, repairs);
   if(cloud.jk_cardioPR||local.jk_cardioPR) out.jk_cardioPR=mergeCardioPRs(cloud.jk_cardioPR, local.jk_cardioPR);
   if(cloud.jk_holdPR||local.jk_holdPR)     out.jk_holdPR=mergeHoldPRs(cloud.jk_holdPR, local.jk_holdPR);
   return out;
@@ -6841,6 +6978,7 @@ function applyBundle(bundle,{wipe=false}={}){
     Object.keys(before).forEach(k=>{ try{ localStorage.setItem(k,before[k]); }catch(_){} });
     return {ok:false,...res};
   }
+  localStorage.removeItem(BACKEXT_REPAIR_FLAG);   // restored data gets its own one-shot repair check on the reload
   return {ok:true,...res};
 }
 
@@ -7208,7 +7346,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.55';
+const BUILD = 'v1.10.56';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
@@ -7253,6 +7391,9 @@ function healBareStrings(){
   if(fixed) console.info('healBareStrings: re-quoted',fixed,'key(s)');
 }
 healBareStrings();
+// Before checkOnboarding(): its cloud pull/backup must merge the repaired numbers, not the stale ones.
+repairBackExtBW();
+enforcePRRepairs();
 checkOnboarding();
 // Kick off DB load in background so it's ready when the user first opens Library/exercises
 setTimeout(loadDB, 500);

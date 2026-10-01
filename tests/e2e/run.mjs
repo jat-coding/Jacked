@@ -2218,6 +2218,157 @@ async function backExtLoad() {
   await p2.ctx.close();
 }
 
+async function backExtRepair() {
+  // Mr. Roni approved 2026-10-01: one-shot in-app repair of numbers STORED while back extensions added body weight
+  // (before v1.10.55). Fixture = the 7 workouts from Dad's cloud backup (read-only, 2026-10-01 17:24Z) that decide
+  // the result: the 3 saved "body only / + Added" ones, whole, and the earlier ones holding his prior records for
+  // every lift in them. Compact: [exId, name, equip, bwMode, [[kg, reps, done]]].
+  const W = (id, date, tv, pc, exs) => ({ id, name: 'Legs and Back', date, duration: '60:00', sets: 27, totalVolume: tv, prCount: pc,
+    exercises: exs.map(([exId, name, equip, bwMode, sets]) => ({ exId, name, equip, tracking: 'weight_reps', ...(bwMode ? { bwMode } : {}),
+      sets: sets.map(([weight, reps, d]) => ({ weight, reps, done: !!d })) })) });
+  const LE = 'Leg_Extensions', LC = 'Seated_Leg_Curl', HX = 'Hyperextensions_Back_Extensions', LP = 'Leg_Press', CP = 'Calf_Press_On_The_Leg_Press_Machine',
+    PO = 'Bent-Arm_Barbell_Pullover', HR = 'Leverage_High_Row', IR = 'Leverage_Iso_Row', LAT = 'Wide-Grip_Lat_Pulldown';
+  const x3 = (w, r = [12, 12, 12]) => r.map(n => [w, n, 1]);
+  const HXN = 'Hyperextensions (Back Extensions)';
+  const dadHist = () => [
+    W('w1781037016028', '2026-06-09T20:30:16.028Z', 21101, 2, [[LE, 'Leg Extensions', 'machine', 0, x3(36.287433)], [LC, 'Seated Leg Curl', 'machine', 0, x3(36.287433)],
+      [HX, HXN, 'other', 0, x3(27.215575)], [PO, 'Bent-Arm Barbell Pullover', 'barbell', 0, x3(40.82)], [HR, 'Leverage High Row', 'machine', 0, x3(72.574866, [12, 10, 10])],
+      [IR, 'Leverage Iso Row', 'machine', 0, x3(72.574866)]]),
+    W('w1789155429897', '2026-09-11T19:37:09.897Z', 17799, 2, [[LE, 'Leg Extensions (machine)', 'machine', 0, x3(40.823362)], [LC, 'Seated Leg Curl (machine)', 'machine', 0, x3(40.823362)],
+      [HX, HXN, 'other', 0, x3(27.215575)], [LP, 'Leg Press (machine)', 'machine', 0, x3(102.058405)], [PO, 'Bent-Arm Pullover (barbell)', 'barbell', 0, x3(54.431149)],
+      [HR, 'Leverage High Row (machine)', 'machine', 0, [...x3(40.823362), [40.823362, 10, 0]]], [IR, 'Leverage Iso Row (machine)', 'machine', 0, x3(40.823362)],
+      [LAT, 'Wide-Grip Lat Pulldown (cable)', 'cable', 0, x3(45.359291)]]),
+    W('w1789414520547', '2026-09-14T19:35:20.547Z', 19922, 3, [[LE, 'Leg Extensions (machine)', 'machine', 0, x3(45.359291)], [LC, 'Seated Leg Curl (machine)', 'machine', 0, x3(45.359291)],
+      [HX, HXN, 'other', 0, x3(31.751504)], [LP, 'Leg Press (machine)', 'machine', 0, x3(102.058405)], [PO, 'Bent-Arm Pullover (barbell)', 'barbell', 0, x3(63.503007, [12, 12, 9])],
+      [HR, 'Leverage High Row (machine)', 'machine', 0, x3(63.503007)], [IR, 'Leverage Iso Row (machine)', 'machine', 0, x3(63.503007)]]),
+    W('w1789668164285', '2026-09-17T18:02:44.285Z', 18842, 0, [[LE, 'Leg Extensions (machine)', 'machine', 0, x3(45.359291)], [LC, 'Seated Leg Curl (machine)', 'machine', 0, x3(45.359291)],
+      [HX, HXN, 'other', 0, x3(31.751504)], [LP, 'Leg Press (machine)', 'machine', 0, x3(102.058405)], [CP, 'Calf Press On The Leg Press (machine)', 'machine', 0, x3(102.058405)],
+      [PO, 'Bent-Arm Pullover (barbell)', 'barbell', 0, x3(63.503007, [12, 12, 7])], [HR, 'Leverage High Row (machine)', 'machine', 0, x3(72.574866, [8, 8, 8])],
+      [IR, 'Leverage Iso Row (machine)', 'machine', 0, x3(72.574866, [8, 8, 8])], [LAT, 'Wide-Grip Lat Pulldown (cable)', 'cable', 0, x3(45.359291)]]),
+    W('w1790104898582', '2026-09-22T19:21:38.582Z', 25805, 3, [[LE, 'Leg Extensions (machine)', 'machine', 0, x3(45.359291)], [LC, 'Seated Leg Curl (machine)', 'machine', 0, x3(45.359291)],
+      [HX, HXN, 'body only', 'added', x3(31.751504)], [LP, 'Leg Press (machine)', 'machine', 0, x3(124.73805, [12, 12, 10])], [CP, 'Calf Press On The Leg Press (machine)', 'machine', 0, x3(124.73805)],
+      [PO, 'Bent-Arm Pullover (barbell)', 'barbell', 0, x3(63.503007, [12, 12, 10])], [HR, 'Leverage High Row (machine)', 'machine', 0, x3(72.574866, [12, 12, 10])],
+      [IR, 'Leverage Iso Row (machine)', 'machine', 0, x3(72.574866, [12, 12, 8])], [LAT, 'Wide-Grip Lat Pulldown (cable)', 'cable', 0, x3(45.359291)]]),
+    W('w1790448706480', '2026-09-26T18:51:46.480Z', 25106, 3, [[LE, 'Leg Extensions (machine)', 'machine', 0, x3(47.627255)], [LC, 'Seated Leg Curl (machine)', 'machine', 0, x3(47.627255)],
+      [HX, HXN, 'body only', 'added', x3(34.019468)], [LP, 'Leg Press (machine)', 'machine', 0, x3(124.73805, [12, 12, 10])], [CP, 'Calf Press On The Leg Press (machine)', 'machine', 0, x3(124.73805)],
+      [PO, 'Bent-Arm Pullover (barbell)', 'barbell', 0, x3(49.89522)], [HR, 'Leverage High Row (machine)', 'machine', 0, x3(72.574866, [12, 10, 8])],
+      [IR, 'Leverage Iso Row (machine)', 'machine', 0, x3(72.574866, [10, 10, 8])], [LAT, 'Wide-Grip Lat Pulldown (cable)', 'cable', 0, x3(45.359291)]]),
+    W('w1790714236686', '2026-09-29T20:37:16.686Z', 26186, 1, [[LE, 'Leg Extensions (machine)', 'machine', 0, x3(47.627255)], [LC, 'Seated Leg Curl (machine)', 'machine', 0, x3(47.627255)],
+      [HX, HXN, 'body only', 'added', x3(34.019468)], [LP, 'Leg Press (machine)', 'machine', 0, x3(124.73805, [12, 12, 10])], [CP, 'Calf Press On The Leg Press (machine)', 'machine', 0, x3(124.73805)],
+      [PO, 'Bent-Arm Pullover (barbell)', 'barbell', 0, x3(49.89522)], [HR, 'Leverage High Row (machine)', 'machine', 0, x3(72.574866)],
+      [IR, 'Leverage Iso Row (machine)', 'machine', 0, x3(72.574866)], [LAT, 'Wide-Grip Lat Pulldown (cable)', 'cable', 0, [[49.89522, 12, 1], [49.89522, 12, 1], [49.89522, 10, 1]]]]),
+  ];
+  const dadPrs = () => ({ [HX]: { date: '2026-09-26T21:55:54.517Z', reps: 12, weight: 147.41769556658292 },
+    [LP]: { date: '2026-09-22T20:24:25.816Z', reps: 12, weight: 124.73805009480093 }, [CP]: { date: '2026-09-22T20:24:25.816Z', reps: 12, weight: 124.73805009480093 },
+    Hack_Squat: { date: '2026-06-06T21:56:55.132Z', reps: 12, weight: 92.98654643430615 }, Calf_Press: { date: '2026-05-15T18:16:00.000Z', reps: 12, weight: 102.06 },
+    [IR]: { date: '2026-06-09T21:42:33.565Z', reps: 12, weight: 72.57486550970236 }, Dip_Machine: { date: '2026-09-22T17:52:48.968Z', reps: 12, weight: 72.57486550970236 },
+    [LE]: { date: '2026-09-26T21:55:54.517Z', reps: 12, weight: 47.62725549074217 }, [LC]: { date: '2026-09-26T21:55:54.517Z', reps: 12, weight: 47.62725549074217 },
+    [LAT]: { date: '2026-09-29T21:41:32.313Z', reps: 12, weight: 49.895220037920375 }, [PO]: { date: '2026-09-14T20:30:12.201Z', reps: 12, weight: 63.50300732098956 } });
+  const bwlog = [{ d: '2026-06-06', kg: 112.9446344494743 }, { d: '2026-08-03', kg: 112.9446344494743 }, { d: '2026-09-19', kg: 113.39822735890993 }, { d: '2026-10-01', kg: 111.58385572116738 }];
+  const dadSeed = () => ({ hist: dadHist(), prs: dadPrs(), bw: 111.58385572116738, bwlog });
+  const NOW = new Date('2026-10-01T18:00:00-06:00');
+  const lb = kg => Math.round(kg * LB);
+  const BAD = ['w1790104898582', 'w1790448706480', 'w1790714236686'];
+  const state = page => page.evaluate(([HX, BAD]) => { const h = gH(), by = id => h.find(w => w.id === id);
+    return { pr: gPR()[HX], tv: BAD.map(id => by(id).totalVolume), pc: BAD.map(id => by(id).prCount),
+      ent: BAD.map(id => by(id).exercises.find(e => e.exId === HX)).map(e => ({ equip: e.equip, bwMode: e.bwMode, sets: e.sets })),
+      cut: S.g('prRepair'), flag: localStorage.getItem(BACKEXT_REPAIR_FLAG), hist: localStorage.getItem('jk_hist'), prs: localStorage.getItem('jk_prs') }; }, [HX, BAD]);
+
+  // 1. Dad's device opens the new build: the repair runs once, by itself, before anything syncs.
+  const logs = [];
+  const A = await phone({ seed: dadSeed(), now: NOW });
+  const a = await state(A.page);
+  check('repair (Dad): back-extension record is 75 lb x 12', lb(a.pr.weight) === 75 && a.pr.reps === 12, JSON.stringify(a.pr));
+  check('repair (Dad): record keeps its 9/26 date and is stamped repaired', a.pr.date === '2026-09-26T21:55:54.517Z' && !!a.pr.repaired, JSON.stringify(a.pr));
+  const drop = a.tv.map((t, i) => [25805, 25106, 26186][i] - t);
+  check('repair (Dad): 9/22, 9/26, 9/29 totals each drop 9,000 lb (to 21,723 / 21,024 / 22,104 kg)', a.tv.join() === '21723,21024,22104' && drop.every(d => Math.abs(d * LB - 9000) <= 3), `${a.tv.join()} drop ${drop.map(d => Math.round(d * LB)).join()}`);
+  check('repair (Dad): 9/22 PR count 3 -> 2; 9/26 stays 3; 9/29 stays 1', a.pc.join() === '2,3,1', a.pc.join());
+  check('repair (Dad): entries tidied to equip "other", no bwMode', a.ent.every(e => e.equip === 'other' && e.bwMode === undefined), JSON.stringify(a.ent.map(e => [e.equip, e.bwMode])));
+  const fx = dadHist().filter(w => BAD.includes(w.id)).map(w => JSON.stringify(w.exercises.find(e => e.exId === HX).sets));
+  check('repair (Dad): typed weights/reps untouched', a.ent.every((e, i) => JSON.stringify(e.sets) === fx[i]), '');
+  const other = await A.page.evaluate(([HX]) => gH().map(w => ({ ...w, exercises: w.exercises.filter(e => e.exId !== HX) })).map(w => JSON.stringify(w.exercises)), [HX]);
+  const fxOther = dadHist().map(w => JSON.stringify(w.exercises.filter(e => e.exId !== HX)));
+  check('repair (Dad): every other exercise is byte-identical', other.join('|') === fxOther.join('|'), '');
+  const prOthers = await A.page.evaluate(HX => { const p = { ...gPR() }; delete p[HX]; return JSON.stringify(p); }, HX);
+  const fxPrs = dadPrs(); delete fxPrs[HX];
+  check('repair (Dad): every other PR record is unchanged', prOthers === JSON.stringify(fxPrs), '');
+  const card = await A.page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = cardLifetime().html; return d.textContent; });
+  check('repair (Dad): Top PR becomes Leg Press / Calf Press on the leg press 275lb x 12', /(Leg Press|Calf Press)/i.test(card) && /275lb × 12/.test(card) && !/325|Hyperext/.test(card), card.slice(-90));
+  check('repair (Dad): repair marker recorded for the cloud merge', a.cut && a.cut[HX] && a.flag, JSON.stringify([a.cut, a.flag]));
+  check('repair (Dad): replay agrees with the stored PR counts for the repaired workouts', await A.page.evaluate(BAD => { const m = prAudit().mismatches.map(x => x.id); return BAD.every(id => !m.includes(id)); }, BAD), '');
+  check('repair (Dad): the repair queued a cloud sync', await A.page.evaluate(() => typeof isDirty === 'function' ? isDirty() : true), '');
+
+  // 2. Idempotent / one-shot: a relaunch does nothing; running it by hand does nothing; dropping the flag and
+  //    running again leaves the data byte-identical.
+  A.page.on('console', m => logs.push(m.text()));
+  await A.page.reload(); await A.page.waitForTimeout(300);
+  const a2 = await state(A.page);
+  check('repair: second launch changes nothing (flag holds)', a2.hist === a.hist && a2.prs === a.prs && a2.flag === a.flag, '');
+  check('repair: second launch logs no repair', !logs.some(t => /\[repair\].*fixed/.test(t)), logs.join(' | '));
+  const again = await A.page.evaluate(() => { const r1 = repairBackExtBW(); localStorage.removeItem(BACKEXT_REPAIR_FLAG); const r2 = repairBackExtBW();
+    return { r1, n2: r2 && r2.workouts.length, hist: localStorage.getItem('jk_hist'), prs: localStorage.getItem('jk_prs') }; });
+  check('repair: idempotent (flag blocks; without the flag it finds nothing left to fix)', again.r1 === null && again.n2 === 0 && again.hist === a.hist && again.prs === a.prs, JSON.stringify({ r1: again.r1, n2: again.n2 }));
+
+  // 3. Cloud merge: the existing cloud copy (325, old totals) and a stale device can't bring 325 back.
+  const cloudOld = { jk_hist: dadHist(), jk_prs: dadPrs(), jk_bw: 111.58385572116738, jk_bwlog: bwlog };
+  const m = await A.page.evaluate(([cloud, HX, BAD]) => { const out = mergeBackup(cloud, collectBackup());
+    return { pr: out.jk_prs[HX], tv: BAD.map(id => out.jk_hist.find(w => w.id === id).totalVolume), cut: out.jk_prRepair }; }, [cloudOld, HX, BAD]);
+  check('merge: Dad\'s current cloud copy (325) + repaired device -> 75 lb is what gets written', lb(m.pr.weight) === 75 && m.tv.join() === '21723,21024,22104' && m.cut && m.cut[HX], JSON.stringify(m));
+  // A stale device / watch with "best record wins" writes 325 back over the repaired cloud copy (marker kept, as
+  // its {...cloud,...local} keeps keys it doesn't know). The repaired phone's next pull and push both drop it.
+  const stale = await A.page.evaluate(([cloud, HX]) => { const fixed = mergeBackup(cloud, collectBackup());
+    const staleWrite = { ...fixed, jk_prs: { ...fixed.jk_prs, [HX]: cloud.jk_prs[HX] }, jk_hist: cloud.jk_hist };
+    const push = mergeBackup(staleWrite, collectBackup());
+    // pull: same merge, written into this device's storage (cloudPullMerge's write step)
+    const pulled = mergeBackup(staleWrite, collectBackup()); Object.keys(pulled).forEach(k => localStorage.setItem(k, JSON.stringify(pulled[k])));
+    return { push: push.jk_prs[HX], local: gPR()[HX], staleIn: staleWrite.jk_prs[HX], swap: mergeBackup(collectBackup(), staleWrite).jk_prs[HX] }; }, [cloudOld, HX]);
+  check('merge: a stale device writing 325 back can\'t resurrect it on push', lb(stale.push.weight) === 75 && lb(stale.staleIn.weight) === 325, JSON.stringify(stale));
+  check('merge: ...nor on pull into the repaired phone', lb(stale.local.weight) === 75, JSON.stringify(stale.local));
+  check('merge: ...nor with the sides swapped (stale copy as local)', lb(stale.swap.weight) === 75, JSON.stringify(stale.swap));
+  // A REAL new record after the repair (80 x 12 tonight) still wins over the repaired 75, everywhere.
+  const newer = await A.page.evaluate(([cloud, HX]) => { const p = gPR(); const rec = { weight: 80 / 2.20462, reps: 12, date: new Date(Date.now() + 1000).toISOString() };
+    const staleWrite = { ...cloud, jk_prRepair: S.g('prRepair') };
+    return { a: mergeBackup(staleWrite, { ...collectBackup(), jk_prs: { ...p, [HX]: rec } }).jk_prs[HX], b: mergeBackup({ ...staleWrite, jk_prs: { ...cloud.jk_prs, [HX]: rec } }, collectBackup()).jk_prs[HX] }; }, [cloudOld, HX]);
+  check('merge: a genuine heavier PR logged after the repair still wins (either side)', lb(newer.a.weight) === 80 && lb(newer.b.weight) === 80, JSON.stringify(newer));
+  check('repair (Dad): no page errors', A.errors.length === 0, A.errors.join(' | '));
+  await A.ctx.close();
+
+  // 4. A second device logging in AFTER the cloud got a stale 325 + old workouts back: the login restore clears the
+  //    device flag, so its reload repairs that data, and the marker keeps the stale record out.
+  const C = await phone({ seed: {}, now: NOW });
+  await C.page.evaluate(([cloud, HX]) => { const cut = { [HX]: '2026-10-01T20:00:00.000Z' };
+    applyBundle({ ...cloud, jk_prRepair: cut, jk_prof: { name: 'Dad', username: '@dad', code: '@dad' }, jk_settings: { wUnit: 'lb' } }, { wipe: true }); localStorage.setItem('jk_appVersion', APP_VERSION); }, [cloudOld, HX]);
+  await C.page.reload(); await C.page.waitForTimeout(300);
+  const c = await state(C.page);
+  check('login restore: stale cloud data is repaired on the new device too', lb(c.pr.weight) === 75 && c.tv.join() === '21723,21024,22104' && c.pc.join() === '2,3,1', JSON.stringify({ pr: c.pr, tv: c.tv, pc: c.pc }));
+  check('login restore: earliest repair time kept', c.cut[HX] === '2026-10-01T20:00:00.000Z', JSON.stringify(c.cut));
+  // Restored with ALREADY-TIDIED workouts but a stale 325 record (a watch's best-wins write): enforced at launch.
+  await C.page.evaluate(([cloud, HX]) => { const h = gH(), p = { ...gPR(), [HX]: cloud.jk_prs[HX] };
+    applyBundle({ jk_hist: h, jk_prs: p, jk_prRepair: S.g('prRepair'), jk_prof: gProf(), jk_settings: { wUnit: 'lb' }, jk_bwlog: S.g('bwlog'), jk_bw: gBW() }, { wipe: true }); localStorage.setItem('jk_appVersion', APP_VERSION); }, [cloudOld, HX]);
+  await C.page.reload(); await C.page.waitForTimeout(300);
+  const c2 = await state(C.page);
+  check('login restore: a stale 325 record over tidied workouts is replaced at launch', lb(c2.pr.weight) === 75 && !!c2.pr.repaired, JSON.stringify(c2.pr));
+  check('login restore: no page errors', C.errors.length === 0, C.errors.join(' | '));
+  await C.ctx.close();
+
+  // 5. Unaffected users are untouched, byte for byte: Mr. Roni's Hevy "Back Extension (Weighted Hyperextension)"
+  //    25 lb (unmatched), a back extension already logged right, and his 9/25 Dips "+ Added 230" (not approved here).
+  const rHist = [
+    { id: 'w1774645620000_3', name: 'Pull', date: '2025-03-28T03:07:00.000Z', duration: '53:00', sets: 3, totalVolume: 340, prCount: 1,
+      exercises: [{ exId: 'imp_back_extension_weighted_hyperextension_', name: 'Back Extension (Weighted Hyperextension)', equip: 'other', tracking: 'weight_reps', sets: [{ weight: 11.34, reps: 12, done: true }] }] },
+    wk('2026-09-20', [{ exId: HX, name: HXN, equip: 'other', tracking: 'weight_reps', sets: [{ weight: 25 / LB, reps: 12, done: true }] }], { pr: 1 }),
+    wk('2026-09-25', [{ exId: 'Dips_-_Triceps_Version', name: 'Dips - Triceps Version', equip: 'body only', tracking: 'weight_reps', bwMode: 'added', sets: [{ weight: 230 / LB, reps: 12, done: true }] }], { pr: 1 }),
+    wk('2026-09-27', [{ exId: HX, name: HXN, equip: 'body only', tracking: 'weight_reps', sets: [{ weight: 0, reps: 15, done: true }] }]),
+  ];
+  const rPrs = { Dips_: { weight: 208.2, reps: 12, date: '2026-09-25T18:00:00.000Z' }, [HX]: { weight: 25 / LB, reps: 12, date: '2026-09-20T18:00:00.000Z' } };
+  const R = await phone({ seed: { hist: rHist, prs: rPrs, bw: 229 / LB }, now: NOW });
+  const r = await R.page.evaluate(() => ({ hist: localStorage.getItem('jk_hist'), prs: localStorage.getItem('jk_prs'), cut: localStorage.getItem('jk_prRepair'), flag: localStorage.getItem(BACKEXT_REPAIR_FLAG) }));
+  check('repair: unaffected user (Mr. Roni-shaped) history byte-identical', r.hist === JSON.stringify(rHist), '');
+  check('repair: unaffected user PRs byte-identical, no repair marker, flag set', r.prs === JSON.stringify(rPrs) && r.cut === null && !!r.flag, JSON.stringify(r.cut));
+  check('repair: unaffected user no page errors', R.errors.length === 0, R.errors.join(' | '));
+  await R.ctx.close();
+}
+
 async function popupScrollLock() {
   // Mr. Roni 2026-10-01: "when on the recap page you are able to scroll the background page. That shouldn't be
   // allowed on any popup screen". Every popup pins the page; wheel and touch over it can't move the page; closing
@@ -2281,7 +2432,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, popupScrollLock].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

@@ -36,6 +36,10 @@ total overwrite of someone's entire history — from every other device.
   deleted workouts or delete kept ones.
 - `jk_prs` / cardio PRs: merge per-exercise, **best record wins** (never
   downgrade a heavier/better PR).
+  Exception (PWA v1.10.56): `jk_prRepair` `{exId: ISO}` marks an exercise whose
+  record a data repair LOWERED. For those exIds, a record dated before the ISO
+  time that has no `repaired` field is stale and is dropped before best-wins.
+  Union `jk_prRepair` per key, earliest time wins; never drop the key.
 - `jk_exNotes` (per-exercise notes, written by every client since 2026-08-27):
   **per key, cloud map + this device's PENDING edits overlaid** (a pending key
   absent locally = delete). Each client keeps a device-local set of exIds it has
