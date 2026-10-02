@@ -3128,12 +3128,113 @@ async function categoryChips() {
   check('chips: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+// Switch Exercise in a routine workout -> one prompt on finish to write the switches back to the routine (2026-10-02).
+async function routineSwapPrompt() {
+  const mk = (id, name, muscle) => ({ id, name, muscle, equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true });
+  const cex = [mk('cA', 'Alpha Press', 'chest'), mk('cB', 'Bravo Row', 'back'), mk('cC', 'Charlie Squat', 'legs'), mk('cD', 'Delta Press', 'chest'),
+               mk('cE', 'Echo Row', 'back'), mk('cF', 'Foxtrot Curl', 'biceps'), mk('cG', 'Golf Curl', 'biceps')];
+  const { page, ctx, errors } = await phone({ seed: { cex, routines: [{ id: 'r1', name: 'Push', desc: 'keep me', exercises: ['cA', 'cB', 'cC'] }] } });
+  // File it into a real section first (the boot-time sections migration would otherwise do it mid-test).
+  const R1 = await page.evaluate(() => { migrateRoutineSections(); return gR()[0]; });
+  await page.evaluate(() => { window._cf = []; const o = showConfirm; window.showConfirm = (m, opt) => { _cf.push(m); return o(m, opt); }; });
+  const routine = () => page.evaluate(() => JSON.stringify(gR().find(r => r.id === 'r1')));
+  const reset = () => page.evaluate(R1 => { S.s('routines', [R1]); S.s('hist', []); _cf.length = 0; cm('fsModal'); }, R1);
+  const sw = (ei, id) => page.evaluate(([ei, id]) => { switchEx(ei); toggleAEItem(id); }, [ei, id]);
+  const logSet = () => page.evaluate(() => { const s = aw.exercises[0].sets[0]; s.weight = 50; s.reps = 5; s.done = true; saveAW(); });
+  // Manual finish: OK the "Finish and save" confirm, then answer the routine prompt if one shows. Returns every confirm text.
+  const finish = async answer => {
+    await page.evaluate(() => { finishW(); });
+    await page.waitForTimeout(100); await page.click('#cfOk'); await page.waitForTimeout(250);
+    if (answer && await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open'))) {
+      await page.click(answer === 'yes' ? '#cfOk' : '#cfCancel'); await page.waitForTimeout(250);
+    }
+    return page.evaluate(() => [..._cf]);
+  };
+  const summaryBtn = () => page.evaluate(() => /Update "/.test(document.getElementById('fsContent').textContent));
+
+  // 1) Accept: switch B -> D plus an add, a reorder and a remove in the same session; only the switch is written back.
+  await reset();
+  await page.evaluate(() => startRW('r1')); await logSet();
+  await sw(1, 'cD');
+  const saved = await page.evaluate(() => S.g('activeWorkout').aw.swaps);
+  check('swap prompt: switch is remembered on the saved live workout (survives reload)', JSON.stringify(saved) === '{"cB":"cD"}', JSON.stringify(saved));
+  await page.evaluate(() => { addExToWorkout('cF'); moveEx(0, 1); });
+  await page.evaluate(() => { rmEx(aw.exercises.findIndex(e => e.exId === 'cC')); });
+  let msgs = await finish('yes');
+  check('swap prompt: one prompt after Finish, naming the switch', msgs.length === 2 && /Bravo Row → Delta Press/.test(msgs[1]) && /"Push"/.test(msgs[1]), JSON.stringify(msgs));
+  const after = JSON.parse(await routine());
+  check('swap prompt: accept replaces the switched slot in place (A, D, C)', after.exercises.join() === 'cA,cD,cC', after.exercises.join());
+  check('swap prompt: accept leaves every other routine field alone (name, desc, section)', JSON.stringify({ ...after, exercises: R1.exercises }) === JSON.stringify(R1), JSON.stringify(after));
+  check('swap prompt: the add/reorder/remove from that session are not written back', !after.exercises.includes('cF') && after.exercises.includes('cC') && after.exercises[0] === 'cA');
+  const h = await page.evaluate(() => gH());
+  check('swap prompt: workout still saved; switch bookkeeping not stored in history', h.length === 1 && !('swaps' in h[0]) && h[0].exercises.some(e => e.exId === 'cD'), JSON.stringify(Object.keys(h[0] || {})));
+  check('swap prompt: finish summary has no second "Update routine" button after the prompt', !(await summaryBtn()));
+  await page.screenshot({ path: SHOTS + '/routine-swap-summary.png' });
+
+  // 2) Decline: routine byte-identical.
+  await reset();
+  const before2 = await routine();
+  await page.evaluate(() => startRW('r1')); await logSet(); await sw(0, 'cD');
+  await page.evaluate(() => { finishW(); }); await page.waitForTimeout(100); await page.click('#cfOk'); await page.waitForTimeout(250);
+  const pop = await page.evaluate(() => ({ t: document.getElementById('cfMsg').textContent, ok: document.getElementById('cfOk').textContent, no: document.getElementById('cfCancel').textContent }));
+  check('swap prompt: buttons read "Update routine" / "Keep routine"', pop.ok === 'Update routine' && pop.no === 'Keep routine', JSON.stringify(pop));
+  await page.screenshot({ path: SHOTS + '/routine-swap-prompt.png' });
+  await page.click('#cfCancel'); await page.waitForTimeout(250);
+  check('swap prompt: decline leaves the routine byte-identical', (await routine()) === before2);
+  check('swap prompt: decline still saves the workout', (await page.evaluate(() => gH().length)) === 1);
+  check('swap prompt: no "Update routine" summary button after declining', !(await summaryBtn()));
+
+  // 3) Freestyle: a switch never prompts.
+  await reset();
+  await page.evaluate(() => { startEmpty(); addExToWorkout('cA'); addExToWorkout('cB'); });
+  await sw(0, 'cD'); await logSet();
+  msgs = await finish('yes');
+  check('swap prompt: freestyle workout with a switch shows no prompt', msgs.length === 1 && /Finish/.test(msgs[0]), JSON.stringify(msgs));
+  check('swap prompt: freestyle finish still saves, routine untouched', (await page.evaluate(() => gH().length)) === 1 && (await routine()) === JSON.stringify(R1));
+
+  // 4) Reorder / add / remove / set logging alone never prompt (each on its own, then all together).
+  for (const [label, fn] of [['reorder', () => moveEx(0, 1)], ['add', () => addExToWorkout('cF')], ['remove', () => rmEx(2)],
+                             ['reorder+add+remove', () => { moveEx(0, 1); addExToWorkout('cF'); rmEx(2); }]]) {
+    await reset();
+    await page.evaluate(() => startRW('r1')); await logSet();
+    await page.evaluate(fn);
+    msgs = await finish('yes');
+    check(`swap prompt: ${label} without a switch shows no prompt`, msgs.length === 1, JSON.stringify(msgs));
+    check(`swap prompt: ${label} leaves the routine untouched`, (await routine()) === JSON.stringify(R1));
+  }
+
+  // 5) Several switches (including a chain B -> F -> G) -> exactly one prompt covering all; accept writes all in place.
+  await reset();
+  await page.evaluate(() => startRW('r1')); await logSet();
+  await sw(0, 'cD'); await sw(2, 'cE'); await sw(1, 'cF'); await sw(1, 'cG');
+  msgs = await finish('yes');
+  check('swap prompt: multiple switches give a single prompt', msgs.length === 2, JSON.stringify(msgs));
+  check('swap prompt: the one prompt lists every switch (chain shown as start -> end)', /Alpha Press → Delta Press/.test(msgs[1]) && /Bravo Row → Golf Curl/.test(msgs[1]) && /Charlie Squat → Echo Row/.test(msgs[1]) && !/Foxtrot/.test(msgs[1]), msgs[1]);
+  check('swap prompt: accept applies every switch in its slot (D, G, E)', JSON.parse(await routine()).exercises.join() === 'cD,cG,cE', await routine());
+
+  // 6) Edge cases: switching back cancels; switched-in then removed is a removal; switching an added exercise; auto-finish.
+  for (const [label, fn] of [['switch then switch back', async () => { await sw(0, 'cD'); await sw(0, 'cA'); }],
+                             ['switched-in exercise later removed', async () => { await sw(0, 'cD'); await page.evaluate(() => rmEx(0)); }],
+                             ['switching an exercise added mid-workout', async () => { await page.evaluate(() => addExToWorkout('cF')); await sw(3, 'cG'); }]]) {
+    await reset();
+    await page.evaluate(() => startRW('r1')); await logSet();
+    await fn();
+    msgs = await finish('yes');
+    check(`swap prompt: ${label} -> no prompt, routine untouched`, msgs.length === 1 && (await routine()) === JSON.stringify(R1), JSON.stringify(msgs));
+  }
+  await reset();
+  await page.evaluate(() => startRW('r1')); await logSet(); await sw(0, 'cD');
+  await page.evaluate(() => finishW(true)); await page.waitForTimeout(250);
+  check('swap prompt: auto-finish (nobody there) never prompts, routine untouched', (await page.evaluate(() => _cf.length)) === 0 && (await routine()) === JSON.stringify(R1) && (await page.evaluate(() => gH().length)) === 1);
+  check('swap prompt: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

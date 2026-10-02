@@ -3263,11 +3263,19 @@ function switchEx(ei) { if(aw&&aw.exercises[ei]) openAEModal('workoutReplace',ei
 function replaceExAt(ei,id) {
   if (!aw||!aw.exercises[ei]) return;
   if (aw.exercises.some((e,i)=>i!==ei&&e.exId===id)) { toast('Already in workout','err'); return; }
+  if (aw.routineId) noteSwap(aw.exercises[ei].exId,id);
   const ex=byId(id);
   aw.exercises[ei]={exId:id, name:ex.name, muscle:ex.muscle||'', equip:ex.equip||'', assist:ex.assist||false,
     tracking:ex.tracking||'weight_reps', imgUrl:imgUrl(ex)||null,
     sets:seedSets(id)};
   renderWS();
+}
+// Routine workouts remember each switch as {original exercise: what it is now}, so a
+// chain A->B->C is A->C and switching back to A cancels it (asked about on finish).
+function noteSwap(from,to){
+  const sw=aw.swaps=aw.swaps||{};
+  const k=Object.keys(sw).find(k=>sw[k]===from);
+  if(k!==undefined) sw[k]=to; else sw[from]=to;
 }
 // Reorder exercises within the live session.
 function moveEx(ei,dir) {
@@ -4237,26 +4245,30 @@ function finishW(auto) {
   if (auto) { _finishWContinue(auto,ts); return; }
   showConfirm(ts===0 ? 'No sets logged — finish anyway?' : 'Finish and save this workout?').then(async ok=>{
     if(!ok) return;
-    await maybeUpdateRoutine();
-    _finishWContinue(auto,ts);
+    const asked=await maybeApplySwaps();
+    _finishWContinue(auto,ts,asked);
   });
 }
-// If this workout was started from a routine and its exercises were changed (added, removed
-// or reordered), ask whether to write those changes back to the routine.
-async function maybeUpdateRoutine(){
-  if(!aw||!aw.routineId) return;
-  const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return;
-  const before=(r.exercises||[]).slice();
-  const after=[...new Set(aw.exercises.map(e=>e.exId).filter(x=>x&&x!=='?'))];
-  if(before.length===after.length&&before.every((id,i)=>id===after[i])) return;
-  const nm=id=>{ const e=byId(id); return e?e.name:'exercise'; };
-  const added=after.filter(id=>!before.includes(id)).map(nm), removed=before.filter(id=>!after.includes(id)).map(nm);
-  const parts=[];
-  if(added.length) parts.push('added '+added.join(', '));
-  if(removed.length) parts.push('removed '+removed.join(', '));
-  if(!parts.length) parts.push('changed the order');
-  const yes=await showConfirm('You '+parts.join('; ')+'. Update the routine "'+r.name+'" with these changes?',{okText:'Update routine',cancelText:'Keep original'});
-  if(yes){ r.exercises=after; S.s('routines',rs); toast('Routine updated','ok'); }
+// A routine workout where Switch Exercise was used: one prompt on finish covering every
+// switch. Yes replaces just those slots in the routine's exercise list, in place; adds,
+// removes and reorders from the session never prompt and are never written back
+// (Mr. Roni, 2026-10-02 -- replaces the v1.8.27 any-change prompt). Returns true if asked.
+async function maybeApplySwaps(){
+  if(!aw||!aw.routineId||!aw.swaps) return false;
+  const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return false;
+  const before=r.exercises||[], now=new Set(aw.exercises.map(e=>e.exId));
+  // Only switches of an exercise the routine has, to one still in the session (switched in
+  // then removed = a removal) and not already elsewhere in the routine (no duplicates).
+  const eff={};
+  Object.entries(aw.swaps).forEach(([from,to])=>{
+    if(from!==to&&before.includes(from)&&now.has(to)&&!(before.includes(to)&&!aw.swaps[to])) eff[from]=to;
+  });
+  const pairs=Object.entries(eff); if(!pairs.length) return false;
+  const nm=id=>byId(id).name;
+  const list=pairs.map(([f,t])=>nm(f)+' → '+nm(t)).join(', ');
+  const yes=await showConfirm(`You switched ${list}. Update the routine "${r.name}" with ${pairs.length>1?'these switches':'this switch'}?`,{okText:'Update routine',cancelText:'Keep routine'});
+  if(yes){ r.exercises=before.map(id=>eff[id]||id); S.s('routines',rs); toast('Routine updated','ok'); }
+  return true;
 }
 // Auto-title an untitled workout after whichever exercise had the highest
 // intensity (best estimated 1RM among weight/bodyweight lifts), falling
@@ -4302,7 +4314,7 @@ function buildProgressNotes(rec,preProgress,prList){
   return notes;
 }
 
-function _finishWContinue(auto,ts) {
+function _finishWContinue(auto,ts,asked) {
   clearInterval(wt); skipRest();   // skipRest also hides the rest bar + clears .resting
   // Auto-finish stops the clock at the LAST logged set (awTouch) so the idle period
   // before the auto-trigger isn't counted; a manual finish ends now.
@@ -4317,7 +4329,8 @@ function _finishWContinue(auto,ts) {
   const preProgress={};
   aw.exercises.forEach(e=>{ if(progressTrackable(e.tracking||'weight_reps')) preProgress[e.exId]=evaluateProgress(e.exId); });
   const prList=commitPRs(aw);              // PRs committed ONLY now, on finish
-  const rec={...aw,duration:dur,sets:ts,totalVolume:Math.round(vol),prCount:prList.length,prSets:prList.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps}))};
+  const {swaps:_sw,...awRec}=aw;   // switch bookkeeping stays out of history
+  const rec={...awRec,duration:dur,sets:ts,totalVolume:Math.round(vol),prCount:prList.length,prSets:prList.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps}))};
   // Snapshot the note that was actually in effect for each exercise tonight
   // onto the saved record -- history should show what note applied to THAT
   // workout, not just whatever the note happens to say today. Also strip any
@@ -4332,7 +4345,7 @@ function _finishWContinue(auto,ts) {
   if(!rec.name || rec.name==='Quick Workout') rec.name=autoNameWorkout(rec.exercises);
   // Detect if the workout's exercises differ from its source routine.
   let rid=null,rname='',ids=aw.exercises.map(e=>e.exId);
-  if(aw.routineId){ const r=gR().find(x=>x.id===aw.routineId); if(r){ const o=r.exercises||[]; if(o.length!==ids.length||o.some((id,i)=>id!==ids[i])){ rid=aw.routineId; rname=r.name; } } }
+  if(aw.routineId&&!asked){ const r=gR().find(x=>x.id===aw.routineId); if(r){ const o=r.exercises||[]; if(o.length!==ids.length||o.some((id,i)=>id!==ids[i])){ rid=aw.routineId; rname=r.name; } } }
   const h=gH(); h.push(rec); S.s('hist',h);
   clearAW();
   if (typeof syncMe==='function') syncMe();  // push updated stats to Supabase if configured
@@ -7708,7 +7721,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.67';
+const BUILD = 'v1.10.68';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
