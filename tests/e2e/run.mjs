@@ -1844,10 +1844,10 @@ async function badgeStandard() {
   check('standard: incline push-ups ignored, standard push-ups count (35 = Bronze)', t['Push-up-Maxing'] === 'bronze', t['Push-up-Maxing']);
   // 1000lb Club: the three standard barbell lifts only.
   const big = b => [E(b, 'bench', [[400, 1]]), E('Barbell_Squat', 'Squat (barbell)', [[400, 1]]), E('Barbell_Deadlift', 'Deadlift (barbell)', [[400, 1]])];
-  t = await tiers(big('Smith_Machine_Bench_Press'));
-  check('standard: Smith machine bench does not count toward the 1000lb Club', t['1000lb Club'] === null, t['1000lb Club']);
-  t = await tiers(big('Dumbbell_Bench_Press'));
-  check('standard: dumbbell bench does not count toward the 1000lb Club', t['1000lb Club'] === null, t['1000lb Club']);
+  t = await tiers(big('Smith_Machine_Incline_Bench_Press'));
+  check('standard: Smith machine incline bench does not count toward the 1000lb Club', t['1000lb Club'] === null, t['1000lb Club']);
+  t = await tiers(big('One_Arm_Dumbbell_Bench_Press'));
+  check('standard: one-arm dumbbell bench does not count toward the 1000lb Club', t['1000lb Club'] === null, t['1000lb Club']);
   t = await tiers([...big('Barbell_Bench_Press_-_Medium_Grip').slice(0, 2), E('Sumo_Deadlift', 'Sumo Deadlift', [[400, 1]])]);
   check('standard: sumo deadlift does not count toward the 1000lb Club', t['1000lb Club'] === null, t['1000lb Club']);
   t = await tiers(big('Barbell_Bench_Press_-_Medium_Grip'));
@@ -1890,12 +1890,13 @@ async function badgeStandard() {
   check('standard: Hevy bench + squat + deadlift make the 1000lb Club', r.o['1000lb Club'] === 'earned', r.o['1000lb Club']);
   check('standard: a Hevy "Running" with distance and time imports as a run and counts for Cardio-Maxing', r.o._ex.includes('bi_run_outdoor:distance') && !!r.o['Cardio-Maxing'], JSON.stringify(r.o._ex) + ' ' + r.o['Cardio-Maxing']);
   check('standard: Hevy import has no page errors', r.errors.length === 0, r.errors.join(' | '));
-  r = await imp(['"Bench Press (Smith Machine)",0,normal,405,1,,', '"Front Squat",0,normal,405,5,,', '"Sumo Deadlift",0,normal,405,1,,', '"Chin Up",0,normal,0,25,,', '"Pull Up (Assisted)",0,normal,0,25,,', '"Pull Up (Band)",0,normal,0,25,,', '"Knee Push Up",0,normal,0,90,,', '"Cycling",0,normal,,,30,1800']);
-  check('standard: Hevy Smith bench, front squat, sumo, chin-ups, assisted/band pull-ups, knee push-ups and cycling earn nothing',
+  r = await imp(['"Incline Bench Press (Smith Machine)",0,normal,405,1,,', '"Front Squat",0,normal,405,5,,', '"Sumo Deadlift",0,normal,405,1,,', '"Chin Up",0,normal,0,25,,', '"Pull Up (Assisted)",0,normal,0,25,,', '"Pull Up (Band)",0,normal,0,25,,', '"Knee Push Up",0,normal,0,90,,', '"Cycling",0,normal,,,30,1800']);
+  check('standard: Hevy Smith incline bench, front squat, sumo, chin-ups, assisted/band pull-ups, knee push-ups and cycling earn nothing',
     ['Bench-Maxing', 'Leg-Maxing', '1000lb Club', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing'].every(n => r.o[n] === null), JSON.stringify(r.o));
 }
 async function benchSubstitutes() {
-  // Bench-Maxing ONLY accepts a flat dumbbell bench too (Mr. Roni, 2026-09-30): pair / 0.83 (Saeterbakken 2011), logged per hand.
+  // Bench-Maxing accepts a flat dumbbell bench too (Mr. Roni, 2026-09-30), logged per hand; since 2026-10-02 the pair is
+  // credited x1.15 (was / 0.83) and the Smith machine bench x0.85.
   // Each lift sits on the tier it reached; the badge takes the highest and names the lift. No GOODLIFT points in the popup.
   const { page, ctx, errors } = await phone({ seed: { bw: 180 / LB, prof: { name: 'T', username: '@t', code: '@t', sex: 'male', birthday: '1995-01-01' } }, now: SEP15 });
   await page.evaluate(async () => { loadDB(); for (let i = 0; i < 100 && !dbLoaded; i++) await new Promise(r => setTimeout(r, 100)); });
@@ -1904,37 +1905,175 @@ async function benchSubstitutes() {
     const b = computeBadges().find(x => x.name === 'Bench-Maxing'); return { tier: b.tier || null, desc: b.desc, curV: b.curV, all: b.all && b.all.v, lifts: (b.lifts || []).map(l => [l.label, Math.round(l.v), l.tier || null]), T: badgeT().bench }; }, [exs, wid]);
   let r = await run([E('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press (barbell)', 185), E('Dumbbell_Bench_Press', 'Bench Press (dumbbell)', 100)]);
   const tierOf = (v, T) => v >= T[2] ? 'gold' : v >= T[1] ? 'silver' : v >= T[0] ? 'bronze' : null;
-  check('bench subs: 100 lb dumbbells per hand convert to 241 lb (2 x 100 / 0.83)', JSON.stringify(r.lifts[1]) === JSON.stringify(['Dumbbell bench', 241, tierOf(200 / 0.83, r.T)]), JSON.stringify(r.lifts));
+  check('bench subs: 100 lb dumbbells per hand credit 230 lb (2 x 100 x 1.15)', JSON.stringify(r.lifts[1]) === JSON.stringify(['Dumbbell bench', 230, tierOf(230, r.T)]), JSON.stringify(r.lifts));
   check('bench subs: barbell 185 sits on its own tier', JSON.stringify(r.lifts[0]) === JSON.stringify(['Barbell bench', 185, tierOf(185, r.T)]), JSON.stringify(r.lifts) + ' ' + r.T);
-  check('bench subs: the badge takes the higher tier (the dumbbell one)', r.tier === tierOf(241, r.T) && (r.tier !== tierOf(185, r.T)), `${r.tier} ladder ${r.T}`);
-  check('bench subs: list row names the lift that reached it', /Dumbbell bench 241/.test(r.desc) && r.curV === '241 lb (Dumbbell bench)' && r.all === '241 lb (Dumbbell bench)', `${r.desc} | ${r.curV} | ${r.all}`);
+  check('bench subs: the badge takes the higher tier (the dumbbell one)', r.tier === tierOf(230, r.T) && (r.tier !== tierOf(185, r.T)), `${r.tier} ladder ${r.T}`);
+  check('bench subs: list row names the lift that reached it', /Dumbbell bench 230/.test(r.desc) && r.curV === '230 lb (Dumbbell bench)' && r.all === '230 lb (Dumbbell bench)', `${r.desc} | ${r.curV} | ${r.all}`);
   r = await run([E('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press (barbell)', 300), E('Dumbbell_Bench_Press', 'Bench Press (dumbbell)', 50)]);
   check('bench subs: a stronger barbell bench wins, and the row shows no substitute label', r.tier === tierOf(300, r.T) && r.curV === '300 lb' && !/Dumbbell/.test(r.desc), `${r.tier} ${r.curV} ${r.desc}`);
-  r = await run([E('Smith_Machine_Bench_Press', 'Smith Machine Bench Press', 405)]);
-  check('bench subs: Smith machine bench is not counted (sources contradict a discount; waiting on his call)', r.tier === null && !r.lifts.length, JSON.stringify(r));
+  r = await run([E('Smith_Machine_Bench_Press', 'Smith Machine Bench Press', 400)]);
+  check('bench subs: Smith machine bench counts at -15% (400 -> 340)', JSON.stringify(r.lifts) === JSON.stringify([['Smith machine bench', 340, tierOf(340, r.T)]]), JSON.stringify(r.lifts));
   r = await run([E('Dumbbell_Bench_Press_with_Neutral_Grip', 'Neutral grip', 120), E('Hammer_Grip_Incline_DB_Bench_Press', 'Incline Dumbbell Press', 120), E('Decline_Dumbbell_Bench_Press', 'Decline Dumbbell Bench Press', 120), E('cex7', 'Dumbbell Bench Press', 120)]);
   check('bench subs: neutral-grip, incline, decline and custom "Dumbbell Bench Press" do not count', r.tier === null && !r.lifts.length, JSON.stringify(r.lifts));
   r = await run([E('cex8', 'Bench Press (Dumbbell)', 100)], 'w1789000000000_0');
-  check('bench subs: a Hevy-imported "Bench Press (Dumbbell)" counts as the dumbbell substitute', JSON.stringify(r.lifts) === JSON.stringify([['Dumbbell bench', 241, tierOf(200 / 0.83, r.T)]]), JSON.stringify(r.lifts));
+  check('bench subs: a Hevy-imported "Bench Press (Dumbbell)" counts as the dumbbell substitute', JSON.stringify(r.lifts) === JSON.stringify([['Dumbbell bench', 230, tierOf(230, r.T)]]), JSON.stringify(r.lifts));
   const club = await page.evaluate(() => { S.s('hist', [{ id: 'wl', name: 'W', date: new Date('2026-09-12T12:00:00-06:00').toISOString(), exercises: [['Dumbbell_Bench_Press', 200], ['Barbell_Squat', 400], ['Barbell_Deadlift', 400]].map(([id, lb]) => ({ exId: id, name: id, tracking: 'weight_reps', sets: [{ weight: lb / 2.20462, reps: 1, done: true }] })), duration: '30:00', sets: 1, totalVolume: 0 }]);
     return computeBadges().find(b => b.name === '1000lb Club').earned; });
-  check('bench subs: dumbbells never count toward the 1000lb Club', club === false);
+  check('bench subs: dumbbells count toward the 1000lb Club, credited (2 x 200 x 1.15 + 800)', club === true);
   check('bench subs: live chip on the dumbbell bench is Bench-Maxing', await page.evaluate(() => exerciseBadgeKey({ exId: 'Dumbbell_Bench_Press', name: 'Bench Press (dumbbell)' })) === 'bench');
   // Popup: each lift on its tier, value + exercise; no GOODLIFT points; thresholds kept.
   await run([E('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press (barbell)', 120), E('Dumbbell_Bench_Press', 'Bench Press (dumbbell)', 100)]);
   await page.evaluate(() => { sp('metrics'); badgeInfo('Bench-Maxing'); }); await page.waitForTimeout(300);
   const pop = await page.evaluate(() => { const el = document.getElementById('badgeFullBody'); const rows = [...el.querySelectorAll('.bf-tier')].map(r => r.textContent.replace(/\s+/g, ' ').trim()); return { txt: el.textContent, rows }; });
-  const T = r.T, dbT = tierOf(241, T);
+  const T = r.T, dbT = tierOf(230, T);
   const dbRow = pop.rows.find(x => x.toLowerCase().startsWith(dbT)), belowRow = pop.rows.find(x => x.startsWith('Below Bronze'));
-  check('bench popup: the dumbbell lift sits in its tier row with just exercise + value, no "from X" aside', !!dbRow && /Dumbbell bench\s*241 lb/.test(dbRow) && !/from/i.test(dbRow), JSON.stringify(pop.rows));
+  check('bench popup: the dumbbell lift sits in its tier row with just exercise + value, no "from X" aside', !!dbRow && /Dumbbell bench\s*230 lb/.test(dbRow) && !/from/i.test(dbRow), JSON.stringify(pop.rows));
   check('bench popup: a barbell lift under Bronze shows as Below Bronze', !!belowRow && /Barbell bench\s*120 lb/.test(belowRow), JSON.stringify(pop.rows));
   check('bench popup: no tier row anywhere has a "from X" aside', pop.rows.every(x => !/\bfrom\b/i.test(x)), JSON.stringify(pop.rows));
-  check('bench popup: the dumbbell conversion sourcing moved to the how-to-earn-it text, not the tier row', /÷\s*0\.83/.test(pop.txt) && /Saeterbakken/i.test(pop.txt), pop.txt.slice(0, 600));
+  check('bench popup: the +15% / -15% credit is explained in the how-to-earn-it text, not the tier row', /\+15%/.test(pop.txt) && /-15%/.test(pop.txt) && /115 lb/.test(pop.txt) && !/0\.83|Saeterbakken/.test(pop.txt), pop.txt.slice(0, 900));
   check('bench popup: shows a per-exercise section for the dumbbell substitute', /No barbell bench\? Dumbbell counts too/.test(pop.txt), pop.txt.slice(0, 600));
   check('bench popup: the tier thresholds are still there', T.every(x => pop.txt.includes(x + ' lb')), T.join());
   check('bench popup: no GOODLIFT points shown', !/GOODLIFT|points/i.test(pop.txt), pop.txt.slice(0, 300));
   await page.screenshot({ path: `${SHOTS}/bench-subs-popup.png` });
   check('bench subs: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function maxingStandards() {
+  // Mr. Roni, locked 2026-09-29, amended 2026-10-02 4:29-4:32pm: one standard lift per Maxing badge / 1000lb Club leg.
+  // Bench, overhead press and the 1000lb bench leg also take dumbbells (+15% of both together) and Smith machine (-15%);
+  // the credit only feeds the badge, never the set, its PR or the strength ranking. Real exercise-db loaded throughout.
+  const { page, ctx, errors } = await phone({ seed: { bw: 180 / LB, prof: { name: 'T', username: '@t', code: '@t', sex: 'male', birthday: '1995-01-01' } }, now: SEP15 });
+  await page.evaluate(async () => { loadDB(); for (let i = 0; i < 100 && !dbLoaded; i++) await new Promise(r => setTimeout(r, 100)); });
+  const E = (exId, name, sets, tracking = 'weight_reps') => ({ exId, name, muscle: 'chest', tracking, sets: sets.map(([w, r]) => ({ weight: tracking === 'distance' ? w : w / LB, reps: r, done: true })) });
+  const B = (exs, wid = 'wlive') => page.evaluate(([exs, wid]) => { S.s('hist', [{ id: wid, name: 'W', date: new Date('2026-09-12T12:00:00-06:00').toISOString(), exercises: exs, duration: '30:00', sets: 1, totalVolume: 0 }]);
+    const o = {}; computeBadges().forEach(b => { o[b.name] = { tier: b.tier || (b.earned ? 'earned' : null), curV: b.curV, desc: b.desc, lifts: (b.lifts || []).map(l => [l.label, Math.round(l.v)]), secs: (b.sections || []).map(x => x.rows.map(r => r.join(': ')).join()) }; });
+    o._T = { bench: badgeT().bench, ohp: badgeT().ohpFrac.map(f => f * gBW() * 2.20462) }; return o; }, [exs, wid]);
+  const tierOf = (v, T) => v >= T[2] ? 'gold' : v >= T[1] ? 'silver' : v >= T[0] ? 'bronze' : null;
+  // Every pinned id is a real library entry.
+  const ids = ['Barbell_Bench_Press_-_Medium_Grip', 'Dumbbell_Bench_Press', 'Smith_Machine_Bench_Press', 'Standing_Military_Press', 'Standing_Dumbbell_Press', 'Smith_Machine_Overhead_Shoulder_Press', 'Barbell_Squat', 'Barbell_Deadlift', 'Pullups', 'Pushups', 'Running_Treadmill', 'Jogging_Treadmill'];
+  const miss = await page.evaluate(async ids => { const raw = await (await fetch(DB_URL)).json(); return ids.filter(id => !raw.some(e => e.id === id)); }, ids);
+  check('maxing: every pinned standard id exists in the real exercise-db dataset (876 entries)', miss.length === 0, miss.join());
+
+  // Cardio-Maxing: running only; bike, rower, elliptical, stair machines and trail walking earn nothing, even though they are cardio.
+  let r = await B([E('Bicycling_Stationary', 'Bicycling, Stationary', [[6, 18]], 'distance'), E('Recumbent_Bike', 'Recumbent Bike', [[6, 18]], 'distance'), E('Bicycling', 'Bicycling', [[10, 25]], 'distance')]);
+  check('maxing: stationary, recumbent and road bike rides no longer feed Cardio-Maxing', r['Cardio-Maxing'].tier === null, JSON.stringify(r['Cardio-Maxing']));
+  r = await B([E('Rowing_Stationary', 'Rowing, Stationary', [[3, 15]], 'distance'), E('Elliptical_Trainer', 'Elliptical Trainer', [[3, 15]], 'distance'), E('Stairmaster', 'Stairmaster', [[3, 15]], 'distance'), E('Trail_Running_Walking', 'Trail Running/Walking', [[3, 18]], 'distance')]);
+  check('maxing: rower, elliptical, Stairmaster and trail running/walking earn no Cardio-Maxing', r['Cardio-Maxing'].tier === null, JSON.stringify(r['Cardio-Maxing']));
+  r = await B([E('Running_Treadmill', 'Running, Treadmill', [[3, 21]], 'distance')]);
+  const tread = r['Cardio-Maxing'].tier;
+  r = await B([E('bi_run_outdoor', 'Running (outdoor)', [[3, 21]], 'distance')]);
+  check('maxing: outdoor and treadmill runs at the same pace earn the same Cardio-Maxing tier', !!tread && r['Cardio-Maxing'].tier === tread, `${tread} vs ${r['Cardio-Maxing'].tier}`);
+  r = await B([E('Jogging_Treadmill', 'Jogging, Treadmill', [[3, 21]], 'distance')]);
+  check('maxing: Jogging, Treadmill (the second treadmill id) earns the same tier too', r['Cardio-Maxing'].tier === tread, JSON.stringify(r['Cardio-Maxing']));
+
+  // Pull-up-Maxing: strict palms-away pull-ups only.
+  r = await B([E('Chin-Up', 'Chin-Up', [[0, 25]], 'bodyweight_reps'), E('Band_Assisted_Pull-Up', 'Band Assisted Pull-Up', [[0, 25]], 'bodyweight_reps'), E('Scapular_Pull-Up', 'Scapular Pull-Up', [[0, 25]], 'bodyweight_reps'), E('Mixed_Grip_Chin', 'Mixed Grip Chin', [[0, 25]], 'bodyweight_reps')]);
+  check('maxing: chin-ups, band-assisted, scapular and mixed-grip chins no longer feed Pull-up-Maxing', r['Pull-up-Maxing'].tier === null, JSON.stringify(r['Pull-up-Maxing']));
+  r = await B([E('V-Bar_Pullup', 'V-Bar Pullup', [[0, 25]], 'bodyweight_reps'), E('Pullups', 'Pullups', [[0, 15]], 'bodyweight_reps')]);
+  check('maxing: V-bar pull-ups ignored, 15 strict pull-ups = Silver', r['Pull-up-Maxing'].tier === 'silver', JSON.stringify(r['Pull-up-Maxing']));
+  // Push-ups, squat, deadlift: no variants.
+  r = await B([E('Push-Up_Wide', 'Push-Up Wide', [[0, 90]], 'bodyweight_reps'), E('Decline_Push-Up', 'Decline Push-Up', [[0, 90]], 'bodyweight_reps'), E('Pushups', 'Pushups', [[0, 30]], 'bodyweight_reps')]);
+  check('maxing: wide and decline push-ups ignored, 30 standard push-ups = Bronze', r['Push-up-Maxing'].tier === 'bronze', JSON.stringify(r['Push-up-Maxing']));
+  r = await B([E('Barbell_Squat_To_A_Bench', 'Barbell Squat To A Bench', [[400, 5]]), E('Front_Barbell_Squat', 'Front Barbell Squat', [[400, 5]])]);
+  check('maxing: squat-to-a-bench and front squat earn no Leg-Maxing', r['Leg-Maxing'].tier === null, JSON.stringify(r['Leg-Maxing']));
+
+  // Bench-Maxing: barbell 100%, dumbbell pair +15%, Smith -15%. 180 lb man's ladder from the app.
+  r = await B([E('Dumbbell_Bench_Press', 'Dumbbell Bench Press', [[50, 1]])]);
+  check('maxing: two 50 lb dumbbells (logged 50 per hand) credit 115 lb toward Bench-Maxing', JSON.stringify(r['Bench-Maxing'].lifts) === JSON.stringify([['Dumbbell bench', 115]]), JSON.stringify(r['Bench-Maxing'].lifts));
+  r = await B([E('Smith_Machine_Bench_Press', 'Smith Machine Bench Press', [[100, 1]])]);
+  check('maxing: 100 lb on the Smith machine bench credits 85 lb', JSON.stringify(r['Bench-Maxing'].lifts) === JSON.stringify([['Smith machine bench', 85]]), JSON.stringify(r['Bench-Maxing'].lifts));
+  r = await B([E('Barbell_Bench_Press_-_Medium_Grip', 'Barbell Bench Press - Medium Grip', [[100, 1]]), E('Bench_Press_-_Powerlifting', 'Bench Press - Powerlifting', [[110, 1]])]);
+  check('maxing: barbell flat bench (both library ids) credits exactly what was lifted', JSON.stringify(r['Bench-Maxing'].lifts) === JSON.stringify([['Barbell bench', 110]]), JSON.stringify(r['Bench-Maxing'].lifts));
+  const T = r._T.bench, sm = Math.ceil(T[0] / 0.85) - 1;   // a Smith lift that would be Bronze at face value but not after -15%
+  r = await B([E('Smith_Machine_Bench_Press', 'Smith Machine Bench Press', [[T[0], 1]])]);
+  check(`maxing: a Smith bench exactly at the Bronze line (${T[0]} lb) falls below it once credited -15%`, r['Bench-Maxing'].tier === null, JSON.stringify(r['Bench-Maxing']));
+  const db = Math.ceil(T[1] / 2.3);   // per hand, enough for Silver only with the +15%
+  r = await B([E('Dumbbell_Bench_Press', 'Dumbbell Bench Press', [[db, 1]])]);
+  check(`maxing: ${db} lb dumbbells per hand reach Silver (${T[1]}) only because of the +15%`, r['Bench-Maxing'].tier === tierOf(db * 2.3, T) && tierOf(db * 2, T) !== r['Bench-Maxing'].tier, `${JSON.stringify(r['Bench-Maxing'])} ladder ${T}`);
+  r = await B([E('One_Arm_Dumbbell_Bench_Press', 'One Arm Dumbbell Bench Press', [[200, 1]]), E('Dumbbell_Bench_Press_with_Neutral_Grip', 'Dumbbell Bench Press with Neutral Grip', [[200, 1]]), E('Smith_Machine_Close-Grip_Bench_Press', 'Smith Machine Close-Grip Bench Press', [[500, 1]]), E('Smith_Machine_Incline_Bench_Press', 'Smith Machine Incline Bench Press', [[500, 1]]), E('Close-Grip_Barbell_Bench_Press', 'Close-Grip Barbell Bench Press', [[500, 1]]), E('Machine_Bench_Press', 'Machine Bench Press', [[500, 1]])]);
+  check('maxing: one-arm / neutral-grip dumbbell, close-grip / incline Smith, close-grip barbell and the chest-press machine earn no Bench-Maxing', r['Bench-Maxing'].tier === null && !r['Bench-Maxing'].lifts.length, JSON.stringify(r['Bench-Maxing']));
+
+  // Shoulder-Maxing: standing barbell 100%, standing dumbbell pair +15%, Smith -15%. 5 reps, vs 180 lb body weight.
+  const O = r._T.ohp;
+  r = await B([E('Standing_Dumbbell_Press', 'Standing Dumbbell Press', [[50, 5]])]);
+  check('maxing: standing dumbbell press 2 x 50 credits 115 lb toward Shoulder-Maxing', JSON.stringify(r['Shoulder-Maxing'].lifts) === JSON.stringify([['Dumbbell overhead press', 115]]) && r['Shoulder-Maxing'].tier === tierOf(115, O), JSON.stringify(r['Shoulder-Maxing']) + ' ' + O);
+  r = await B([E('Smith_Machine_Overhead_Shoulder_Press', 'Smith Machine Overhead Shoulder Press', [[100, 5]])]);
+  check('maxing: Smith overhead press 100 lb credits 85 lb', JSON.stringify(r['Shoulder-Maxing'].lifts) === JSON.stringify([['Smith machine overhead press', 85]]) && r['Shoulder-Maxing'].tier === tierOf(85, O), JSON.stringify(r['Shoulder-Maxing']));
+  r = await B([E('Standing_Military_Press', 'Standing Military Press', [[95, 5]]), E('Standing_Dumbbell_Press', 'Standing Dumbbell Press', [[40, 5]])]);
+  check('maxing: barbell 95 x5 credits 95 (no bonus) and the 2 x 40 dumbbells credit 92; badge names the better lift', JSON.stringify(r['Shoulder-Maxing'].lifts) === JSON.stringify([['Barbell overhead press', 95], ['Dumbbell overhead press', 92]]) && r['Shoulder-Maxing'].curV === '95 lb x5', JSON.stringify(r['Shoulder-Maxing']));
+  r = await B([E('Standing_Dumbbell_Press', 'Standing Dumbbell Press', [[60, 5]])]);
+  check('maxing: list row and popup value name the dumbbell lift that set the tier', r['Shoulder-Maxing'].curV === '138 lb x5 (Dumbbell overhead press)' && /Dumbbell overhead press 138/.test(r['Shoulder-Maxing'].desc), JSON.stringify(r['Shoulder-Maxing']));
+  r = await B([E('Dumbbell_Shoulder_Press', 'Dumbbell Shoulder Press', [[100, 5]]), E('Seated_Barbell_Military_Press', 'Seated Barbell Military Press', [[200, 5]]), E('Push_Press', 'Push Press', [[200, 5]]), E('Standing_Alternating_Dumbbell_Press', 'Standing Alternating Dumbbell Press', [[100, 5]]), E('Standing_Palms-In_Dumbbell_Press', 'Standing Palms-In Dumbbell Press', [[100, 5]]), E('Arnold_Dumbbell_Press', 'Arnold Dumbbell Press', [[100, 5]]), E('Machine_Shoulder_Military_Press', 'Machine Shoulder (Military) Press', [[300, 5]]), E('Standing_Barbell_Press_Behind_Neck', 'Standing Barbell Press Behind Neck', [[200, 5]])]);
+  check('maxing: seated dumbbell / seated barbell, push press, alternating, palms-in, Arnold, machine and behind-the-neck presses earn no Shoulder-Maxing', r['Shoulder-Maxing'].tier === null && !r['Shoulder-Maxing'].lifts.length, JSON.stringify(r['Shoulder-Maxing']));
+  r = await B([E('Standing_Military_Press', 'Standing Military Press', [[300, 4]])]);
+  check('maxing: Shoulder-Maxing still needs 5 reps', r['Shoulder-Maxing'].tier === null, JSON.stringify(r['Shoulder-Maxing']));
+
+  // 1000lb Club: bench leg takes barbell / dumbbell +15% / Smith -15%; squat and deadlift no variants.
+  const club = b => [b, E('Barbell_Squat', 'Barbell Squat', [[400, 1]]), E('Barbell_Deadlift', 'Barbell Deadlift', [[400, 1]])];
+  r = await B(club(E('Dumbbell_Bench_Press', 'Dumbbell Bench Press', [[87, 1]])));
+  check('maxing: 1000lb Club with 2 x 87 lb dumbbells: 200 lb credited + 800 = earned', r['1000lb Club'].tier === 'earned' && /200 lb \(Dumbbell bench, credited\)/.test(r['1000lb Club'].secs[0]), JSON.stringify(r['1000lb Club']));
+  r = await B(club(E('Dumbbell_Bench_Press', 'Dumbbell Bench Press', [[86, 1]])));
+  check('maxing: 1000lb Club with 2 x 86 lb dumbbells: 198 credited, total 998, not earned', r['1000lb Club'].tier === null, JSON.stringify(r['1000lb Club']));
+  r = await B(club(E('Smith_Machine_Bench_Press', 'Smith Machine Bench Press', [[200, 1]])));
+  check('maxing: 1000lb Club with a 200 lb Smith bench: 170 credited, total 970, not earned', r['1000lb Club'].tier === null && /970 lb/.test(r['1000lb Club'].desc), JSON.stringify(r['1000lb Club']));
+  r = await B(club(E('Smith_Machine_Bench_Press', 'Smith Machine Bench Press', [[236, 1]])));
+  check('maxing: 1000lb Club with a 236 lb Smith bench: 201 credited, earned', r['1000lb Club'].tier === 'earned', JSON.stringify(r['1000lb Club']));
+  r = await B(club(E('Barbell_Bench_Press_-_Medium_Grip', 'Barbell Bench Press - Medium Grip', [[200, 1]])));
+  check('maxing: 1000lb Club with a 200 lb barbell bench: exactly 1000, earned, no credit label', r['1000lb Club'].tier === 'earned' && !/credited/.test(r['1000lb Club'].secs[0]), JSON.stringify(r['1000lb Club']));
+  r = await B([E('Barbell_Bench_Press_-_Medium_Grip', 'b', [[300, 1]]), E('Smith_Machine_Squat', 'Smith Machine Squat', [[400, 1]]), E('Romanian_Deadlift', 'Romanian Deadlift', [[400, 1]]), E('Trap_Bar_Deadlift', 'Trap Bar Deadlift', [[400, 1]])]);
+  check('maxing: Smith squat, Romanian and trap-bar deadlift never fill the 1000lb Club legs', r['1000lb Club'].tier === null, JSON.stringify(r['1000lb Club']));
+
+  // Hevy imports: matched on exercise identity + variant only, no provenance flag. Tricky real Hevy names.
+  const imp = 'w1789000000000_0';
+  r = await B([E('cex1', 'Bench Press (Smith Machine)', [[100, 1]]), E('cex2', 'Bench Press (Dumbbell)', [[50, 1]])], imp);
+  check('maxing: Hevy "Bench Press (Smith Machine)" credits 85, "Bench Press (Dumbbell)" 115', JSON.stringify(r['Bench-Maxing'].lifts) === JSON.stringify([['Dumbbell bench', 115], ['Smith machine bench', 85]]), JSON.stringify(r['Bench-Maxing'].lifts));
+  r = await B([E('Standing_Military_Press', 'Overhead Press (Dumbbell)', [[50, 5]]), E('cex3', 'Overhead Press (Smith Machine)', [[100, 5]])], imp);
+  check('maxing: Hevy "Overhead Press (Dumbbell)" credits as dumbbells (115), not as the barbell press, and the Smith one 85', JSON.stringify(r['Shoulder-Maxing'].lifts) === JSON.stringify([['Dumbbell overhead press', 115], ['Smith machine overhead press', 85]]), JSON.stringify(r['Shoulder-Maxing'].lifts));
+  r = await B([E('Dumbbell_Bench_Press', 'Single Arm Dumbbell Bench Press', [[120, 1]]), E('cex4', 'Incline Bench Press (Smith Machine)', [[400, 1]]), E('cex5', 'Close Grip Bench Press (Smith Machine)', [[400, 1]]), E('cex6', 'Bench Press - Close Grip (Barbell)', [[400, 1]])], imp);
+  check('maxing: Hevy single-arm dumbbell, Smith incline / close-grip and barbell close-grip bench earn no Bench-Maxing', r['Bench-Maxing'].tier === null && !r['Bench-Maxing'].lifts.length, JSON.stringify(r['Bench-Maxing']));
+  r = await B([E('cex7', 'Seated Overhead Press (Dumbbell)', [[100, 5]]), E('cex8', 'Seated Overhead Press (Barbell)', [[200, 5]]), E('cex9', 'Shoulder Press (Dumbbell)', [[100, 5]]), E('cex10', 'Push Press', [[200, 5]]), E('cex11', 'Arnold Press (Dumbbell)', [[100, 5]])], imp);
+  check('maxing: Hevy seated presses, "Shoulder Press (Dumbbell)", push press and Arnold press earn no Shoulder-Maxing', r['Shoulder-Maxing'].tier === null && !r['Shoulder-Maxing'].lifts.length, JSON.stringify(r['Shoulder-Maxing']));
+  r = await B([E('cex12', 'Squat (Smith Machine)', [[400, 5]]), E('cex13', 'Chin Up', [[0, 25]], 'bodyweight_reps'), E('cex14', 'Cycling', [[30, 60]], 'distance')], imp);
+  check('maxing: Hevy Smith squat, chin-ups and cycling earn nothing', r['Leg-Maxing'].tier === null && r['Pull-up-Maxing'].tier === null && r['Cardio-Maxing'].tier === null, JSON.stringify([r['Leg-Maxing'], r['Pull-up-Maxing'], r['Cardio-Maxing']]));
+
+  // Live logger chip: fires on all six bench / overhead-press ids, not on look-alikes.
+  const chip = await page.evaluate(() => ['Barbell_Bench_Press_-_Medium_Grip', 'Dumbbell_Bench_Press', 'Smith_Machine_Bench_Press', 'Standing_Military_Press', 'Standing_Dumbbell_Press', 'Smith_Machine_Overhead_Shoulder_Press', 'Smith_Machine_Incline_Bench_Press', 'Dumbbell_Shoulder_Press'].map(id => exerciseBadgeKey({ exId: id, name: id }) || '-').join());
+  check('maxing: live chip on barbell / dumbbell / Smith bench and overhead press only', chip === 'bench,bench,bench,ohp,ohp,ohp,-,-', chip);
+  const live = await page.evaluate(() => { S.s('hist', []); const v = badgeTierForKey('ohp', [{ exercises: [{ exId: 'Standing_Dumbbell_Press', name: 'Standing Dumbbell Press', tracking: 'weight_reps', sets: [{ weight: 60 / 2.20462, reps: 5, done: true }] }] }]); return [Math.round(v.value), v.by]; });
+  check('maxing: live Shoulder-Maxing chip uses the credited 138 lb for 2 x 60 dumbbells', JSON.stringify(live) === JSON.stringify([138, 'Dumbbell overhead press']), JSON.stringify(live));
+
+  // The credit never touches the set, its PR or the strength ranking.
+  const keep = await page.evaluate(() => {
+    const w = { id: 'wk', name: 'W', date: new Date('2026-09-12T12:00:00-06:00').toISOString(), duration: '30:00', sets: 2, totalVolume: 0,
+      exercises: [{ exId: 'Dumbbell_Bench_Press', name: 'Dumbbell Bench Press', tracking: 'weight_reps', sets: [{ weight: 50 / 2.20462, reps: 1, done: true }] },
+        { exId: 'Smith_Machine_Overhead_Shoulder_Press', name: 'Smith Machine Overhead Shoulder Press', tracking: 'weight_reps', sets: [{ weight: 100 / 2.20462, reps: 5, done: true }] }] };
+    S.s('prs', {}); S.s('hist', [w]); commitPRs(w); computeBadges();
+    const h = gH()[0], p = gPR();
+    return { set1: Math.round(h.exercises[0].sets[0].weight * 2.20462), set2: Math.round(h.exercises[1].sets[0].weight * 2.20462),
+      pr1: Math.round((p.Dumbbell_Bench_Press || {}).weight * 2.20462), pr2: Math.round((p.Smith_Machine_Overhead_Shoulder_Press || {}).weight * 2.20462),
+      f1: exStrengthFactor('Dumbbell_Bench_Press', 'chest'), f2: exStrengthFactor('Smith_Machine_Bench_Press', 'chest') };
+  });
+  check('maxing: credit never changes the stored set weight (50 dumbbell, 100 Smith)', keep.set1 === 50 && keep.set2 === 100, JSON.stringify(keep));
+  check('maxing: credit never changes the exercise\'s own PR (50, 100)', keep.pr1 === 50 && keep.pr2 === 100, JSON.stringify(keep));
+  check('maxing: strength ranking factors unchanged (dumbbell x2 per hand, machine x0.9)', keep.f1 === 2 && keep.f2 === 0.9, JSON.stringify(keep));
+
+  // Plank: scored by hold time, never by rep count, and never feeds a rep badge.
+  const plank = await page.evaluate(() => { S.s('holdPR', {}); S.s('prs', {});
+    const mk = (tracking, sets) => ({ exercises: [{ exId: 'Plank', name: 'Plank', tracking, sets }] });
+    commitPRs(mk('duration', [{ weight: 45, reps: 0, done: true }]));
+    const a = commitPRs(mk('duration', [{ weight: 30, reps: 99, done: true }])).length;   // shorter hold, huge stray reps: no PR
+    const b = commitPRs(mk('duration', [{ weight: 90, reps: 0, done: true }])).length;
+    return { a, b, sec: (gHoldPR().Plank || {}).sec, track: byId('Plank').tracking, chip: exerciseBadgeKey({ exId: 'Plank', name: 'Plank', tracking: 'duration' }) }; });
+  check('maxing: plank is timed and its PR is the longest hold (90 s), stray reps ignored', plank.track === 'duration' && plank.a === 0 && plank.b === 1 && plank.sec === 90, JSON.stringify(plank));
+  check('maxing: a plank never feeds a rep-counted badge', plank.chip === null, JSON.stringify(plank));
+
+  // Popup text explains the credit.
+  await page.evaluate(() => { S.s('hist', []); sp('metrics'); badgeInfo('Shoulder-Maxing'); }); await page.waitForTimeout(250);
+  const pop = await page.evaluate(() => document.getElementById('badgeFullBody').textContent);
+  check('maxing: Shoulder-Maxing popup explains dumbbell +15% (115 lb example) and Smith -15%', /\+15%/.test(pop) && /-15%/.test(pop) && /115 lb/.test(pop) && /Seated/.test(pop), pop.slice(0, 700));
+  const how = await page.evaluate(() => [BADGE_HOW['1000lb Club'], BADGE_DETAIL['1000lb Club'].how, BADGE_HOW['Bench-Maxing']].join(' || '));
+  check('maxing: 1000lb Club and Bench-Maxing text name the dumbbell +15% / Smith -15% bench', (how.match(/\+15%/g) || []).length === 3 && (how.match(/-15%/g) || []).length === 3, how);
+  check('maxing: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
 async function badgePopupSections() {
@@ -2616,10 +2755,13 @@ async function navPinned() {
   const OPEN = [...moIds.map(id => [id, `om('${id}')`, `cm('${id}')`]),
     ['achievements', 'openAch()', 'closeAch()'], ['recap', 'openRecap(2026,7)', 'closeRecap()'], ['badge', 'badgeInfo(computeBadges()[0].name)', 'closeBadgeFull()']];
   const bad = [];
+  // A loaded machine (other headless browsers running) can still be laying out after the fixed waits: wait until
+  // scrollY holds still for 5 frames before reading it, so the check measures the lock, not render lag.
+  const settle = () => page.evaluate(() => new Promise(res => { let last = -1, same = 0, n = 0; const f = () => { const y = scrollY; same = y === last ? same + 1 : 0; last = y; if (same >= 5 || ++n > 120) res(); else requestAnimationFrame(f); }; requestAnimationFrame(f); }));
   for (const [name, open, close] of OPEN) {
-    await page.evaluate(() => { sp('leaderboard'); window.scrollTo(0, 500); }); await page.waitForTimeout(60);
+    await page.evaluate(() => { sp('leaderboard'); window.scrollTo(0, 500); }); await page.waitForTimeout(60); await settle();
     const y0 = await page.evaluate(() => window.scrollY);
-    await page.evaluate(open); await page.waitForTimeout(120);
+    await page.evaluate(open); await page.waitForTimeout(120); await settle();
     const o = await nav();
     await swipe(300, 195, 700); await page.mouse.move(195, 420); await page.mouse.wheel(0, 500); await page.waitForTimeout(120);
     const o2 = await nav();
@@ -2991,7 +3133,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
