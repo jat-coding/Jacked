@@ -2661,6 +2661,44 @@ async function navPinned() {
   check('nav pinned: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function importUnits() {
+  // Mr. Roni 2026-10-02: importer must never store a pound value as kg. His Hevy rows (stored history, @jat backup:
+  // 2025-05-08 "Seated Palms Up Wrist Curl" 55 x 12, 55 x 15, 45 x 12 -> 24.95 / 24.95 / 20.41 kg, i.e. correct).
+  // A bare "weight" header used to be read as kg: 55 lb -> 55 kg -> shown as 121 lb.
+  const WC = 'Seated_Dumbbell_Palms-Up_Wrist_Curl';
+  const rows = ['"Arms","8 May 2025, 03:52","8 May 2025, 04:40","Seated Palms Up Wrist Curl",0,"normal",55,12', '"Arms","8 May 2025, 03:52","8 May 2025, 04:40","Seated Palms Up Wrist Curl",1,"normal",55,15',
+    '"Arms","8 May 2025, 03:52","8 May 2025, 04:40","Seated Palms Up Wrist Curl",2,"normal",45,12'];
+  const head = w => `title,start_time,end_time,exercise_title,set_index,set_type,${w},reps`;
+  const { page, ctx, errors } = await phone({ now: SEP15 });
+  await dbReady(page);
+  const run = async (csv, answer) => page.evaluate(async ([csv, answer]) => {
+    S.s('hist', []); S.s('prs', {});
+    const p = importWorkoutCsv(csv); let asked = null;
+    for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 50)); if (document.getElementById('confirmModal').classList.contains('open')) { asked = document.getElementById('cfMsg').textContent; break; } }
+    if (asked) { if (answer === 'lb') document.getElementById('cfOk').click(); else if (answer === 'kg') document.getElementById('cfCancel').click(); else document.getElementById('confirmModal').click(); }
+    await p;
+    const w = gH()[0], e = w && w.exercises[0];
+    return { asked, n: gH().length, exId: e && e.exId, kg: e && e.sets.map(s => s.weight), shown: e && e.sets.map(s => dW(s.weight)), pr: gPR()[e && e.exId], vol: w && w.totalVolume };
+  }, [csv, answer]);
+  const lbOK = r => r.n === 1 && r.exId === WC && r.kg.join() === '24.95,24.95,20.41' && r.shown.join() === '55,55,45' && Math.abs(r.pr.weight - 24.95) < 0.01;
+  let r = await run([head('weight_lbs'), ...rows].join('\n'));
+  check('import units: Hevy weight_lbs 55/55/45 -> 24.95/24.95/20.41 kg, shown 55/55/45 lb, PR 55 lb, no question', lbOK(r) && !r.asked, JSON.stringify(r));
+  r = await run([head('weight_kg'), ...rows.map(x => x.replace(',55,', ',24.95,').replace(',45,', ',20.41,'))].join('\n'));
+  check('import units: Hevy weight_kg 24.95/20.41 stored as is (55/45 lb), no question', lbOK(r) && !r.asked, JSON.stringify(r));
+  r = await run([head('weight'), ...rows].join('\n'), 'lb');
+  check('import units: bare "weight" column asks pounds or kilograms (never assumes kg)', !!r.asked && /pounds or kilograms/.test(r.asked), JSON.stringify(r));
+  check('import units: bare "weight", answered Pounds -> 55 lb stays 55 lb (24.95 kg), not 121 lb', lbOK(r), JSON.stringify(r));
+  r = await run([head('weight'), ...rows].join('\n'), 'kg');
+  check('import units: bare "weight", answered Kilograms -> stored as kg (55 kg)', r.n === 1 && r.kg.join() === '55,55,45', JSON.stringify(r));
+  r = await run([head('weight'), ...rows].join('\n'), 'dismiss');
+  check('import units: question dismissed -> nothing imported', r.n === 0, JSON.stringify(r));
+  r = await run([head('weight') + ',weight_unit', ...rows.map(x => x + ',lbs')].join('\n'));
+  check('import units: "Weight Unit" column lbs -> converted, no question', lbOK(r) && !r.asked, JSON.stringify(r));
+  r = await run(['Title,Start Time,End Time,Exercise Title,Set Index,Set Type,Weight (lbs),Reps', ...rows].join('\n'));
+  check('import units: "Weight (lbs)" header -> converted, no question', lbOK(r) && !r.asked, JSON.stringify(r));
+  check('import units: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 async function topPRRaw() {
   // Mr. Roni 2026-10-01 (4:26-6:22pm): Lifetime Stats "Top PR" = heaviest RAW weight lifted, reps only break a tie;
   // plain bodyweight moves never count; derived from history so stored records with body weight in them can't win.
@@ -2813,7 +2851,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, topPRRaw, monthReset, dipRepair, hevyRelabel].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, topPRRaw, monthReset, dipRepair, hevyRelabel].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

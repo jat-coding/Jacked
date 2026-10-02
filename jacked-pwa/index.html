@@ -7262,6 +7262,14 @@ function parseImportDate(s) {
 
 // Import a workout-log CSV (Hevy and similar) into history; recompute PRs so the
 // calendar fills in and badges can unlock.
+// The file doesn't say pounds or kilograms: ask. 'lb' | 'kg' | null (dismissed: import nothing).
+async function askImportUnit(){
+  const cancel=document.getElementById('cfCancel'); let kg=false; const h=()=>{ kg=true; };
+  cancel.addEventListener('click',h);
+  const ok=await showConfirm("This file doesn't say whether its weights are in pounds or kilograms. Which are they?",{okText:'Pounds (lb)',cancelText:'Kilograms (kg)'});
+  cancel.removeEventListener('click',h);
+  return ok?'lb':kg?'kg':null;
+}
 async function importWorkoutCsv(text) {
   const rows=parseCSV(text);
   if (rows.length<2){ toast('Could not read that file','err'); return; }
@@ -7271,7 +7279,8 @@ async function importWorkoutCsv(text) {
   const ciStart=col('start_time','date','workout_date','start');
   const ciEnd=col('end_time','end');
   const ciEx=col('exercise_title','exercise_name','exercise');
-  const ciW=col('weight_kg','weight_lbs','weight_lb','weight');
+  // Weight column: Hevy's weight_kg / weight_lbs, else any header starting "weight" ("Weight", "Weight (lbs)").
+  let ciW=col('weight_kg','weight_lbs','weight_lb','weight'); if(ciW<0) ciW=header.findIndex(h=>/^weight/.test(h)&&!/unit/.test(h));
   const ciReps=col('reps','rep_count','rep');
   const ciSetType=col('set_type');
   // Hevy exports runs with distance_km (or distance_miles) and duration_seconds; the app stores a run set as
@@ -7280,7 +7289,15 @@ async function importWorkoutCsv(text) {
   const ciDur=col('duration_seconds','duration_sec','duration');
   const distMi=(header[ciDist]||'').includes('km')?1/1.609344:1;
   if (ciEx<0){ toast('Unrecognized file — expected a Hevy-style CSV','err'); return; }
-  const inLb=(header[ciW]||'').includes('lb');
+  // Unit (v1.10.64): never assume kg. The weight header says it (weight_lbs / weight_kg), or a unit column does
+  // per row (Strong-style "Weight Unit": lbs / kg), or we ask -- a bare "weight" column of pounds stored as kg read
+  // 2.2x too heavy everywhere (PRs, totals, badges).
+  const hw=header[ciW]||'', ciUnit=col('weight_unit','weight_units','unit','units');
+  let fileUnit=/lb/.test(hw)?'lb':/kg/.test(hw)?'kg':null;
+  const rowUnit=row=>{ const u=String(ciUnit>=0?row[ciUnit]||'':'').toLowerCase(); return /lb|pound/.test(u)?'lb':/kg|kilo/.test(u)?'kg':null; };
+  if(!fileUnit&&ciW>=0&&rows.slice(1).some(r=>r&&parseFloat(r[ciW])>0&&!rowUnit(r))){
+    fileUnit=await askImportUnit(); if(!fileUnit){ toast('Import cancelled'); return; }
+  }
 
   toast('Reading workouts…');
   loadDB(); for(let i=0;i<100&&!dbLoaded&&dbLoading;i++) await new Promise(r=>setTimeout(r,100));   // loadDB returns at once while a load is already running
@@ -7306,7 +7323,7 @@ async function importWorkoutCsv(text) {
     g.rows.forEach(row=>{
       const name=(row[ciEx]||'').trim(); if(!name) return;
       if (ciSetType>=0 && String(row[ciSetType]||'').toLowerCase()==='warmup') return;
-      let w=ciW>=0?parseFloat(row[ciW]):0; if(isNaN(w))w=0; if(inLb) w=w/2.20462;
+      let w=ciW>=0?parseFloat(row[ciW]):0; if(isNaN(w))w=0; if((rowUnit(row)||fileUnit)==='lb') w=w/2.20462;
       let reps=ciReps>=0?parseInt(row[ciReps],10):0; if(isNaN(reps))reps=0;
       let dist=ciDist>=0?parseFloat(row[ciDist]):0; if(isNaN(dist))dist=0;
       let secs=ciDur>=0?parseFloat(row[ciDur]):0; if(isNaN(secs))secs=0;
@@ -7576,7 +7593,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.63';
+const BUILD = 'v1.10.64';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
