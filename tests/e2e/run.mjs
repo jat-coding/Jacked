@@ -2699,6 +2699,64 @@ async function importUnits() {
   check('import units: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function resetPR() {
+  // Mr. Roni 2026-10-02 (3:26pm ask, 3:33pm answers): "Reset PR" on the exercise itself, confirm first; clears the
+  // stored PR so the next logged set is the new PR whatever the weight; history untouched; syncs; merge can't bring
+  // the old PR back. Fixture = his Wrist Curl: imported 55 lb x 15 (24.95 kg, 2025-05-20), app-logged 40 lb in July.
+  const WC = 'Seated_Dumbbell_Palms-Up_Wrist_Curl', OLD = { weight: 24.95, reps: 15, date: '2025-05-20T03:07:00.000Z' };
+  const wc = (sets) => ({ exId: WC, name: 'Seated Palms Up Wrist Curl', muscle: 'forearms', equip: 'dumbbell', tracking: 'weight_reps', sets });
+  const hist = [{ id: 'w1747710420000_103', name: 'Arms', date: OLD.date, duration: '—', sets: 3, totalVolume: 1098, prCount: 1, exercises: [wc([{ weight: 24.95, reps: 20, done: true }, { weight: 24.95, reps: 15, done: true }])] },
+    { ...wk('2026-07-15', [wc([{ weight: 18.14, reps: 18, done: true }])]), prCount: 0 },
+    wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]]), { exId: 'Plank', name: 'Plank', muscle: 'abdominals', tracking: 'duration', sets: [{ weight: 90, reps: 0, done: true }] }])];
+  const prs = { [WC]: OLD, 'Barbell_Bench_Press_-_Medium_Grip': { weight: 185 / LB, reps: 5, date: '2026-09-10T18:00:00Z' } };
+  const { page, ctx, errors } = await phone({ seed: { hist, prs, holdPR: { Plank: { sec: 90, date: '2026-09-10T18:00:00Z' } }, bw: 229 / LB }, now: SEP15 });
+  await dbReady(page);
+  const snap = () => page.evaluate(() => ({ hist: localStorage.getItem('jk_hist'), badges: JSON.stringify(computeBadges().map(b => [b.name, b.earned, b.tier || null])), top: JSON.stringify(topPRSet()), prs: gPR(), reset: S.g('prReset') }));
+  const before = await snap();
+  await page.evaluate(id => openExInfo(id), WC); await page.waitForTimeout(150);
+  const btn = await page.evaluate(() => { const b = document.getElementById('resetPRBtn'); return b && b.textContent; });
+  check('reset PR: exercise info shows "Reset PR (55lb × 15)"', btn === 'Reset PR (55lb × 15)', String(btn));
+  await page.click('#resetPRBtn'); await page.waitForTimeout(150);
+  const cf = await page.evaluate(() => ({ open: document.getElementById('confirmModal').classList.contains('open'), msg: document.getElementById('cfMsg').textContent, ok: document.getElementById('cfOk').textContent }));
+  check('reset PR: asks first (confirm with the exercise and its PR)', cf.open && /Wrist Curl/.test(cf.msg) && /55lb × 15/.test(cf.msg) && cf.ok === 'Reset PR', JSON.stringify(cf));
+  await page.click('#cfCancel'); await page.waitForTimeout(100);
+  check('reset PR: Cancel keeps the PR', (await page.evaluate(id => gPR()[id], WC)).weight === 24.95 && !(await page.evaluate(() => S.g('prReset'))));
+  await page.click('#resetPRBtn'); await page.waitForTimeout(120); await page.click('#cfOk'); await page.waitForTimeout(200);
+  const after = await snap();
+  check('reset PR: stored PR cleared, reset time recorded', !after.prs[WC] && after.reset && after.reset[WC], JSON.stringify(after.reset));
+  check('reset PR: other exercises\' PRs untouched', JSON.stringify(after.prs['Barbell_Bench_Press_-_Medium_Grip']) === JSON.stringify(before.prs['Barbell_Bench_Press_-_Medium_Grip']));
+  check('reset PR: history (sets, totals, prCount) byte-identical', after.hist === before.hist);
+  check('reset PR: badges/tiers and Top PR card (computed from history) unchanged', after.badges === before.badges && after.top === before.top, after.top);
+  check('reset PR: button gone after the reset (nothing stored)', !(await page.evaluate(() => document.getElementById('resetPRBtn'))));
+  check('reset PR: marks the change for cloud sync (dirty)', await page.evaluate(() => isDirty()));
+  // Next logged set becomes the PR, even a light one (20 lb x 5, far under 55 x 15 and the July 40 x 18).
+  const got = await page.evaluate(([WC, LB]) => commitPRs({ exercises: [{ exId: WC, name: 'Wrist Curl', tracking: 'weight_reps', sets: [{ weight: 20 / LB, reps: 5, done: true }] }] }), [WC, LB]);
+  const now = await page.evaluate(id => gPR()[id], WC);
+  check('reset PR: next logged set (20 lb x 5) is the new PR', got.length === 1 && Math.round(now.weight * LB) === 20 && now.reps === 5, JSON.stringify(now));
+  // Merge: the cloud (or another device) still has the old 55 x 15; it must not come back.
+  const m = await page.evaluate(([WC, OLD]) => {
+    const local = { jk_prs: gPR(), jk_prReset: S.g('prReset'), jk_hist: gH() };
+    const cloud = { jk_prs: { ...gPR(), [WC]: OLD }, jk_hist: gH() };
+    const a = mergeBackup(cloud, local), b = mergeBackup(local, cloud);    // either side can be "cloud"
+    const otherDevice = mergeBackup({ jk_prReset: S.g('prReset'), jk_prs: {} }, { jk_prs: { [WC]: OLD } });   // stale device merging the cloud
+    return { a: a.jk_prs[WC], b: b.jk_prs[WC], o: otherDevice.jk_prs[WC] || null, keep: !!(a.jk_prReset && a.jk_prReset[WC]) };
+  }, [WC, OLD]);
+  check('reset PR: merge keeps the new 20 x 5 over the cloud\'s old 55 x 15, both directions, and keeps the marker', m.a && m.b && m.a.reps === 5 && m.b.reps === 5 && m.keep, JSON.stringify(m));
+  check('reset PR: a device without the reset that merges the cloud drops its old 55 x 15', m.o === null, JSON.stringify(m.o));
+  check('reset PR: newer reset wins in the marker merge', await page.evaluate(() => mergePRReset({ x: '2026-10-01T00:00:00Z' }, { x: '2026-10-02T00:00:00Z' }).x === '2026-10-02T00:00:00Z' && mergePRReset({ x: '2026-10-02T00:00:00Z' }, { x: '2026-10-01T00:00:00Z' }).x === '2026-10-02T00:00:00Z'));
+  // A restore that writes the old record back (login / file import of an old backup) is cleaned at next launch.
+  await page.evaluate(([WC, OLD]) => { const p = gPR(); p[WC] = OLD; S.s('prs', p); }, [WC, OLD]);
+  await page.reload(); await page.waitForFunction(() => document.querySelector('nav').style.display === 'flex');
+  const rl = await page.evaluate(id => gPR()[id] || null, WC);
+  check('reset PR: an old record written back by a restore is dropped at launch; the new one would stay', rl === null, JSON.stringify(rl));
+  // Timed hold: resets its hold record.
+  await page.evaluate(() => openExInfo('Plank')); await page.waitForTimeout(120);
+  const hb = await page.evaluate(() => (document.getElementById('resetPRBtn') || {}).textContent);
+  await page.click('#resetPRBtn'); await page.waitForTimeout(120); await page.click('#cfOk'); await page.waitForTimeout(150);
+  check('reset PR: timed hold (Plank 1:30) resets its hold record', hb === 'Reset PR (1:30)' && !(await page.evaluate(() => gHoldPR().Plank)), String(hb));
+  check('reset PR: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 async function topPRRaw() {
   // Mr. Roni 2026-10-01 (4:26-6:22pm): Lifetime Stats "Top PR" = heaviest RAW weight lifted, reps only break a tie;
   // plain bodyweight moves never count; derived from history so stored records with body weight in them can't win.
@@ -2851,7 +2909,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, topPRRaw, monthReset, dipRepair, hevyRelabel].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
