@@ -229,13 +229,14 @@ async function jacked() {
   {
     // Leaderboard crown: previous calendar month's top weight lifted, next to the name with a gilded row.
     const aug = wk('2026-08-12', [ex('Barbell Bench Press', [[185, 5]])]); aug.totalVolume = 10000;
-    const friends = [{ id: '@bob', code: '@bob', name: 'Bob', username: '@bob', pmVol: 50000 }, { id: '@amy', code: '@amy', name: 'Amy', username: '@amy', pmVol: 20000 }];
+    // mYm: numbers published this month by a v1.10.58+ build (monthOf ignores unstamped totals).
+    const friends = [{ id: '@bob', code: '@bob', name: 'Bob', username: '@bob', pmVol: 50000, mYm: '2026-09' }, { id: '@amy', code: '@amy', name: 'Amy', username: '@amy', pmVol: 20000, mYm: '2026-09' }];
     const { page, ctx, errors } = await phone({ seed: { hist: [aug], friends }, now: SEP15 });
     await page.evaluate(() => { sp('leaderboard'); renderLB(); });
     await page.waitForTimeout(200);
     const crowned = await page.evaluate(() => [...crownCodes()]);
     check('crown: last month top lifter (Bob, 50000) wears it', crowned.length === 1 && crowned[0] === '@bob', JSON.stringify(crowned));
-    const sub = await page.evaluate(() => [...crownCodes([yourStats(), { code: '@amy', pmVol: 20000 }])]);
+    const sub = await page.evaluate(() => [...crownCodes([yourStats(), { code: '@amy', pmVol: 20000, mYm: '2026-09' }])]);
     check('crown: a board crowns its own top lifter (Amy wins a board without Bob)', sub.length === 1 && sub[0] === '@amy', JSON.stringify(sub));
     const bobRow = page.locator('#page-leaderboard .fc, #page-leaderboard .lbi', { hasText: 'Bob' }).first();
     check('crown: winner shows the crown icon and NO gold glow (glow is for Jacked only)', (await bobRow.locator('svg').count()) >= 1 && (await page.locator('#page-leaderboard .gilded').count()) === 0, '');
@@ -2494,12 +2495,96 @@ async function topPRRaw() {
   check('Top PR: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function monthReset() {
+  // Mr. Roni 2026-10-01 (photo: "Past Month" still showed Dad 413.1K lb on Oct 1): "For the leaderboards first day of
+  // the month should show the metrics reset for the leaderboards." Calendar month in local time (America/Denver
+  // here), every chip, "This Month"; crown = last calendar month's winner; friends measured on the same month.
+  const KG = lb => lb / LB, near = (kg, lb) => Math.abs(kg * LB - lb) < 3;
+  const W = (iso, lbs, pr = 0, id) => ({ id: id || 'w' + iso, name: 'W', date: new Date(iso).toISOString(), exercises: [ex('Barbell Squat', [[100, 1]])], duration: '30:00', sets: 1, totalVolume: KG(lbs), prCount: pr });
+  const hist = [W('2026-09-15T12:00:00-06:00', 40000, 2), W('2026-09-30T23:30:00-06:00', 5000, 1), W('2026-10-01T00:30:00-06:00', 3000, 1)];
+  // Sep 30 23:59 MDT: Sep 30's late workout is this month; Oct's isn't here yet (it's in the future).
+  {
+    const { page, ctx } = await phone({ seed: { hist: hist.slice(0, 2) }, now: new Date('2026-09-30T23:59:00-06:00') });
+    const m = await page.evaluate(() => monthStats());
+    check('month boundary: Sep 30 23:59 MDT -> September counts both Sep workouts', m.ym === '2026-09' && near(m.v, 45000) && m.w === 2 && m.p === 3, JSON.stringify(m));
+    await ctx.close();
+  }
+  // Oct 1 00:05 MDT, nothing logged yet in October (the 23:30 Sep 30 workout is 05:30Z Oct 1 -- still September locally).
+  const bobOld = { id: '@bob', code: '@bob', name: 'Bob', username: '@bob', totalVolume: KG(900000), workouts: 200, prs: 50, streak: 4, consistency: 60, badges: 9,
+    // Old build: rolling-30-day numbers, no month stamp. Last published Sep 29 (so its pv is August).
+    mVol: KG(413100), mWorkouts: 12, mPRs: 21, pmVol: KG(99999), days: ['2026-09-26', '2026-09-27', '2026-09-29'],
+    wd: [{ name: 'Legs', date: '2026-09-29T20:00:00Z', vol: KG(30000), sets: 20 }, { name: 'Back', date: '2026-09-27T20:00:00Z', vol: KG(25000), sets: 20 },
+      { name: 'Push', date: '2026-09-26T20:00:00Z', vol: KG(20000), sets: 20 }], recent: [] };
+  const amyNew = { id: '@amy', code: '@amy', name: 'Amy', username: '@amy', totalVolume: KG(500000), workouts: 100, prs: 30, streak: 2, consistency: 40, badges: 5,
+    // New build, last published in September: her stamped month total is her final September.
+    mYm: '2026-09', mVol: KG(60000), mWorkouts: 9, mPRs: 4, pmVol: KG(10000), mStreak: 3, mCons: 30, mBadges: 2, days: ['2026-09-28'], wd: [], recent: [] };
+  const seedOct = { hist: hist.slice(0, 2), friends: [bobOld, amyNew], closeBuddies: ['@bob', '@amy'] };
+  {
+    const { page, ctx, errors } = await phone({ seed: seedOct, now: new Date('2026-10-01T00:05:00-06:00') });
+    const mine = await page.evaluate(() => monthStats());
+    check('month boundary: Oct 1 00:05 MDT -> this month is empty (0 weight, 0 sessions, 0 PRs, 0 streak, 0%)', mine.ym === '2026-10' && mine.v === 0 && mine.w === 0 && mine.p === 0 && mine.st === 0 && mine.c === 0, JSON.stringify(mine));
+    check('month boundary: Sep 30 23:30 MDT workout counts toward September (crown total 45,000 lb)', near(mine.pv, 45000), String(mine.pv * LB));
+    const vals = await page.evaluate(() => CMP.map(c => [c.k, [yourStats(), ...friendSrc()].map(p => c.mon(p))]));
+    check('Oct 1: every This Month chip is 0 for everyone (you, an old-build friend, a September-stamped friend)', vals.every(([, v]) => v.every(x => x === 0)), JSON.stringify(vals));
+    // Crown = September's winner. Bob (old build, published in September) is measured from his shared September workouts
+    // (75,000 lb), never his stale August pv (99,999). Amy's final September = 60,000. You: 45,000.
+    const crowned = await page.evaluate(() => [...crownCodes()]);
+    check('crown on Oct 1 = September winner (Bob 75,000 lb from his shared Sept workouts)', crowned.join() === '@bob', JSON.stringify(crowned) + ' ' + JSON.stringify(await page.evaluate(() => friendSrc().map(p => [p.code, Math.round(monthOf(p).pv * 2.20462)]))));
+    await page.evaluate(() => { sp('leaderboard'); cmpRange = 'month'; renderLB(); });
+    await page.waitForTimeout(150);
+    const ui = await page.evaluate(() => ({ tog: [...document.querySelectorAll('#compareBoard .unit-tog button')].map(b => b.textContent.trim()),
+      rows: [...document.querySelectorAll('#compareBoard .lbi')].map(r => r.textContent.replace(/\s+/g, ' ').trim()), medals: document.querySelectorAll('#compareBoard .lbr.gold,#compareBoard .lbr.silver,#compareBoard .lbr.bronze').length,
+      txt: document.getElementById('compareBoard').textContent }));
+    check('toggle reads "This Month" / "All Time"', ui.tog.join('|') === 'This Month|All Time', ui.tog.join('|'));
+    check('Oct 1 board: everyone at 0, no medals, you first then by name, fresh-board note', ui.rows.length === 3 && /You/.test(ui.rows[0]) && /Amy/.test(ui.rows[1]) && /Bob/.test(ui.rows[2])
+      && ui.rows.every(r => /\b0 lb/.test(r)) && ui.medals === 0 && /New month/.test(ui.txt) && !/413/.test(ui.txt), JSON.stringify(ui.rows));
+    for (const k of ['prs', 'workouts', 'streak', 'consistency', 'badges']) {
+      await page.evaluate(k => cmpSw(k), k); await page.waitForTimeout(50);
+      const t = await page.evaluate(() => ({ rows: [...document.querySelectorAll('#compareBoard .lbi')].map(r => r.textContent.replace(/\s+/g, ' ').trim()), how: (document.getElementById('cmpHow') || {}).textContent || '' }));
+      check(`Oct 1 board (${k}): everyone shows 0 and the chip says how it's counted`, t.rows.every(r => /(^|\s)0(d|%)?\s*$/.test(r) || /\s0\s*$/.test(r.replace(/[^\w\s%]/g, ' ').trim() + ' ') || / 0( |d|%|$)/.test(r)) && t.how.length > 5, JSON.stringify(t));
+    }
+    await page.evaluate(() => { cmpSw('volume'); cmpRangeSet('all'); });
+    const allT = await page.evaluate(() => ({ rows: [...document.querySelectorAll('#compareBoard .lbi')].map(r => r.textContent.replace(/\s+/g, ' ').trim()), how: !!document.getElementById('cmpHow') }));
+    check('All Time unchanged (Bob 900K lb first)', /Bob/.test(allT.rows[0]) && /900/.test(allT.rows[0]) && !allT.how, JSON.stringify(allT));
+    check('month reset: no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  // Oct 5 MDT: values match what each person did since the 1st.
+  {
+    const oct = [...hist, W('2026-10-02T09:00:00-06:00', 2000, 0), W('2026-10-03T09:00:00-06:00', 4000, 2), W('2026-10-05T07:00:00-06:00', 1000, 0)];
+    // Bob still on the old build, but he trained in October and published: his rolling 30 days must not show; his
+    // October workouts from his shared list are counted. His pv was computed in October -> it is September's.
+    const bob = { ...bobOld, mVol: KG(420000), pmVol: KG(75000), days: [...bobOld.days, '2026-10-01', '2026-10-02'],
+      wd: [{ name: 'Legs', date: '2026-10-02T16:00:00Z', vol: KG(8000), sets: 20 }, { name: 'Arms', date: '2026-10-01T16:00:00Z', vol: KG(7000), sets: 20 }, ...bobOld.wd] };
+    const amy = { ...amyNew, mYm: '2026-10', mVol: KG(12345), mWorkouts: 3, mPRs: 2, mStreak: 2, mCons: 40, mBadges: 1, pmVol: KG(60000) };
+    const { page, ctx, errors } = await phone({ seed: { hist: oct, friends: [bob, amy], closeBuddies: ['@bob', '@amy'] }, now: new Date('2026-10-05T18:00:00-06:00') });
+    const r = await page.evaluate(() => { const ppl = [yourStats(), ...friendSrc()]; return Object.fromEntries(ppl.map(p => [p.code, monthOf(p)])); });
+    const me = r['@tester'], b = r['@bob'], a = r['@amy'];
+    check('Oct 5 (you): weight = Oct 1+2+3+5 workouts (10,000 lb), 4 sessions, 3 PRs', near(me.v, 10000) && me.w === 4 && me.p === 3, JSON.stringify(me));
+    check('Oct 5 (you): longest run Oct 1-3 = 3 days; consistency 4 of 5 days = 80%', me.st === 3 && me.c === 80, JSON.stringify(me));
+    const pub = await page.evaluate(() => myActivity().m);
+    check('Oct 5 (you): what you publish to friends is stamped 2026-10 and equals your board numbers', pub.ym === '2026-10' && pub.v === me.v && pub.w === me.w && pub.p === me.p && pub.st === me.st && pub.c === me.c, JSON.stringify(pub));
+    check('Oct 5 (old-build friend): October from his shared workouts (15,000 lb, 2 sessions), never his rolling 420K; PRs/badges 0', near(b.v, 15000) && b.w === 2 && b.p === 0 && b.b === 0, JSON.stringify(b));
+    check('Oct 5 (old-build friend): streak 2 (Oct 1-2), consistency 2/5 = 40%', b.st === 2 && b.c === 40, JSON.stringify(b));
+    check('Oct 5 (old-build friend): crown total = his October-computed pv (75,000 lb)', near(b.pv, 75000), JSON.stringify(b));
+    check('Oct 5 (new-build friend, stamped October): her published numbers', near(a.v, 12345) && a.w === 3 && a.p === 2 && a.st === 2 && a.c === 40 && a.b === 1, JSON.stringify(a));
+    // Cloud mapping keeps the stamp (refreshFriends -> cleanPerson round trip).
+    const cp = await page.evaluate(() => cleanPerson({ code: '@zed', mYm: '2026-10', mStreak: 3, mCons: 50, mBadges: 1 }));
+    check('friend cache keeps the month stamp and the new month numbers', cp.mYm === '2026-10' && cp.mStreak === 3 && cp.mCons === 50 && cp.mBadges === 1, JSON.stringify(cp));
+    await page.evaluate(() => { sp('leaderboard'); cmpRange = 'month'; cmpSw('volume'); });
+    const rows = await page.evaluate(() => [...document.querySelectorAll('#compareBoard .lbi')].map(r => r.textContent.replace(/\s+/g, ' ').trim()));
+    check('Oct 5 board (weight): Bob 15K, Amy 12.3K, you 10K in that order', /Bob/.test(rows[0]) && /Amy/.test(rows[1]) && /You/.test(rows[2]), JSON.stringify(rows));
+    check('Oct 5: crown is still September\'s winner (Bob 75,000 lb vs Amy 60,000 vs you 45,000)', (await page.evaluate(() => [...crownCodes()])).join() === '@bob', '');
+    check('month values: no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, topPRRaw].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, topPRRaw, monthReset].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

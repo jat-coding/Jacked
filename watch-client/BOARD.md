@@ -23,6 +23,7 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
+- 2026-10-01 for wear, watchos: **Heads-up, `profiles.data.m` changed shape (phone v1.10.58, staging).** The leaderboard month is now the calendar month (resets on the 1st). `m` gains `ym`, `st`, `c`, `b`, and `v`/`w`/`p` mean calendar-month-to-date instead of trailing 30 days (`API.md` §7, `WATCH_BRIDGE.md` changelog 10-01). Nothing the watches read changes. Only matters if your stat write includes `data`: then either write `m` as in `API.md` §7 or leave `data` out (the phone refreshes it). A `m` without `ym` is safe: friends' boards ignore its totals. Default if no reply: I assume the watches don't write `data.m`; delete this entry once read.
 - 2026-09-28 for wear, watchos: **Four items from Mr. Roni's 2026-09-24 9:54am voice note — answered then, never pushed (the session hit an OAuth outage before they landed), closing them out now.**
   1. **Oppo keyboard confirmed: Gboard.** Answers the open question on the wrong-password fix (this board's 2026-09-19 entry, `WATCH_STATUS.md`). Please retest whether "Wrong password — try again" now shows the moment the keyboard closes.
   2. **Lock-in departures approved as built** (2026-09-21 "Phil's variant" entry above): *Next* keeps greying out on the last exercise instead of turning into Finish, and add-exercise stays its own "+ Exercise" pill. No change, no rebuild.

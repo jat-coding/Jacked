@@ -328,7 +328,10 @@ implement badge logic — stale badge count is cosmetic).
   "days":   ["2026-07-18", …],                       // distinct YYYY-MM-DD with a workout
   "recent": [ { "name","date","totalVolume","sets",  // last 6, newest first
                 "dist"?, "pace"? } ],                 // dist/pace only for cardio workouts
-  "m":      { "v": monthVolume, "w": monthWorkouts, "p": monthPRs },
+  "m":      { "ym": "2026-10", "v": monthVolume, "w": monthWorkouts, "p": monthPRs, "pv": lastMonthVolume,
+              "st": longestDayRunThisMonth, "c": pctOfMonthDaysSoFarTrained, "b": monthlyBadgesEarned },
+              // since v1.10.58: CALENDAR month in the device's local time (resets at midnight on the 1st),
+              // stamped by "ym"; friends ignore v/w/p/st/c/b unless "ym" is their current month.
   "badgeList": [ { "n":name, "t":tier, "e":emoji } ]
 }
 ```

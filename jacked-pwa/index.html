@@ -1366,6 +1366,7 @@ function cleanPerson(p){
     totalVolume:_cn(p.totalVolume), workouts:_cn(p.workouts), prs:_cn(p.prs), streak:_cn(p.streak),
     consistency:_cn(p.consistency), badges:_cn(p.badges),
     mVol:_cn(p.mVol), mWorkouts:_cn(p.mWorkouts), mPRs:_cn(p.mPRs), pmVol:_cn(p.pmVol),
+    mYm:(typeof p.mYm==='string'&&/^\d{4}-\d{2}$/.test(p.mYm))?p.mYm:'', mStreak:_cn(p.mStreak), mCons:_cn(p.mCons), mBadges:_cn(p.mBadges),
     days:arr(p.days,400).filter(d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)),
     recent:arr(p.recent,20).map(obj).map(w=>dist(w,{name:_cs(w.name),date:_cs(w.date,40),totalVolume:_cn(w.totalVolume),sets:_cn(w.sets)})),
     wd:arr(p.wd,60).map(obj).map(w=>dist(w,{name:_cs(w.name),date:_cs(w.date,40),vol:_cn(w.vol),sets:_cn(w.sets),
@@ -5528,15 +5529,17 @@ function renderMetricsPage(){
 const gCB=()=>S.g('closeBuddies')||[];
 function toggleCB(code){ const cb=new Set(gCB()); cb.has(code)?cb.delete(code):cb.add(code); S.s('closeBuddies',[...cb]); renderLB(); }
 
-// Categories for the close-buddy comparison filter. Each has an all-time getter
-// and a past-month getter (streak/consistency/badges are inherently current).
+// Categories for the close-buddy comparison filter. Each has an all-time getter and a THIS-MONTH getter: the
+// calendar month, reset at local midnight on the 1st, for every chip (Mr. Roni, 2026-10-01: "first day of the
+// month should show the metrics reset for the leaderboards"). Month values come from monthOf(); `how` is the
+// one-line definition shown under the chips.
 const CMP=[
-  {k:'volume',      ic:'dumbbell',col:'#5aa9ff',label:'Weight',      all:p=>p.totalVolume||0, mon:p=>p.mVol||0,      fmt:v=>fmtW(v)+' '+uL()},
-  {k:'prs',         ic:'trophy',col:'#ffd700',label:'PRs',          all:p=>p.prs||0,         mon:p=>p.mPRs||0,      fmt:v=>v},
-  {k:'workouts',    ic:'calendar',col:'#4b3fd6',label:'Sessions',     all:p=>p.workouts||0,    mon:p=>p.mWorkouts||0, fmt:v=>v},
-  {k:'streak',      ic:'flame',col:'var(--orange)',label:'Streak',       all:p=>p.streak||0,      mon:p=>p.streak||0,    fmt:v=>v+'d'},
-  {k:'consistency', ic:'barchart',col:'#b07cff',label:'Consistency',  all:p=>p.consistency||0, mon:p=>p.consistency||0, fmt:v=>v+'%'},
-  {k:'badges',      ic:'medal',col:'#ffca4d',label:'Badges',       all:p=>p.badges||0,      mon:p=>p.badges||0,    fmt:v=>v+' '+uic('medal')},
+  {k:'volume',      ic:'dumbbell',col:'#5aa9ff',label:'Weight',      all:p=>p.totalVolume||0, mon:p=>monthOf(p).v, fmt:v=>fmtW(v)+' '+uL(), how:'Total weight lifted since the 1st'},
+  {k:'prs',         ic:'trophy',col:'#ffd700',label:'PRs',          all:p=>p.prs||0,         mon:p=>monthOf(p).p, fmt:v=>v, how:'PRs set since the 1st'},
+  {k:'workouts',    ic:'calendar',col:'#4b3fd6',label:'Sessions',     all:p=>p.workouts||0,    mon:p=>monthOf(p).w, fmt:v=>v, how:'Workouts since the 1st'},
+  {k:'streak',      ic:'flame',col:'var(--orange)',label:'Streak',       all:p=>p.streak||0,      mon:p=>monthOf(p).st, fmt:v=>v+'d', how:'Longest run of training days this month'},
+  {k:'consistency', ic:'barchart',col:'#b07cff',label:'Consistency',  all:p=>p.consistency||0, mon:p=>monthOf(p).c, fmt:v=>v+'%', how:'Share of this month\'s days so far with a workout'},
+  {k:'badges',      ic:'medal',col:'#ffca4d',label:'Badges',       all:p=>p.badges||0,      mon:p=>monthOf(p).b, fmt:v=>v+' '+uic('medal'), how:'Monthly badges earned this month'},
 ];
 let cmpM='volume', cmpRange='month';   // 'all' | 'month' (default: this month)
 function cmpSw(k){ cmpM=k; renderLB(); }
@@ -5567,14 +5570,55 @@ function calcStreak(h) {
   return streak;
 }
 
-// Trailing-30-day summary (volume / sessions / PRs) from local history.
-function monthStats(){
-  const cut=+new Date()-30*864e5, h=gH();
-  const mh=h.filter(w=>+new Date(w.date)>=cut);
-  // pv = total weight lifted in the previous CALENDAR month -- decides the leaderboard crown.
-  const n=new Date(), ps=+new Date(n.getFullYear(),n.getMonth()-1,1), pe=+new Date(n.getFullYear(),n.getMonth(),1);
-  const pv=Math.round(h.filter(w=>{const t=+new Date(w.date);return t>=ps&&t<pe;}).reduce((a,w)=>a+(w.totalVolume||0),0));
-  return { v:Math.round(mh.reduce((a,w)=>a+(w.totalVolume||0),0)), w:mh.length, p:mh.reduce((a,w)=>a+(w.prCount||0),0), pv };
+// Calendar months in LOCAL time: ymKey() = 'YYYY-MM'; monthBounds(0) = [this month's 1st 00:00, next 1st), -1 = last month.
+function ymKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function monthBounds(off){ const n=new Date(); return [+new Date(n.getFullYear(),n.getMonth()+(off||0),1), +new Date(n.getFullYear(),n.getMonth()+(off||0)+1,1)]; }
+// Streak + consistency for THIS calendar month from a list of training days (YYYY-MM-DD):
+// st = longest run of consecutive training days inside the month; c = % of the month's days so far (1st..today) trained.
+function monthDayStats(dayList){
+  const ym=ymKey(), today=new Date().getDate();
+  const ds=[...new Set((dayList||[]).filter(d=>typeof d==='string'&&d.slice(0,7)===ym).map(d=>+d.slice(8,10)))].filter(n=>n>=1&&n<=today).sort((a,b)=>a-b);
+  let st=0, run=0, prev=-9;
+  ds.forEach(n=>{ run=n===prev+1?run+1:1; if(run>st) st=run; prev=n; });
+  return {st, c:Math.min(100,Math.round(ds.length/today*100))};
+}
+// Badges that reset with the month (Challenge-Maxing, Comeback-Maxing) plus Jacked, which is re-checked live each month.
+function monthBadgeCount(){ return computeBadges().filter(b=>b.earned&&(b.monthly||b.name==='Jacked')).length; }
+// THIS calendar month's summary from local history (was a trailing 30 days until Mr. Roni's 2026-10-01 report:
+// on the 1st the "Past Month" board still showed September). Resets at local midnight on the 1st.
+// ym stamps which month these numbers are for, so a friend's board never shows them in a later month (monthOf).
+// pv = total weight lifted in the previous CALENDAR month -- decides the leaderboard crown. noBadges skips the
+// badge pass (computeBadges) for callers that only need pv.
+function monthStats(noBadges){
+  const h=gH(), [ms,me]=monthBounds(0), [ps]=monthBounds(-1);
+  const inR=(w,a,b)=>{ const t=+new Date(w.date); return t>=a&&t<b; };
+  const mh=h.filter(w=>inR(w,ms,me));
+  const pv=Math.round(h.filter(w=>inR(w,ps,ms)).reduce((a,w)=>a+(w.totalVolume||0),0));
+  const ds=monthDayStats(h.map(w=>dayKey(w.date)));
+  return { ym:ymKey(), v:Math.round(mh.reduce((a,w)=>a+(w.totalVolume||0),0)), w:mh.length, p:mh.reduce((a,w)=>a+(w.prCount||0),0), pv,
+    st:ds.st, c:ds.c, b:noBadges?0:monthBadgeCount() };
+}
+// This-month numbers for anyone on a board, all measured on the VIEWER's calendar month.
+//  • You: monthStats().
+//  • A friend whose build published numbers stamped with this month (data.m.ym): those numbers.
+//  • Anyone else (an old build that publishes rolling-30-day numbers with no stamp, or nobody has synced since the
+//    1st): never their published totals. Weight and Sessions are counted from the workouts they share with friends
+//    (data.wd, the last 30 days) dated this month; Streak and Consistency from their training days; PRs and Badges
+//    can't be read from shared data, so 0 -- nothing stale can rank them up.
+//  • pv (last month's weight, for the crown): stamped last month -> that month's final total; stamped this month ->
+//    their pv; unstamped -> their pv only if the same publish holds a workout from this month (so it was computed
+//    after the 1st), else last month's shared workouts summed.
+function monthOf(p){
+  if(!p) return {v:0,w:0,p:0,st:0,c:0,b:0,pv:0};
+  if(p.isYou||p.mYm===ymKey()) return {v:p.mVol||0,w:p.mWorkouts||0,p:p.mPRs||0,st:p.mStreak||0,c:p.mCons||0,b:p.mBadges||0,pv:p.pmVol||0};
+  const [ms,me]=monthBounds(0), [ps]=monthBounds(-1), cur=ymKey(), prev=ymKey(new Date(ps));
+  const wd=(p.wd||[]).filter(w=>w&&w.date&&!isNaN(new Date(w.date)));
+  const inR=(w,a,b)=>{ const t=+new Date(w.date); return t>=a&&t<b; };
+  const sumV=(a,b)=>Math.round(wd.filter(w=>inR(w,a,b)).reduce((s,w)=>s+(w.vol||0),0));
+  const days=[...(p.days||[]),...wd.map(w=>dayKey(w.date)),...(p.recent||[]).map(w=>dayKey(w.date))].filter(Boolean);
+  const ds=monthDayStats(days), latest=days.slice().sort().pop()||'';
+  const pv=p.mYm===prev?(p.mVol||0):p.mYm?0:(latest.slice(0,7)===cur?(p.pmVol||0):sumV(ps,ms));
+  return {v:sumV(ms,me), w:wd.filter(w=>inR(w,ms,me)).length, p:0, st:ds.st, c:ds.c, b:0, pv};
 }
 
 function yourStats() {
@@ -5583,7 +5627,7 @@ function yourStats() {
   const streak=calcStreak(h);
   const cons=Math.round((h.filter(w=>new Date(w.date)>=new Date(+new Date()-30*864e5)).length/30)*100);
   const m=monthStats();
-  return {id:'me',name:prof.name||'You',username:prof.username||'@you',code:prof.code,isYou:true,avatarUrl:prof.avatarUrl||'',totalVolume:tv,workouts:h.length,prs:Object.keys(prs).length,streak,consistency:cons,badges:earnedBadgeCount(),mVol:m.v,mWorkouts:m.w,mPRs:m.p,pmVol:m.pv};
+  return {id:'me',name:prof.name||'You',username:prof.username||'@you',code:prof.code,isYou:true,avatarUrl:prof.avatarUrl||'',totalVolume:tv,workouts:h.length,prs:Object.keys(prs).length,streak,consistency:cons,badges:earnedBadgeCount(),mVol:m.v,mWorkouts:m.w,mPRs:m.p,pmVol:m.pv,mYm:m.ym,mStreak:m.st,mCons:m.c,mBadges:m.b};
 }
 
 // My calendar days + recent workouts + month summary + earned badges
@@ -5655,9 +5699,9 @@ function personByCode(code){
 // Pass a board's own people to crown within that board (the close-buddies compare board crowns
 // its own top lifter, Mr. Roni 2026-09-24); no argument = you + every accepted friend.
 function crownCodes(list){
-  const all=list||[yourStats(),...friendSrc().filter(f=>!f.pending)];
-  const top=Math.max(0,...all.map(p=>p.pmVol||0));
-  return top>0?new Set(all.filter(p=>(p.pmVol||0)===top).map(p=>p.code)):new Set();
+  const all=list||[{isYou:true,code:(gProf()||{}).code,pmVol:monthStats(true).pv},...friendSrc().filter(f=>!f.pending)];
+  const pv=p=>monthOf(p).pv, top=Math.max(0,...all.map(pv));
+  return top>0?new Set(all.filter(p=>pv(p)===top).map(p=>p.code)):new Set();
 }
 // Leaderboards: the gold glow row means Jacked, the crown alone means last month's winner (Mr. Roni, 2026-09-24). Friends' Jacked comes from the synced badgeList.
 const hasJacked=p=>(p.isYou?myBadgeList():(p.badgeList||[])).some(b=>b.n==='Jacked');
@@ -5890,26 +5934,31 @@ function renderLB() {
   const medal=i=>i<3?uic('medal',[TIERC.gold,TIERC.silver,TIERC.bronze][i],16):'#'+(i+1);
   const chips=CMP.map(c=>`<button class="chip ${c.k===cmpM?'on':''}" onclick="cmpSw('${c.k}')">${uic(c.ic,c.k===cmpM?c.col:'var(--muted)')} ${c.label}</button>`).join('');
   const rangeTog=`<div class="unit-tog" style="margin-bottom:10px">
-      <button type="button" class="${cmpRange==='month'?'active':''}" onclick="cmpRangeSet('month')">Past Month</button>
+      <button type="button" class="${cmpRange==='month'?'active':''}" onclick="cmpRangeSet('month')">This Month</button>
       <button type="button" class="${cmpRange==='all'?'active':''}" onclick="cmpRangeSet('all')">All Time</button>
     </div>`;
   let board;
   if(!buddies.length){
     board=`<div style="color:var(--muted);font-size:13px;padding:6px 0">Mark friends as ${uic('star','#ffd700')} close buddies below to compare them here.</div>`;
   } else {
-    const ranked=[you,...buddies].sort((a,b)=>getv(b)-getv(a)), crowned=crownCodes([you,...buddies]);
-    board=ranked.map((p,i)=>`<div class="lbi ${p.isYou?'lbyou':''}${hasJacked(p)?' gilded':''}" style="cursor:pointer" onclick="openFriend('${p.code}')">
-      <div class="lbr ${i===0?'gold':i===1?'silver':i===2?'bronze':'other'}">${medal(i)}</div>
+    // Ties (everyone at 0 on the 1st) keep a steady order: you first, then by name. Nobody at 0 gets a medal.
+    const val=new Map([you,...buddies].map(p=>[p.code,getv(p)]));
+    const ranked=[you,...buddies].sort((a,b)=>(val.get(b.code)-val.get(a.code))||((b.isYou?1:0)-(a.isYou?1:0))||String(a.name).localeCompare(String(b.name))), crowned=crownCodes([you,...buddies]);
+    const allZero=ranked.every(p=>!val.get(p.code));
+    board=(cmpRange==='month'&&allZero?`<div style="color:var(--muted);font-size:13px;padding:2px 0 8px">New month, fresh board. Nobody has a ${def.label.toLowerCase()} number yet this month.</div>`:'')
+      +ranked.map((p,i)=>{ const z=!val.get(p.code); return `<div class="lbi ${p.isYou?'lbyou':''}${hasJacked(p)?' gilded':''}" style="cursor:pointer" onclick="openFriend('${p.code}')">
+      <div class="lbr ${z?'other':i===0?'gold':i===1?'silver':i===2?'bronze':'other'}">${z?'–':medal(i)}</div>
       ${avHTML(p)}
       <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${crowned.has(p.code)?crownMark():''}${esc(p.name)}${p.isYou?' <span style="font-size:10px;color:var(--accent);font-weight:700">(You)</span>':''}</div><div style="font-size:11px;color:var(--muted)">${esc(p.username)}</div></div>
-      <div style="font-family:var(--fh);font-size:20px;font-weight:800;color:${i===0?'var(--accent)':'var(--text2)'}">${def.fmt(getv(p))}</div>
-    </div>`).join('');
+      <div style="font-family:var(--fh);font-size:20px;font-weight:800;color:${i===0&&!z?'var(--accent)':'var(--text2)'}">${def.fmt(val.get(p.code))}</div>
+    </div>`; }).join('');
   }
   document.getElementById('compareBoard').innerHTML=`
     <div class="metric-card">
       <div class="blk-head"><div class="blk-t">Leaderboards</div><span class="blk-act" role="button" tabindex="0" onclick="crownInfo()">${uic('crown','#ffd700',13)}Last month's winner</span></div>
       ${rangeTog}
       <div class="chips" style="flex-wrap:wrap;margin-bottom:10px">${chips}</div>
+      ${cmpRange==='month'?`<div id="cmpHow" style="font-size:11px;color:var(--muted);margin:-4px 0 8px">${def.how}</div>`:''}
       ${board}
     </div>`;
 
@@ -6531,7 +6580,7 @@ async function refreshFriends() {
       totalVolume:pr.total_volume||0, workouts:pr.workouts||0, prs:pr.prs||0,
       streak:pr.streak||0, consistency:pr.consistency||0, badges:pr.badges||0,
       days:data.days||[], recent:data.recent||[], wd:data.wd||[], badgeList:data.badgeList||[],
-      mVol:m.v||0, mWorkouts:m.w||0, mPRs:m.p||0, pmVol:m.pv||0 }; };
+      mVol:m.v||0, mWorkouts:m.w||0, mPRs:m.p||0, pmVol:m.pv||0, mYm:m.ym||'', mStreak:m.st||0, mCons:m.c||0, mBadges:m.b||0 }; };
     liveFriends=[
       ...[...accepted].filter(cleanCode).map(c=>({...mk(c),pending:false})),
       ...pendingIn.filter(cleanCode).map(c=>({...mk(c),pending:true}))
@@ -7365,7 +7414,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.57';
+const BUILD = 'v1.10.58';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
