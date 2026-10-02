@@ -4076,7 +4076,7 @@ function repairDipAdded(){
 // sets onto a body-weight exercise (an assisted/weighted Hevy dip would read as body weight +/- the number).
 // Enabled per account (Mr. Roni approved @dad 2026-10-02); hevyRelabelPlan() is the dry run for anyone.
 const RELABEL_FLAG='jacked_relabelHevy1';
-const HEVY_RELABEL_ACCOUNTS=new Set(['@dad']);
+const HEVY_RELABEL_ACCOUNTS=new Set(['@dad','@jat']);   // Mr. Roni, 2026-10-02: extended to his own account (curl/leg-press mismatches confirmed)
 const impId=name=>'imp_'+String(name).toLowerCase().replace(/[^a-z0-9]+/g,'_');
 function hevyRelabelPlan(hist){
   const moves=[], skips=[];
@@ -7553,7 +7553,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.61';
+const BUILD = 'v1.10.62';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

@@ -2506,13 +2506,25 @@ async function hevyRelabel() {
   check('relabel: restored old copy is relabelled again', ent(c.h, 'w1778868960000_8', 'Leg Press (Machine)').exId === 'Leg_Press' && c.prs.Leg_Press.repaired && lb(c.prs['Barbell_Bench_Press_-_Medium_Grip'].weight) === 135);
   check('relabel: no page errors', D.errors.length === 0, D.errors.join(' | '));
   await D.ctx.close();
-  // @jat has the same pre-9/27 imports but is NOT on the allow-list: nothing moves; the dry run still sees them.
+  // An account NOT on the allow-list (e.g. a friend who imported the same way): nothing moves, dry run still sees it.
+  const N = await phone({ seed: { ...seed, prof: prof('@newfriend') } });
+  await N.page.waitForFunction(() => dbLoaded); await N.page.waitForTimeout(600);
+  const n = await N.page.evaluate(() => ({ raw: localStorage.getItem('jk_hist'), prs: localStorage.getItem('jk_prs'), flag: localStorage.getItem(RELABEL_FLAG), plan: hevyRelabelPlan() }));
+  check('relabel: an unlisted account -> history and records untouched, no flag', n.raw === JSON.stringify(base.h) && n.prs === JSON.stringify(base.prs) && !n.flag);
+  check('relabel: dry run on an unlisted account still lists the moves (9) and the skipped assisted dips (2)', n.plan.moves.length === 9 && n.plan.skips.length === 2 && n.plan.skips.every(s => s.why === 'bodyweight'),
+    JSON.stringify({ m: n.plan.moves.length, s: n.plan.skips.map(s => s.why) }));
+  check('relabel: unlisted account, no page errors', N.errors.length === 0, N.errors.join(' | '));
+  await N.ctx.close();
+  // @jat extended to the allow-list (Mr. Roni, 2026-10-02: his own curl/leg-press mismatches confirmed) -- same
+  // fixture content, his own profile: it now relabels exactly like @dad's run above (shared mechanism, only the
+  // allow-list gate differs per account), not just a dry run.
   const J = await phone({ seed: { ...seed, prof: prof('@jat') } });
-  await J.page.waitForFunction(() => dbLoaded); await J.page.waitForTimeout(600);
-  const j = await J.page.evaluate(() => ({ raw: localStorage.getItem('jk_hist'), prs: localStorage.getItem('jk_prs'), flag: localStorage.getItem(RELABEL_FLAG), plan: hevyRelabelPlan() }));
-  check('relabel: @jat not on the allow-list -> history and records untouched, no flag', j.raw === JSON.stringify(base.h) && j.prs === JSON.stringify(base.prs) && !j.flag);
-  check('relabel: dry run on @jat still lists the moves (9) and the skipped assisted dips (2)', j.plan.moves.length === 9 && j.plan.skips.length === 2 && j.plan.skips.every(s => s.why === 'bodyweight'),
-    JSON.stringify({ m: j.plan.moves.length, s: j.plan.skips.map(s => s.why) }));
+  await J.page.waitForFunction(() => localStorage.getItem(RELABEL_FLAG), null, { timeout: 10000 });
+  const j = await st(J.page);
+  check('relabel: @jat now on the allow-list -> Leg Press moved off Calf Press', ent(j.h, 'w1778868960000_8', 'Leg Press (Machine)').exId === 'Leg_Press');
+  check('relabel: @jat Bicep Curl (Machine) moved off the dumbbell curl id', ent(j.h, 'w1782757380000_13', 'Bicep Curl (Machine)').exId === 'Machine_Bicep_Curl');
+  check('relabel: @jat prCounts match the replay of his relabelled history', j.h.every(w => w.prCount === (j.rp.find(([id]) => id === w.id) || [0, 0])[1]));
+  check('relabel: @jat records stamped repaired and marked for merge', !!j.cut['Leg_Press'] && !!(j.prs['Leg_Press'] && j.prs['Leg_Press'].repaired), JSON.stringify(j.prs['Leg_Press']));
   check('relabel: @jat no page errors', J.errors.length === 0, J.errors.join(' | '));
   await J.ctx.close();
 }
