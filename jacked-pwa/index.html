@@ -3431,14 +3431,14 @@ const flatNm=s=>(s||'').toLowerCase().replace(/[^a-z]/g,'');
 // exercise maps to the same library id: imported workouts are re-matched by name (customs left out) once the library
 // is loaded, so an old import filed under a custom or an older, looser match is judged by what it really was.
 const BADGE_STD={
-  bench:['Barbell_Bench_Press_-_Medium_Grip'],          // barbell flat bench (Bench-Maxing, 1000lb Club)
+  bench:['Barbell_Bench_Press_-_Medium_Grip','Bench_Press_-_Powerlifting'],  // barbell flat bench, two library ids for the same lift (Bench-Maxing, 1000lb Club) -- Mr. Roni, 2026-10-02
   benchDb:['Dumbbell_Bench_Press'],                     // flat dumbbell bench: Bench-Maxing substitute ONLY (BENCH_SUBS)
-  ohp:['Standing_Military_Press'],                      // standing barbell overhead press
+  ohp:['Standing_Military_Press','Barbell_Shoulder_Press'],  // standing barbell overhead press, two library ids for the same lift -- Mr. Roni, 2026-10-02
   squat:['Barbell_Squat','Barbell_Full_Squat'],         // barbell back squat, both depth-variant library ids (Leg-Maxing, 1000lb Club) -- Mr. Roni, 2026-10-02: reverses the 9/29 one-id-only lockdown for this pair specifically
   deadlift:['Barbell_Deadlift'],                        // conventional barbell deadlift (1000lb Club)
   pullup:['Pullups'],                                   // strict pull-up, palms away
   pushup:['Pushups'],                                   // standard push-up
-  cardio:['bi_run_outdoor','Running_Treadmill'],        // running, outdoor or treadmill
+  cardio:['bi_run_outdoor','Running_Treadmill','Jogging_Treadmill'],  // running, outdoor, treadmill or jogging-treadmill (same lift, two treadmill ids) -- Mr. Roni, 2026-10-02
 };
 const _stdByName=new Map();
 function badgeStdId(ex,w){
@@ -3454,6 +3454,22 @@ function badgeStdId(ex,w){
   return !id||/^cex/.test(id)?null:id;
 }
 function isStdEx(ex,key,w){ const id=badgeStdId(ex,w); return !!id&&BADGE_STD[key].includes(id); }
+// Several badges now have more than one qualifying library id (same lift, two db entries --
+// Mr. Roni, 2026-10-02). "Start the workout for this badge" should open whichever one the
+// user actually logs, not always the array's first id. Scans real history for the most
+// recent qualifying set and returns that exact id; falls back to BADGE_STD[key][0] for a
+// user with no history yet (nothing to prefer).
+function stdExIdForBadge(key){
+  let bestId=null, bestTs=-Infinity;
+  gH().forEach(w=>{
+    const t=+new Date(w.date);
+    (w.exercises||[]).forEach(ex=>{
+      const id=badgeStdId(ex,w);
+      if(id&&BADGE_STD[key].includes(id)&&t>bestTs){ bestTs=t; bestId=id; }
+    });
+  });
+  return bestId||BADGE_STD[key][0];
+}
 function exerciseBadgeKey(ex){
   // A duration exercise's "reps" field is unused (its value lives in "weight" as seconds), so none of the rep-based
   // badges can fire for one.
@@ -4768,9 +4784,10 @@ function closeBadgeFull(){ document.getElementById('badgeFull').classList.remove
 // "Take me to the workout for this badge" button in the badge popup (Mr. Roni, 2026-09-24).
 function badgePlan(b){
   const ex=(label,title,...ids)=>({label,title,ids:ids.filter(Boolean)});
-  // The badge's own standard exercise, the exact library id it counts (BADGE_STD).
-  const bench=()=>BADGE_STD.bench[0], ohp=()=>BADGE_STD.ohp[0], squat=()=>BADGE_STD.squat[0], dead=()=>BADGE_STD.deadlift[0];
-  const pull=()=>BADGE_STD.pullup[0], push=()=>BADGE_STD.pushup[0], run=()=>BADGE_STD.cardio[0];
+  // The badge's own standard exercise -- whichever qualifying library id the user actually
+  // logs most recently, not just the array's first entry (Mr. Roni, 2026-10-02).
+  const bench=()=>stdExIdForBadge('bench'), ohp=()=>stdExIdForBadge('ohp'), squat=()=>stdExIdForBadge('squat'), dead=()=>stdExIdForBadge('deadlift');
+  const pull=()=>stdExIdForBadge('pullup'), push=()=>stdExIdForBadge('pushup'), run=()=>stdExIdForBadge('cardio');
   switch(b.name){
     case 'Bench-Maxing': return ex('Start a bench workout','Bench day',bench());
     case 'Shoulder-Maxing': return ex('Start an overhead press workout','Shoulder day',ohp());
@@ -7536,7 +7553,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.60';
+const BUILD = 'v1.10.61';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
