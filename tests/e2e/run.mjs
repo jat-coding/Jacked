@@ -1528,7 +1528,7 @@ async function builtinMachines() {
   check('machines: search "lat raise" finds Lateral Raise (machine)', search['lat raise'].includes('bi_lateral_raise_machine'));
   check('machines: search finds each one', search['lateral raise machine'].includes('bi_lateral_raise_machine') && search['hip thrust machine'].includes('bi_hip_thrust_machine') && search['assisted pull up'].includes('bi_assisted_pullup_machine') && search['assisted pullup'].includes('bi_assisted_pullup_machine') && search['assisted dip'].includes('bi_assisted_dip_machine'), JSON.stringify(search));
   // Library chips (real DOM)
-  for (const [chip, id] of [['shoulders', 'bi_lateral_raise_machine'], ['glutes', 'bi_hip_thrust_machine'], ['lats', 'bi_assisted_pullup_machine'], ['triceps', 'bi_assisted_dip_machine']]) {
+  for (const [chip, id] of [['shoulders', 'bi_lateral_raise_machine'], ['glutes', 'bi_hip_thrust_machine'], ['back', 'bi_assisted_pullup_machine'], ['triceps', 'bi_assisted_dip_machine']]) {
     const shown = await page.evaluate(([chip, id]) => { sp('exercises'); mFlt = chip; document.getElementById('exSearch').value = byId(id).name.split(' (')[0]; renderEx(); return document.getElementById('exList').innerHTML.includes(`openExInfo('${id}')`); }, [chip, id]);
     check(`machines: ${id} listed under the ${chip} chip`, shown);
   }
@@ -1604,14 +1604,14 @@ async function exerciseAudit() {
   await page.evaluate(() => { sp('exercises'); buildMuscleChips('muscleChips', handleMFChip, null); });
   const chip = await page.evaluate(() => {
     const chips = [...document.querySelectorAll('#muscleChips .chip')].map(b => b.dataset.muscle);
-    const inChip = (e, c) => c === 'warmup' ? (e.category || '').toLowerCase() === 'warmup' : c === 'cardio' ? isCardioCat(e) : (e.muscle || '').toLowerCase() === c;
-    return { chips, orphans: allEx().filter(e => e.muscle && !chips.some(c => inChip(e, c))).map(e => e.name) };
+    // 2026-10-02: chips are the body map's 10 groups; a custom "Full Body" lift has no group (search still finds it).
+    return { chips, orphans: allEx().filter(e => e.muscle && e.muscle.toLowerCase() !== 'full body' && !chips.some(c => chipMatch(c, e))).map(e => e.name) };
   });
   check('audit: every library exercise with a muscle sits under a filter chip', chip.orphans.length === 0, chip.orphans.slice(0, 10).join(', '));
-  check('audit: Middle Back / Neck / Adductors / Abductors chips exist', ['middle back', 'neck', 'adductors', 'abductors'].every(c => chip.chips.includes(c)), chip.chips.join());
-  check('audit: custom Back / Legs / Full Body exercises get their chip', ['back', 'legs', 'full body'].every(c => chip.chips.includes(c)), chip.chips.join());
-  const row = await page.evaluate(() => { mFlt = 'middle back'; document.getElementById('exSearch').value = 'bent over row'; renderEx(); return document.getElementById('exList').innerHTML.includes("openExInfo('Bent_Over_Barbell_Row')"); });
-  check('audit: Bent Over Row (barbell) listed under Middle Back', row);
+  check('audit: Middle Back / Neck / Adductors / Abductors lifts fold into Back / Shoulders / Legs', await page.evaluate(() => ['middle back', 'neck', 'adductors', 'abductors'].map(m => muscleGroup(m)).join()) === 'back,shoulders,legs,legs');
+  check('audit: custom Back / Legs exercises get their chip', ['back', 'legs'].every(c => chip.chips.includes(c)), chip.chips.join());
+  const row = await page.evaluate(() => { mFlt = 'back'; document.getElementById('exSearch').value = 'bent over row'; renderEx(); return document.getElementById('exList').innerHTML.includes("openExInfo('Bent_Over_Barbell_Row')"); });
+  check('audit: Bent Over Row (barbell, middle back) listed under Back', row);
   const odd = await page.evaluate(() => { mFlt = 'biceps'; document.getElementById('exSearch').value = 'curl'; renderEx(); const h = document.getElementById('exList').innerHTML; return { esc: h.includes('&lt;b&gt;Überkreuz&lt;/b&gt;'), raw: h.includes('<b>Überkreuz</b>') }; });
   check('audit: odd/unicode custom name is listed and escaped', odd.esc && !odd.raw, JSON.stringify(odd));
   // 2. Strength math.
@@ -2904,12 +2904,94 @@ async function monthReset() {
     await ctx.close();
   }
 }
+async function categoryChips() {
+  // Mr. Roni 2026-10-02: picker chips cut to the body map's 10; sub-muscles fold into their parent for the chip row
+  // and filter only; the selected chip moves to the front and is obviously selected.
+  const TEN = 'Chest,Back,Shoulders,Biceps,Triceps,Legs,Glutes,Core,Cardio,Warm-up';
+  const FOLD = { lats: 'back', traps: 'back', 'lower back': 'back', 'middle back': 'back', forearms: 'biceps',
+    quadriceps: 'legs', hamstrings: 'legs', calves: 'legs', adductors: 'legs', abductors: 'legs' };
+  const { page, ctx, errors } = await phone({ seed: { prof: { name: 'T', username: '@t', code: '@t', sex: 'male' }, bw: 80 }, now: SEP15 });
+  await dbReady(page);
+  await page.evaluate(() => { sp('exercises'); mFlt = null; buildMuscleChips('muscleChips', handleMFChip, null); });
+  const labels = sel => page.evaluate(sel => [...document.querySelectorAll(sel + ' .chip')].map(b => b.textContent.trim()).join(), sel);
+  check('chips: Library shows exactly the 10 body-map chips', (await labels('#muscleChips')) === TEN, await labels('#muscleChips'));
+  // Real taps in the Add-Exercise picker: Glutes sits mid-row, off-screen to the right on a phone.
+  await page.evaluate(() => { startEmpty(); openAEModal('workout'); });
+  await page.waitForTimeout(250);
+  check('chips: Add-Exercise picker shows exactly the 10 chips', (await labels('#aeChips')) === TEN, await labels('#aeChips'));
+  await page.evaluate(() => { document.getElementById('aeChips').scrollLeft = 400; });
+  await page.locator('#aeChips .chip[data-muscle="glutes"]').click();
+  await page.waitForTimeout(150);
+  const st = await page.evaluate(() => { const row = document.getElementById('aeChips'), f = row.firstElementChild, r = f.getBoundingClientRect(), rr = row.getBoundingClientRect();
+    return { first: f.dataset.muscle, on: f.classList.contains('on') && f.classList.contains('sel'), pressed: f.getAttribute('aria-pressed'), check: !!f.querySelector('svg'),
+      visible: r.left >= rr.left - 1 && r.right <= rr.right + 1 && r.left >= 0 && r.right <= innerWidth, scroll: row.scrollLeft, others: [...row.querySelectorAll('.chip.on')].length,
+      ring: getComputedStyle(f).boxShadow !== 'none', order: [...row.querySelectorAll('.chip')].map(b => b.textContent.trim()).join() }; });
+  check('chips: tapped Glutes chip jumps to the front of the row', st.first === 'glutes' && st.order === 'Glutes,Chest,Back,Shoulders,Biceps,Triceps,Legs,Core,Cardio,Warm-up', st.order);
+  check('chips: selected chip is marked (filled + check mark + ring, aria-pressed) and is the only one on', st.on && st.pressed === 'true' && st.check && st.ring && st.others === 1, JSON.stringify(st));
+  check('chips: selected chip is fully visible without scrolling the row (row scrolled back to start)', st.visible && st.scroll === 0, JSON.stringify(st));
+  await page.locator('#aeChips .chip[data-muscle="glutes"]').click();
+  await page.waitForTimeout(150);
+  check('chips: tapping the selected chip again clears it and restores the normal order', (await labels('#aeChips')) === TEN && await page.evaluate(() => aeFlt === null && !document.querySelector('#aeChips .chip.on')));
+  await page.evaluate(() => cm('aeModal'));
+  // Library: same behaviour on a real tap.
+  await page.evaluate(() => { aw = null; sp('exercises'); });
+  await page.locator('#muscleChips .chip[data-muscle="core"]').click();
+  await page.waitForTimeout(150);
+  check('chips: Library selected chip (Core) goes first and is marked', await page.evaluate(() => { const f = document.querySelector('#muscleChips .chip'); return mFlt === 'core' && f.dataset.muscle === 'core' && f.classList.contains('sel'); }));
+  await page.locator('#muscleChips .chip[data-muscle="core"]').click();
+  // Every folded sub-muscle: a real free-exercise-db lift tagged with it is listed under its parent chip (Library and picker),
+  // and the parent's list is a superset of every one of its sub-muscle lifts.
+  const fold = await page.evaluate(FOLD => Object.entries(FOLD).map(([sub, parent]) => {
+    const lifts = allEx().filter(e => e._d && (e.muscle || '').toLowerCase() === sub);
+    const ex = lifts[0];
+    if (!ex) return { sub, parent, n: 0 };
+    sp('exercises'); mFlt = parent; document.getElementById('exSearch').value = ex.name; renderEx();
+    const lib = document.getElementById('exList').innerHTML.includes(`openExInfo('${ex.id}')`);
+    _aeTarget = 'routine'; _aeSelected = new Set(); aeFlt = parent; document.getElementById('aeSearch').value = ex.name; renderAEList();
+    const ae = !!document.getElementById('esr-' + ex.id);
+    const all = lifts.every(e => chipMatch(parent, e)) && lifts.every(e => !['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'glutes', 'core'].filter(c => c !== parent).some(c => chipMatch(c, e)));
+    return { sub, parent, n: lifts.length, name: ex.name, lib, ae, all, muscle: byId(ex.id).muscle };
+  }), FOLD);
+  for (const f of fold) {
+    check(`chips: ${f.sub} lifts (${f.n}) show under ${f.parent} chip, nowhere else -- e.g. "${f.name}"`, f.n > 0 && f.lib && f.ae && f.all, JSON.stringify(f));
+    check(`chips: ${f.sub} lift keeps its own muscle tag (${f.muscle})`, f.muscle === f.sub, JSON.stringify(f));
+  }
+  await page.evaluate(() => { document.getElementById('exSearch').value = ''; document.getElementById('aeSearch').value = ''; mFlt = null; aeFlt = null; });
+  // Switching a Lats lift opens the picker pre-filtered to Back, with Back first.
+  const sw = await page.evaluate(() => { rExs = ['Wide-Grip_Lat_Pulldown']; openAEModal('routineReplace', 0); const f = document.querySelector('#aeChips .chip');
+    const r = { flt: aeFlt, first: f.dataset.muscle, sel: f.classList.contains('sel'), listed: !!document.getElementById('esr-Pullups') }; cm('aeModal'); rExs = []; return r; });
+  check('chips: Switch on a Lats lift opens filtered to Back, Back chip first', sw.flt === 'back' && sw.first === 'back' && sw.sel && sw.listed, JSON.stringify(sw));
+  // Everything outside the chip row still shows the specific tag.
+  const disp = await page.evaluate(() => {
+    const ids = ['Wide-Grip_Lat_Pulldown', 'Barbell_Squat', 'Palms-Down_Wrist_Curl_Over_A_Bench', 'Barbell_Shrug'];
+    const info = ids.map(id => { openExInfo(id); const t = document.getElementById('exInfoContent').textContent; cm('exInfoModal'); return t; });
+    sp('exercises'); document.getElementById('exSearch').value = 'wide-grip lat pulldown'; renderEx(); const lib = document.getElementById('exList').textContent;
+    _aeTarget = 'routine'; _aeSelected = new Set(); aeFlt = 'back'; document.getElementById('aeSearch').value = 'wide-grip lat pulldown'; renderAEList();
+    const ae = document.getElementById('esr-Wide-Grip_Lat_Pulldown')?.textContent || '';
+    document.getElementById('exSearch').value = ''; document.getElementById('aeSearch').value = ''; aeFlt = null;
+    return { muscles: ids.map(id => byId(id).muscle), info, lib, ae, groups: ids.map(id => muscleGroup(byId(id).muscle)) };
+  });
+  check('chips: exercise data keeps specific muscles (lats / quadriceps / forearms / traps)', disp.muscles.join() === 'lats,quadriceps,forearms,traps', disp.muscles.join());
+  check('chips: exercise info screen still shows Lats / Quadriceps / Forearms / Traps', ['Lats', 'Quadriceps', 'Forearms', 'Traps'].every((m, i) => disp.info[i].includes(m)), disp.info.map(t => t.slice(0, 80)).join(' | '));
+  check('chips: Library row and picker row still say Lats, not Back', /Lats/.test(disp.lib) && /Lats/.test(disp.ae), disp.ae.slice(0, 120));
+  check('chips: body-map/ranking grouping unchanged (back / legs / biceps / back)', disp.groups.join() === 'back,legs,biceps,back', disp.groups.join());
+  // PRs and badges: a logged Lats lift commits a PR under its own id and keeps "lats" in history; strength credit still Back.
+  const pr = await page.evaluate(() => { S.s('prs', {}); const ex = byId('Wide-Grip_Lat_Pulldown');
+    const w = { exercises: [{ exId: ex.id, name: ex.name, muscle: ex.muscle, equip: ex.equip, tracking: 'weight_reps', sets: [{ weight: 60, reps: 8, done: true }] }] };
+    const n = commitPRs(w).length; const h = [{ id: 'w1', name: 'Pull', date: new Date().toISOString(), duration: '30:00', sets: 1, totalVolume: 480, exercises: w.exercises }]; S.s('hist', h);
+    return { n, pr: !!gPR()['Wide-Grip_Lat_Pulldown'], histMuscle: gH()[0].exercises[0].muscle, back: muscleStrengthRatio().back, badges: computeBadges().length }; });
+  check('chips: PR on a Lats lift commits under its own exercise, history keeps "lats"', pr.n === 1 && pr.pr && pr.histMuscle === 'lats', JSON.stringify(pr));
+  check('chips: Lats lift still credits Back strength; badge list intact (14)', pr.back > 0 && pr.badges === 14, JSON.stringify(pr));
+  await page.screenshot({ path: SHOTS + '/category-chips.png' });
+  check('chips: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

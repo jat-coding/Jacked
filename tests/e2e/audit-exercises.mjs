@@ -16,7 +16,7 @@ try {
   await page.evaluate(async () => { sp('exercises'); for (let i = 0; i < 200 && !dbLoaded; i++) await new Promise(r => setTimeout(r, 100)); });
   ({ rows, chips } = await page.evaluate(() => {
     const chips = [...document.querySelectorAll('#muscleChips .chip')].map(b => b.dataset.muscle);
-    const inChip = (e, c) => c === 'warmup' ? (e.category || '').toLowerCase() === 'warmup' : c === 'cardio' ? isCardioCat(e) : (e.muscle || '').toLowerCase() === c;
+    const inChip = (e, c) => chipMatch(c, e);
     const rows = allEx().map(e => {
       const d = allDB.find(x => x.id === e.id);
       const log = { exId: e.id, name: e.name, muscle: e.muscle, equip: e.equip, tracking: e.tracking, assist: e.assist || false };

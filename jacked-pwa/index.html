@@ -338,6 +338,9 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .cdrag{touch-action:none;cursor:grab;color:var(--muted);padding:6px 4px;display:flex;align-items:center;-webkit-user-select:none;user-select:none}
 .chip{padding:6px 13px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--fb);transition:all .2s;white-space:nowrap;flex-shrink:0;-webkit-appearance:none}
 .chip.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+/* selected picker chip: pinned first, check + clear mark, heavier weight and a ring so it reads as the active filter */
+.chip.sel{display:inline-flex;align-items:center;gap:5px;font-weight:800;padding:6px 10px 6px 9px;margin:4px 2px 4px 4px;box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--accent)}
+.chip.sel .chip-x{opacity:.7;margin-left:1px}
 .cur-card{flex:0 0 auto;width:200px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);padding:14px;white-space:normal}
 .spin{display:inline-block;width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -1817,22 +1820,37 @@ function thumbH(ex, sz=52) {
 let mFlt = null;   // library page filter
 let aeFlt = null;  // add-exercise modal filter
 
+// The picker's chips are the body map's 10 groups (Mr. Roni, 2026-10-02). Sub-muscles fold into their parent
+// for the chip row and its filter only, via the same muscleGroup() the body map uses (Lats/Traps/Lower Back/
+// Middle Back -> Back, Forearms -> Biceps, Quads/Hamstrings/Calves/Adductors/Abductors -> Legs). e.muscle itself
+// is untouched, so PRs, badges, rankings and the exercise info screen keep the specific tag.
+const CHIP_CATS=[['chest','Chest'],['back','Back'],['shoulders','Shoulders'],['biceps','Biceps'],['triceps','Triceps'],
+  ['legs','Legs'],['glutes','Glutes'],['core','Core'],['cardio','Cardio'],['warmup','Warm-up']];
+function chipMatch(flt, e){
+  if(!flt) return true;
+  if(flt==='warmup') return (e.category||'').toLowerCase()==='warmup';
+  if(flt==='cardio') return isCardioCat(e);
+  return muscleGroup(e.muscle)===flt;
+}
+// The chip an exercise files under, or null (e.g. a custom "Full Body" lift -- search still finds it).
+function chipOf(e){
+  if((e.category||'').toLowerCase()==='warmup') return 'warmup';
+  if(isCardioCat(e)) return 'cardio';
+  const g=muscleGroup(e.muscle);
+  return CHIP_CATS.some(c=>c[0]===g)?g:null;
+}
+
 function buildMuscleChips(containerId, handler, active) {
-  let muscles;
-  if (allDB.length) {
-    // Every muscle a library exercise uses, custom ones included (a custom "Back" or "Legs" lift had no chip).
-    muscles = [...new Set(allEx().map(e=>(e.muscle||'').toLowerCase()))].filter(m=>ALLOWED_MUSCLES.has(m)).sort();
-  } else {
-    muscles = ['chest','back','shoulders','biceps','triceps','legs','glutes','core'];
-  }
   const el = document.getElementById(containerId);
   if (!el) return;
-  // Warm-up and Cardio are their own category chips, pinned first.
-  el.innerHTML = `<button class="chip ${active==='warmup'?'on':''}" data-muscle="warmup" onclick="${handler.name}(event)">Warm-up</button>`
-    + `<button class="chip ${active==='cardio'?'on':''}" data-muscle="cardio" onclick="${handler.name}(event)">Cardio</button>`
-    + muscles.filter(m=>m!=='cardio').map(m =>
-    `<button class="chip ${active===m?'on':''}" data-muscle="${m}" onclick="${handler.name}(event)">${capW(m)}</button>`
+  // The selected chip jumps to the front with a check mark, and the row scrolls back to the start,
+  // so the active filter is the first thing visible (Mr. Roni, 2026-10-02).
+  const cats = active ? [...CHIP_CATS.filter(c=>c[0]===active), ...CHIP_CATS.filter(c=>c[0]!==active)] : CHIP_CATS;
+  el.innerHTML = cats.map(([m,label]) => m===active
+    ? `<button class="chip on sel" data-muscle="${m}" aria-pressed="true" onclick="${handler.name}(event)"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5l10 -10"/></svg>${label}<svg class="chip-x" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`
+    : `<button class="chip" data-muscle="${m}" aria-pressed="false" onclick="${handler.name}(event)">${label}</button>`
   ).join('');
+  el.scrollLeft = 0;
 }
 // Treat distance-tracked, cardio-muscle, or cardio-category exercises as cardio.
 function isCardioCat(e){
@@ -2185,7 +2203,7 @@ function renderEx() {
   const filt=all.filter(e=>
     !hid.has(e.id)&&
     exSearchMatch(q,e)&&
-    (!mFlt||(mFlt==='warmup'?(e.category||'').toLowerCase()==='warmup':mFlt==='cardio'?isCardioCat(e):(e.muscle||'').toLowerCase()===mFlt.toLowerCase()))
+    chipMatch(mFlt,e)
   ).sort(exRankCmp).slice(0,80);   // favourites → used-before → rest
   const prs=gPR(), hp=gHoldPR();
   const el=document.getElementById('exList');
@@ -2816,8 +2834,7 @@ function openAEModal(target, idx) {
   if (target==='workoutReplace'||target==='routineReplace') {
     const curId = target==='workoutReplace' ? aw?.exercises[_aeReplaceIdx]?.exId : rExs[_aeReplaceIdx];
     const cur = curId ? byId(curId) : null;
-    if (cur) aeFlt = (cur.category||'').toLowerCase()==='warmup' ? 'warmup'
-      : isCardioCat(cur) ? 'cardio' : ((cur.muscle||'').toLowerCase()||null);
+    if (cur) aeFlt = chipOf(cur);
   }
   // pre-select already-in-routine exercises
   if (target==='routine') rExs.forEach(id=>_aeSelected.add(id));
@@ -2861,7 +2878,7 @@ function renderAEList() {
   const all=allEx();
   refreshUsedRank();
 
-  const matchFlt=e=> !aeFlt || (aeFlt==='warmup'?(e.category||'').toLowerCase()==='warmup':aeFlt==='cardio'?isCardioCat(e):(e.muscle||'').toLowerCase()===aeFlt.toLowerCase());
+  const matchFlt=e=>chipMatch(aeFlt,e);
   const hid=new Set(gHidden());
   let filt = all.filter(e=>
     !hid.has(e.id)&&exSearchMatch(q,e)&&matchFlt(e)
@@ -7646,7 +7663,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.65';
+const BUILD = 'v1.10.66';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
