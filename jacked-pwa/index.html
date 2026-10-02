@@ -3985,6 +3985,127 @@ function enforcePRRepairs(){
     return n;
   }catch(e){ console.warn('[repair] enforce failed',e); return 0; }
 }
+// Store an edited history and bring every number SAVED from the edited exercises back in line with it: each
+// touched workout's prCount (+ prSets) loses its old-replay PRs for those exercises and gains the new ones, and
+// their jk_prs records are rebuilt from prReplay and stamped/marked like repairBackExtBW (merge can't bring the old
+// ones back). Other exercises' PRs in those workouts, and every other workout, are left exactly as stored.
+function commitHistRepair(hist2, exIds, at){
+  const has=w=>(w.exercises||[]).some(ex=>exIds.has(ex.exId));
+  const wids=new Set(gH().filter(has).map(w=>w.id));
+  const before=prReplay();
+  S.s('hist',hist2);
+  const after=prReplay(), mine=(rp,id)=>(rp.get(id)||NO_PRS).list.filter(p=>exIds.has(p.exId)&&!p.cardio&&!p.hold);
+  const workouts=[];
+  const hist3=hist2.map(w=>{
+    if(!wids.has(w.id)&&!has(w)) return w;
+    const o=mine(before,w.id), n=mine(after,w.id);
+    if(!o.length&&!n.length) return w;
+    const w2={...w};
+    if(typeof w.prCount==='number') w2.prCount=Math.max(0,w.prCount-o.length+n.length);
+    if(Array.isArray(w.prSets)) w2.prSets=[...w.prSets.filter(p=>!exIds.has(p.exId)),...n.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps}))];
+    workouts.push({id:w.id,date:w.date,prCount:[w.prCount,w2.prCount]});
+    return w2;
+  });
+  S.s('hist',hist3);
+  const prs=gPR(), cut=S.g('prRepair')||{}, out={};
+  exIds.forEach(id=>{ out[id]=setRepairedPR(prs,id,at); if(!cut[id]||cut[id]>at) cut[id]=at; });
+  S.s('prs',prs); S.s('prRepair',cut);
+  return {workouts,prs:out};
+}
+
+// ── One-shot repair: Mr. Roni's 9/25 dips, body weight typed into "+ Added" (v1.10.59) ────────────────────────
+// Approved 2026-10-02 ("set added weight to 0"). His 9/24-evening (MDT) chest dips were saved bodyweight + Added
+// 230 lb -- his own body weight typed in the box -- so every set counted ~459 lb and stored a 459 lb x 12 record.
+// Matched exactly (account, workout, exercise, set, the stored 230 lb), found read-only in his cloud backup: the
+// added weight becomes 0, totalVolume loses 230 lb x those reps, then commitHistRepair. Nothing else is touched.
+// Once per device (flag below, never backed up; applyBundle clears it); a second run finds no 230 lb left anyway.
+const DIP_REPAIR_FLAG='jacked_repairDip1';
+const DIP_FIXES=[{code:'@jat', wid:'w1790301227388', exId:'Dips_-_Chest_Version', kg:104.32636917019714, sets:[0,1,2,3]}];
+function repairDipAdded(){
+  try{
+    if(localStorage.getItem(DIP_REPAIR_FLAG)) return null;
+    const fixes=DIP_FIXES.filter(f=>f.code===(gProf()||{}).code);
+    if(!fixes.length) return null;   // another account: nothing to do (no flag, so a later login on this device still checks)
+    const at=new Date().toISOString(), log={at,build:BUILD,workouts:[]}, exIds=new Set();
+    const hist2=gH().map(w=>{
+      const f=fixes.find(f=>f.wid===w.id); if(!f) return w;
+      const ei=(w.exercises||[]).findIndex(ex=>ex.exId===f.exId); if(ei<0) return w;
+      let vol=0; const fixed=[];
+      const sets=(w.exercises[ei].sets||[]).map((s,si)=>{
+        if(!f.sets.includes(si)||!s||Math.abs((s.weight||0)-f.kg)>0.01) return s;
+        if(s.done) vol+=s.weight*Math.max(0,s.reps||0);
+        fixed.push(si); return {...s,weight:0};
+      });
+      if(!fixed.length) return w;
+      exIds.add(f.exId);
+      const w2={...w,exercises:w.exercises.map((ex,i)=>i===ei?{...ex,sets}:ex)};
+      if(typeof w.totalVolume==='number') w2.totalVolume=Math.max(0,Math.round(w.totalVolume-vol));
+      log.workouts.push({id:w.id,ei,sets:fixed,totalVolume:[w.totalVolume,w2.totalVolume]});
+      return w2;
+    });
+    if(exIds.size){ Object.assign(log,commitHistRepair(hist2,exIds,at),{workouts:log.workouts}); console.info('[repair] dips + Added body weight — fixed',log); }
+    else console.info('[repair] dips: nothing to fix on this device');
+    localStorage.setItem(DIP_REPAIR_FLAG, JSON.stringify({build:BUILD,at,workouts:log.workouts.length}));
+    return log;
+  }catch(e){ console.warn('[repair] dips failed, will retry next launch',e); return null; }
+}
+
+// ── One-shot relabel of Hevy imports with the current matcher (v1.10.59) ─────────────────────────────────────
+// Imports before the 2026-09-27 matcher fix filed lifts under the wrong exercise ("Leg Press (Machine)" as Calf
+// Press on the Leg Press, "Bench Press (Dumbbell)" as barbell bench...). The importer keeps the Hevy name as the
+// entry's name, so re-running resolveExercise on it gives the exercise a fresh import would pick today. Moves exId,
+// muscle, equip, image only; name, sets, weights, reps, totalVolume stay. Then commitHistRepair for every exercise
+// that lost or gained entries. Not moved (reported in the log): entries already under the user's own exercise,
+// a target with another tracking type (cardio/reps-only: the stored sets mean something else there), and loaded
+// sets onto a body-weight exercise (an assisted/weighted Hevy dip would read as body weight +/- the number).
+// Enabled per account (Mr. Roni approved @dad 2026-10-02); hevyRelabelPlan() is the dry run for anyone.
+const RELABEL_FLAG='jacked_relabelHevy1';
+const HEVY_RELABEL_ACCOUNTS=new Set(['@dad']);
+const impId=name=>'imp_'+String(name).toLowerCase().replace(/[^a-z0-9]+/g,'_');
+function hevyRelabelPlan(hist){
+  const moves=[], skips=[];
+  (hist||gH()).forEach(w=>{
+    if(!IMPORTED_ID.test(w.id||'')) return;
+    (w.exercises||[]).forEach((ex,ei)=>{
+      if(!ex||!ex.name||!ex.exId) return;
+      const to=resolveExercise(ex.name)||impId(ex.name);
+      if(to===ex.exId) return;
+      const m=byId(to), tr=ex.tracking||'weight_reps';
+      const why=isCustomEx(ex.exId)?'own exercise'
+        :(m.tracking||'weight_reps')!==tr?'tracking'
+        :isBodyweightEx({exId:to,name:ex.name,equip:m.equip,tracking:tr})&&(ex.sets||[]).some(s=>(s.weight||0)>0)?'bodyweight':'';
+      const it={wid:w.id,date:w.date,ei,name:ex.name,from:ex.exId,to,toName:m.name};
+      if(why) skips.push({...it,why}); else moves.push(it);
+    });
+  });
+  return {moves,skips};
+}
+function relabelHevyImports(){
+  try{
+    if(localStorage.getItem(RELABEL_FLAG)) return null;
+    if(!HEVY_RELABEL_ACCOUNTS.has((gProf()||{}).code)) return null;   // not enabled for this account
+    if(!dbLoaded) return null;                                        // matcher needs the library: next launch
+    const at=new Date().toISOString(), plan=hevyRelabelPlan(), log={at,build:BUILD,moves:plan.moves.length,skips:plan.skips};
+    if(plan.moves.length){
+      const exIds=new Set(), byW=new Map();
+      plan.moves.forEach(m=>{ exIds.add(m.from); exIds.add(m.to); if(!byW.has(m.wid)) byW.set(m.wid,new Map()); byW.get(m.wid).set(m.ei,m); });
+      const hist2=gH().map(w=>{
+        const mv=byW.get(w.id); if(!mv) return w;
+        return {...w,exercises:w.exercises.map((ex,ei)=>{
+          const m=mv.get(ei); if(!m||ex.exId!==m.from) return ex;
+          const meta=byId(m.to);
+          return {...ex,exId:m.to,muscle:meta.muscle||guessMuscle(ex.name),equip:meta.equip||'',imgUrl:histImgUrl(meta)||null};
+        })};
+      });
+      const counts={};
+      plan.moves.forEach(m=>{ const k=m.name+' : '+m.from+' -> '+m.to; counts[k]=(counts[k]||0)+1; });
+      Object.assign(log,{counts},commitHistRepair(hist2,exIds,at));
+      console.info('[repair] Hevy imports relabelled',log);
+    } else console.info('[repair] Hevy imports: nothing to relabel on this device',log);
+    localStorage.setItem(RELABEL_FLAG, JSON.stringify({build:BUILD,at,moves:plan.moves.length}));
+    return log;
+  }catch(e){ console.warn('[repair] Hevy relabel failed, will retry next launch',e); return null; }
+}
 const prSetText=p=>p.cardio?`${p.weight} mi · ${fmtPace(pacePerMile(p.weight,p.reps))}`:p.hold?`${fmtHold(p.weight)} hold`:`${dW(p.weight)}${uL()} × ${p.reps}`;
 const PR_STAR=(sp='')=>`<span style="color:#ffd700">${sp}★</span>`;
 
@@ -7047,6 +7168,7 @@ function applyBundle(bundle,{wipe=false}={}){
     return {ok:false,...res};
   }
   localStorage.removeItem(BACKEXT_REPAIR_FLAG);   // restored data gets its own one-shot repair check on the reload
+  localStorage.removeItem(DIP_REPAIR_FLAG); localStorage.removeItem(RELABEL_FLAG);
   return {ok:true,...res};
 }
 
@@ -7176,7 +7298,7 @@ async function importWorkoutCsv(text) {
     });
     if(!exMap.size) continue;
     const exercises=[...exMap.entries()].map(([name,sets])=>{
-      const id=resolveExercise(name)||('imp_'+name.toLowerCase().replace(/[^a-z0-9]+/g,'_'));
+      const id=resolveExercise(name)||impId(name);
       const meta=byId(id);
       // A run (distance-tracked in the library) keeps its distance and time when the file has them.
       // A timed hold (plank etc.) keeps its seconds, stored in "weight" like every duration set.
@@ -7414,7 +7536,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.58';
+const BUILD = 'v1.10.59';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
@@ -7461,6 +7583,7 @@ function healBareStrings(){
 healBareStrings();
 // Before checkOnboarding(): its cloud pull/backup must merge the repaired numbers, not the stale ones.
 repairBackExtBW();
+repairDipAdded();
 enforcePRRepairs();
 checkOnboarding();
 // Kick off DB load in background so it's ready when the user first opens Library/exercises
@@ -7473,6 +7596,8 @@ setTimeout(loadDB, 500);
   if(!dbLoaded){ loadDB(); for(let i=0;i<50&&dbLoading;i++) await new Promise(r=>setTimeout(r,100)); }
   migrateRoutineSections();
   if(document.getElementById('page-routines').classList.contains('active')) renderRoutines();
+  // The Hevy relabel needs the exercise library too (resolveExercise); without it, it waits for the next launch.
+  if(relabelHevyImports()) reRenderActivePage();
 })();
 </script>
 </div><!-- /#jkRoot -->

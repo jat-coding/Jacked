@@ -42,3 +42,11 @@ commit 8565a62 on staging. Nothing written to Dad's cloud row from here; his pho
 - e2e backExtRepair 28 checks; full suite 785/785.
 - Watch: WATCH_BRIDGE + SYNC_PLAYBOOK say to keep jk_prRepair and honour it in the jk_prs merge.
 Still not done (separate, unapproved): Top PR ranking, Mr. Roni's 9/25 dip "+ Added 230", Dad's old Hevy label matches.
+
+---
+## Follow-up, approved 2026-10-02 7:06am MDT -- BUILT v1.10.59 (staging)
+1. Mr. Roni's own 9/25 Dips: "+ Added 230" (his body weight) -> 459 lb x 12 record. Approved: added weight 0.
+   Built for all four sets of that entry (all carried 230). See tasks/2026-10-02-dip-and-hevy-relabel.md.
+2. Dad's pre-9/27 Hevy import labels: relabel with the current matcher. Built, enabled for @dad only; @jat dry run
+   reported, not applied. Same card.
+3. Production push of v1.10.56 (and now v1.10.59) is HELD -- Mr. Roni: "I'll check staging first."

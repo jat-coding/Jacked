@@ -2374,6 +2374,149 @@ async function backExtRepair() {
   await R.ctx.close();
 }
 
+// ── 2026-10-02 data repairs (v1.10.59) ────────────────────────────────────────────────────────────────────────
+// Fixtures: compact copies of real rows from the @dad and @jat cloud backups (read-only, 2026-10-01 17:24Z / 18:23Z),
+// only the exercises that decide the result. [id, date, totalVolume, prCount, [[exId, name, equip, muscle, tracking,
+// (bwMode,) [[kg, reps, done]]]]].
+const DAD_W = [["w1778272980000_12", "2026-05-08T20:43:00.000Z", 7566, 6, [["Calf_Press_On_The_Leg_Press_Machine", "Leg Press (Machine)", "machine", "calves", "weight_reps", [[40.82, 12, 1], [40.82, 12, 1], [40.82, 12, 1]]], ["imp_rear_kick_machine_", "Rear Kick (Machine)", "", "lats", "weight_reps", [[20.41, 12, 1], [20.41, 12, 1], [20.41, 12, 1], [20.41, 12, 1], [20.41, 12, 1], [20.41, 12, 1]]]]], ["w1778868960000_8", "2026-05-15T18:16:00.000Z", 12411, 3, [["Calf_Press_On_The_Leg_Press_Machine", "Leg Press (Machine)", "machine", "calves", "weight_reps", [[102.06, 12, 1], [102.06, 12, 1], [102.06, 12, 1]]], ["imp_rear_kick_machine_", "Rear Kick (Machine)", "", "lats", "weight_reps", [[24.95, 12, 1], [24.95, 12, 1], [24.95, 12, 1], [24.95, 12, 1], [24.95, 12, 1], [24.95, 12, 1]]]]], ["w1779999720000_1", "2026-05-28T20:22:00.000Z", 10326, 4, [["Barbell_Bench_Press_-_Medium_Grip", "Bench Press (Smith Machine)", "barbell", "chest", "weight_reps", [[83.91, 3, 1], [70.31, 5, 1], [70.31, 5, 1]]], ["Dumbbell_Alternate_Bicep_Curl", "Bicep Curl (Machine)", "dumbbell", "biceps", "weight_reps", [[40.82, 12, 1], [40.82, 12, 1], [40.82, 12, 1]]], ["Dips_-_Chest_Version", "Chest Dip (Assisted)", "other", "chest", "weight_reps", [[54.43, 12, 1], [54.43, 10, 1], [54.43, 10, 1]]]]], ["w1780434180000_25", "2026-06-02T21:03:00.000Z", 10269, 2, [["Dumbbell_Alternate_Bicep_Curl", "Bicep Curl (Machine)", "dumbbell", "biceps", "weight_reps", [[40.82, 12, 1], [40.82, 12, 1]]], ["imp_chest_dip_assisted_", "Chest Dip (Assisted)", "", "chest", "weight_reps", [[54.43, 12, 1], [54.43, 12, 1], [54.43, 10, 1]]]]], ["w1780434222168", "2026-06-02T21:03:42.168Z", 10813, 7, [["Machine_Bicep_Curl", "Machine Bicep Curl", "machine", "biceps", "weight_reps", [[40.823362, 12, 1], [40.823362, 12, 1], [40.823362, 12, 1]]]]], ["w1780517880000_24", "2026-06-03T20:18:00.000Z", 17418, 3, [["cex1780461701088", "Rear Kick (Machine)", "machine", "Glutes", "weight_reps", [[36.29, 12, 1], [36.29, 12, 1], [36.29, 12, 1], [36.29, 12, 1], [36.29, 12, 1], [36.29, 12, 1]]]]], ["w1782757380000_13", "2026-06-29T18:23:00.000Z", 11376, 2, [["Dumbbell_Alternate_Bicep_Curl", "Bicep Curl (Machine)", "dumbbell", "biceps", "weight_reps", [[40.82, 12, 1], [40.82, 12, 1], [45.36, 10, 1]]], ["imp_chest_dip_assisted_", "Chest Dip (Assisted)", "", "chest", "weight_reps", [[40.82, 12, 1], [40.82, 10, 1], [40.82, 8, 1]]], ["Barbell_Bench_Press_-_Medium_Grip", "Bench Press (Dumbbell)", "barbell", "chest", "weight_reps", [[6.8, 50, 1], [6.8, 50, 1]]]]], ["w1786561794613", "2026-08-12T19:09:54.613Z", 7729, 1, [["Leg_Press", "Leg Press (machine)", "machine", "quadriceps", "weight_reps", [[45.359291, 12, 1], [63.503007, 12, 1], [77.110795, 12, 1]]], ["Calf_Press_On_The_Leg_Press_Machine", "Calf Press On The Leg Press (machine)", "machine", "calves", "weight_reps", [[45.359291, 12, 1], [63.503007, 12, 1], [77.110795, 12, 1]]]]], ["w1787662573674", "2026-08-25T12:56:13.674Z", 7641, 0, [["Barbell_Bench_Press_-_Medium_Grip", "Bench Press (barbell, med grip)", "barbell", "chest", "weight_reps", [[61.235043, 12, 1], [61.235043, 8, 1], [61.235043, 7, 1]]], ["Dumbbell_Alternate_Bicep_Curl", "Alternate Bicep Curl (dumbbell)", "dumbbell", "biceps", "weight_reps", [[27.215575, 12, 1], [27.215575, 12, 1], [27.215575, 12, 1]]], ["Dumbbell_Bench_Press", "Bench Press (dumbbell)", "dumbbell", "chest", "weight_reps", [[9.071858, 50, 1], [9.071858, 50, 1]]]]], ["w1790104898582", "2026-09-22T19:21:38.582Z", 25805, 3, [["Leg_Press", "Leg Press (machine)", "machine", "quadriceps", "weight_reps", [[124.73805, 12, 1], [124.73805, 12, 1], [124.73805, 10, 1]]], ["Calf_Press_On_The_Leg_Press_Machine", "Calf Press On The Leg Press (machine)", "machine", "calves", "weight_reps", [[124.73805, 12, 1], [124.73805, 12, 1], [124.73805, 12, 1]]]]]] ;
+const DAD_CEX = [{"_c": true, "id": "cex1780461701088", "name": "Rear Kick", "equip": "machine", "notes": "", "assist": false, "images": [], "muscle": "Glutes", "category": "strength", "tracking": "weight_reps"}] ;
+const DAD_BW = 111.58385572116738 ;
+const JAT_W = [["w1781997821819", "2026-06-20T23:23:41.819Z", 4526, 4, [["Dumbbell_Incline_Shoulder_Raise", "Incline Shoulder Raise (dumbbell)", "dumbbell", "shoulders", "weight_reps", [[31.751504, 16, 1], [36.287433, 12, 1], [36.287433, 12, 1], [36.287433, 10, 1]]], ["Cable_Crossover", "Crossover (cable)", "cable", "chest", "weight_reps", [[14.74177, 12, 1], [14.74177, 10, 1], [14.74177, 10, 1], [14.74177, 10, 1]]], ["Triceps_Pushdown", "Triceps Pushdown (cable)", "cable", "triceps", "weight_reps", [[29.483539, 12, 1], [31.751504, 10, 1], [31.751504, 8, 1], [31.751504, 8, 1]]], ["Dips_-_Chest_Version", "Dips (chest version)", "other", "chest", "weight_reps", [[0.453593, 12, 1], [0.453593, 8, 1], [0.453593, 7, 1], [0.453593, 6, 1]]], ["EZ-Bar_Skullcrusher", "EZ-Bar Skullcrusher (ez-bar)", "e-z curl bar", "triceps", "weight_reps", [[22.679645, 12, 1], [31.751504, 8, 1], [31.751504, 8, 1], [31.751504, 6, 1]]]]], ["w1788816921576", "2026-09-07T21:35:21.577Z", 12197, 0, [["Pushups", "Pushups (bodyweight)", "body only", "chest", "weight_reps", [[103.872776, 53, 1], [103.872776, 20, 1], [103.872776, 15, 1], [103.872776, 10, 1], [103.872776, 2, 1]]], ["Incline_Dumbbell_Press", "Incline Press (dumbbell)", "dumbbell", "chest", "weight_reps", [[29.483539, 5, 1], [29.483539, 6, 1], [24.94761, 9, 1], [24.94761, 7, 1]]], ["Single-Arm_Cable_Crossover", "Single-Arm Crossover (cable)", "cable", "chest", "weight_reps", [[12.247009, 12, 1], [14.968566, 12, 1], [14.968566, 10, 1], [14.968566, 7, 1]]], ["Cable_One_Arm_Tricep_Extension", "One Arm Tricep Extension (cable)", "cable", "triceps", "weight_reps", [[27.215575, 8, 1], [27.215575, 7, 1], [27.215575, 6, 1], [27.215575, 4, 1]]], ["Dips_-_Chest_Version", "Dips (chest version)", "other", "chest", "weight_reps", [[0.453593, 5, 1], [0.453593, 5, 1], [0.453593, 3, 1]]]]], ["w1790301227388", "2026-09-25T01:53:47.388Z", 12269, 3, [["Barbell_Bench_Press_-_Medium_Grip", "Bench Press (barbell, med grip)", "barbell", "chest", "weight_reps", [[61.235043, 10, 1], [102.058405, 12, 1], [111.130263, 5, 1], [102.058405, 6, 1]]], ["Triceps_Pushdown", "Triceps Pushdown (cable)", "cable", "triceps", "weight_reps", [[31.751504, 14, 1], [31.751504, 12, 1], [31.751504, 12, 1], [31.751504, 10, 1]]], ["Cable_Crossover", "Crossover (cable)", "cable", "chest", "weight_reps", [[14.74177, 20, 1], [14.74177, 15, 1], [14.74177, 12, 1], [14.74177, 12, 1]]], ["Dips_-_Chest_Version", "Dips (chest version)", "body only", "chest", "weight_reps", "added", [[104.326369, 12, 1], [104.326369, 7, 1], [104.326369, 8, 1], [104.326369, 6, 1]]]]]] ;
+const JAT_PRS = {"Cable_Crossover": {"date": "2026-09-25T02:36:27.077Z", "reps": 20, "weight": 14.741769556658292}, "Triceps_Pushdown": {"date": "2026-09-25T02:36:27.077Z", "reps": 14, "weight": 31.75150366049478}, "Dips_-_Chest_Version": {"date": "2026-09-25T02:36:27.077Z", "reps": 12, "weight": 208.19914543095865}, "Barbell_Bench_Press_-_Medium_Grip": {"date": "2024-06-20T02:04:00.000Z", "reps": 2, "weight": 138.35}} ;
+const JAT_BW = 105.23355498906842 ; const JAT_BWLOG = [{"d": "2026-06-19", "kg": 103.8727762607615}, {"d": "2026-09-24", "kg": 103.8727762607615}, {"d": "2026-09-29", "kg": 105.23355498906842}] ;
+const fx = ([id, date, tv, pc, exs]) => ({ id, name: 'W', date, duration: '60:00', sets: exs.reduce((a, e) => a + e[e.length - 1].length, 0), totalVolume: tv, prCount: pc,
+  exercises: exs.map(a => { const [exId, name, equip, muscle, tracking, ...rest] = a; const sets = rest.pop(), bwMode = rest[0];
+    return { exId, name, equip, muscle, tracking, ...(bwMode ? { bwMode } : {}), sets: sets.map(([weight, reps, d]) => ({ weight, reps, done: !!d })) }; }) });
+const prof = code => ({ name: code.slice(1), username: code, code });
+
+async function dipRepair() {
+  // Mr. Roni approved 2026-10-02: his 9/24-evening chest dips were saved "+ Added 230" (his body weight) on all four
+  // sets -> 459 lb x 12 record. The one-shot sets that added weight to 0 on HIS account only.
+  const WID = 'w1790301227388', DIP = 'Dips_-_Chest_Version', lb = kg => Math.round(kg * LB);
+  const hist = JAT_W.map(fx), seed = { hist, prs: JAT_PRS, bw: JAT_BW, bwlog: JAT_BWLOG, prof: prof('@jat') };
+  const P = await phone({ seed });
+  const st = page => page.evaluate(([WID, DIP]) => { const w = gH().find(w => w.id === WID);
+    return { w, pr: gPR()[DIP], cut: S.g('prRepair'), flag: localStorage.getItem(DIP_REPAIR_FLAG), hist: localStorage.getItem('jk_hist'), prs: localStorage.getItem('jk_prs'), bw: gBW() }; }, [WID, DIP]);
+  const a = await st(P.page), dip = a.w.exercises[3], orig = hist.find(w => w.id === WID);
+  check('dip: all four "+ Added 230" sets now 0 added, reps kept', dip.sets.every(s => s.weight === 0) && dip.sets.map(s => s.reps).join() === '12,7,8,6', JSON.stringify(dip.sets));
+  check('dip: entry keeps body only / + Added (only the number changed)', dip.equip === 'body only' && dip.bwMode === 'added' && dip.exId === DIP);
+  check('dip: other exercises in that workout untouched', JSON.stringify(a.w.exercises.slice(0, 3)) === JSON.stringify(orig.exercises.slice(0, 3)));
+  check('dip: totalVolume loses 230 lb x 33 reps (27,048 -> 19,458 lb)', a.w.totalVolume === Math.round(orig.totalVolume - 104.326369 * 33) && lb(a.w.totalVolume) === 19458, `${lb(orig.totalVolume)} -> ${lb(a.w.totalVolume)}`);
+  check('dip: prCount unchanged (the dip was a PR before and still is)', a.w.prCount === 3, String(a.w.prCount));
+  check('dip: 459 x 12 record replaced by body weight x 12, stamped repaired', lb(a.pr.weight) === lb(a.bw) && a.pr.reps === 12 && !!a.pr.repaired && !!a.cut[DIP], JSON.stringify(a.pr));
+  check('dip: other PR records untouched', ['Barbell_Bench_Press_-_Medium_Grip', 'Triceps_Pushdown', 'Cable_Crossover'].every(k => JSON.stringify(JSON.parse(a.prs)[k]) === JSON.stringify(JAT_PRS[k])));
+  check('dip: older dip workouts untouched', JSON.stringify(JSON.parse(a.hist).filter(w => w.id !== WID)) === JSON.stringify(hist.filter(w => w.id !== WID)));
+  // Once: the reload does nothing; even with the flag gone a second run finds nothing to fix.
+  await P.page.reload(); await P.page.waitForTimeout(300);
+  const b = await st(P.page);
+  check('dip: second launch changes nothing', b.hist === a.hist && b.prs === a.prs);
+  await P.page.evaluate(() => localStorage.removeItem(DIP_REPAIR_FLAG)); await P.page.reload(); await P.page.waitForTimeout(300);
+  const c = await st(P.page);
+  check('dip: re-run without the flag is a no-op (idempotent)', c.hist === a.hist && c.prs === a.prs && !!c.flag);
+  // Merge: the cloud's stale copy (230 lb sets, 459 record) can't come back.
+  const m = await P.page.evaluate(([cloud, WID, DIP]) => { const out = mergeBackup(cloud, collectBackup()); return { w: out.jk_hist.find(w => w.id === WID), pr: out.jk_prs[DIP] }; },
+    [{ jk_hist: hist, jk_prs: JAT_PRS }, WID, DIP]);
+  check('dip: merge with the old cloud copy keeps the fixed sets and record', m.w.exercises[3].sets.every(s => s.weight === 0) && lb(m.pr.weight) === lb(a.bw), JSON.stringify(m.pr));
+  // Login restore of the old cloud copy: the flag is cleared and the next launch fixes it again.
+  await P.page.evaluate(([cloud]) => { applyBundle(cloud, { wipe: true }); localStorage.setItem('jk_appVersion', APP_VERSION); },
+    [{ jk_hist: hist, jk_prs: JAT_PRS, jk_prof: prof('@jat'), jk_settings: { wUnit: 'lb' }, jk_bw: JAT_BW, jk_bwlog: JAT_BWLOG }]);
+  await P.page.reload(); await P.page.waitForTimeout(300);
+  const d = await st(P.page);
+  check('dip: login restore of the old copy is fixed again on the next launch', d.w.exercises[3].sets.every(s => s.weight === 0) && lb(d.pr.weight) === lb(d.bw) && d.w.totalVolume === a.w.totalVolume);
+  check('dip: no page errors', P.errors.length === 0, P.errors.join(' | '));
+  await P.ctx.close();
+  // Not his account: same workout id and data, byte for byte untouched, no flag.
+  for (const code of ['@dad', '@tester']) {
+    const O = await phone({ seed: { ...seed, prof: prof(code) } });
+    const o = await st(O.page);
+    check(`dip: account ${code} untouched (only @jat is fixed)`, o.hist === JSON.stringify(hist) && o.prs === JSON.stringify(JAT_PRS) && !o.flag && o.cut === null);
+    await O.ctx.close();
+  }
+}
+
+async function hevyRelabel() {
+  // Mr. Roni approved 2026-10-02 for Dad: re-run the current matcher on the stored Hevy name of every imported entry
+  // and move it to that exercise; weights untouched, PRs recomputed. Enabled for @dad only (allow-list).
+  const lb = kg => Math.round(kg * LB);
+  const hist = DAD_W.map(fx);
+  const seed = { hist, prs: {}, cex: DAD_CEX, bw: DAD_BW, prof: prof('@dad') };
+  // prCount/jk_prs as the app had them: the replay of this fixture (a fresh @tester page, which never relabels).
+  const T = await phone({ seed: { ...seed, prof: prof('@tester') } });
+  await T.page.waitForFunction(() => dbLoaded);
+  const base = await T.page.evaluate(() => { const rp = prReplay(), prs = {};
+    const h = gH().map(w => ({ ...w, prCount: (rp.get(w.id) || NO_PRS).n }));
+    rp.forEach(r => r.list.forEach(p => { prs[p.exId] = { weight: p.weight, reps: p.reps, date: '2026-09-30T12:00:00.000Z' }; }));
+    return { h, prs, tester: { hist: localStorage.getItem('jk_hist'), flag: localStorage.getItem(RELABEL_FLAG) } }; });
+  check('relabel: other account (@tester) untouched, not flagged', base.tester.hist === JSON.stringify(hist) && !base.tester.flag);
+  await T.ctx.close();
+  seed.hist = base.h; seed.prs = base.prs;
+  const oldRp = new Map();   // per workout: PRs on the moved exercises under the OLD labels
+  const D = await phone({ seed });
+  await D.page.waitForFunction(() => localStorage.getItem(RELABEL_FLAG), null, { timeout: 10000 });
+  const st = page => page.evaluate(() => ({ h: gH(), prs: gPR(), cut: S.g('prRepair'), flag: localStorage.getItem(RELABEL_FLAG), raw: localStorage.getItem('jk_hist'), rawPrs: localStorage.getItem('jk_prs'),
+    rp: [...prReplay()].map(([id, r]) => [id, r.n]) }));
+  const a = await st(D.page);
+  const ent = (h, wid, name) => h.find(w => w.id === wid).exercises.find(e => e.name === name);
+  const want = [['w1778272980000_12', 'Leg Press (Machine)', 'Leg_Press'], ['w1778868960000_8', 'Leg Press (Machine)', 'Leg_Press'],
+    ['w1779999720000_1', 'Bench Press (Smith Machine)', 'Machine_Bench_Press'], ['w1779999720000_1', 'Bicep Curl (Machine)', 'Machine_Bicep_Curl'],
+    ['w1782757380000_13', 'Bench Press (Dumbbell)', 'Dumbbell_Bench_Press'], ['w1782757380000_13', 'Bicep Curl (Machine)', 'Machine_Bicep_Curl'],
+    ['w1778272980000_12', 'Rear Kick (Machine)', 'cex1780461701088']];
+  want.forEach(([wid, name, to]) => { const e = ent(a.h, wid, name);
+    check(`relabel: ${name} (${wid.slice(-5)}) -> ${to}`, e.exId === to && e.muscle && e.equip !== undefined, JSON.stringify({ exId: e.exId, muscle: e.muscle, equip: e.equip })); });
+  check('relabel: Leg Press now reads quadriceps / machine', ent(a.h, 'w1778868960000_8', 'Leg Press (Machine)').muscle === 'quadriceps' && ent(a.h, 'w1778868960000_8', 'Leg Press (Machine)').equip === 'machine');
+  check('relabel: assisted Hevy dips NOT moved onto body-weight Dips (assist weight would read as load)',
+    ent(a.h, 'w1780434180000_25', 'Chest Dip (Assisted)').exId === 'imp_chest_dip_assisted_' && ent(a.h, 'w1779999720000_1', 'Chest Dip (Assisted)').exId === 'Dips_-_Chest_Version');
+  check('relabel: app-logged workouts untouched', ['w1780434222168', 'w1786561794613', 'w1787662573674', 'w1790104898582'].every(id =>
+    JSON.stringify(a.h.find(w => w.id === id).exercises) === JSON.stringify(base.h.find(w => w.id === id).exercises)));
+  check('relabel: Hevy name, sets, weights, reps, totalVolume unchanged everywhere', a.h.every((w, i) => w.totalVolume === base.h[i].totalVolume &&
+    w.exercises.every((e, ei) => e.name === base.h[i].exercises[ei].name && JSON.stringify(e.sets) === JSON.stringify(base.h[i].exercises[ei].sets))));
+  check('relabel: entry already under his own Rear Kick left alone', ent(a.h, 'w1780517880000_24', 'Rear Kick (Machine)').exId === 'cex1780461701088');
+  check('relabel: every workout prCount matches the replay of the relabelled history', a.h.every(w => w.prCount === (a.rp.find(([id]) => id === w.id) || [0, 0])[1]),
+    JSON.stringify(a.h.map(w => [w.id.slice(-5), w.prCount, (a.rp.find(([id]) => id === w.id) || [])[1]])));
+  check('relabel: some prCounts really moved', a.h.some((w, i) => w.prCount !== base.h[i].prCount));
+  const P = a.prs, r = k => P[k] && `${lb(P[k].weight)}x${P[k].reps}`;
+  check('relabel: barbell bench record drops to his real barbell 135 (Smith 185 x 3 moved out)', lb(P['Barbell_Bench_Press_-_Medium_Grip'].weight) === 135, r('Barbell_Bench_Press_-_Medium_Grip'));
+  check('relabel: Smith 185 x 3 now the machine bench record', r('Machine_Bench_Press') === '185x3', r('Machine_Bench_Press'));
+  check('relabel: machine curl record now 100 x 10 (was filed as dumbbell curl; his app-logged best 90 x 12)', r('Machine_Bicep_Curl') === '100x10', r('Machine_Bicep_Curl'));
+  check('relabel: dumbbell curl record now his real dumbbell sets only', lb(P['Dumbbell_Alternate_Bicep_Curl'].weight) === 60, r('Dumbbell_Alternate_Bicep_Curl'));
+  check('relabel: Leg Press record 275 x 12, calf press keeps its own 275 x 12 sets', r('Leg_Press') === '275x12' && r('Calf_Press_On_The_Leg_Press_Machine') === '275x12');
+  check('relabel: emptied old id loses its record (imp Rear Kick)', !P.imp_rear_kick_machine_);
+  check('relabel: rebuilt records stamped repaired and marked for merge', ['Leg_Press', 'Machine_Bench_Press', 'Barbell_Bench_Press_-_Medium_Grip'].every(k => P[k].repaired && a.cut[k]));
+  check('relabel: records of untouched lifts unchanged (dips)', JSON.stringify(P['Dips_-_Chest_Version']) === JSON.stringify(base.prs['Dips_-_Chest_Version']) && !a.cut['Dips_-_Chest_Version']);
+  // Idempotent: second launch, and a re-run with the flag cleared, change nothing.
+  await D.page.reload(); await D.page.waitForTimeout(600);
+  const b = await st(D.page);
+  check('relabel: second launch changes nothing', b.raw === a.raw && b.rawPrs === a.rawPrs);
+  const re = await D.page.evaluate(() => { localStorage.removeItem(RELABEL_FLAG); const before = localStorage.getItem('jk_hist'); const l = relabelHevyImports(); return { same: before === localStorage.getItem('jk_hist'), moves: l && l.moves }; });
+  check('relabel: re-run finds nothing to move (idempotent)', re.same && re.moves === 0, JSON.stringify(re));
+  // Merge can't undo it: the old cloud copy (old labels, Smith 185 under barbell bench) against this device.
+  const cloudOld = { jk_hist: base.h, jk_prs: base.prs, jk_cex: DAD_CEX };
+  const m = await D.page.evaluate(([cloud]) => { const out = mergeBackup(cloud, collectBackup());
+    return { lp: out.jk_hist.find(w => w.id === 'w1778868960000_8').exercises[0].exId, bench: out.jk_prs['Barbell_Bench_Press_-_Medium_Grip'], cut: out.jk_prRepair }; }, [cloudOld]);
+  check('relabel: merge with the old cloud copy keeps the new labels and the 135 bench record', m.lp === 'Leg_Press' && lb(m.bench.weight) === 135 && !!m.cut.Leg_Press, JSON.stringify(m.bench));
+  // A stale device's backup on top of the relabelled cloud: its old 185 record loses to the repair marker.
+  const m2 = await D.page.evaluate(([old]) => { const out = mergeBackup(collectBackup(), old); return out.jk_prs['Barbell_Bench_Press_-_Medium_Grip']; }, [cloudOld]);
+  check('relabel: a stale device cannot push the old 185 bench record back', lb(m2.weight) === 135, JSON.stringify(m2));
+  // Login restore of the old copy: flag cleared, relabelled again on the next launch.
+  await D.page.evaluate(([cloud, bw]) => { applyBundle({ ...cloud, jk_prof: { name: 'dad', username: '@dad', code: '@dad' }, jk_settings: { wUnit: 'lb' }, jk_bw: bw }, { wipe: true });
+    localStorage.setItem('jk_appVersion', APP_VERSION); }, [cloudOld, DAD_BW]);
+  check('relabel: login restore clears the device flag', !(await D.page.evaluate(() => localStorage.getItem(RELABEL_FLAG))));
+  await D.page.reload(); await D.page.waitForFunction(() => localStorage.getItem(RELABEL_FLAG), null, { timeout: 10000 });
+  const c = await st(D.page);
+  check('relabel: restored old copy is relabelled again', ent(c.h, 'w1778868960000_8', 'Leg Press (Machine)').exId === 'Leg_Press' && c.prs.Leg_Press.repaired && lb(c.prs['Barbell_Bench_Press_-_Medium_Grip'].weight) === 135);
+  check('relabel: no page errors', D.errors.length === 0, D.errors.join(' | '));
+  await D.ctx.close();
+  // @jat has the same pre-9/27 imports but is NOT on the allow-list: nothing moves; the dry run still sees them.
+  const J = await phone({ seed: { ...seed, prof: prof('@jat') } });
+  await J.page.waitForFunction(() => dbLoaded); await J.page.waitForTimeout(600);
+  const j = await J.page.evaluate(() => ({ raw: localStorage.getItem('jk_hist'), prs: localStorage.getItem('jk_prs'), flag: localStorage.getItem(RELABEL_FLAG), plan: hevyRelabelPlan() }));
+  check('relabel: @jat not on the allow-list -> history and records untouched, no flag', j.raw === JSON.stringify(base.h) && j.prs === JSON.stringify(base.prs) && !j.flag);
+  check('relabel: dry run on @jat still lists the moves (9) and the skipped assisted dips (2)', j.plan.moves.length === 9 && j.plan.skips.length === 2 && j.plan.skips.every(s => s.why === 'bodyweight'),
+    JSON.stringify({ m: j.plan.moves.length, s: j.plan.skips.map(s => s.why) }));
+  check('relabel: @jat no page errors', J.errors.length === 0, J.errors.join(' | '));
+  await J.ctx.close();
+}
+
 async function popupScrollLock() {
   // Mr. Roni 2026-10-01: "when on the recap page you are able to scroll the background page. That shouldn't be
   // allowed on any popup screen". Every popup pins the page; wheel and touch over it can't move the page; closing
@@ -2584,7 +2727,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, topPRRaw, monthReset].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, topPRRaw, monthReset, dipRepair, hevyRelabel].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
