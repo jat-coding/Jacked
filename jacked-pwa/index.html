@@ -7369,30 +7369,53 @@ document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.
 // background page. That shouldn't be allowed on any popup screen"). Every popup is position:fixed over the page, but
 // a drag with nothing left to scroll inside it chained through to the page. The lock follows the DOM, not open/close
 // calls: whenever any popup (.mo, achievements, badge, recap) has class "open" the page is pinned, and it is released
-// when the last one closes -- so nested popups and every close path (X, backdrop, Escape, code) agree. Pinned with
-// body position:fixed at -scrollY, the one lock iOS Safari (also home-screen) honours; the scroll spot comes back on
-// close unless a popup moved you to another tab. In the rotated landscape frame #jkRoot is the scroller instead.
+// when the last one closes -- so nested popups and every close path (X, backdrop, Escape, code) agree.
+// v1.10.63 (Mr. Roni 2026-10-02, photo: the tab bar floating mid-screen on Friends and moving with the list): the
+// v1.10.55 lock pinned the page by making body position:fixed at -scrollY and called scrollTo(Y) on close. On iOS
+// WebKit that hands the compositor a document that is suddenly Y px taller and scrolled in the same frame; the fixed
+// nav keeps its scroll-0 place in the document, so it sits Y px up the screen and rides along with the scroll. The
+// page is no longer moved at all: wheel and touch drags over a popup are cancelled unless an element inside the popup
+// can still scroll that way, so body style and window.scrollY never change and there is nothing to restore.
+// In the rotated landscape frame #jkRoot is the scroller; overflow:hidden on it is enough there (touch coordinates are
+// screen axes, not the app's, so the drag filter below is skipped).
 const SCROLL_LOCK_SEL='.mo.open,#achFull.open,#badgeFull.open,#recapFull.open';
-let _sl=null;   // {y, page, rot} while pinned
+let _sl=null;   // {page, rot} while pinned
 function syncScrollLock(){
-  const want=!!document.querySelector(SCROLL_LOCK_SEL), b=document.body, html=document.documentElement;
+  const want=!!document.querySelector(SCROLL_LOCK_SEL), html=document.documentElement;
   if(want===!!_sl) return;
   const root=document.getElementById('jkRoot'), pg=(document.querySelector('.page.active')||{}).id;
   if(want){
-    const rot=html.hasAttribute('data-rot');
-    _sl={y:window.scrollY||0, page:pg, rot};
-    if(rot){ if(root) root.style.overflow='hidden'; }
-    else Object.assign(b.style,{position:'fixed',top:-_sl.y+'px',left:'0',right:'0',width:'100%',overflow:'hidden'});
+    _sl={page:pg, rot:html.hasAttribute('data-rot')};
+    if(_sl.rot&&root) root.style.overflow='hidden';
     html.classList.add('popup-lock');
   } else {
     const s=_sl; _sl=null;
     if(root) root.style.overflow='';
-    ['position','top','left','right','width','overflow'].forEach(k=>b.style[k]='');
     html.classList.remove('popup-lock');
-    if(!s.rot) window.scrollTo(0, s.page===pg?s.y:0);
+    if(s.page!==pg){ if(s.rot&&root) root.scrollTop=0; else window.scrollTo(0,0); }   // a popup switched tabs: new tab from its top
   }
 }
 new MutationObserver(syncScrollLock).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
+// Can something inside an open popup scroll by dy (content delta, + = down)? Walks up from the touched element; an
+// inner scroller at its edge hands over to an outer one, never to the page.
+function _popupCanScroll(t,dy){
+  for(let el=t&&t.nodeType===1?t:t&&t.parentElement; el&&el!==document.body&&el.id!=='jkRoot'; el=el.parentElement){
+    if(el.scrollHeight<=el.clientHeight+1) continue;
+    const oy=getComputedStyle(el).overflowY; if(oy!=='auto'&&oy!=='scroll') continue;
+    if(dy>0?el.scrollTop+el.clientHeight<el.scrollHeight-1:dy<0?el.scrollTop>0:true) return true;
+  }
+  return false;
+}
+const _slOn=()=>_sl&&!_sl.rot;
+document.addEventListener('wheel',e=>{ if(_slOn()&&!e.ctrlKey&&!_popupCanScroll(e.target,e.deltaY)) e.preventDefault(); },{passive:false});
+let _slTY=null;
+document.addEventListener('touchstart',e=>{ _slTY=e.touches.length===1?e.touches[0].clientY:null; },{passive:true});
+document.addEventListener('touchmove',e=>{
+  if(!_slOn()||_slTY===null||e.touches.length!==1) return;
+  const t=e.target; if(t&&t.matches&&t.matches('input[type=range]')) return;
+  const y=e.touches[0].clientY, dy=_slTY-y; _slTY=y;
+  if(dy!==0&&!_popupCanScroll(t,dy)&&e.cancelable) e.preventDefault();
+},{passive:false});
 
 // In-app replacement for window.confirm()/window.prompt(). iOS Safari drops
 // those silently once the app is installed to the home screen — the call
@@ -7553,7 +7576,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.62';
+const BUILD = 'v1.10.63';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

@@ -2567,16 +2567,16 @@ async function popupScrollLock() {
   await page.evaluate(y => window.scrollTo(0, y), Y);
   await page.evaluate(() => { om('profModal'); showConfirm('Sure?'); }); await page.waitForTimeout(100);
   await page.evaluate(() => { const b = document.getElementById('cfCancel'); b ? b.click() : cm('confirmModal'); }); await page.waitForTimeout(100);
-  const mid = await page.evaluate(() => ({ fixed: document.body.style.position, open: !!document.querySelector('#profModal.open') }));
-  check('scroll lock: nested: closing the confirm keeps the page pinned while the profile is open', mid.fixed === 'fixed' && mid.open, JSON.stringify(mid));
+  const mid = await page.evaluate(() => ({ locked: document.documentElement.classList.contains('popup-lock'), open: !!document.querySelector('#profModal.open') }));
+  check('scroll lock: nested: closing the confirm keeps the page pinned while the profile is open', mid.locked && mid.open, JSON.stringify(mid));
   await page.evaluate(() => cm('profModal')); await page.waitForTimeout(100);
-  const end = await page.evaluate(() => ({ fixed: document.body.style.position, y: window.scrollY }));
-  check('scroll lock: nested: closing the last popup releases it and restores the spot', end.fixed === '' && end.y === Y, JSON.stringify(end));
+  const end = await page.evaluate(() => ({ locked: document.documentElement.classList.contains('popup-lock'), y: window.scrollY }));
+  check('scroll lock: nested: closing the last popup releases it and restores the spot', !end.locked && end.y === Y, JSON.stringify(end));
   // Backdrop tap closes and releases too.
   await page.evaluate(() => om('profModal')); await page.waitForTimeout(100);
   await page.mouse.click(195, 30); await page.waitForTimeout(150);
-  const bd = await page.evaluate(() => ({ open: !!document.querySelector('.mo.open'), fixed: document.body.style.position, y: window.scrollY }));
-  check('scroll lock: backdrop tap closes and unpins', !bd.open && bd.fixed === '' && bd.y === Y, JSON.stringify(bd));
+  const bd = await page.evaluate(() => ({ open: !!document.querySelector('.mo.open'), locked: document.documentElement.classList.contains('popup-lock'), y: window.scrollY }));
+  check('scroll lock: backdrop tap closes and unpins', !bd.open && !bd.locked && bd.y === Y, JSON.stringify(bd));
   // A long popup still scrolls its own content.
   await page.evaluate(() => openAch()); await page.waitForTimeout(150);
   const s0 = await page.evaluate(() => document.getElementById('achFull').scrollTop);
@@ -2585,6 +2585,80 @@ async function popupScrollLock() {
   check('scroll lock: Achievements page still scrolls its own list', s1.max > 0 && s1.st > s0, JSON.stringify({ s0, ...s1 }));
   await page.evaluate(() => closeAch());
   check('scroll lock: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function navPinned() {
+  // Mr. Roni 2026-10-02 (photo, Friends tab): "The bottom tab bar is moving while I scroll." The v1.10.55 popup lock
+  // made body position:fixed at -scrollY and scrollTo(Y) on close; on iOS the fixed nav kept its scroll-0 spot in the
+  // document and rode up the screen with the list. The nav's bottom must stay at the viewport bottom through scrolling,
+  // around every popup, and through the landscape lock and back; the page itself must never be moved by a popup.
+  const fr = n => ({ id: '@f' + n, code: '@f' + n, name: 'Friend ' + n, username: '@f' + n, totalVolume: 100000, workouts: 50, prs: 5, streak: 1, consistency: 10, badges: 1, days: [], wd: [], recent: [] });
+  const friends = Array.from({ length: 14 }, (_, i) => fr(i));
+  const hist = days('2026-08-01', 40).map(d => wk(d, [ex('Barbell Bench Press', [[185, 5]])]));
+  const { page, ctx, errors } = await phone({ seed: { hist, friends, closeBuddies: friends.slice(0, 4).map(f => f.code), bw: 180 / LB }, now: SEP15 });
+  await page.evaluate(() => { window.__wo = 0; Object.defineProperty(window, 'orientation', { get: () => window.__wo, configurable: true }); });
+  await page.evaluate(() => sp('leaderboard')); await page.waitForTimeout(400);
+  const nav = () => page.evaluate(() => { const b = document.querySelector('nav').getBoundingClientRect(), nb = parseFloat(getComputedStyle(document.querySelector('nav')).bottom);
+    return { bottom: b.bottom, want: innerHeight - nb, w: b.width, h: b.height, y: window.scrollY, pos: document.body.style.position, top: document.body.style.top }; });
+  const pinned = n => Math.abs(n.bottom - n.want) < 1 && n.h < 90 && n.w > 300;
+  const swipe = async (dy, x = 195, y0 = 620) => { const c = await ctx.newCDPSession(page);
+    await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y0 }] });
+    for (let k = 1; k <= 10; k++) await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y0 - k * dy / 10 }] });
+    await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await c.detach(); await page.waitForTimeout(250); };
+  let n = await nav();
+  check('nav pinned: Friends tab is long enough to scroll, nav starts at the viewport bottom', pinned(n) && (await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)) > 600, JSON.stringify(n));
+  await swipe(350); n = await nav();
+  check('nav pinned: touch-scrolling Friends moves the page, nav stays at the bottom', n.y > 100 && pinned(n), JSON.stringify(n));
+  await page.mouse.move(195, 400); await page.mouse.wheel(0, 300); await page.waitForTimeout(200); n = await nav();
+  check('nav pinned: wheel-scrolling keeps the nav at the bottom', pinned(n), JSON.stringify(n));
+  // Every popup type: all .mo sheets plus the full-screen pages.
+  const moIds = await page.evaluate(() => [...document.querySelectorAll('.mo')].map(m => m.id).filter(Boolean));
+  const OPEN = [...moIds.map(id => [id, `om('${id}')`, `cm('${id}')`]),
+    ['achievements', 'openAch()', 'closeAch()'], ['recap', 'openRecap(2026,7)', 'closeRecap()'], ['badge', 'badgeInfo(computeBadges()[0].name)', 'closeBadgeFull()']];
+  const bad = [];
+  for (const [name, open, close] of OPEN) {
+    await page.evaluate(() => { sp('leaderboard'); window.scrollTo(0, 500); }); await page.waitForTimeout(60);
+    const y0 = await page.evaluate(() => window.scrollY);
+    await page.evaluate(open); await page.waitForTimeout(120);
+    const o = await nav();
+    await swipe(300, 195, 700); await page.mouse.move(195, 420); await page.mouse.wheel(0, 500); await page.waitForTimeout(120);
+    const o2 = await nav();
+    await page.evaluate(close); await page.waitForTimeout(120);
+    const c1 = await nav();
+    await swipe(250); const c2 = await nav();
+    await swipe(-400); const c3 = await nav();
+    const ok = o.pos === '' && o.y === y0 && o2.y === y0 && c1.y === y0 && pinned(c1) && pinned(c2) && pinned(c3) && c2.y !== c1.y;
+    if (!ok) bad.push({ name, y0, o: [o.pos, o.top, o.y], o2: o2.y, c1: [c1.y, c1.bottom], c2: [c2.y, c2.bottom], c3: [c3.y, c3.bottom] });
+  }
+  check(`nav pinned: ${OPEN.length} popups -- opening never moves the page or makes body fixed, a drag over it can't scroll the page, and after closing the nav stays at the bottom while scrolling`, bad.length === 0 && OPEN.length > 20, JSON.stringify(bad).slice(0, 900));
+  await page.evaluate(() => openAch()); await page.waitForTimeout(120); await swipe(400, 195, 700);
+  const achT = await page.evaluate(() => document.getElementById('achFull').scrollTop); await page.evaluate(() => closeAch()); await page.waitForTimeout(80);
+  check('nav pinned: a long popup (Achievements) still touch-scrolls its own content', achT > 50, String(achT));
+  check('nav pinned: lock released after the last popup', !(await page.evaluate(() => document.documentElement.classList.contains('popup-lock'))));
+  // A popup that switches tabs: the new tab starts at its top, nav at the bottom.
+  await page.evaluate(() => { window.scrollTo(0, 500); om('profModal'); }); await page.waitForTimeout(80);
+  await page.evaluate(() => { sp('metrics'); cm('profModal'); }); await page.waitForTimeout(150); n = await nav();
+  check('nav pinned: a popup that switched tabs lands on the new tab at its top, nav pinned', n.y === 0 && pinned(n), JSON.stringify(n));
+  // Portrait-lock rotate path: turn to landscape (fake lock), use popups there, turn back, and around a rotation mid-popup.
+  const rotate = async (a) => { const [w, h] = a ? [844, 390] : [390, 844]; await page.setViewportSize({ width: w, height: h });
+    await page.evaluate(a => { window.__wo = a === 270 ? -90 : a; dispatchEvent(new Event('orientationchange')); dispatchEvent(new Event('resize')); }, a); await page.waitForTimeout(250); };
+  await page.evaluate(() => { sp('leaderboard'); window.scrollTo(0, 400); }); await page.waitForTimeout(80);
+  await rotate(90);
+  const land = await page.evaluate(() => ({ rot: document.documentElement.getAttribute('data-rot'), tf: getComputedStyle(document.body).transform }));
+  await page.evaluate(() => om('fpModal')); await page.waitForTimeout(100); await page.evaluate(() => cm('fpModal'));
+  await page.evaluate(() => openAch()); await page.waitForTimeout(100); await page.evaluate(() => closeAch());
+  await rotate(0); n = await nav();
+  check('nav pinned: landscape lock engaged, popups used there, back to portrait: nav at the bottom', land.rot === '90' && land.tf !== 'none' && pinned(n), JSON.stringify({ land, n }));
+  await swipe(300); n = await nav();
+  check('nav pinned: after the rotate path, scrolling keeps the nav at the bottom', pinned(n), JSON.stringify(n));
+  await page.evaluate(() => { window.scrollTo(0, 300); om('fpModal'); }); await page.waitForTimeout(80);
+  await rotate(270); const midRot = await page.evaluate(() => ({ top: document.body.style.top, w: document.body.style.width })); await page.evaluate(() => cm('fpModal')); await page.waitForTimeout(80);
+  await rotate(0); await swipe(200); n = await nav();
+  check('nav pinned: popup open across a rotation (portrait -> landscape -> close -> portrait): no inline body offset, nav pinned while scrolling', midRot.top === '' && midRot.w === '' && pinned(n), JSON.stringify({ midRot, n }));
+  await page.evaluate(() => { window.scrollTo(0, 300); }); await rotate(90); await page.evaluate(() => om('fpModal')); await page.waitForTimeout(80);
+  await rotate(0); await page.evaluate(() => cm('fpModal')); await page.waitForTimeout(80); await swipe(200); n = await nav();
+  check('nav pinned: popup opened in landscape, closed in portrait: nav pinned while scrolling', pinned(n) && !(await page.evaluate(() => document.getElementById('jkRoot').style.overflow)), JSON.stringify(n));
+  check('nav pinned: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
 async function topPRRaw() {
@@ -2739,7 +2813,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, topPRRaw, monthReset, dipRepair, hevyRelabel].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, topPRRaw, monthReset, dipRepair, hevyRelabel].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
