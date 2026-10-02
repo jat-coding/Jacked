@@ -3434,7 +3434,7 @@ const BADGE_STD={
   bench:['Barbell_Bench_Press_-_Medium_Grip'],          // barbell flat bench (Bench-Maxing, 1000lb Club)
   benchDb:['Dumbbell_Bench_Press'],                     // flat dumbbell bench: Bench-Maxing substitute ONLY (BENCH_SUBS)
   ohp:['Standing_Military_Press'],                      // standing barbell overhead press
-  squat:['Barbell_Squat'],                              // barbell back squat (Leg-Maxing, 1000lb Club)
+  squat:['Barbell_Squat','Barbell_Full_Squat'],         // barbell back squat, both depth-variant library ids (Leg-Maxing, 1000lb Club) -- Mr. Roni, 2026-10-02: reverses the 9/29 one-id-only lockdown for this pair specifically
   deadlift:['Barbell_Deadlift'],                        // conventional barbell deadlift (1000lb Club)
   pullup:['Pullups'],                                   // strict pull-up, palms away
   pushup:['Pushups'],                                   // standard push-up
@@ -7536,7 +7536,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.59';
+const BUILD = 'v1.10.60';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
