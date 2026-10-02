@@ -5188,21 +5188,40 @@ function logMetricWeight(){
   toast('Weight logged ✓','ok'); renderMetricsPage();
 }
 
+// Lifetime Stats "Top PR" (Mr. Roni, 2026-10-01): the heaviest RAW weight you have lifted, reps only break a tie
+// (then the earlier set). Not weight x reps, not e1RM. Derived from history, never from jk_prs, so a stored record
+// that folded body weight in (his Push-ups "229 lb x 62", Dad's old 325 back extension) can't win. Plain/assisted
+// bodyweight moves never count (isPlainBW); "+ Added" lifts count the added plates only, never body + plates.
+// Cardio and timed holds are not lifts. Imported workouts have no done flag to trust, same as importBest.
+function topPRSet(){
+  let best=null; const key=kg=>Math.round(kg*100);   // 0.01 kg: imports and app entries of the same plate tie
+  gH().forEach(w=>{ const imported=IMPORTED_ID.test(w.id||''), t=+new Date(w.date)||0;
+    (w.exercises||[]).forEach((ex,ei)=>{
+      if(!ex.exId||ex.exId==='?'||!isWT(ex)||isCardio(ex)||isHold(ex)||isPlainBW(ex)) return;
+      (ex.sets||[]).forEach(st=>{
+        const kg=+st.weight||0, reps=+st.reps||0;
+        if(kg<=0||reps<=0||(!st.done&&!imported)) return;
+        const c={exId:ex.exId,name:ex.name,weight:kg,reps,date:w.date,t,ei};
+        if(!best||key(kg)>key(best.weight)||(key(kg)===key(best.weight)&&(reps>best.reps||(reps===best.reps&&(t<best.t||(t===best.t&&ei<best.ei)))))) best=c;
+      });
+    });
+  });
+  return best;
+}
 function cardLifetime(){
-  const h=gH(), prs=gPR();
+  const h=gH();
   const tv=h.reduce((a,w)=>a+(w.totalVolume||0),0);
   const ts=h.reduce((a,w)=>a+(w.sets||0),0);
   // w.duration is "MM:SS" (minutes:seconds). Average only workouts that have one (imports without an end time store "—").
   const durs=h.map(w=>{const p=(w.duration||'').split(':');return p.length===2&&p.every(x=>x!==''&&!isNaN(x))?(+p[0]*60+ +p[1])/60:0;}).filter(m=>m>0);
   const avgMin=durs.length?Math.round(durs.reduce((a,m)=>a+m,0)/durs.length):0;
-  const topPR=Object.entries(prs).sort((a,b)=>b[1].weight*b[1].reps-a[1].weight*a[1].reps)[0];
-  const tEx=topPR?byId(topPR[0]):null;
+  const top=topPRSet(), tEx=top?byId(top.exId):null;
   const html=`<div class="stats-g2">
       <div class="sc"><div class="sv">${h.length}</div><div class="sl">Workouts</div></div>
       <div class="sc"><div class="sv">${fmtW(tv)}</div><div class="sl">${uL()} Lifted</div></div>
       <div class="sc"><div class="sv">${ts}</div><div class="sl">Total Sets</div></div>
       <div class="sc"><div class="sv">${avgMin}</div><div class="sl">Avg min/session</div></div>
-    </div>${tEx?`<div style="background:var(--bg3);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px;margin-top:8px"><div>${uic('trophy','#ffd700',24)}</div><div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Top PR</div><div style="font-weight:600;font-size:14px;margin-top:2px">${esc(tEx.name)}</div><div style="font-family:var(--fh);font-size:22px;font-weight:800;color:var(--accent)">${dW(topPR[1].weight)}${uL()} × ${topPR[1].reps} reps</div></div></div>`:''}`;
+    </div>${tEx?`<div style="background:var(--bg3);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px;margin-top:8px"><div>${uic('trophy','#ffd700',24)}</div><div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Top PR</div><div style="font-weight:600;font-size:14px;margin-top:2px">${esc(tEx.name)}</div><div style="font-family:var(--fh);font-size:22px;font-weight:800;color:var(--accent)">${dW(top.weight)}${uL()} × ${top.reps} reps</div></div></div>`:''}`;
   return {id:'lifetime',title:'Lifetime Stats',html};
 }
 
@@ -7346,7 +7365,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.56';
+const BUILD = 'v1.10.57';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

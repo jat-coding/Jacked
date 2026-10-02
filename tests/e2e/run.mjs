@@ -2294,6 +2294,10 @@ async function backExtRepair() {
   check('repair (Dad): every other PR record is unchanged', prOthers === JSON.stringify(fxPrs), '');
   const card = await A.page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = cardLifetime().html; return d.textContent; });
   check('repair (Dad): Top PR becomes Leg Press / Calf Press on the leg press 275lb x 12', /(Leg Press|Calf Press)/i.test(card) && /275lb × 12/.test(card) && !/325|Hyperext/.test(card), card.slice(-90));
+  // v1.10.57 raw-weight Top PR: Leg Press and Calf Press on the leg press tie at 275 x 12 on 9/22; the earlier set
+  // (Leg Press comes first in that workout) takes it.
+  const topD = await A.page.evaluate(() => topPRSet());
+  check('Top PR (Dad, raw heaviest): Leg Press 275 lb x 12', topD && topD.exId === 'Leg_Press' && lb(topD.weight) === 275 && topD.reps === 12 && /Leg Press[^×]*275lb × 12/.test(card), JSON.stringify(topD) + ' ' + card.slice(-60));
   check('repair (Dad): repair marker recorded for the cloud merge', a.cut && a.cut[HX] && a.flag, JSON.stringify([a.cut, a.flag]));
   check('repair (Dad): replay agrees with the stored PR counts for the repaired workouts', await A.page.evaluate(BAD => { const m = prAudit().mismatches.map(x => x.id); return BAD.every(id => !m.includes(id)); }, BAD), '');
   check('repair (Dad): the repair queued a cloud sync', await A.page.evaluate(() => typeof isDirty === 'function' ? isDirty() : true), '');
@@ -2427,12 +2431,75 @@ async function popupScrollLock() {
   check('scroll lock: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function topPRRaw() {
+  // Mr. Roni 2026-10-01 (4:26-6:22pm): Lifetime Stats "Top PR" = heaviest RAW weight lifted, reps only break a tie;
+  // plain bodyweight moves never count; derived from history so stored records with body weight in them can't win.
+  const BW = 229 / LB;
+  const bwEx = (exId, name, lbs, reps, extra = {}) => ({ exId, name, muscle: 'chest', equip: 'body only', tracking: 'weight_reps', ...extra, sets: [{ weight: lbs / LB, reps, done: true }] });
+  const lift = (exId, name, sets, extra = {}) => ({ exId, name, muscle: 'legs', equip: 'barbell', tracking: 'weight_reps', ...extra, sets: sets.map(([l, r, d = true]) => ({ weight: l / LB, reps: r, done: d })) });
+  const cardTxt = page => page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = cardLifetime().html; return d.textContent.replace(/\s+/g, ' '); });
+  const hist = [
+    wk('2026-07-20', [bwEx('Pushups', 'Pushups (bodyweight)', 229, 62), bwEx('Pullups', 'Pullups (bodyweight)', 229, 20), bwEx('Plank', 'Plank (bodyweight)', 229, 1)]),
+    wk('2026-09-10', [lift('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press', [[185, 5], [135, 20]]), lift('Barbell_Squat', 'Squat', [[225, 3]])]),
+    // "+ Added 230" dips: counts 230 (the plates), never 229 + 230 = 459.
+    wk('2026-09-25', [bwEx('Dips_-_Chest_Version', 'Dips (chest version)', 230, 12, { bwMode: 'added' }), bwEx('Pullups', 'Assisted Pull-up', 80, 10, { bwMode: 'assist' })]),
+    // An unchecked 400 lb set never counts.
+    wk('2026-09-28', [lift('Barbell_Deadlift', 'Deadlift', [[400, 5, false], [225, 8]])]),
+  ];
+  // Stored records as the old card read them: push-ups with body weight, dips with body weight folded in.
+  const prs = { Pushups: { weight: BW, reps: 62, date: '2026-07-20T18:00:00Z' }, 'Dips_-_Chest_Version': { weight: 459 / LB, reps: 12, date: '2026-09-25T18:00:00Z' },
+    Barbell_Squat: { weight: 225 / LB, reps: 3, date: '2026-09-10T18:00:00Z' } };
+  const { page, ctx, errors } = await phone({ seed: { hist, prs, bw: BW }, now: SEP15 });
+  let top = await page.evaluate(() => topPRSet()), card = await cardTxt(page);
+  check('Top PR: push-ups 229 x 62 never wins (plain bodyweight)', !/Push/i.test(card) && top.exId !== 'Pushups', card);
+  check('Top PR: stored 459 lb dip record (body weight folded in) not shown', !/459/.test(card), card);
+  check('Top PR: "+ Added" dips count the 230 lb of plates, and win over lighter barbell lifts', top.exId === 'Dips_-_Chest_Version' && Math.round(top.weight * LB) === 230 && top.reps === 12, JSON.stringify(top));
+  check('Top PR: card shows that set as weight x reps', /Top PR.*Dips.*230lb × 12 reps/.test(card), card);
+  check('Top PR: unchecked 400 lb deadlift set ignored', !/400/.test(card), card);
+  // Heaviest weighted lift wins over more reps or more weight x reps.
+  await page.evaluate(([LB]) => { const h = gH(); h.push({ id: 'wx1', name: 'W', date: '2026-09-29T18:00:00Z', duration: '30:00', sets: 2, totalVolume: 0, prCount: 0,
+    exercises: [{ exId: 'Barbell_Squat', name: 'Squat', equip: 'barbell', tracking: 'weight_reps', sets: [{ weight: 315 / LB, reps: 1, done: true }, { weight: 275 / LB, reps: 10, done: true }] }] });
+    S.s('hist', h); }, [LB]);
+  top = await page.evaluate(() => topPRSet()); card = await cardTxt(page);
+  check('Top PR: heaviest weighted lift wins (squat 315 x 1 beats 275 x 10 and dips 230 x 12)', top.exId === 'Barbell_Squat' && Math.round(top.weight * LB) === 315 && top.reps === 1 && /315lb × 1 reps/.test(card), card);
+  // Reps only break ties: 315 x 4 on another lift beats 315 x 1.
+  await page.evaluate(([LB]) => { const h = gH(); h.push({ id: 'wx2', name: 'W', date: '2026-09-30T18:00:00Z', duration: '30:00', sets: 1, totalVolume: 0, prCount: 0,
+    exercises: [{ exId: 'Leg_Press', name: 'Leg Press', equip: 'machine', tracking: 'weight_reps', sets: [{ weight: 315 / LB, reps: 4, done: true }] }] });
+    S.s('hist', h); }, [LB]);
+  top = await page.evaluate(() => topPRSet());
+  check('Top PR: reps break a tie at the same weight (315 x 4 beats 315 x 1)', top.exId === 'Leg_Press' && top.reps === 4, JSON.stringify(top));
+  // Same weight and reps: the earlier set keeps it (the newer one doesn't steal it).
+  await page.evaluate(([LB]) => { const h = gH(); h.push({ id: 'wx3', name: 'W', date: '2026-09-30T20:00:00Z', duration: '30:00', sets: 1, totalVolume: 0, prCount: 0,
+    exercises: [{ exId: 'Hack_Squat', name: 'Hack Squat', equip: 'machine', tracking: 'weight_reps', sets: [{ weight: 315 / LB, reps: 4, done: true }] }] });
+    S.s('hist', h); }, [LB]);
+  top = await page.evaluate(() => topPRSet());
+  check('Top PR: exact tie keeps the earlier set', top.exId === 'Leg_Press', JSON.stringify(top));
+  // An imported workout (no reliable done flag) counts; cardio and timed holds never do.
+  await page.evaluate(([LB]) => { const h = gH(); h.push({ id: 'w1775529720000_22', name: 'Hevy', date: '2026-04-07T18:00:00Z', duration: '—', sets: 3, totalVolume: 0, prCount: 0,
+    exercises: [{ exId: 'Calf_Press_On_The_Leg_Press_Machine', name: 'Leg Press (Machine)', equip: 'machine', tracking: 'weight_reps', sets: [{ weight: 500 / LB, reps: 12 }] },
+      { exId: 'bi_run_outdoor', name: 'Run', tracking: 'distance', sets: [{ weight: 900, reps: 30, done: true }] },
+      { exId: 'Plank', name: 'Plank', tracking: 'duration', sets: [{ weight: 900, reps: 1, done: true }] }] });
+    S.s('hist', h); }, [LB]);
+  top = await page.evaluate(() => topPRSet()); card = await cardTxt(page);
+  check('Top PR: imported 500 x 12 counts; cardio distance and hold seconds never do', top.exId === 'Calf_Press_On_The_Leg_Press_Machine' && Math.round(top.weight * LB) === 500 && /500lb × 12 reps/.test(card), card);
+  // kg display follows the unit setting.
+  await page.evaluate(() => { const s = S.g('settings'); S.s('settings', { ...(s || {}), wUnit: 'kg' }); });
+  card = await cardTxt(page);
+  check('Top PR: shown in kg when the unit is kg (500 lb = 226.8 kg)', /226\.8kg × 12 reps|227kg × 12 reps/.test(card), card);
+  // No weighted lift at all: no Top PR row (bodyweight-only user).
+  const B = await phone({ seed: { hist: [hist[0]], prs: { Pushups: prs.Pushups }, bw: BW }, now: SEP15 });
+  const cardB = await cardTxt(B.page);
+  check('Top PR: bodyweight-only history shows no Top PR (not push-ups)', !/Top PR/.test(cardB), cardB);
+  await B.ctx.close();
+  check('Top PR: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, topPRRaw].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
