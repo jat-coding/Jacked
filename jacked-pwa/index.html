@@ -6698,7 +6698,25 @@ function mergeBackup(cloud, local, pendingNotes){
   if(cloud.jk_prs||local.jk_prs)           out.jk_prs=mergePRs(rs(cloud.jk_prs,_prDate), rs(local.jk_prs,_prDate), repairs);
   if(cloud.jk_cardioPR||local.jk_cardioPR) out.jk_cardioPR=mergeCardioPRs(rs(cloud.jk_cardioPR,_cardioDate), rs(local.jk_cardioPR,_cardioDate));
   if(cloud.jk_holdPR||local.jk_holdPR)     out.jk_holdPR=mergeHoldPRs(rs(cloud.jk_holdPR,_prDate), rs(local.jk_holdPR,_prDate));
+
+  // Body weight (v1.10.70): the Jacked Sync companion imports the latest Samsung Health / Health Connect
+  // weight into the cloud copy. Whole-key local-wins would erase it on this device's next backup, so
+  // jk_bwlog is unioned by date (local wins on the same date) and jk_bw is DERIVED from the latest-dated
+  // entry. Safe because every phone write goes through logWeight(), which keeps jk_bw == that entry.
+  const bwlog=mergeBWlog(cloud.jk_bwlog, local.jk_bwlog);
+  if(bwlog){ out.jk_bwlog=bwlog; out.jk_bw=bwlog[bwlog.length-1].kg; }
   return out;
+}
+
+// [{d:'YYYY-MM-DD', kg}] union by d, local entry wins on a shared date, sorted by d. Malformed entries are
+// dropped. null when neither side has a usable entry (jk_bw then keeps the local-wins baseline).
+function mergeBWlog(cloud, local){
+  const ok=e=>e&&typeof e.d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(e.d)&&Number(e.kg)>0;
+  const byD=new Map();
+  (Array.isArray(cloud)?cloud:[]).forEach(e=>{ if(ok(e)) byD.set(e.d,e); });
+  (Array.isArray(local)?local:[]).forEach(e=>{ if(ok(e)) byD.set(e.d,e); });
+  if(!byD.size) return null;
+  return [...byD.values()].sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
 }
 
 // The heavy one: full localStorage bundle for cross-device restore. Touches only
@@ -7742,7 +7760,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.69';
+const BUILD = 'v1.10.70';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

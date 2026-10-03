@@ -3273,12 +3273,43 @@ async function routineSwapPrompt() {
   check('swap prompt: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function bodyWeightMerge() {
+  // Mr. Roni 2026-10-02 11:28pm: "Yes allow the body weight to be imported" (watch-client/BODY_WEIGHT_IMPORT_PROPOSAL.md).
+  // The companion writes Health Connect weights into the cloud jk_bwlog/jk_bw; the phone's merge must keep them.
+  const { page, ctx, errors } = await phone({ seed: { bw: 100, bwlog: [{ d: '2026-09-01', kg: 101 }, { d: '2026-09-10', kg: 100 }] }, now: SEP15 });
+  await dbReady(page);
+  const r = await page.evaluate(() => {
+    const local = collectBackup();
+    const imported = { ...local, jk_bwlog: [{ d: '2026-09-01', kg: 101 }, { d: '2026-09-10', kg: 100 }, { d: '2026-09-14', kg: 98.4 }], jk_bw: 98.4 };
+    const push = mergeBackup(imported, local);                         // phone backs up over the import
+    const clash = mergeBackup({ jk_bwlog: [{ d: '2026-09-10', kg: 97 }], jk_bw: 97 }, local);   // same date: phone wins
+    const older = mergeBackup({ jk_bwlog: [{ d: '2026-08-01', kg: 105 }], jk_bw: 105 }, local);  // older import never becomes current
+    const junk = mergeBackup({ jk_bwlog: [{ d: 'bad', kg: 5 }, { d: '2026-09-20', kg: 0 }, null] }, local);
+    const none = mergeBackup({ jk_bw: 90 }, { jk_bw: 88 });            // no log anywhere: local-wins baseline
+    return { push: [push.jk_bwlog.map(e => e.d + ':' + e.kg).join(','), push.jk_bw], clash: [clash.jk_bwlog.find(e => e.d === '2026-09-10').kg, clash.jk_bw],
+      older: [older.jk_bwlog.length, older.jk_bw, older.jk_bwlog[0].d], junk: [junk.jk_bwlog.length, junk.jk_bw], none: [none.jk_bw, 'jk_bwlog' in none] };
+  });
+  check('bw merge: phone backup keeps the imported 09-14 entry and jk_bw follows it', r.push[0] === '2026-09-01:101,2026-09-10:100,2026-09-14:98.4' && r.push[1] === 98.4, JSON.stringify(r.push));
+  check('bw merge: same date on both sides, the phone entry wins', r.clash[0] === 100 && r.clash[1] === 100, JSON.stringify(r.clash));
+  check('bw merge: an older import is added to the log but never becomes the current weight', r.older[0] === 3 && r.older[1] === 100 && r.older[2] === '2026-08-01', JSON.stringify(r.older));
+  check('bw merge: malformed cloud entries are dropped', r.junk[0] === 2 && r.junk[1] === 100, JSON.stringify(r.junk));
+  check('bw merge: with no log on either side jk_bw keeps local-wins', r.none[0] === 88 && r.none[1] === false, JSON.stringify(r.none));
+  // Pull path: cloudPullMerge-style write-back lands the import on this device and the app reads it.
+  const pulled = await page.evaluate(() => {
+    const m = mergeBackup({ ...collectBackup(), jk_bwlog: [...gBWlog(), { d: '2026-09-14', kg: 98.4 }], jk_bw: 98.4 }, collectBackup());
+    Object.keys(m).forEach(k => localStorage.setItem(k, JSON.stringify(m[k])));
+    return [gBW(), gBWlog().length];
+  });
+  check('bw merge: after a pull the phone reads the imported weight as current', pulled[0] === 98.4 && pulled[1] === 3, JSON.stringify(pulled));
+  check('bw merge: no console errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

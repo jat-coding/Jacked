@@ -48,6 +48,10 @@ total overwrite of someone's entire history — from every other device.
   on a watch survived exactly until the phone's next backup (field report
   2026-09-14; fixed in PWA v1.8.11). Wear `PendingNotesStore`, watchOS
   equivalent, PWA `jacked_exNotesPending`.
+- `jk_bwlog` / `jk_bw` (PWA v1.10.70, for the companion's Health Connect weight
+  import): `jk_bwlog` **union by `d`**, local entry wins on a shared date, sorted by
+  `d`; `jk_bw` is **derived** = `kg` of the latest-dated entry (local-wins only when
+  neither side has a usable log). Whole-key local-wins here erased imported weights.
 - Keys a fresh device auto-initialises EMPTY (`jk_cex`, `jk_routines`,
   `jk_friends`): **an empty local value never beats a non-empty cloud one** — a
   device that signed in before the cloud had `jk_cex` would otherwise wipe it on

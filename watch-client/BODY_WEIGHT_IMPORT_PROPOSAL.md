@@ -1,6 +1,6 @@
 # Body weight from Samsung Health into Jacked — proposal
 
-**From:** Wear session (jacked-wear), for Phil and Mr. Roni · **Date:** 2026-09-23 · **Status:** proposal, nothing built
+**From:** Wear session (jacked-wear), for Phil and Mr. Roni · **Date:** 2026-09-23 · **Status:** approved by Mr. Roni 2026-10-02; phone merge rule built in v1.10.70 (staging, not live); companion side not built
 
 ## Why
 
@@ -67,6 +67,5 @@ the phone offline during the import.
 
 ## Decisions wanted
 
-- **Mr. Roni:** the `jk_bwlog` union + derived `jk_bw` rule in `mergeBackup()` — yes/no, and
-  the phone build it will ship in. Default if no reply: nothing is built; this stays a proposal.
+- **Mr. Roni (decided 2026-10-02 11:28pm):** yes. Rule ships in phone build v1.10.70.
 - **Phil (decided 2026-09-23):** current weight only, no backfill; the most recent reading counts for the day. The import switch defaults to ON.
