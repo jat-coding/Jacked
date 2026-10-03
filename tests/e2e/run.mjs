@@ -161,6 +161,44 @@ async function consistency() {
   await ctx.close();
 }
 
+async function prMaxing() {
+  const run = async (label, hist, want) => {
+    const { page, ctx } = await phone({ seed: { hist }, now: SEP15 });
+    const b = await badge(page, 'PR-Maxing');
+    check(`pr-maxing: ${label}`, b.earned === want, `earned=${b.earned} ${b.desc}`);
+    await ctx.close();
+  };
+  const prWk = (d, pr) => Object.assign(wk(d), { prCount: pr });
+
+  await run('7 PRs across 6 days inside one rolling week (not 7 consecutive 1-PR days) -> earned',
+    [prWk('2026-08-01', 2), prWk('2026-08-02', 1), prWk('2026-08-03', 1), prWk('2026-08-04', 1), prWk('2026-08-05', 1), prWk('2026-08-06', 1)], true);
+
+  await run('6 PRs in a rolling week -> not earned',
+    [prWk('2026-08-01', 1), prWk('2026-08-02', 1), prWk('2026-08-03', 1), prWk('2026-08-04', 1), prWk('2026-08-05', 1), prWk('2026-08-06', 1)], false);
+
+  await run('7 PRs scattered oddly across a rolling week, split over two separate weeks -> not earned (each window alone is short)',
+    [prWk('2026-08-01', 3), prWk('2026-08-09', 4)], false);
+
+  {
+    // A single workout with 2 PRs plus 5 more scattered across the window still totals correctly (7, not just "some" number).
+    const hist = [prWk('2026-08-01', 2), prWk('2026-08-02', 1), prWk('2026-08-04', 1), prWk('2026-08-05', 1), prWk('2026-08-06', 1), prWk('2026-08-07', 1)];
+    const { page, ctx } = await phone({ seed: { hist }, now: SEP15 });
+    const b = await badge(page, 'PR-Maxing');
+    check('pr-maxing: one 2-PR workout + 5 scattered 1-PR workouts in the window totals to 7 -> earned, desc shows 7',
+      b.earned === true && /best: 7 PRs? in 7 days/.test(b.desc), JSON.stringify(b));
+    await ctx.close();
+  }
+
+  {
+    // PRs older than 3 months (before 2026-06-15, the cutoff for "now" = Sep 15) don't count toward the total.
+    const hist = [prWk('2026-05-01', 2), prWk('2026-05-02', 1), prWk('2026-05-03', 1), prWk('2026-05-04', 1), prWk('2026-05-05', 1), prWk('2026-05-06', 1)];
+    const { page, ctx } = await phone({ seed: { hist }, now: SEP15 });
+    const b = await badge(page, 'PR-Maxing');
+    check('pr-maxing: 7 PRs in a rolling week more than 3 months ago -> not earned, outside the 3-month window', b.earned === false, JSON.stringify(b));
+    await ctx.close();
+  }
+}
+
 function allGoldHistory({ pullReps = 20 } = {}) {
   const h = [];
   // 7 straight days, each with a PR -> PR-Maxing + Consistency-Maxing
@@ -499,7 +537,7 @@ async function achievementsPage() {
     const t = await page.locator('#badgeFullBody').innerText();
     check('comeback popup: Steady and Bounce back sections with this-month / last-month rows', /Steady/.test(t) && /Bounce back/.test(t) && /Sessions this month/.test(t) && /Sessions last month/.test(t) && /Days trained this month/.test(t), t);
     const pr = await page.evaluate(() => { badgeInfo('PR-Maxing'); return document.getElementById('badgeFullBody').innerText; });
-    check('PR-Maxing popup: 3-month reset note + highest ever', /Resets every 3 months/.test(pr) && /Highest ever/i.test(pr) && /days? in a row/.test(pr), pr);
+    check('PR-Maxing popup: 3-month reset note + highest ever', /Resets every 3 months/.test(pr) && /Highest ever/i.test(pr) && /in 7 days/.test(pr), pr);
     await ctx.close();
   }
   {
@@ -3309,7 +3347,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

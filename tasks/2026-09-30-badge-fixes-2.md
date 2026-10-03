@@ -49,6 +49,7 @@ earned pill.
 
 ## Done-when
 - [x] 2 answered: rolling 7-day window (2026-09-30 10:25am)
-- [ ] PR-Maxing rebuilt to weekly-count rule, tests pass
+- [x] PR-Maxing rebuilt to weekly-count rule, tests pass (see
+      tasks/2026-10-02-prmaxing-weekly-count.md, staging v1.10.71)
 - [ ] Coward-Maxing pill recolored off bgreen, tests pass
 - [ ] staging push, version bumped, screenshot of achievements screen sent

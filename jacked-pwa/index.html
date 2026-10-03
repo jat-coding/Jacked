@@ -3441,8 +3441,8 @@ function progressInfo(kind){
 // ============================================================
 // LIVE METRIC-TIER BADGES (Bench/Shoulder/Leg/Pull-up/Push-up/Cardio-Maxing)
 // Placed next to the progression chip per Mr. Roni's request 2026-09-17.
-// Only these six can be scoped to ONE exercise -- 1000lb Club, Variety, the
-// 7-day PR streak, Consistency-Maxing, Coward-Maxing and Jacked all need the whole account/workout and
+// Only these six can be scoped to ONE exercise -- 1000lb Club, Variety,
+// PR-Maxing, Consistency-Maxing, Coward-Maxing and Jacked all need the whole account/workout and
 // can't be tied to finishing a single lift (the limit flagged when he first
 // asked if this was possible).
 //
@@ -4665,8 +4665,10 @@ function computeBadges() {
     }
   }
 
-  // 2) A PR every day for 7 consecutive days (PR-Maxing is a 3-month-reset badge: only the last 3 months count)
-  const prBest3=bestStreak(h3.filter(w=>(w.prCount||0)>0)), prBestAll=bestStreak(h.filter(w=>(w.prCount||0)>0));
+  // 2) 7 total PRs within any rolling 7-day window, not a fixed calendar week (PR-Maxing
+  // is a 3-month-reset badge: only the last 3 months count; a single workout's prCount can
+  // contribute more than 1 toward the total).
+  const prBest3=bestWeekTotal(h3), prBestAll=bestWeekTotal(h);
   const prWeek=prBest3>=7;
 
   // 3) 1000 lb club — flat bench + barbell back squat + conventional barbell deadlift (the standard ids) must all
@@ -4731,8 +4733,8 @@ function computeBadges() {
 
   // Consistency-Maxing: trained on 7+ consecutive calendar days (local dates, any
   // number of workouts per day), anywhere in history -- permanent once earned,
-  // like PR-Maxing. Not a duplicate of PR-Maxing: that one needs a PR on each
-  // of the 7 days; this only needs a finished workout on each.
+  // like PR-Maxing. Not a duplicate of PR-Maxing: that one needs 7 total PRs within
+  // a rolling 7-day window; this needs a finished workout on each of 7 consecutive days.
   const bestRun=bestStreak(h3), bestRunAll=bestStreak(h);   // Consistency-Maxing is also a 3-month-reset badge
 
   // All-time bests (kept even when the 3-month tier has dropped) -- shown in the popup.
@@ -4746,7 +4748,7 @@ function computeBadges() {
     'Pull-up-Maxing':puA>0&&{v:`${puA} reps`,tier:tierOf(puA,TH.pullup)},
     'Push-up-Maxing':psA>0&&{v:`${psA} reps`,tier:tierOf(psA,TH.pushup)},
     'Cardio-Maxing':isFinite(cardioAll)&&{v:`${fmtClock(cardioAll)} per mile`,tier:cardioTierOf(cardioAll)},
-    'PR-Maxing':prBestAll>0&&{v:`${prBestAll} day${prBestAll!==1?'s':''} in a row`},
+    'PR-Maxing':prBestAll>0&&{v:`${prBestAll} PR${prBestAll!==1?'s':''} in 7 days`},
     'Consistency-Maxing':bestRunAll>0&&{v:`${bestRunAll} day${bestRunAll!==1?'s':''} in a row`}
   };
 
@@ -4813,7 +4815,7 @@ function computeBadges() {
       lifts:cardioR.lifts},
     {icon:'target',color:'var(--blue)',name:'Variety-Maxing',earned:variety>=100,
       desc:`${variety} / 100 different exercises logged`},
-    {icon:'flame',color:'var(--orange)',name:'PR-Maxing',threeMonth:true,desc:`PR 7 days in a row — best: ${prBest3} day${prBest3!==1?'s':''}`,earned:prWeek},
+    {icon:'flame',color:'var(--orange)',name:'PR-Maxing',threeMonth:true,desc:`7 PRs in a rolling week — best: ${prBest3} PR${prBest3!==1?'s':''} in 7 days`,earned:prWeek},
     {icon:'calendarCheck',color:'var(--green)',name:'Consistency-Maxing',threeMonth:true,desc:`Train 7 days in a row — best: ${bestRun} day${bestRun!==1?'s':''}`,earned:bestRun>=7},
     {icon:'bed',color:'var(--muted)',name:'Coward-Maxing',desc:'7+ days off in a row',earned:weekOff},
     {icon:'dumbbell',color:MCOL[ch.group]||'var(--accent)',name:'Challenge-Maxing',monthly:true,earned:chDone,group:ch.group,
@@ -4856,7 +4858,7 @@ const BADGE_HOW={
   get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)); return `Standing barbell overhead press, 5 reps, vs your body weight (set it in Profile). Standing dumbbell press counts at +15% (both dumbbells together). Seated presses, including the Smith machine one, don't count. Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}%.`+badgeAdjNote(); },
   get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)); return `Barbell back squat, 5 reps, vs your body weight (set it in Profile). Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}%.`+badgeAdjNote(); },
   '1000lb Club':'Barbell flat bench press + barbell back squat + conventional barbell deadlift from one workout, summed to 1000 lb or more. Flat dumbbell bench counts at +15%, Smith machine bench at -15%; no other variations.',
-  'PR-Maxing':'Hit a personal record 7 days in a row. Only the last 3 months count.',
+  'PR-Maxing':'Hit 7 personal records within any rolling 7-day window. Only the last 3 months count.',
   'Consistency-Maxing':'Finish a workout 7 days in a row. Only the last 3 months count.',
   'Coward-Maxing':'Given after 7+ days off in a row this month. Resets monthly.',
   'Jacked':'Every Monthly and 3-month badge earned, every tier at Gold. Permanent badges not needed. Locked while you hold Coward-Maxing.',
@@ -4887,7 +4889,7 @@ const BADGE_DETAIL={
   'Challenge-Maxing':{how:'Your weakest muscle group each month (glutes excluded, never repeated). Train it in the target number of different workouts.',note:'Resets monthly with a new muscle group.'},
   'Comeback-Maxing':{how:'Two ways in: Steady (train at least half the days this month) or Bounce back (more sessions than a slow last month).',note:'Resets monthly. Either one earns it.'},
   'Variety-Maxing':{how:'Log a real set on 100 different exercises from the library. Each new one counts once, forever.'},
-  'PR-Maxing':{how:'Hit a personal record 7 days in a row.',note:'Resets every 3 months. Only the last 3 months count.'},
+  'PR-Maxing':{how:'Hit 7 personal records within any rolling 7-day window. A single workout\'s PRs all count toward the total.',note:'Resets every 3 months. Only the last 3 months count.'},
   'Consistency-Maxing':{how:'Finish a workout on 7 calendar days in a row. Same day twice still counts as one.',note:'Resets every 3 months. Only the last 3 months count.'},
   'Coward-Maxing':{how:'Given after 7+ days off in a row this month. Holding it locks Jacked.',note:'Resets monthly. Starts fresh on the 1st.'},
   'Jacked':{how:'Earn every Monthly reset and 3-month reset badge, every tiered badge at Gold. Permanent badges are not needed. You also cannot have Coward-Maxing: holding it locks Jacked.',note:'Checked every month. Losing Gold on a 3-month badge, or missing a monthly badge, loses Jacked until you earn it back.'}
@@ -5837,6 +5839,23 @@ function bestStreak(h){
     const t=+new Date(d+'T12:00:00');
     run=(prev!==null&&Math.round((t-prev)/864e5)===1)?run+1:1;
     if(run>best) best=run; prev=t;
+  }
+  return best;
+}
+// Best rolling 7-day (any start day, not calendar-week) total of w.prCount across h.
+// Two-pointer over distinct days with PRs: for each day as a window end, shrink from
+// the left until the span is <=6 days apart, track the max sum seen.
+function bestWeekTotal(h){
+  const byDay={};
+  h.forEach(w=>{ const c=w.prCount||0; if(c){ const k=dayKey(w.date); byDay[k]=(byDay[k]||0)+c; } });
+  const days=Object.keys(byDay).sort();
+  if(!days.length) return 0;
+  const ms=days.map(k=>+new Date(k+'T12:00:00')), vals=days.map(k=>byDay[k]);
+  let best=0, start=0, sum=0;
+  for(let end=0; end<days.length; end++){
+    sum+=vals[end];
+    while(ms[end]-ms[start]>6*864e5){ sum-=vals[start]; start++; }
+    if(sum>best) best=sum;
   }
   return best;
 }
@@ -7760,7 +7779,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.70';
+const BUILD = 'v1.10.71';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
