@@ -1997,8 +1997,19 @@ async function maxingStandards() {
   const O = r._T.ohp;
   r = await B([E('Standing_Dumbbell_Press', 'Standing Dumbbell Press', [[50, 5]])]);
   check('maxing: standing dumbbell press 2 x 50 credits 115 lb toward Shoulder-Maxing', JSON.stringify(r['Shoulder-Maxing'].lifts) === JSON.stringify([['Dumbbell overhead press', 115]]) && r['Shoulder-Maxing'].tier === tierOf(115, O), JSON.stringify(r['Shoulder-Maxing']) + ' ' + O);
-  r = await B([E('Smith_Machine_Overhead_Shoulder_Press', 'Smith Machine Overhead Shoulder Press', [[100, 5]])]);
-  check('maxing: Smith overhead press 100 lb credits 85 lb', JSON.stringify(r['Shoulder-Maxing'].lifts) === JSON.stringify([['Smith machine overhead press', 85]]) && r['Shoulder-Maxing'].tier === tierOf(85, O), JSON.stringify(r['Shoulder-Maxing']));
+  // Mr. Roni, 2026-10-02 5:33pm: 'Barbell Shoulder Press' and the library's only Smith overhead press are both SEATED in
+  // their library instructions, so neither counts at all, not even at -15% -- however heavy.
+  const desc = await page.evaluate(async () => { const raw = await (await fetch(DB_URL)).json(); return ['Barbell_Shoulder_Press', 'Smith_Machine_Overhead_Shoulder_Press', 'Standing_Military_Press', 'Standing_Dumbbell_Press'].map(id => /^\s*(sit|to begin, place a flat bench)/i.test((raw.find(e => e.id === id) || {}).instructions?.[0] || '') ? 'seated' : 'standing').join(); });
+  check('maxing: real library: Barbell Shoulder Press and the Smith overhead press are seated; Standing Military / Standing Dumbbell Press are not', desc === 'seated,seated,standing,standing', desc);
+  r = await B([E('Barbell_Shoulder_Press', 'Barbell Shoulder Press', [[300, 5]]), E('Smith_Machine_Overhead_Shoulder_Press', 'Smith Machine Overhead Shoulder Press', [[300, 5]])]);
+  check('maxing: seated "Barbell Shoulder Press" and the Smith overhead press (300 x5 each) earn no Shoulder-Maxing and list no lift', r['Shoulder-Maxing'].tier === null && !r['Shoulder-Maxing'].lifts.length && !r['Shoulder-Maxing'].curV, JSON.stringify(r['Shoulder-Maxing']));
+  r = await B([E('Barbell_Shoulder_Press', 'Barbell Shoulder Press', [[300, 5]]), E('Smith_Machine_Overhead_Shoulder_Press', 'Smith Machine Overhead Shoulder Press', [[300, 5]]), E('Barbell_Squat', 'Barbell Squat', [[400, 1]]), E('Barbell_Deadlift', 'Barbell Deadlift', [[400, 1]])]);
+  check('maxing: neither seated press fills the 1000lb Club bench leg', r['1000lb Club'].tier === null, JSON.stringify(r['1000lb Club']));
+  r = await B([E('Barbell_Shoulder_Press', 'Barbell Shoulder Press', [[300, 5]]), E('Standing_Military_Press', 'Standing Military Press', [[95, 5]])]);
+  check('maxing: alongside a seated 300, the standing barbell 95 x5 is the only lift Shoulder-Maxing sees', JSON.stringify(r['Shoulder-Maxing'].lifts) === JSON.stringify([['Barbell overhead press', 95]]) && r['Shoulder-Maxing'].tier === tierOf(95, O), JSON.stringify(r['Shoulder-Maxing']));
+  const liveSeat = await page.evaluate(() => { S.s('hist', []); return [exerciseBadgeKey({ exId: 'Barbell_Shoulder_Press', name: 'Barbell Shoulder Press' }), exerciseBadgeKey({ exId: 'Smith_Machine_Overhead_Shoulder_Press', name: 'Smith Machine Overhead Shoulder Press' }),
+    badgeTierForKey('ohp', [{ exercises: [{ exId: 'Barbell_Shoulder_Press', name: 'Barbell Shoulder Press', tracking: 'weight_reps', sets: [{ weight: 300 / 2.20462, reps: 5, done: true }] }, { exId: 'Smith_Machine_Overhead_Shoulder_Press', name: 'Smith Machine Overhead Shoulder Press', tracking: 'weight_reps', sets: [{ weight: 300 / 2.20462, reps: 5, done: true }] }] }]).tier || null]; });
+  check('maxing: live logger: no Shoulder-Maxing chip or tier for either seated press', JSON.stringify(liveSeat) === '[null,null,null]', JSON.stringify(liveSeat));
   r = await B([E('Standing_Military_Press', 'Standing Military Press', [[95, 5]]), E('Standing_Dumbbell_Press', 'Standing Dumbbell Press', [[40, 5]])]);
   check('maxing: barbell 95 x5 credits 95 (no bonus) and the 2 x 40 dumbbells credit 92; badge names the better lift', JSON.stringify(r['Shoulder-Maxing'].lifts) === JSON.stringify([['Barbell overhead press', 95], ['Dumbbell overhead press', 92]]) && r['Shoulder-Maxing'].curV === '95 lb x5', JSON.stringify(r['Shoulder-Maxing']));
   r = await B([E('Standing_Dumbbell_Press', 'Standing Dumbbell Press', [[60, 5]])]);
@@ -2027,8 +2038,8 @@ async function maxingStandards() {
   const imp = 'w1789000000000_0';
   r = await B([E('cex1', 'Bench Press (Smith Machine)', [[100, 1]]), E('cex2', 'Bench Press (Dumbbell)', [[50, 1]])], imp);
   check('maxing: Hevy "Bench Press (Smith Machine)" credits 85, "Bench Press (Dumbbell)" 115', JSON.stringify(r['Bench-Maxing'].lifts) === JSON.stringify([['Dumbbell bench', 115], ['Smith machine bench', 85]]), JSON.stringify(r['Bench-Maxing'].lifts));
-  r = await B([E('Standing_Military_Press', 'Overhead Press (Dumbbell)', [[50, 5]]), E('cex3', 'Overhead Press (Smith Machine)', [[100, 5]])], imp);
-  check('maxing: Hevy "Overhead Press (Dumbbell)" credits as dumbbells (115), not as the barbell press, and the Smith one 85', JSON.stringify(r['Shoulder-Maxing'].lifts) === JSON.stringify([['Dumbbell overhead press', 115], ['Smith machine overhead press', 85]]), JSON.stringify(r['Shoulder-Maxing'].lifts));
+  r = await B([E('Standing_Military_Press', 'Overhead Press (Dumbbell)', [[50, 5]]), E('cex3', 'Overhead Press (Smith Machine)', [[300, 5]]), E('cex15', 'Shoulder Press (Smith Machine)', [[300, 5]])], imp);
+  check('maxing: Hevy "Overhead Press (Dumbbell)" credits as dumbbells (115), not as the barbell press; Hevy Smith overhead presses credit nothing', JSON.stringify(r['Shoulder-Maxing'].lifts) === JSON.stringify([['Dumbbell overhead press', 115]]), JSON.stringify(r['Shoulder-Maxing'].lifts));
   r = await B([E('Dumbbell_Bench_Press', 'Single Arm Dumbbell Bench Press', [[120, 1]]), E('cex4', 'Incline Bench Press (Smith Machine)', [[400, 1]]), E('cex5', 'Close Grip Bench Press (Smith Machine)', [[400, 1]]), E('cex6', 'Bench Press - Close Grip (Barbell)', [[400, 1]])], imp);
   check('maxing: Hevy single-arm dumbbell, Smith incline / close-grip and barbell close-grip bench earn no Bench-Maxing', r['Bench-Maxing'].tier === null && !r['Bench-Maxing'].lifts.length, JSON.stringify(r['Bench-Maxing']));
   r = await B([E('cex7', 'Seated Overhead Press (Dumbbell)', [[100, 5]]), E('cex8', 'Seated Overhead Press (Barbell)', [[200, 5]]), E('cex9', 'Shoulder Press (Dumbbell)', [[100, 5]]), E('cex10', 'Push Press', [[200, 5]]), E('cex11', 'Arnold Press (Dumbbell)', [[100, 5]])], imp);
@@ -2038,7 +2049,7 @@ async function maxingStandards() {
 
   // Live logger chip: fires on all six bench / overhead-press ids, not on look-alikes.
   const chip = await page.evaluate(() => ['Barbell_Bench_Press_-_Medium_Grip', 'Dumbbell_Bench_Press', 'Smith_Machine_Bench_Press', 'Standing_Military_Press', 'Standing_Dumbbell_Press', 'Smith_Machine_Overhead_Shoulder_Press', 'Smith_Machine_Incline_Bench_Press', 'Dumbbell_Shoulder_Press'].map(id => exerciseBadgeKey({ exId: id, name: id }) || '-').join());
-  check('maxing: live chip on barbell / dumbbell / Smith bench and overhead press only', chip === 'bench,bench,bench,ohp,ohp,ohp,-,-', chip);
+  check('maxing: live chip on barbell / dumbbell / Smith bench and standing barbell / dumbbell overhead press only', chip === 'bench,bench,bench,ohp,ohp,-,-,-', chip);
   const live = await page.evaluate(() => { S.s('hist', []); const v = badgeTierForKey('ohp', [{ exercises: [{ exId: 'Standing_Dumbbell_Press', name: 'Standing Dumbbell Press', tracking: 'weight_reps', sets: [{ weight: 60 / 2.20462, reps: 5, done: true }] }] }]); return [Math.round(v.value), v.by]; });
   check('maxing: live Shoulder-Maxing chip uses the credited 138 lb for 2 x 60 dumbbells', JSON.stringify(live) === JSON.stringify([138, 'Dumbbell overhead press']), JSON.stringify(live));
 
@@ -2070,7 +2081,7 @@ async function maxingStandards() {
   // Popup text explains the credit.
   await page.evaluate(() => { S.s('hist', []); sp('metrics'); badgeInfo('Shoulder-Maxing'); }); await page.waitForTimeout(250);
   const pop = await page.evaluate(() => document.getElementById('badgeFullBody').textContent);
-  check('maxing: Shoulder-Maxing popup explains dumbbell +15% (115 lb example) and Smith -15%', /\+15%/.test(pop) && /-15%/.test(pop) && /115 lb/.test(pop) && /Seated/.test(pop), pop.slice(0, 700));
+  check('maxing: Shoulder-Maxing popup explains dumbbell +15% (115 lb example), names both seated presses as not counting, offers no Smith credit', /\+15%/.test(pop) && !/-15%/.test(pop) && /115 lb/.test(pop) && /Barbell Shoulder Press and Smith Machine Overhead Shoulder Press are seated/.test(pop) && !/Smith machine counts/i.test(pop), pop.slice(0, 700));
   const how = await page.evaluate(() => [BADGE_HOW['1000lb Club'], BADGE_DETAIL['1000lb Club'].how, BADGE_HOW['Bench-Maxing']].join(' || '));
   check('maxing: 1000lb Club and Bench-Maxing text name the dumbbell +15% / Smith -15% bench', (how.match(/\+15%/g) || []).length === 3 && (how.match(/-15%/g) || []).length === 3, how);
   check('maxing: no page errors', errors.length === 0, errors.join(' | '));
@@ -3141,18 +3152,22 @@ async function routineSwapPrompt() {
   const reset = () => page.evaluate(R1 => { S.s('routines', [R1]); S.s('hist', []); _cf.length = 0; cm('fsModal'); }, R1);
   const sw = (ei, id) => page.evaluate(([ei, id]) => { switchEx(ei); toggleAEItem(id); }, [ei, id]);
   const logSet = () => page.evaluate(() => { const s = aw.exercises[0].sets[0]; s.weight = 50; s.reps = 5; s.done = true; saveAW(); });
-  // Manual finish: OK the "Finish and save" confirm, then answer the routine prompt if one shows. Returns every confirm text.
+  // Manual finish: OK the "Finish and save" confirm, then answer each routine prompt that shows, in order
+  // ('yes'/'no' answers every prompt; an array answers them one by one). Returns every confirm text.
   const finish = async answer => {
     await page.evaluate(() => { finishW(); });
     await page.waitForTimeout(100); await page.click('#cfOk'); await page.waitForTimeout(250);
-    if (answer && await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open'))) {
-      await page.click(answer === 'yes' ? '#cfOk' : '#cfCancel'); await page.waitForTimeout(250);
+    for (let i = 0; answer && i < 3 && await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open')); i++) {
+      const a = Array.isArray(answer) ? answer[i] : answer;
+      await page.click(a === 'yes' ? '#cfOk' : '#cfCancel'); await page.waitForTimeout(250);
     }
     return page.evaluate(() => [..._cf]);
   };
   const summaryBtn = () => page.evaluate(() => /Update "/.test(document.getElementById('fsContent').textContent));
+  const isSwap = m => / → /.test(m || ''), isAny = m => /^You (added|removed|changed the order)/.test(m || '');
 
-  // 1) Accept: switch B -> D plus an add, a reorder and a remove in the same session; only the switch is written back.
+  // 1) A switch B -> D plus an add, a reorder and a remove in one session: BOTH prompts show, switch first.
+  //    Yes to the switch, keep to the rest: only the switch is written back.
   await reset();
   await page.evaluate(() => startRW('r1')); await logSet();
   await sw(1, 'cD');
@@ -3160,18 +3175,33 @@ async function routineSwapPrompt() {
   check('swap prompt: switch is remembered on the saved live workout (survives reload)', JSON.stringify(saved) === '{"cB":"cD"}', JSON.stringify(saved));
   await page.evaluate(() => { addExToWorkout('cF'); moveEx(0, 1); });
   await page.evaluate(() => { rmEx(aw.exercises.findIndex(e => e.exId === 'cC')); });
-  let msgs = await finish('yes');
-  check('swap prompt: one prompt after Finish, naming the switch', msgs.length === 2 && /Bravo Row → Delta Press/.test(msgs[1]) && /"Push"/.test(msgs[1]), JSON.stringify(msgs));
-  const after = JSON.parse(await routine());
+  let msgs = await finish(['yes', 'no']);
+  check('both prompts: switch + add/remove shows the switch prompt, then the any-change prompt', msgs.length === 3 && isSwap(msgs[1]) && /Bravo Row → Delta Press/.test(msgs[1]) && /"Push"/.test(msgs[1]) && isAny(msgs[2]), JSON.stringify(msgs));
+  check('both prompts: the any-change prompt names the add and the remove, not the switch again', /added Foxtrot Curl/.test(msgs[2]) && /removed Charlie Squat/.test(msgs[2]) && !/Bravo|Delta/.test(msgs[2]), msgs[2]);
+  let after = JSON.parse(await routine());
   check('swap prompt: accept replaces the switched slot in place (A, D, C)', after.exercises.join() === 'cA,cD,cC', after.exercises.join());
   check('swap prompt: accept leaves every other routine field alone (name, desc, section)', JSON.stringify({ ...after, exercises: R1.exercises }) === JSON.stringify(R1), JSON.stringify(after));
-  check('swap prompt: the add/reorder/remove from that session are not written back', !after.exercises.includes('cF') && after.exercises.includes('cC') && after.exercises[0] === 'cA');
+  check('both prompts: keep on the any-change prompt -> the add/reorder/remove are not written back', !after.exercises.includes('cF') && after.exercises.includes('cC') && after.exercises[0] === 'cA');
   const h = await page.evaluate(() => gH());
   check('swap prompt: workout still saved; switch bookkeeping not stored in history', h.length === 1 && !('swaps' in h[0]) && h[0].exercises.some(e => e.exId === 'cD'), JSON.stringify(Object.keys(h[0] || {})));
-  check('swap prompt: finish summary has no second "Update routine" button after the prompt', !(await summaryBtn()));
+  check('both prompts: finish summary "Update routine" button is back when the routine still differs', await summaryBtn());
   await page.screenshot({ path: SHOTS + '/routine-swap-summary.png' });
 
-  // 2) Decline: routine byte-identical.
+  // 1b) Same session, yes to both: the routine becomes the session's list (D, A, F).
+  await reset();
+  await page.evaluate(() => startRW('r1')); await logSet(); await sw(1, 'cD');
+  await page.evaluate(() => { addExToWorkout('cF'); moveEx(0, 1); rmEx(aw.exercises.findIndex(e => e.exId === 'cC')); });
+  msgs = await finish('yes');
+  check('both prompts: yes to both writes the switch, add, reorder and remove (D, A, F)', msgs.length === 3 && JSON.parse(await routine()).exercises.join() === 'cD,cA,cF', await routine());
+  check('both prompts: nothing left to offer on the summary after yes to both', !(await summaryBtn()));
+
+  // 1c) Keep the switch, yes to the rest: the add is written back, the declined switch is not.
+  await reset();
+  await page.evaluate(() => startRW('r1')); await logSet(); await sw(1, 'cD'); await page.evaluate(() => addExToWorkout('cF'));
+  msgs = await finish(['no', 'yes']);
+  check('both prompts: keep the switch, accept the add -> routine A, B, C, F (switch not written)', msgs.length === 3 && /added Foxtrot Curl/.test(msgs[2]) && !/Delta/.test(msgs[2]) && JSON.parse(await routine()).exercises.join() === 'cA,cB,cC,cF', JSON.stringify(msgs) + ' ' + await routine());
+
+  // 2) Decline a switch-only session: routine byte-identical, no any-change prompt about the switch.
   await reset();
   const before2 = await routine();
   await page.evaluate(() => startRW('r1')); await logSet(); await sw(0, 'cD');
@@ -3180,9 +3210,10 @@ async function routineSwapPrompt() {
   check('swap prompt: buttons read "Update routine" / "Keep routine"', pop.ok === 'Update routine' && pop.no === 'Keep routine', JSON.stringify(pop));
   await page.screenshot({ path: SHOTS + '/routine-swap-prompt.png' });
   await page.click('#cfCancel'); await page.waitForTimeout(250);
+  check('swap prompt: declining a switch-only session asks nothing more', (await page.evaluate(() => _cf.length)) === 2 && !(await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open'))), JSON.stringify(await page.evaluate(() => _cf)));
   check('swap prompt: decline leaves the routine byte-identical', (await routine()) === before2);
   check('swap prompt: decline still saves the workout', (await page.evaluate(() => gH().length)) === 1);
-  check('swap prompt: no "Update routine" summary button after declining', !(await summaryBtn()));
+  check('swap prompt: summary "Update routine" button shows again after declining (no longer hidden)', await summaryBtn());
 
   // 3) Freestyle: a switch never prompts.
   await reset();
@@ -3192,16 +3223,26 @@ async function routineSwapPrompt() {
   check('swap prompt: freestyle workout with a switch shows no prompt', msgs.length === 1 && /Finish/.test(msgs[0]), JSON.stringify(msgs));
   check('swap prompt: freestyle finish still saves, routine untouched', (await page.evaluate(() => gH().length)) === 1 && (await routine()) === JSON.stringify(R1));
 
-  // 4) Reorder / add / remove / set logging alone never prompt (each on its own, then all together).
-  for (const [label, fn] of [['reorder', () => moveEx(0, 1)], ['add', () => addExToWorkout('cF')], ['remove', () => rmEx(2)],
-                             ['reorder+add+remove', () => { moveEx(0, 1); addExToWorkout('cF'); rmEx(2); }]]) {
+  // 4) No switch: reorder / add / remove each bring back the any-change prompt (v1.8.27), and only that one.
+  for (const [label, fn, want, re] of [['reorder', () => moveEx(0, 1), 'cB,cA,cC', /changed the order/], ['add', () => addExToWorkout('cF'), 'cA,cB,cC,cF', /added Foxtrot Curl/],
+                             ['remove', () => rmEx(2), 'cA,cB', /removed Charlie Squat/],
+                             ['reorder+add+remove', () => { moveEx(0, 1); addExToWorkout('cF'); rmEx(2); }, 'cB,cA,cF', /added Foxtrot Curl; removed Charlie Squat/]]) {
     await reset();
     await page.evaluate(() => startRW('r1')); await logSet();
     await page.evaluate(fn);
-    msgs = await finish('yes');
-    check(`swap prompt: ${label} without a switch shows no prompt`, msgs.length === 1, JSON.stringify(msgs));
-    check(`swap prompt: ${label} leaves the routine untouched`, (await routine()) === JSON.stringify(R1));
+    msgs = await finish('no');
+    check(`any-change prompt: ${label} without a switch shows the any-change prompt (and no switch prompt)`, msgs.length === 2 && isAny(msgs[1]) && re.test(msgs[1]) && !isSwap(msgs[1]), JSON.stringify(msgs));
+    check(`any-change prompt: ${label}, "Keep original" leaves the routine untouched`, (await routine()) === JSON.stringify(R1));
+    await reset();
+    await page.evaluate(() => startRW('r1')); await logSet();
+    await page.evaluate(fn);
+    await finish('yes');
+    check(`any-change prompt: ${label}, "Update routine" writes it back (${want})`, JSON.parse(await routine()).exercises.join() === want, await routine());
   }
+  await reset();
+  await page.evaluate(() => startRW('r1')); await logSet();
+  msgs = await finish('yes');
+  check('any-change prompt: set logging alone never prompts', msgs.length === 1, JSON.stringify(msgs));
 
   // 5) Several switches (including a chain B -> F -> G) -> exactly one prompt covering all; accept writes all in place.
   await reset();
@@ -3212,18 +3253,21 @@ async function routineSwapPrompt() {
   check('swap prompt: the one prompt lists every switch (chain shown as start -> end)', /Alpha Press → Delta Press/.test(msgs[1]) && /Bravo Row → Golf Curl/.test(msgs[1]) && /Charlie Squat → Echo Row/.test(msgs[1]) && !/Foxtrot/.test(msgs[1]), msgs[1]);
   check('swap prompt: accept applies every switch in its slot (D, G, E)', JSON.parse(await routine()).exercises.join() === 'cD,cG,cE', await routine());
 
-  // 6) Edge cases: switching back cancels; switched-in then removed is a removal; switching an added exercise; auto-finish.
-  for (const [label, fn] of [['switch then switch back', async () => { await sw(0, 'cD'); await sw(0, 'cA'); }],
-                             ['switched-in exercise later removed', async () => { await sw(0, 'cD'); await page.evaluate(() => rmEx(0)); }],
-                             ['switching an exercise added mid-workout', async () => { await page.evaluate(() => addExToWorkout('cF')); await sw(3, 'cG'); }]]) {
+  // 6) Edge cases: switching back cancels; switched-in then removed is a removal; switching an added exercise is an add.
+  await reset();
+  await page.evaluate(() => startRW('r1')); await logSet(); await sw(0, 'cD'); await sw(0, 'cA');
+  msgs = await finish('yes');
+  check('swap prompt: switch then switch back -> no prompt, routine untouched', msgs.length === 1 && (await routine()) === JSON.stringify(R1), JSON.stringify(msgs));
+  for (const [label, fn, re] of [['switched-in exercise later removed', async () => { await sw(0, 'cD'); await page.evaluate(() => rmEx(0)); }, /^You removed Alpha Press\./],
+                             ['switching an exercise added mid-workout', async () => { await page.evaluate(() => addExToWorkout('cF')); await sw(3, 'cG'); }, /^You added Golf Curl\./]]) {
     await reset();
     await page.evaluate(() => startRW('r1')); await logSet();
     await fn();
-    msgs = await finish('yes');
-    check(`swap prompt: ${label} -> no prompt, routine untouched`, msgs.length === 1 && (await routine()) === JSON.stringify(R1), JSON.stringify(msgs));
+    msgs = await finish('no');
+    check(`swap prompt: ${label} -> no switch prompt, just the any-change one; keep = routine untouched`, msgs.length === 2 && re.test(msgs[1]) && (await routine()) === JSON.stringify(R1), JSON.stringify(msgs));
   }
   await reset();
-  await page.evaluate(() => startRW('r1')); await logSet(); await sw(0, 'cD');
+  await page.evaluate(() => startRW('r1')); await logSet(); await sw(0, 'cD'); await page.evaluate(() => addExToWorkout('cF'));
   await page.evaluate(() => finishW(true)); await page.waitForTimeout(250);
   check('swap prompt: auto-finish (nobody there) never prompts, routine untouched', (await page.evaluate(() => _cf.length)) === 0 && (await routine()) === JSON.stringify(R1) && (await page.evaluate(() => gH().length)) === 1);
   check('swap prompt: no page errors', errors.length === 0, errors.join(' | '));

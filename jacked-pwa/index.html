@@ -3460,9 +3460,11 @@ const BADGE_STD={
   bench:['Barbell_Bench_Press_-_Medium_Grip','Bench_Press_-_Powerlifting'],  // barbell flat bench, two library ids for the same lift (Bench-Maxing, 1000lb Club) -- Mr. Roni, 2026-10-02
   benchDb:['Dumbbell_Bench_Press'],                     // flat dumbbell bench, both hands (not One_Arm_, neutral-grip, incline or decline): x1.15 (LIFT_VARIANTS)
   benchSmith:['Smith_Machine_Bench_Press'],             // flat Smith machine bench (not close-grip, incline or decline): x0.85 (LIFT_VARIANTS)
-  ohp:['Standing_Military_Press','Barbell_Shoulder_Press'],  // standing barbell overhead press, two library ids for the same lift -- Mr. Roni, 2026-10-02
+  ohp:['Standing_Military_Press'],                      // standing barbell overhead press. NOT Barbell_Shoulder_Press: despite the name its library
+                                                        // instructions are a seated press, so it never counts, not even at a penalty (Mr. Roni, 2026-10-02 5:33pm)
   ohpDb:['Standing_Dumbbell_Press'],                    // standing dumbbell press, both hands (not seated Dumbbell_Shoulder_Press, alternating, palms-in, Arnold): x1.15
-  ohpSmith:['Smith_Machine_Overhead_Shoulder_Press'],   // the library's only Smith overhead press: x0.85
+  ohpSmith:[],                                          // a STANDING Smith overhead press would go here at x0.85. The library has none: its only one,
+                                                        // Smith_Machine_Overhead_Shoulder_Press, is seated on a bench, so it never counts (Mr. Roni, 2026-10-02 5:33pm)
   squat:['Barbell_Squat','Barbell_Full_Squat'],         // barbell back squat, both depth-variant library ids (Leg-Maxing, 1000lb Club) -- Mr. Roni, 2026-10-02: reverses the 9/29 one-id-only lockdown for this pair specifically
   deadlift:['Barbell_Deadlift'],                        // conventional barbell deadlift (1000lb Club)
   pullup:['Pullups'],                                   // strict pull-up, palms away
@@ -3473,15 +3475,14 @@ const _stdByName=new Map();
 // Hevy's exact names for the dumbbell / Smith versions the badges credit. The general name matcher files these
 // elsewhere ("Overhead Press (Dumbbell)" on the barbell Standing Military Press, "Bench Press (Smith Machine)" on the
 // plain chest-press machine), so for a badge they are pinned here by exact name (2026-10-02).
-const HEVY_BADGE_NAME={'bench press (smith machine)':'Smith_Machine_Bench_Press','overhead press (dumbbell)':'Standing_Dumbbell_Press',
-  'overhead press (smith machine)':'Smith_Machine_Overhead_Shoulder_Press'};
+const HEVY_BADGE_NAME={'bench press (smith machine)':'Smith_Machine_Bench_Press','overhead press (dumbbell)':'Standing_Dumbbell_Press'};
 const BADGE_SMITH_IDS=()=>BADGE_STD.benchSmith.concat(BADGE_STD.ohpSmith);
 function badgeStdId(ex,w){
   const id=(ex&&ex.exId)||'';
   if(/^w\d+_\d+$/.test((w&&w.id)||'')&&dbLoaded&&ex&&ex.name){   // imported (Hevy CSV) workout
     // The name matcher reads a "(...)" as an equipment hint only, so "Pull Up (Assisted)" and "Pull Up (Band)" land
     // on Pullups. For a badge, any qualifier other than plain barbell / dumbbell / bodyweight / weighted is a different exercise.
-    // A Smith machine name is let through only when it lands on one of the two Smith ids the badges credit (-15%).
+    // A Smith machine name is let through only when it lands on a Smith id the badges credit (-15%; today only the bench).
     // Single-arm / alternating dumbbell work is a different lift from the two-hand press the badge credits.
     const pin=HEVY_BADGE_NAME[ex.name.trim().toLowerCase().replace(/\s+/g,' ')]; if(pin) return pin;
     const q=(ex.name.match(/\(([^)]*)\)/)||[])[1], smith=/smith/i.test(ex.name);
@@ -3583,7 +3584,7 @@ const LIFT_VARIANTS={
   ohp:[
     {key:'ohp', label:'Barbell overhead press', mult:1},
     {key:'ohpDb', label:'Dumbbell overhead press', mult:BADGE_DB_BONUS, pair:true},
-    {key:'ohpSmith', label:'Smith machine overhead press', mult:BADGE_SMITH_CUT},
+    {key:'ohpSmith', label:'Smith machine overhead press', mult:BADGE_SMITH_CUT},   // empty id list today (BADGE_STD.ohpSmith)
   ],
 };
 function liftVariant(ex,badge,w){ return LIFT_VARIANTS[badge].find(v=>isStdEx(ex,v.key,w))||null; }
@@ -3695,7 +3696,7 @@ function metricBadgeInfo(key,tier,value,exName){
     : key==='cardio' ? `${fmtClock(value)}/mi`
     : sub ? `${Math.round(value)} lb credited`
     : `${Math.round(value)} lb`;
-  const subNote=` Dumbbells: both together +15%. Smith machine: -15%.`;
+  const subNote=key==='ohp'&&!BADGE_STD.ohpSmith.length?` Dumbbells: both together +15%.`:` Dumbbells: both together +15%. Smith machine: -15%.`;
   const T=badgeT();
   const rules={
     bench:`Bronze / Silver / Gold — 1-rep barbell bench: ${T.bench.join(' / ')} lb.`+(sub?subNote:''),
@@ -4245,17 +4246,18 @@ function finishW(auto) {
   if (auto) { _finishWContinue(auto,ts); return; }
   showConfirm(ts===0 ? 'No sets logged — finish anyway?' : 'Finish and save this workout?').then(async ok=>{
     if(!ok) return;
-    const asked=await maybeApplySwaps();
-    _finishWContinue(auto,ts,asked);
+    const sw=await maybeApplySwaps();
+    await maybeUpdateRoutine(sw);
+    _finishWContinue(auto,ts);
   });
 }
 // A routine workout where Switch Exercise was used: one prompt on finish covering every
-// switch. Yes replaces just those slots in the routine's exercise list, in place; adds,
-// removes and reorders from the session never prompt and are never written back
-// (Mr. Roni, 2026-10-02 -- replaces the v1.8.27 any-change prompt). Returns true if asked.
+// switch. Yes replaces just those slots in the routine's exercise list, in place
+// (Mr. Roni, 2026-10-02). Adds, removes and reorders are asked about separately, right
+// after, by maybeUpdateRoutine. Returns {eff: the switches asked about, yes} or null.
 async function maybeApplySwaps(){
-  if(!aw||!aw.routineId||!aw.swaps) return false;
-  const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return false;
+  if(!aw||!aw.routineId||!aw.swaps) return null;
+  const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return null;
   const before=r.exercises||[], now=new Set(aw.exercises.map(e=>e.exId));
   // Only switches of an exercise the routine has, to one still in the session (switched in
   // then removed = a removal) and not already elsewhere in the routine (no duplicates).
@@ -4263,12 +4265,32 @@ async function maybeApplySwaps(){
   Object.entries(aw.swaps).forEach(([from,to])=>{
     if(from!==to&&before.includes(from)&&now.has(to)&&!(before.includes(to)&&!aw.swaps[to])) eff[from]=to;
   });
-  const pairs=Object.entries(eff); if(!pairs.length) return false;
+  const pairs=Object.entries(eff); if(!pairs.length) return null;
   const nm=id=>byId(id).name;
   const list=pairs.map(([f,t])=>nm(f)+' → '+nm(t)).join(', ');
   const yes=await showConfirm(`You switched ${list}. Update the routine "${r.name}" with ${pairs.length>1?'these switches':'this switch'}?`,{okText:'Update routine',cancelText:'Keep routine'});
   if(yes){ r.exercises=before.map(id=>eff[id]||id); S.s('routines',rs); toast('Routine updated','ok'); }
-  return true;
+  return {eff,yes};
+}
+// The v1.8.27 any-change prompt, restored to run alongside the switch prompt (Mr. Roni,
+// 2026-10-02 5:35pm): if exercises were added, removed or reordered, ask whether to write
+// that back. Switches were already asked about, so a switched slot counts as unchanged here
+// (a declined switch keeps the routine's original exercise) and is never asked twice.
+async function maybeUpdateRoutine(sw){
+  if(!aw||!aw.routineId) return;
+  const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return;
+  const back={}; if(sw&&!sw.yes) Object.entries(sw.eff).forEach(([f,t])=>{ back[t]=f; });
+  const before=(r.exercises||[]).slice();
+  const after=[...new Set(aw.exercises.map(e=>back[e.exId]||e.exId).filter(x=>x&&x!=='?'))];
+  if(before.length===after.length&&before.every((id,i)=>id===after[i])) return;
+  const nm=id=>{ const e=byId(id); return e?e.name:'exercise'; };
+  const added=after.filter(id=>!before.includes(id)).map(nm), removed=before.filter(id=>!after.includes(id)).map(nm);
+  const parts=[];
+  if(added.length) parts.push('added '+added.join(', '));
+  if(removed.length) parts.push('removed '+removed.join(', '));
+  if(!parts.length) parts.push('changed the order');
+  const yes=await showConfirm('You '+parts.join('; ')+'. Update the routine "'+r.name+'" with these changes?',{okText:'Update routine',cancelText:'Keep original'});
+  if(yes){ r.exercises=after; S.s('routines',rs); toast('Routine updated','ok'); }
 }
 // Auto-title an untitled workout after whichever exercise had the highest
 // intensity (best estimated 1RM among weight/bodyweight lifts), falling
@@ -4314,7 +4336,7 @@ function buildProgressNotes(rec,preProgress,prList){
   return notes;
 }
 
-function _finishWContinue(auto,ts,asked) {
+function _finishWContinue(auto,ts) {
   clearInterval(wt); skipRest();   // skipRest also hides the rest bar + clears .resting
   // Auto-finish stops the clock at the LAST logged set (awTouch) so the idle period
   // before the auto-trigger isn't counted; a manual finish ends now.
@@ -4345,7 +4367,7 @@ function _finishWContinue(auto,ts,asked) {
   if(!rec.name || rec.name==='Quick Workout') rec.name=autoNameWorkout(rec.exercises);
   // Detect if the workout's exercises differ from its source routine.
   let rid=null,rname='',ids=aw.exercises.map(e=>e.exId);
-  if(aw.routineId&&!asked){ const r=gR().find(x=>x.id===aw.routineId); if(r){ const o=r.exercises||[]; if(o.length!==ids.length||o.some((id,i)=>id!==ids[i])){ rid=aw.routineId; rname=r.name; } } }
+  if(aw.routineId){ const r=gR().find(x=>x.id===aw.routineId); if(r){ const o=r.exercises||[]; if(o.length!==ids.length||o.some((id,i)=>id!==ids[i])){ rid=aw.routineId; rname=r.name; } } }
   const h=gH(); h.push(rec); S.s('hist',h);
   clearAW();
   if (typeof syncMe==='function') syncMe();  // push updated stats to Supabase if configured
@@ -4831,7 +4853,7 @@ const TIERC={bronze:'#cd7f32',silver:'#b8b8c8',gold:'#ffd700'};
 // Tap-to-explain text for each badge.
 const BADGE_HOW={
   get 'Bench-Maxing'(){ const T=badgeT(); return `Barbell flat bench, 1 rep. Flat dumbbell bench counts at +15% (both dumbbells together), Smith machine flat bench at -15%. Bronze ${T.bench[0]}, Silver ${T.bench[1]}, Gold ${T.bench[2]} lb. `+benchHowNote(); },
-  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)); return `Standing barbell overhead press, 5 reps, vs your body weight (set it in Profile). Standing dumbbell press counts at +15% (both dumbbells together), Smith machine press at -15%. Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}%.`+badgeAdjNote(); },
+  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)); return `Standing barbell overhead press, 5 reps, vs your body weight (set it in Profile). Standing dumbbell press counts at +15% (both dumbbells together). Seated presses, including the Smith machine one, don't count. Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}%.`+badgeAdjNote(); },
   get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)); return `Barbell back squat, 5 reps, vs your body weight (set it in Profile). Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}%.`+badgeAdjNote(); },
   '1000lb Club':'Barbell flat bench press + barbell back squat + conventional barbell deadlift from one workout, summed to 1000 lb or more. Flat dumbbell bench counts at +15%, Smith machine bench at -15%; no other variations.',
   'PR-Maxing':'Hit a personal record 7 days in a row. Only the last 3 months count.',
@@ -4853,9 +4875,8 @@ const BADGE_DETAIL={
     exHow:[{t:'No barbell bench? Dumbbell counts too',body:'Flat Dumbbell Bench Press, both hands. Log one dumbbell\'s weight; both together get +15% (two 50 lb dumbbells = 100 lb, credited 115 lb).'},
       {t:'Smith machine counts too',body:'Flat Smith Machine Bench Press, credited at -15% (100 lb logged = 85 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],
     tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'}; },
-  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Standing barbell overhead press (Standing Military Press), 5 reps, measured against your body weight — set it in Profile. Seated, push press, behind-the-neck, other variations and custom exercises don\'t count.',
-    exHow:[{t:'Dumbbells count too',body:'Standing Dumbbell Press, both hands. Log one dumbbell\'s weight; both together get +15% (two 50 lb dumbbells = 100 lb, credited 115 lb).'},
-      {t:'Smith machine counts too',body:'Smith Machine Overhead Shoulder Press, credited at -15% (100 lb logged = 85 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Standing barbell overhead press (Standing Military Press), 5 reps, measured against your body weight — set it in Profile. Seated presses (Barbell Shoulder Press and Smith Machine Overhead Shoulder Press are seated too, whatever the name), push press, behind-the-neck, other variations and custom exercises don\'t count.',
+    exHow:[{t:'Dumbbells count too',body:'Standing Dumbbell Press, both hands. Log one dumbbell\'s weight; both together get +15% (two 50 lb dumbbells = 100 lb, credited 115 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
   get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Barbell back squat (Barbell Squat), 5 reps, measured against your body weight — set it in Profile. Front squats, Smith machine and custom exercises don\'t count.',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
   '1000lb Club':{how:'Your best barbell flat bench press + barbell back squat + conventional barbell deadlift, all from the same workout, added together to 1000 lb or more. The bench can also be a flat dumbbell bench (both dumbbells together +15%) or a flat Smith machine bench (-15%). No front squat, Smith squat, sumo or custom exercises.'},
   get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return {how:'Most reps in one set of strict pull-ups (Pullups, palms facing away). Chin-ups, assisted, band, scapular and custom exercises don\'t count.',tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
@@ -7721,7 +7742,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.68';
+const BUILD = 'v1.10.69';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
