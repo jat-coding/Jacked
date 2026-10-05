@@ -64,6 +64,42 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 - 2026-09-22 for wear, watchos: **Rule, please check your own code against it:** no routine gets added to a user's Routines list without their explicit input (Mr. Roni, after a live bug -- a suggested workout's Start button was silently saving a routine). See `WATCH_BRIDGE.md` A12 for the two phone-side bugs and fixes. Does anything on the watch add to `jk_routines` from a Start/suggest tap, or from saving a workout, without the user separately confirming? Default if no reply: assumed clear, ask again if a similar report comes in from a watch user.
 
 ## wear (jacked-wear, Galaxy Watch 8 Classic)
+- 2026-10-05 for pwa (relay to Mr. Roni), also for watchos: **Live workout shared between phone and watch: my restatement of what you told Phil on the phone this evening, plus our questions. Nothing is built; your design comes first.**
+  **The concept as we understand it:**
+  - Start an ad-hoc workout on the phone OR a watch, with no routine needed, adding exercises on the fly.
+  - The other device follows it in real time.
+  - You can switch between phone and watch freely during the workout and record sets on either.
+  - It finishes once, as ONE workout in `jk_hist`.
+
+  Please correct anything we got wrong. Does it also cover routine-started workouts, and both watches (Galaxy and Apple)?
+
+  **How it works today, for reference:** the in-progress workout (`aw`) lives only on the device that started it: phone `localStorage`, each watch's local store. Nothing reaches the server until Finish. `API.md` §8: writes are whole-blob, and Realtime is on `friend_requests` only, not on `profiles`/backups.
+
+  **Questions (your design decides; the watches follow it):**
+  1. **Where the live workout lives.** Our suggestion: a separate record, not the backup blob. Every set written into the blob would collide with the phone's own backups through the whole-blob CAS. For example a `live_workouts` table, one row per account (`code`, `aw` JSON, a version counter, `updated_at`, the device that last wrote), owner-only by RLS like `profile_backups`. Does that fit your plans for the A14 privacy work?
+  2. **Push or poll.** The phone can subscribe through Supabase Realtime. For battery, the watches would probably poll every few seconds, only while a workout is open, and send on each change. Would you add the new table to the `supabase_realtime` publication?
+  3. **Conflicts: two devices editing at once.** Last-writer-wins on the whole `aw` would lose a set checked on the watch while the phone edits another one. Our proposal:
+     - Every exercise and every set gets a stable id.
+     - Changes merge per set: newest change to that set wins, and a deletion is a tombstone (like `jk_deleted`).
+     - The version counter detects a stale write, so the writer re-reads and re-merges.
+
+     Do you prefer something simpler, for example one device "holds" the workout and the other asks to take it over?
+  4. **Finishing.** Who may Finish, and how do we stop a double save if both devices tap Finish, or one is offline? Suggestion:
+     - The workout id is minted at Start and shared, so the `jk_hist` union by id makes a second save harmless.
+     - Finish marks the live row `finished` (or deletes it), and the other device then closes its copy and shows the summary.
+     - Only the finishing device commits PRs: `jk_prs`, `jk_holdPR`, the cardio PRs, A16, `jk_prReset`/`jk_prRepair`.
+  5. **Discard.** Should Discard on one device end it on both, with a confirm?
+  6. **Offline.** A watch at the gym without a signal keeps logging locally and merges when it reconnects. Is that acceptable, or should the watch refuse to join while offline?
+  7. **Timer and rest timer.** One clock: workout start time stored in the record, so both devices show the same time. Should the rest timer be shared too, or stay per device?
+  8. **Transient state.** The workout also carries switches (`aw.swaps`, v1.10.68), notes in effect (A5), and the auto-name (A4) applied at Finish. Do these ride in the live record?
+  9. **Heart rate and calories.** These come only from the watch. Should the phone show the watch's live ❤/🔥 while the watch is connected?
+  10. **Phone app closed or asleep:**
+      - Should the phone pick up a watch-started workout the next time it opens (a Resume banner)?
+      - Should a watch pick up a phone-started one at app launch (a Resume card that says "from phone")?
+
+  **Our side once you've settled it:** both watches build it, Galaxy first, then Apple Watch. The live write path gets a code review before it ships. We test on `@watchdev`/`@watchdev2`, with two devices on one account. Phil decides anything a user would notice differing across devices (rule 8).
+
+  **Default if no reply:** nothing is built on the watches. Please put the design in a `WATCH_BRIDGE` APP-WIDE item, or answer here, and we'll plan both watches from it.
 - 2026-10-03 for pwa (relay to Mr. Roni): **Wear v0.26 is tagged and on Play internal testing (wear vc125 / phone vc25). It closes my earlier entry about your PR rules.**
   - **Back extensions:** never body-weight-loaded by id, matching your v1.10.55 `NOT_BW_IDS`.
   - **PR commit:** follows `jk_prReset` (weights and cardio) and `jk_prRepair` (`jk_prs` only, as your `mergePRs`), including your NaN-date behaviour.
