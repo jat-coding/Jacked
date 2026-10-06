@@ -661,6 +661,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div>
       <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:1px" id="awName">Workout</div>
       <div class="td" id="awTimer">00:00</div>
+      <div id="awLive" style="display:none;font-size:11px;color:var(--muted);font-weight:600"></div>
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn bg sm" onclick="cancelW()">Cancel</button>
@@ -2986,20 +2987,461 @@ const STALE_IDLE_MS = 30*60*1000, STALE_TOTAL_MS = 70*60*1000;
 function awIsStale() { return aw && awStart && ((awTouch && Date.now()-awTouch>STALE_IDLE_MS) || Date.now()-awStart>STALE_TOTAL_MS); }
 
 // Persist the in-progress workout so a reload/crash/screen-lock doesn't lose it.
-function saveAW() { if(aw){ awTouch=Date.now(); S.s('activeWorkout',{aw,awStart,awTouch}); } }
+function saveAW() { if(aw){ awTouch=Date.now(); if(liveStamp()) liveSchedule(); S.s('activeWorkout',{aw,awStart,awTouch}); } }
 function clearAW() { try{ localStorage.removeItem('jk_activeWorkout'); }catch(e){} }
+
+// ============================================================
+// LIVE SHARED WORKOUT (phone <-> watch), phase 1: server + phone.
+// Mr. Roni's design (watch-client/BOARD.md c9bd1dc + c7d9f25) on Phil's schema (f775c3a);
+// the wire contract the watches build against is WATCH_BRIDGE.md A17. Table:
+// supabase/migrations/20261006_live_workouts.sql (one row per account, CAS on `rev`).
+//  • `aw` itself is the shared doc. Every exercise gets a stable `lid`, every set a `sid`, and
+//    each carries a change stamp u (epoch ms) + d (device id, the tiebreak). Workout-level
+//    fields (name, swaps, rest timer, exercise order) are stamped in `aw.mu`. Deletions are
+//    tombstones in `aw.tomb` {id:{u,d}}, never just absent.
+//  • Stamps come from diffing against the last stamped state (`_liveShadow`) on every
+//    saveAW(), so no mutation path has to remember to stamp anything itself.
+//  • Merge (mergeLive): newest stamp per set / per exercise header / per workout field wins;
+//    a tombstone at least as new as the item deletes it.
+//  • Writes are separate from the whole-blob backup (activeWorkout is in SYNC_SKIP), debounced,
+//    and compare-and-swap on `rev`: a write that lost the race re-reads, re-merges, retries.
+//  • Finish: the device whose CAS flips status to 'finished' commits jk_hist + PRs; a device that
+//    finds it already finished commits nothing, unless it brings sets the finished doc lacks,
+//    which are merged in and the history entry's totals/PRs recomputed (`lrev` stamps the
+//    entry so the newer version wins in mergeBackup).
+// ============================================================
+const LIVE_DEBOUNCE_MS=1200;
+let LIVE_POLL_MS=5000;                  // Realtime fallback while a workout is open
+const LIVE_STALE_MS=STALE_TOTAL_MS;     // an 'active' row untouched this long is abandoned; the next Start replaces it
+const LIVE_FINISH_TIMEOUT_MS=4000;      // no answer by then = finish offline, settle with the server later
+const LIVE_Q_KEY='jacked_liveFinishQ', LIVE_DECLINED_KEY='jacked_liveDeclined';   // device state, never in the blob
+const LIVE_Z={u:0,d:''};
+let _liveShadow=null, _liveDirty=false, _livePushT=null, _liveBusy=null, _liveAgain=false, _livePollAt=0,
+    _liveChan=null, _liveSolo=null, _liveAsk=null, _liveHold=false, _finLock=null, _liveLastC=0, _liveOffered=new Set();
+const _liveStats={writes:0, casMiss:0, commits:0, dupFinish:0, recomputes:0};
+function liveDevice(){
+  let d=null; try{ d=localStorage.getItem('jacked_deviceId'); }catch(_){}
+  if(!d){ d='phone-'+Math.random().toString(36).slice(2,10); try{ localStorage.setItem('jacked_deviceId',d); }catch(_){} }
+  return d;
+}
+function liveC(){ _liveLastC=Math.max(_liveLastC+1, Date.now()*1000); return _liveLastC; }   // creation order
+function liveId(p){ return p+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function liveGt(a,b){ a=a||LIVE_Z; b=b||LIVE_Z; return a.u!==b.u ? a.u>b.u : String(a.d||'')>String(b.d||''); }
+const LIVE_META=new Set(['lid','sid','c','u','d','sets','imgUrl']);
+function liveSig(o){ const r={}; Object.keys(o||{}).forEach(k=>{ if(!LIVE_META.has(k)) r[k]=o[k]; }); return canonJson(r); }
+function liveWSig(a,k){ return k==='order' ? (a.exercises||[]).map(e=>e.lid).join(',') : canonJson(a[k]===undefined?null:a[k]); }
+const LIVE_WFIELDS=['name','swaps','rest','order'];
+
+// Stamp whatever changed since the last stamp. Returns true when anything did.
+function liveStamp(){
+  if(!aw||!Array.isArray(aw.exercises)) return false;
+  const now=Date.now(), st={u:now,d:liveDevice()}, sh=_liveShadow, ns={e:{},s:{},w:{}};
+  let ch=false;
+  aw.tomb=aw.tomb||{}; aw.mu=aw.mu||{};
+  if(!aw.startedAt) aw.startedAt=awStart||now;
+  aw.exercises.forEach(e=>{
+    if(!e.lid){ e.lid=liveId('x'); e.c=liveC(); }
+    const sig=liveSig(e);
+    if(!e.u || (sh&&sh.e[e.lid]!==undefined&&sh.e[e.lid]!==sig)){ e.u=now; e.d=st.d; ch=true; }
+    ns.e[e.lid]=sig;
+    (e.sets||[]).forEach(s=>{
+      if(!s.sid){ s.sid=liveId('s'); s.c=liveC(); }
+      const ss=liveSig(s);
+      if(!s.u || (sh&&sh.s[s.sid]!==undefined&&sh.s[s.sid]!==ss)){ s.u=now; s.d=st.d; ch=true; }
+      ns.s[s.sid]=ss;
+    });
+  });
+  if(sh){
+    Object.keys(sh.e).forEach(id=>{ if(!(id in ns.e)){ aw.tomb[id]=st; ch=true; } });
+    Object.keys(sh.s).forEach(id=>{ if(!(id in ns.s)){ aw.tomb[id]=st; ch=true; } });
+  }
+  LIVE_WFIELDS.forEach(k=>{
+    const sig=liveWSig(aw,k);
+    if(!aw.mu[k] || (sh&&sh.w[k]!==sig)){ aw.mu[k]=st; ch=true; }
+    ns.w[k]=sig;
+  });
+  _liveShadow=ns;
+  if(ch) _liveDirty=true;
+  return ch;
+}
+// Take the current aw as the stamped baseline without stamping anything (after a load or a merge).
+function liveRebase(){ _liveShadow=null; if(aw){ const d=_liveDirty; liveStamp(); _liveDirty=d; } }
+
+// The doc that goes on the wire: aw minus device-only bits. Custom-exercise photos (data: URLs)
+// never leave this device, same rule as history.
+function liveWire(a){
+  const {_pairFrom,...w}=a;
+  return {...w, v:1, exercises:(w.exercises||[]).map(({imgUrl,...e})=>({...e, sets:(e.sets||[]).map(s=>({...s}))}))};
+}
+// Doc -> aw, keeping this device's image for each exercise (or the library's).
+function liveFromWire(doc, local){
+  const imgs=new Map(((local&&local.exercises)||[]).map(e=>[e.lid,e.imgUrl]));
+  const {v,...a}=JSON.parse(JSON.stringify(doc));
+  a.exercises=(a.exercises||[]).map(e=>({...e, imgUrl:imgs.has(e.lid)?imgs.get(e.lid):(imgUrl(byId(e.exId))||null)}));
+  return a;
+}
+// Latest change time anywhere in the doc (any device) -- feeds the idle clock, so the phone
+// never auto-finishes a workout the watch is still logging.
+function liveTouch(doc){
+  let t=0; const m=s=>{ if(s&&s.u>t) t=s.u; };
+  (doc.exercises||[]).forEach(e=>{ m(e); (e.sets||[]).forEach(m); });
+  Object.values(doc.mu||{}).forEach(m); Object.values(doc.tomb||{}).forEach(m);
+  return t;
+}
+
+// Pure merge of two docs of the SAME session.
+function mergeLive(a,b){
+  if(!a) return b; if(!b) return a;
+  const tomb={...(a.tomb||{})};
+  Object.entries(b.tomb||{}).forEach(([k,s])=>{ if(!tomb[k]||liveGt(s,tomb[k])) tomb[k]=s; });
+  const dead=(id,st)=>!!tomb[id] && !liveGt(st,tomb[id]);
+  const out={...a}, am=a.mu||{}, bm=b.mu||{}, mu={};
+  out.startedAt=Math.min(a.startedAt||Infinity, b.startedAt||Infinity); if(!isFinite(out.startedAt)) delete out.startedAt;
+  ['name','swaps','rest'].forEach(k=>{
+    const src=liveGt(bm[k],am[k])?b:a, s=(src===b?bm:am)[k];
+    if(src[k]===undefined) delete out[k]; else out[k]=src[k];
+    if(s) mu[k]=s;
+  });
+  const key=(e,i)=>e.lid||('nolid:'+e.exId+':'+i);
+  const ea=new Map((a.exercises||[]).map((e,i)=>[key(e,i),e])), eb=new Map((b.exercises||[]).map((e,i)=>[key(e,i),e]));
+  const exs=new Map();
+  new Set([...ea.keys(),...eb.keys()]).forEach(k=>{
+    const x=ea.get(k), y=eb.get(k);
+    const head=!x?y:!y?x:(liveGt(y,x)?y:x);
+    if(dead(k,head)) return;
+    const sets=new Map();
+    [...((x&&x.sets)||[]), ...((y&&y.sets)||[])].forEach((s,i)=>{
+      const sk=s.sid||('nosid:'+k+':'+i), cur=sets.get(sk);
+      if(!cur||liveGt(s,cur)) sets.set(sk,s);
+    });
+    const live=[...sets.entries()].filter(([sk,s])=>!dead(sk,s)).map(([,s])=>s)
+      .sort((p,q)=>((p.c||0)-(q.c||0))||String(p.sid||'').localeCompare(String(q.sid||'')));
+    exs.set(k,{...head, sets:live});
+  });
+  const ow=liveGt(bm.order,am.order)?b:a; mu.order=(ow===b?bm:am).order;
+  if(!mu.order) delete mu.order;
+  const ordered=[];
+  (ow.exercises||[]).forEach((e,i)=>{ const k=key(e,i); if(exs.has(k)){ ordered.push(exs.get(k)); exs.delete(k); } });
+  [...exs.values()].sort((p,q)=>(p.c||0)-(q.c||0)).forEach(e=>ordered.push(e));
+  out.exercises=ordered; out.mu=mu; out.tomb=tomb;
+  return out;
+}
+
+// Fold a separately-started session (this device's) into another device's live one: same
+// exercise -> its sets are appended, otherwise the exercise is added. Ids are kept.
+function liveFold(target, mine){
+  const out=JSON.parse(JSON.stringify(target)), now=Date.now(), st={u:now,d:liveDevice()};
+  (mine.exercises||[]).forEach(me=>{
+    const t=(out.exercises||[]).find(e=>e.exId===me.exId);
+    if(t) (me.sets||[]).forEach(s=>t.sets.push({...s,u:now,d:st.d}));
+    else out.exercises.push({...me,u:now,d:st.d,sets:(me.sets||[]).map(s=>({...s,u:now,d:st.d}))});
+  });
+  out.mu={...(out.mu||{}),order:st};
+  out.startedAt=Math.min(out.startedAt||Infinity, mine.startedAt||Infinity);
+  return out;
+}
+
+function liveOn(){ const p=gProf(); return supaEnabled() && !!(p&&p.code); }
+function liveCode(){ return gProf().code; }
+async function liveRead(code){
+  const { data, error } = await SUPA.from('live_workouts')
+    .select('session_id,status,doc,rev,updated_at,updated_by,hr,kcal,stats_at').eq('code',code).maybeSingle();
+  if(error) throw error;
+  return data||null;
+}
+// Compare-and-swap on rev: lands only if nobody wrote since we read `rev`.
+async function liveCas(code, rev, patch){
+  const { data, error } = await SUPA.from('live_workouts')
+    .update({...patch, rev:rev+1, updated_at:new Date().toISOString(), updated_by:liveDevice()})
+    .eq('code',code).eq('rev',rev).select('rev');
+  if(error) throw error;
+  if(data&&data.length){ _liveStats.writes++; return true; }
+  _liveStats.casMiss++; return false;
+}
+async function liveInsert(code, patch){
+  const { error } = await SUPA.from('live_workouts')
+    .insert({code, rev:1, updated_at:new Date().toISOString(), updated_by:liveDevice(), ...patch});
+  if(error){ if(error.code==='23505'){ _liveStats.casMiss++; return false; } throw error; }   // someone inserted first
+  _liveStats.writes++; return true;
+}
+const liveFresh=row=>row && row.status==='active' && Date.now()-(Date.parse(row.updated_at)||0) < LIVE_STALE_MS;
+function liveFrom(dev){
+  const d=String(dev||'').toLowerCase();
+  return d.startsWith('watchos')?'Apple Watch':(d.startsWith('wear')||d.includes('watch'))?'watch':d.startsWith('phone')?'other phone':'other device';
+}
+function liveDeclined(){ try{ const a=JSON.parse(localStorage.getItem(LIVE_DECLINED_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(_){ return []; } }
+function liveDecline(id){ try{ localStorage.setItem(LIVE_DECLINED_KEY, JSON.stringify([...liveDeclined(),id].slice(-20))); }catch(_){} }
+
+function liveSchedule(ms=LIVE_DEBOUNCE_MS){
+  if(!liveOn()) return;
+  clearTimeout(_livePushT); _livePushT=setTimeout(()=>{ _livePushT=null; liveSync(); }, ms);
+}
+// One reconcile at a time; a request that arrives mid-flight runs once more after it.
+function liveSync(){
+  if(_liveBusy){ _liveAgain=true; return _liveBusy; }
+  _liveBusy=(async()=>{
+    let r;
+    try{ do{ _liveAgain=false; r=await _liveSyncOnce(); }while(_liveAgain); }
+    catch(e){ console.warn('live sync',e); r='error'; }
+    finally{ _liveBusy=null; }
+    return r;
+  })();
+  return _liveBusy;
+}
+async function _liveSyncOnce(){
+  if(!liveOn()) return 'off';
+  const code=liveCode();
+  for(let attempt=0; attempt<5; attempt++){
+    let row;
+    try{ row=await liveRead(code); }catch(e){ console.warn('live read',e); return 'error'; }   // a failed read means no write
+    liveShowStats(row);
+    if(!aw) return await liveIdle(row);
+    if(_finLock||_liveHold) return 'busy';
+    if(_liveSolo===aw.id) return 'solo';
+    liveStamp();
+    const mine=liveWire(aw);
+    if(!row){
+      if(await liveInsert(code,{session_id:aw.id,status:'active',doc:mine})){ _liveDirty=false; return 'inserted'; }
+      continue;
+    }
+    if(row.session_id!==aw.id){
+      if(liveFresh(row)) return await liveOtherSession(row);
+      // A finished/discarded/abandoned earlier session: this Start replaces it.
+      if(await liveCas(code,row.rev,{session_id:aw.id,status:'active',doc:mine,hr:null,kcal:null,stats_at:null})){ _liveDirty=false; return 'replaced'; }
+      continue;
+    }
+    if(row.status==='discarded'){ liveCloseRemote(null,'discarded',row.updated_by); return 'discarded'; }
+    const merged=mergeLive(row.doc, mine);
+    if(row.status==='finished'){ const r=await liveLate(code,row,merged); if(r==='retry-late') continue; return r; }
+    const ahead=canonJson(merged)!==canonJson(row.doc);
+    if(ahead && !(await liveCas(code,row.rev,{doc:merged}))) continue;   // lost the race: re-read, re-merge
+    _liveDirty=false;
+    liveAdopt(merged);
+    return ahead?'written':'clean';
+  }
+  console.warn('live sync: version contention, gave up after 5 attempts');
+  return 'contention';
+}
+
+// Take in a merged doc without losing anything typed here since it was built.
+function liveAdopt(doc){
+  if(!aw||doc.id!==aw.id) return false;
+  liveStamp();
+  const cur=liveWire(aw), m=mergeLive(doc,cur);
+  if(canonJson(m)!==canonJson(doc)){ _liveDirty=true; liveSchedule(); }
+  if(canonJson(m)===canonJson(cur)) return false;
+  const ids=aw.exercises.map(e=>e.lid).join(',');
+  aw=liveFromWire(m,aw);
+  if(aw.exercises.map(e=>e.lid).join(',')!==ids) aw._pairFrom=null;
+  awStart=aw.startedAt||awStart;
+  awTouch=Math.max(awTouch||0, liveTouch(m));
+  liveRebase(); liveApplyRest(); liveRender();
+  return true;
+}
+// Re-render the session, but never under the user's thumb mid-typing.
+function liveRender(){
+  const box=document.getElementById('wSession'), el=document.activeElement;
+  if(box&&el&&box.contains(el)&&el.matches&&el.matches('input')){ setTimeout(()=>{ if(aw) liveRender(); },800); return; }
+  if(aw){ renderWS(); const n=document.getElementById('awName'); if(n) n.textContent=aw.name; }
+}
+function liveApplyRest(){
+  const r=aw&&aw.rest, bar=document.getElementById('restBar');
+  if(r&&r.endsAt>Date.now()){
+    if(restEnd!==r.endsAt){ restEnd=r.endsAt; clearInterval(rt); bar.classList.add('show'); document.body.classList.add('resting'); restTick(); rt=setInterval(restTick,250); }
+  } else if(document.body.classList.contains('resting')){ clearInterval(rt); bar.classList.remove('show'); document.body.classList.remove('resting'); }
+}
+// The watch's live heart rate / calories, shown while it is fresh (written every ~10 s).
+function liveShowStats(row){
+  const el=document.getElementById('awLive'); if(!el) return;
+  const ok=aw&&row&&row.session_id===aw.id&&(row.hr||row.kcal)&&Date.now()-(Date.parse(row.stats_at)||0)<30000;
+  el.style.display=ok?'':'none';
+  if(ok) el.innerHTML=`${uic('heart',MCOL.cardio,11)} ${row.hr?row.hr+' bpm':''}${row.hr&&row.kcal?' · ':''}${row.kcal?row.kcal+' kcal':''}`;
+}
+
+// Our session is open here, and another device has a different one live.
+async function liveOtherSession(row){
+  if(_liveAsk===aw.id||_cfResolve) return 'asking';   // never stack on another open confirm (one resolver)
+  const mineId=aw.id; _liveAsk=mineId;
+  const yes=await showConfirm(`A workout is already in progress on your ${liveFrom(row.updated_by)}. Add this workout's sets to it?`,{okText:'Add to it',cancelText:'Keep separate'});
+  _liveAsk=null;
+  if(!aw||aw.id!==mineId) return 'gone';
+  if(!yes){ _liveSolo=mineId; toast('This workout stays on this phone','ok'); return 'solo'; }
+  let fresh; try{ fresh=await liveRead(liveCode()); }catch(e){ console.warn('live read',e); return 'error'; }
+  if(!aw||aw.id!==mineId) return 'gone';
+  if(!liveFresh(fresh)){ _liveAgain=true; return 'retry'; }   // it ended meanwhile: ours simply takes the row
+  liveStamp();
+  const folded=liveFold(fresh.doc, liveWire(aw));
+  aw=liveFromWire(folded,aw); awStart=aw.startedAt||awStart;
+  liveRebase(); _liveDirty=true; saveAW(); liveRender();
+  _liveAgain=true;
+  return 'folded';
+}
+
+// The other device finished this session while we still had it open.
+async function liveLate(code,row,merged){
+  const late=canonJson(merged)!==canonJson(row.doc);
+  if(late){
+    if(!(await liveCas(code,row.rev,{doc:merged}))) return 'retry-late';
+    liveRecompute(merged,row.rev+1,true);
+    liveCloseRemote(merged,'late',row.updated_by);
+    return 'late-merged';
+  }
+  liveCloseRemote(row.doc,'finished',row.updated_by);
+  return 'closed';
+}
+// Close the local copy after another device ended the session.
+function liveCloseRemote(doc,why,by){
+  clearTimeout(_livePushT); clearInterval(wt); clearInterval(rt);
+  document.getElementById('restBar').classList.remove('show'); document.body.classList.remove('resting');
+  clearAW(); aw=null; _liveShadow=null; _finLock=null; sp('home');
+  const from=liveFrom(by);
+  if(why==='discarded'){ toast(`Workout discarded on your ${from}`,'ok'); return; }
+  if(why==='late'){ toast(`Your extra sets were added to the workout finished on your ${from}`,'ok'); return; }
+  // Summary from the finished doc; the finishing device committed history + PRs, and they
+  // arrive here through the normal backup pull.
+  const a=liveFromWire(doc,null), ts=a.exercises.reduce((n,e)=>n+e.sets.filter(s=>s.done).length,0);
+  const vol=a.exercises.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+effWeight(e,s)*Math.max(0,s.reps||0),0):0),0);
+  const sec=Math.max(0,Math.floor((liveTouch(doc)-(a.startedAt||liveTouch(doc)))/1000));
+  const dur=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');
+  showFinishSummary({name:(!a.name||a.name==='Quick Workout')?autoNameWorkout(a.exercises):a.name,dur,ts,vol:Math.round(vol),prList:[],rid:null,rname:'',ids:a.exercises.map(e=>e.exId)});
+  toast(`Workout finished on your ${from}`,'ok');
+  [5000,30000].forEach(ms=>setTimeout(()=>{ cloudPullMerge().then(c=>{ if(c) reRenderActivePage(); }).catch(()=>{}); },ms));
+}
+
+// No workout open here: settle late sets into a finished entry, or offer to resume another
+// device's live one (Mr. Roni's #6: "from watch" / "from phone").
+async function liveIdle(row){
+  if(!row) return 'idle';
+  if(row.status==='finished'){ liveRecompute(row.doc,row.rev,false); return 'idle'; }
+  if(!liveFresh(row)||_liveHold) return 'idle';
+  const id=row.session_id;
+  if(row.updated_by===liveDevice()||_liveOffered.has(id)||liveDeclined().includes(id)||gH().some(w=>w&&w.id===id)||_cfResolve) return 'idle';
+  _liveOffered.add(id);
+  const ok=await showConfirm(`Resume the workout from your ${liveFrom(row.updated_by)}?`,{okText:'Resume',cancelText:'Not now'});
+  if(!ok){ liveDecline(id); return 'declined'; }
+  return await liveResumeRemote();
+}
+async function liveResumeRemote(){
+  if(aw||!liveOn()) return 'busy';
+  let row; try{ row=await liveRead(liveCode()); }catch(e){ console.warn('live read',e); return 'error'; }
+  if(!liveFresh(row)||aw) return 'gone';
+  aw=liveFromWire(row.doc,null); awStart=aw.startedAt||Date.now(); awTouch=Math.max(liveTouch(row.doc),Date.now());
+  _finLock=null; _liveSolo=null; liveRebase(); _liveDirty=false;
+  beginW(); liveApplyRest();
+  return 'resumed';
+}
+
+// A finished doc (possibly with late sets) -> this device's history entry, totals and PRs
+// recomputed. `create`: build the entry if this device does not have it yet (it brought the
+// late sets). PR records only ever move up (commitPRs), so re-running this is harmless.
+function liveRecompute(doc, rev, create){
+  const h=gH(), i=h.findIndex(w=>w&&w.id===doc.id);
+  if(i<0&&!create) return false;
+  if(i>=0&&(h[i].lrev||0)>=rev) return false;
+  const a=liveFromWire(doc,null);
+  if(i<0){
+    const end=liveTouch(doc)||Date.now();
+    const f=buildFinishRec(a, a.startedAt||end, end);
+    f.rec.lrev=rev; h.push(f.rec);
+  } else {
+    const old=h[i], notes=new Map((old.exercises||[]).filter(e=>e.note).map(e=>[e.exId,e.note]));
+    const exs=liveHistExercises(a.exercises).map(e=>notes.has(e.exId)?{...e,note:notes.get(e.exId)}:e);
+    const ps=new Map((old.prSets||[]).map(p=>[p.exId,p]));
+    commitPRs({exercises:exs}).forEach(p=>ps.set(p.exId,p));
+    const prSets=[...ps.keys()].map(exId=>{
+      const ei=exs.findIndex(e=>e.exId===exId), b=ei>=0?prBest(exs[ei]):null;
+      return b?{exId,ei,si:b.si,weight:b.weight,reps:b.reps}:null;
+    }).filter(Boolean);
+    const sets=exs.reduce((n,e)=>n+e.sets.filter(s=>s.done).length,0);
+    const vol=exs.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+effWeight(e,s)*Math.max(0,s.reps||0),0):0),0);
+    h[i]={...old, exercises:exs, sets, totalVolume:Math.round(vol), prCount:prSets.length, prSets, lrev:rev};
+  }
+  _liveStats.recomputes++;
+  S.s('hist',h);
+  if(typeof syncMe==='function') syncMe();
+  if(typeof syncBackup==='function') syncBackup();
+  if(typeof reRenderActivePage==='function') try{ reRenderActivePage(); }catch(_){}
+  return true;
+}
+
+// Finish CAS: flip the row to 'finished' with the final merged doc. {won,doc,rev} | {lost,row,merged}.
+// No answer in time / offline -> {won,offline}: finish here and settle with the server later.
+async function liveClaimFinish(doc){
+  const code=liveCode();
+  const run=async()=>{
+    for(let i=0;i<5;i++){
+      const row=await liveRead(code);
+      if(!row){ if(await liveInsert(code,{session_id:doc.id,status:'finished',doc})) return {won:true,doc,rev:1}; continue; }
+      if(row.session_id!==doc.id){
+        if(liveFresh(row)) return {won:true,doc,rev:0};   // another session is live: this one finishes on its own
+        if(await liveCas(code,row.rev,{session_id:doc.id,status:'finished',doc,hr:null,kcal:null,stats_at:null})) return {won:true,doc,rev:row.rev+1};
+        continue;
+      }
+      const merged=mergeLive(row.doc,doc);
+      if(row.status==='finished') return {lost:true,row,merged};
+      if(await liveCas(code,row.rev,{status:'finished',doc:merged})) return {won:true,doc:merged,rev:row.rev+1};
+    }
+    throw new Error('version contention');
+  };
+  let to;
+  try{ return await Promise.race([run(), new Promise((_,rej)=>{ to=setTimeout(()=>rej(new Error('timeout')),LIVE_FINISH_TIMEOUT_MS); })]); }
+  catch(e){ console.warn('live finish',e); liveQueueFinish(doc); return {won:true,offline:true}; }
+  finally{ clearTimeout(to); }
+}
+function liveQ(){ try{ const a=JSON.parse(localStorage.getItem(LIVE_Q_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(_){ return []; } }
+function liveQueueFinish(doc){ try{ localStorage.setItem(LIVE_Q_KEY, JSON.stringify([...liveQ().filter(d=>d.id!==doc.id),doc].slice(-5))); }catch(_){} }
+// A finish made offline: tell the server now. If the other device also finished meanwhile, the two
+// docs merge and this device's entry is recomputed (both committed locally; PR records max-merge).
+async function liveFlushFinishQ(){
+  if(!liveOn()) return;
+  const code=liveCode();
+  for(const doc of liveQ()){
+    try{
+      let done=false;
+      for(let i=0;i<5&&!done;i++){
+        const row=await liveRead(code);
+        if(!row){ done=await liveInsert(code,{session_id:doc.id,status:'finished',doc}); continue; }
+        if(row.session_id!==doc.id){ done=true; break; }   // a newer session owns the row now
+        const merged=mergeLive(row.doc,doc);
+        if(row.status==='finished'&&canonJson(merged)===canonJson(row.doc)){ liveRecompute(row.doc,row.rev,false); done=true; break; }
+        if(await liveCas(code,row.rev,{status:'finished',doc:merged})){ liveRecompute(merged,row.rev+1,false); done=true; }
+      }
+      if(done) try{ localStorage.setItem(LIVE_Q_KEY, JSON.stringify(liveQ().filter(d=>d.id!==doc.id))); }catch(_){}
+    }catch(e){ console.warn('live finish flush',e); return; }
+  }
+}
+async function liveDiscard(id){
+  if(!liveOn()) return;
+  try{
+    const code=liveCode();
+    for(let i=0;i<5;i++){
+      const row=await liveRead(code);
+      if(!row||row.session_id!==id||row.status!=='active') return;
+      if(await liveCas(code,row.rev,{status:'discarded'})) return;
+    }
+  }catch(e){ console.warn('live discard',e); }
+}
+function liveSubscribe(){
+  if(!liveOn()||_liveChan) return;
+  try{
+    _liveChan=SUPA.channel('jk_live_workouts')
+      .on('postgres_changes',{event:'*',schema:'public',table:'live_workouts',filter:'code=eq.'+liveCode()},()=>liveSchedule(250))
+      .subscribe();
+  }catch(e){ console.warn('liveSubscribe',e); }
+}
+function liveBoot(){ if(!liveOn()) return; liveSubscribe(); liveFlushFinishQ().then(()=>liveSync()); }
 
 // Stop a forgotten session: publish it if anything was logged, else discard. Any set with a
 // weight or reps typed into it but never tapped done is counted as done first (Mr. Roni,
 // 2026-10-05 10:47pm: "lock all the typed out workouts") -- a blank, untouched set still
 // doesn't count towards anything.
 function autoFinishStale() {
-  if(!aw) return;
+  if(!aw||_finLock) return;   // a Finish is already committing this workout (finish lock)
   clearInterval(wt); clearInterval(rt);
   aw.exercises.forEach(e=>e.sets.forEach(s=>{ if(!s.done&&(s.weight>0||s.reps>0)) s.done=true; }));
   const ts=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   if(ts>0){ finishW(true); toast('Workout auto-finished after inactivity','ok'); }
-  else { clearAW(); aw=null; sp('home'); toast('Inactive workout discarded','ok'); }
+  else { liveDiscard(aw.id); clearAW(); aw=null; sp('home'); toast('Inactive workout discarded','ok'); }
 }
 
 function maybeResumeAW() {
@@ -3009,8 +3451,10 @@ function maybeResumeAW() {
   if(!hasWork){ clearAW(); return; }
   aw=saved.aw; awStart=saved.awStart||Date.now(); awTouch=saved.awTouch||awStart;
   if(awIsStale()) { autoFinishStale(); return; }  // dead timer → resolve it, tells him now that the app is open
+  _liveHold=true;   // don't publish it to the live row before he says yes
   showConfirm('Resume your unfinished workout?').then(ok=>{
-    if(ok) { beginW(); } else { aw=null; clearAW(); }
+    _liveHold=false;
+    if(ok) { liveRebase(); beginW(); } else { liveDecline(aw.id); aw=null; clearAW(); }
   });
 }
 
@@ -3075,6 +3519,8 @@ function beginW() {
   if(!awStart) awStart=Date.now();
   awTouch=Date.now();   // mark active NOW so the stale-auto-finish doesn't fire on start
   if(aw) aw._pairFrom=null;   // never resume mid-way through picking a superset partner
+  if(aw&&!aw.startedAt) aw.startedAt=awStart;   // one clock for every device on the live record
+  _finLock=null;
   clearInterval(wt);
   wt=setInterval(updWT,1000);
   updWT();
@@ -3084,6 +3530,7 @@ function beginW() {
 
 function updWT() {
   if(awIsStale()){ autoFinishStale(); return; }
+  if(liveOn()&&Date.now()-_livePollAt>LIVE_POLL_MS){ _livePollAt=Date.now(); liveSync(); }   // Realtime fallback
   ws=Math.max(0,Math.floor((Date.now()-awStart)/1000));
   const t=String(Math.floor(ws/60)).padStart(2,'0')+':'+String(ws%60).padStart(2,'0');
   document.getElementById('awTimer').textContent=t;
@@ -4360,35 +4807,68 @@ function buildProgressNotes(rec,preProgress,prList){
   return notes;
 }
 
+// Finish lock + CAS (live shared workout): one commit per workout, whichever trigger or device
+// gets there first. A second trigger on this device (a manual Finish confirmed while auto-finish
+// already ran, a double tap) finds the lock or the entry already in history and commits nothing;
+// another device's Finish loses the server CAS (liveClaimFinish) and commits nothing either.
 function _finishWContinue(auto,ts) {
-  clearInterval(wt); skipRest();   // skipRest also hides the rest bar + clears .resting
+  if(!aw||_finLock) return;
   // Auto-finish stops the clock at the LAST logged set (awTouch) so the idle period
   // before the auto-trigger isn't counted; a manual finish ends now.
   const endTs = auto ? (awTouch||awStart||Date.now()) : Date.now();
-  ws = Math.max(0, Math.floor((endTs - (awStart||endTs))/1000));
-  const vol=aw.exercises.reduce((a,e)=>a+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*Math.max(0,s.reps||0)),0):0),0);
-  const dur=String(Math.floor(ws/60)).padStart(2,'0')+':'+String(ws%60).padStart(2,'0');
+  const id=aw.id; _finLock=id;
+  clearInterval(wt); clearTimeout(_livePushT); skipRest();   // skipRest also hides the rest bar + clears .resting
+  liveStamp();
+  if(gH().some(w=>w&&w.id===id)){ _liveStats.dupFinish++; clearAW(); aw=null; _liveShadow=null; sp('home'); return; }
+  if(!liveOn()||_liveSolo===id){
+    const p=gProf(); if(p&&p.code&&_liveSolo!==id) liveQueueFinish(liveWire(aw));   // signed out/offline: settle the live row later
+    _commitFinish(endTs,0); return;
+  }
+  const busy=_liveBusy||Promise.resolve();
+  busy.then(()=>aw&&aw.id===id?liveClaimFinish(liveWire(aw)):null).then(r=>{
+    if(!r||!aw||aw.id!==id) return;   // a sync that was in flight closed it (ended on the other device)
+    if(r.lost){ _finLock=null; liveSync(); return; }   // already finished elsewhere: close here, merging in any sets it lacks
+    if(r.doc){ aw=liveFromWire(r.doc,aw); awStart=aw.startedAt||awStart; }   // includes the other device's last sets
+    _commitFinish(endTs,r.rev||0);
+  });
+}
+// Strip the live-sync bookkeeping (ids, stamps) from exercises going into history, and any
+// custom exercise's local photo (a data: URL) -- history syncs to Supabase and rides the JSON
+// export, and that photo must never leave this device. Snapshot the note in effect tonight.
+function liveHistExercises(exs){
+  return (exs||[]).map(e=>{
+    const {lid,c,u,d,...e2}=e;
+    e2.sets=(e.sets||[]).map(({sid,c,u,d,...s})=>s);
+    if(e2.imgUrl&&String(e2.imgUrl).startsWith('data:')) e2.imgUrl=null;
+    const n=exNote(e2.exId);
+    return n?{...e2,note:n}:e2;
+  });
+}
+// Build the history record for a workout and commit its PRs (the one place PRs are committed).
+function buildFinishRec(a,startTs,endTs){
+  const ts=a.exercises.reduce((n,e)=>n+e.sets.filter(s=>s.done).length,0);
+  const sec=Math.max(0, Math.floor((endTs - (startTs||endTs))/1000));
+  const vol=a.exercises.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*Math.max(0,s.reps||0)),0):0),0);
+  const dur=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');
   // Capture the PRE-workout progress signal (history through last time, not
   // tonight) for every trackable exercise before tonight's numbers land in
   // history -- needed to tell whether a prior "go up" suggestion was
   // actually followed tonight.
   const preProgress={};
-  aw.exercises.forEach(e=>{ if(progressTrackable(e.tracking||'weight_reps')) preProgress[e.exId]=evaluateProgress(e.exId); });
-  const prList=commitPRs(aw);              // PRs committed ONLY now, on finish
-  const {swaps:_sw,...awRec}=aw;   // switch bookkeeping stays out of history
+  a.exercises.forEach(e=>{ if(progressTrackable(e.tracking||'weight_reps')) preProgress[e.exId]=evaluateProgress(e.exId); });
+  const prList=commitPRs(a);              // PRs committed ONLY now, on finish
+  _liveStats.commits++;
+  // Switch bookkeeping and live-sync state stay out of history.
+  const {swaps:_sw,_pairFrom:_pf,tomb:_t,mu:_m,rest:_r,startedAt:_sa,v:_v,...awRec}=a;
   const rec={...awRec,duration:dur,sets:ts,totalVolume:Math.round(vol),prCount:prList.length,prSets:prList.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps}))};
-  // Snapshot the note that was actually in effect for each exercise tonight
-  // onto the saved record -- history should show what note applied to THAT
-  // workout, not just whatever the note happens to say today. Also strip any
-  // custom exercise's local photo (a data: URL cached onto aw.exercises for the
-  // active-workout screen) — history syncs to Supabase and rides the JSON
-  // export/import file, and that photo must never leave this device.
-  rec.exercises=rec.exercises.map(e=>{
-    const n=exNote(e.exId);
-    const e2=(e.imgUrl&&String(e.imgUrl).startsWith('data:'))?{...e,imgUrl:null}:e;
-    return n?{...e2,note:n}:e2;
-  });
+  rec.exercises=liveHistExercises(rec.exercises);
   if(!rec.name || rec.name==='Quick Workout') rec.name=autoNameWorkout(rec.exercises);
+  return {rec,prList,preProgress,vol,dur,ts,sec};
+}
+function _commitFinish(endTs,rev) {
+  const {rec,prList,preProgress,vol,dur,ts,sec}=buildFinishRec(aw,awStart,endTs);
+  ws=sec;
+  if(rev) rec.lrev=rev;
   // Detect if the workout's exercises differ from its source routine.
   let rid=null,rname='',ids=aw.exercises.map(e=>e.exId);
   if(aw.routineId){ const r=gR().find(x=>x.id===aw.routineId); if(r){ const o=r.exercises||[]; if(o.length!==ids.length||o.some((id,i)=>id!==ids[i])){ rid=aw.routineId; rname=r.name; } } }
@@ -4401,7 +4881,7 @@ function _finishWContinue(auto,ts) {
   if (typeof syncBackup==='function') syncBackup();
   const summaryVol=Math.round(vol);
   const progressNotes=buildProgressNotes(rec,preProgress,prList);
-  aw=null;
+  aw=null; _liveShadow=null;
   showFinishSummary({name:rec.name,dur,ts,vol:summaryVol,prList,rid,rname,ids,progressNotes});
   sp('home');
 }
@@ -4447,7 +4927,8 @@ function saveAsNewRoutine(idsCsv){
 
 function cancelW() {
   showConfirm('Cancel workout? All progress will be lost.').then(ok=>{ if(!ok) return;
-    clearInterval(wt); skipRest(); clearAW(); aw=null; sp('home');
+    if(aw) liveDiscard(aw.id);   // Discard ends it on every device (Mr. Roni's #3)
+    clearInterval(wt); skipRest(); clearAW(); aw=null; _liveShadow=null; sp('home');
   });
 }
 
@@ -4459,9 +4940,9 @@ function restTick() {
   document.getElementById('restDisp').textContent = restSec>=60 ? Math.floor(restSec/60)+':'+String(restSec%60).padStart(2,'0') : restSec;
   if (restSec<=0) { clearInterval(rt); document.getElementById('restBar').classList.remove('show'); document.body.classList.remove('resting'); haptic('success',false); }
 }
-function startRest(s) { restEnd=Date.now()+s*1000; clearInterval(rt); document.getElementById('restBar').classList.add('show'); document.body.classList.add('resting'); restTick(); rt=setInterval(restTick,250); }
-function adjRest(d) { restEnd=Math.max(Date.now()+5000, restEnd+d*1000); restTick(); }
-function skipRest() { clearInterval(rt); document.getElementById('restBar').classList.remove('show'); document.body.classList.remove('resting'); }
+function startRest(s) { restEnd=Date.now()+s*1000; if(aw) aw.rest={endsAt:restEnd,dur:s}; clearInterval(rt); document.getElementById('restBar').classList.add('show'); document.body.classList.add('resting'); restTick(); rt=setInterval(restTick,250); }
+function adjRest(d) { restEnd=Math.max(Date.now()+5000, restEnd+d*1000); if(aw&&aw.rest){ aw.rest={...aw.rest,endsAt:restEnd}; saveAW(); } restTick(); }
+function skipRest() { if(aw&&aw.rest){ aw.rest=null; if(!_finLock) saveAW(); } clearInterval(rt); document.getElementById('restBar').classList.remove('show'); document.body.classList.remove('resting'); }
 
 // ============================================================
 // PLATE CALCULATOR (works in the user's chosen unit)
@@ -6524,6 +7005,7 @@ async function authBoot(){
 function onAuthed(){
   cm('authGate'); _gate = null;
   subscribeFriends();
+  liveBoot();
   if (typeof maybeCloudBackup==='function') maybeCloudBackup();
   if (isDirty()) scheduleSync();
   refreshFriends();   // preload so the Friends tab is warm before it's opened
@@ -6568,7 +7050,9 @@ async function authGateSubmit(){
     else gateMsg('Could not save — check your connection and try again.');
   } finally { btn.disabled = false; btn.textContent = prev; }
 }
-window.addEventListener('online', ()=>{ if (!_authUid && !_gate && gProf()) authBoot(); });
+window.addEventListener('online', ()=>{ if (!_authUid && !_gate && gProf()) authBoot(); else if (liveOn()) liveFlushFinishQ().then(()=>liveSync()); });
+// Coming back to the app: catch up with the live row (watch-started workout to resume, late sets).
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && liveOn()) liveSchedule(300); });
 
 // Realtime: push friend add/accept/remove to both devices instead of waiting for
 // the 25s poll. Needs the `friend_requests` table added to Supabase's realtime
@@ -6735,14 +7219,16 @@ function mergeBackup(cloud, local, pendingNotes){
   if(delSet.size) out.jk_deleted=[...delSet];
 
   // jk_hist: union by workout id, entries kept VERBATIM (watch-written fields like
-  // hrSeries/hrAvg/kcal must survive). Local wins on an id clash; tombstoned ids
-  // are filtered out so deletions stick.
+  // hrSeries/hrAvg/kcal must survive). Local wins on an id clash, unless the cloud copy
+  // carries a higher `lrev` (live-workout revision: late sets merged into a finished
+  // workout, totals/PRs recomputed -- WATCH_BRIDGE.md A17); tombstoned ids are filtered
+  // out so deletions stick.
   const ch=Array.isArray(cloud.jk_hist)?cloud.jk_hist:[];
   const lh=Array.isArray(local.jk_hist)?local.jk_hist:[];
   if(ch.length||lh.length){
     const byId=new Map();
     lh.forEach(w=>{ if(w&&w.id!=null) byId.set(w.id,w); });
-    ch.forEach(w=>{ if(w&&w.id!=null && !byId.has(w.id)) byId.set(w.id,w); });
+    ch.forEach(w=>{ if(w&&w.id!=null){ const l=byId.get(w.id); if(!l || (Number(w.lrev)||0)>(Number(l.lrev)||0)) byId.set(w.id,w); } });
     out.jk_hist=[...byId.values()].filter(w=>!delSet.has(w.id));
   }
 
@@ -7843,7 +8329,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.71';
+const BUILD = 'v1.10.72';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';

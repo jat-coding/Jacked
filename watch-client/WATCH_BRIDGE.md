@@ -55,6 +55,64 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ## APP-WIDE (watch must mirror)
 
+### A17. Live shared workout (phone <-> watch): the server record + sync contract — build v1.10.72 (staging)
+Mr. Roni, 2026-10-06 (`BOARD.md` `c9bd1dc` six answers + `c7d9f25` four edge cases, on Phil's `f775c3a`
+proposal, adopted with the changes marked **[changed]**). Rollout step 1: server + phone only. Watches: build
+behind an off flag; the table is **written, not yet applied** to the real project (needs Mr. Roni's go), so
+until then every read of it fails and the phone falls back to finishing locally, exactly as before.
+- **Table** `public.live_workouts` (`supabase/migrations/20261006_live_workouts.sql`): one row per account.
+  `code` PK (FK `profiles.code`, cascade), `session_id`, `status` `'active'|'finished'|'discarded'`, `doc` jsonb,
+  `rev` bigint, `updated_at` (**server clock**, set by trigger), `updated_by` (device id: `phone-…`, `wear-…`,
+  `watchos-…`; the phone labels the other device from this prefix), `hr`, `kcal`, `stats_at`. Owner-only RLS
+  (`owns_code`, select/insert/update/delete), in `supabase_realtime`. Not in the backup blob, not archived.
+- **Writes = CAS on `rev`:** `PATCH live_workouts?code=eq.X&rev=eq.N` with `rev:N+1`; `[]` back = someone wrote
+  first: re-read, merge, retry (max 5). A failed read = no write. **[changed]** A trigger refuses any change to
+  `doc`/`status`/`session_id` whose `rev` is not exactly old+1 (Postgres error `40001`), and refuses moving
+  `rev` on a stats-only write. Live stats: write only `hr`, `kcal`, `stats_at`, never `rev`. Insert when no
+  row exists; a `23505` back means another device inserted first: re-read and merge.
+- **`doc`** = the phone's `aw`: `{v:1, id, routineId?, name, date, startedAt, swaps?, rest?, exercises:[…], mu, tomb}`.
+  `id` = `session_id` = the workout's `jk_hist` id, minted at Start (`'w'+ms`). `startedAt` = epoch ms, one
+  clock for every device (merge keeps the earlier). Exercise: the usual fields plus `lid` (stable id), `c`
+  (creation order, a number: sort key for exercises not in the order list and for sets), `u` (epoch ms of the
+  last change to the exercise's own fields), `d` (device id that made it). Set: the usual fields plus `sid`,
+  `c`, `u`, `d`; any change to any field of a set re-stamps that set. `mu` = `{name, swaps, rest, order}`, each
+  `{u,d}`: the stamp of that workout-level field; `order` is the exercise order, taken from the winning side's
+  `exercises` array. `tomb` = `{<lid or sid>: {u,d}}` **[changed: a map, not inline `{sid,del:true}` entries]**.
+  `rest` = `{endsAt (epoch ms), dur (s)}` or null: the shared rest timer. No `imgUrl` on the wire (a custom
+  exercise's photo never leaves the device).
+- **Merge (same session):** stamps compare by `u`, then by `d` as a string (higher wins) so every device picks
+  the same winner. Per set: newest stamp wins. Per exercise header: newest wins; sets merge independently.
+  Workout fields: newest `mu[k]` wins. A tombstone at least as new as the item deletes it (an exercise
+  tombstone removes its sets too). Order: the winning `mu.order` side's exercise order, then any other live
+  exercises by `c`. Sets inside an exercise sort by `c`, then `sid`.
+- **Start / resume:** no row, or a `finished`/`discarded` row, or an `active` row untouched for 70 min
+  (`updated_at`): this Start takes the row (insert / CAS replace). An `active` fresh row of ANOTHER session:
+  ask "A workout is already in progress on your <device>. Add this workout's sets to it?" Yes = fold this
+  session into that one (same `exId` -> sets appended, else exercise added, ids kept) and continue under its
+  id; No = this workout stays local-only and finishes as its own entry. A device with no workout open that
+  sees a fresh `active` row from another device offers "Resume the workout from your <device>?" (once per
+  session; a decline is remembered on that device).
+- **Finish (either device, manual or the 30-min-idle / 70-min-total auto-finish):** CAS `status='finished'`
+  with the merged final `doc`. Only the device whose CAS wins builds the `jk_hist` entry (from the merged doc,
+  so the other device's last sets are in it; `id` = `session_id`, plus `lrev` = the row's rev) and commits PRs
+  (`jk_prs`, `jk_holdPR`, cardio PRs, A16). A device that finds the row already `finished` commits nothing
+  and closes, showing the summary from `doc`; the entry reaches it through the normal backup pull. A local
+  finish lock + an already-in-`jk_hist` check stop a second trigger on the same device. No answer within
+  4 s / offline: finish locally, keep the doc in a device queue, and CAS it to `finished` when back online.
+  The idle clock counts changes from **every** device (the newest stamp in `doc`), so a phone never
+  auto-finishes a workout the watch is still logging.
+- **Late sets (edge case 1):** a device whose doc has sets the `finished` row lacks merges them in (CAS, status
+  stays `finished`) and builds/recomputes its own entry. Every device holding that entry recomputes it when it
+  sees a `finished` row with `rev` above the entry's `lrev`: exercises from the doc, `sets`, `totalVolume`,
+  PRs re-committed (records only go up), `prCount`/`prSets` rebuilt, `lrev` = rev.
+  **Backup merge rule change:** in `jk_hist`, an id clash keeps the copy with the higher `lrev`; with equal or
+  no `lrev`, local still wins as before. Watch: apply the same rule in its `jk_hist` merge, or a recomputed
+  entry is overwritten by the stale copy. History entries never carry `lid`/`sid`/stamps (stripped at Finish).
+- **Discard:** confirm, then CAS `status='discarded'`; other devices close their copy with nothing saved.
+- **Phone transport:** Realtime on `live_workouts` (`code=eq.<me>`), plus a 5 s poll while a workout is open,
+  and a check on app focus / reconnect. Writes debounced 1.2 s after the last change. Live HR/kcal shown under
+  the workout timer while `stats_at` is under 30 s old.
+
 ### A16. Static holds are timed — build v1.10.48 (staging)
 Mr. Roni, 2026-09-29. **Rule:** exercise-db ids Plank, Side_Bridge, Isometric_Neck_Exercise_-_Front_And_Back,
 Isometric_Neck_Exercise_-_Sides, Plate_Pinch, Crucifix, Downward_Facing_Balance use `tracking:'duration'`
@@ -315,6 +373,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 10-06 | staging | v1.10.72: live shared workout, phase 1 (server + phone). New table `live_workouts` (migration written, NOT applied), `aw` carries `lid`/`sid`/stamps/`mu`/`tomb`, CAS on `rev`, set-level merge, finish lock + finish CAS, late-set recompute with `lrev`; `mergeBackup()` keeps the higher-`lrev` `jk_hist` entry on an id clash. Contract: A17 | APP-WIDE |
 | 10-02 | staging | v1.10.70: body-weight import merge rule (Mr. Roni yes, 11:28pm). `mergeBackup()` unions `jk_bwlog` by date (local wins on a shared date) and derives `jk_bw` from the latest-dated entry, so weights the Jacked Sync companion imports from Health Connect survive the phone's next backup. No new storage keys | APP-WIDE |
 | 10-02 | staging | v1.10.69: (1) Shoulder-Maxing no longer counts `Barbell_Shoulder_Press` or `Smith_Machine_Overhead_Shoulder_Press` (both seated in the library); only `Standing_Military_Press` x1 and `Standing_Dumbbell_Press` pair x1.15; no Smith OHP credit (library has no standing one). (2) The v1.8.27 any-change prompt (add/remove/reorder on finishing a ROUTINE workout) is back, asked right AFTER the v1.10.68 switch prompt; switched slots count as unchanged in it. Finish-summary "Update <routine>" button no longer hidden. No new storage keys | APP-WIDE |
 | 10-02 | staging | v1.10.68: finishing a ROUTINE workout where Switch Exercise was used asks once ("Update routine" / "Keep routine") to write the switches back; yes replaces only those slots in `routine.exercises`, in place, every other routine field untouched. Replaces the v1.8.27 prompt that fired on any add/remove/reorder (those no longer prompt). Live workout carries transient `aw.swaps` `{originalExId: currentExId}`, stripped from the history record. Auto-finish never prompts. A watch that offers Switch during a routine workout should do the same on finish; no new storage keys | APP-WIDE |

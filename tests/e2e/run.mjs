@@ -3,6 +3,7 @@
 // Consistency-Maxing, Jacked). Screenshots go to $SHOTS (default /tmp/jk16/shots).
 import fs from 'fs';
 import { startServer, stopServer, launch, close, phone, check, results, wk, ex, days, LB, URL, pngPixel } from './harness.mjs';
+import { LIVE_SUITES } from './live.mjs';
 const SHOTS = process.env.SHOTS || '/tmp/jk16/shots';
 fs.mkdirSync(SHOTS, { recursive: true });
 const badges = page => page.evaluate(() => computeBadges().map(b => ({ name: b.name, earned: b.earned, tier: b.tier || null, desc: b.desc, detail: b.detail })));
@@ -3349,7 +3350,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
