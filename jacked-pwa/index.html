@@ -241,6 +241,12 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .td{font-family:var(--fh);font-size:32px;font-weight:900;color:var(--accent);letter-spacing:2px;line-height:1}
 .ws{padding-top:calc(76px + var(--sat))}
 .wstats{display:flex;align-items:center;justify-content:center;gap:22px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:12px;margin-bottom:14px;text-align:center}
+/* Mini stat bar, just below the fixed .ab header -- shown only once the big .wstats tile has
+   scrolled out of view (Mr. Roni, 2026-10-05 9:46pm: lost sight of weight/sets once scrolled
+   into the exercise list). Low-profile on purpose -- a thin line, not a second big tile. */
+.wmini{position:fixed;top:calc(76px + var(--sat));left:16px;right:16px;z-index:85;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:5px 14px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:11px;color:var(--muted);opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .15s,transform .15s}
+.wmini.show{opacity:1;transform:translateY(0)}
+.wmini b{color:var(--accent);font-weight:800;font-size:12px}
 .wstats-v{font-family:var(--fh);font-size:24px;font-weight:800;color:var(--accent);line-height:1}
 .wstats-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
 .eb{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:14px;margin-bottom:12px}
@@ -661,6 +667,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <button class="btn ba sm" onclick="finishW()">✓ Finish</button>
     </div>
   </div>
+  <div class="wmini" id="wMini"></div>
   <div class="ws" id="wSession"></div>
 </div>
 
@@ -3078,6 +3085,8 @@ function renderWS() {
   const doneAll=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   const volAll=aw.exercises.reduce((a,e)=>a+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*s.reps),0):0),0);
   let h=`<div class="wstats"><div><div class="wstats-v">${fmtW(volAll)}</div><div class="wstats-l">${uL()} lifted</div></div><div style="width:1px;background:var(--border)"></div><div><div class="wstats-v">${doneAll}</div><div class="wstats-l">sets done</div></div></div>`;
+  const wMiniEl=document.getElementById('wMini');
+  if(wMiniEl) wMiniEl.innerHTML=`<b>${fmtW(volAll)} ${uL()}</b> lifted<span style="width:1px;height:12px;background:var(--border)"></span><b>${doneAll}</b> sets done`;
   h+=aw.exercises.map((ex,ei)=>{
     const pr=prs[ex.exId];
     const ih=ex.imgUrl
@@ -3209,6 +3218,7 @@ function renderWS() {
     <button class="btn bg" onclick="openPlate()">Plates</button>
   </div>`;
   document.getElementById('wSession').innerHTML=h;
+  if(typeof _wMiniSync==='function') _wMiniSync();
   saveAW();
 }
 
@@ -7632,6 +7642,23 @@ document.addEventListener('touchmove',e=>{
   const x=e.touches[0].clientX, dx=_slTX-x; _slTX=x;
   if((dx!==0||dy!==0)&&!_popupCanScroll(t,dx,dy)&&e.cancelable) e.preventDefault();
 },{passive:false});
+
+// Active-workout mini stat bar: shows once the big .wstats tile has scrolled up under the
+// fixed header, hides again above it. Checked on scroll, not on a timer -- cheap (one
+// getBoundingClientRect) and only does anything while page-active is the visible page.
+// #jkRoot only scrolls in the rotated-landscape frame (see its CSS above); window scrolls
+// in the normal portrait case, so both are listened for and share this one handler.
+function _wMiniSync(){
+  const page=document.querySelector('.page.active');
+  const mini=document.getElementById('wMini');
+  if(!mini) return;
+  if(!page||page.id!=='page-active'){ mini.classList.remove('show'); return; }
+  const tile=document.querySelector('#page-active .wstats');
+  const headerH=mini.getBoundingClientRect().top;   // mini sits right under .ab; its own top = header height
+  mini.classList.toggle('show', !!tile && tile.getBoundingClientRect().bottom<headerH);
+}
+window.addEventListener('scroll',_wMiniSync,{passive:true});
+document.getElementById('jkRoot').addEventListener('scroll',_wMiniSync,{passive:true});
 
 // In-app replacement for window.confirm()/window.prompt(). iOS Safari drops
 // those silently once the app is installed to the home screen — the call
