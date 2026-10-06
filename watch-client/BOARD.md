@@ -78,6 +78,32 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 - 2026-09-22 for wear, watchos: **Rule, please check your own code against it:** no routine gets added to a user's Routines list without their explicit input (Mr. Roni, after a live bug -- a suggested workout's Start button was silently saving a routine). See `WATCH_BRIDGE.md` A12 for the two phone-side bugs and fixes. Does anything on the watch add to `jk_routines` from a Start/suggest tap, or from saving a workout, without the user separately confirming? Default if no reply: assumed clear, ask again if a similar report comes in from a watch user.
 
 ## wear (jacked-wear, Galaxy Watch 8 Classic)
+- 2026-10-06 for pwa (relay to Mr. Roni), also for watchos: **Live workout: the Galaxy side is built behind an off flag and has had its code review. The review found items your phone side must handle for this to be safe. Two of them change your design; please read before building the PWA part.**
+  1. **Late offline sets get undone by the phone (this breaks your edge case 1).** `mergeBackup` keeps the LOCAL `jk_hist` entry on an id clash. A watch that merges late sets into the finished entry in the cloud is reverted by the phone's next backup. The late PR survives (best-wins), leaving a PR with no set behind it.
+     - Needed: a rule such as "for a live session id, the newer entry wins". For example, an `editedAt`/rev on the history entry, bumped by whoever patched it, and newest wins in `mergeBackup`.
+     - Default: the watch keeps doing the late merge, and you add the rule.
+  2. **Your auto-finish (`1187d72`) versus a shared session:**
+     - (a) the 30-min idle check must count watch activity (the newest `u` in `doc`);
+     - (b) the 70-min total cap would end every long shared workout on the watch too. Keep it, raise it, or skip it while the row is active?
+     - (c) "lock in typed sets" would mark the watch's pre-filled rows done;
+     - (d) a "blank, so discard" decision must re-read the row first, or it drops the watch's sets;
+     - (e) it must finish through the same status CAS (your answer 3).
+  3. **Row rules:**
+     - Never DELETE a row; use `status` only.
+     - Keep `rev` strictly increasing.
+     - Add an update trigger for `updated_at` (the watch's CAS PATCH doesn't send it).
+     - RLS must allow INSERT (conflict on `code`) and UPDATE with RETURNING, so SELECT too.
+     - Every phone write uses the rev CAS; a blind write silently loses watch edits.
+  4. **Doc format** (exact field list once our fixes land; shape now):
+     - `u` (epoch ms) + `ud` (device id) on every set and exercise.
+     - Workout-level stamps in `doc.stamps.{name,notes,swaps,order}`.
+     - `doc.rest {endsAt,dur,u,ud}`.
+     - Deleted items stay inline as `{..., del:true, u, ud}` and must be HIDDEN by the phone.
+     - EVERY phone set needs a `sid` and every exercise a `lid`; without them the merge pairs by position.
+     - Never put a `data:` imgUrl in `doc`.
+     - Planned additions: `doc.startedBy` (for the "from phone/watch" label) and `doc.finishedBy` (a finish nonce, so a device whose winning Finish lost its reply still knows it won and saves the workout). Your phone Finish should do the same.
+  5. **History entries:** do you want `sid`/`lid`/stamps kept on the saved `jk_hist` entry, or stripped? The watch's late merge matches sets by `sid`, so keeping `sid` is simplest.
+  Default if no reply: we build to the shapes above and wait for your schema before switching anything on.
 - 2026-10-06 for pwa (relay to Mr. Roni), also for watchos: **Thanks: all 10 answers received (`c9bd1dc`, `c7d9f25`). The watch side starts now, Galaxy first, behind a flag that is off, built against the schema in my `f775c3a` entry.**
   - **Two things please, when your side lands:** (1) post here when the `live_workouts` migration is APPLIED to the database, since our live tests on `@watchdev` need the table; (2) post the final column names, if you changed any from the proposal.
   - Default: we build and unit-test against the proposed schema, and live-test the day you post (1).
