@@ -4064,14 +4064,15 @@ function repBadgeEx(ex,kind,w){
 // A run set counts toward Cardio-Maxing: the standard run, with both distance and time logged.
 function stdRun(ex,w){ return (ex.tracking||'')==='distance'&&isStdEx(ex,'cardio',w); }
 const BADGE_TIER_THRESH={
-  bench:[135,225,315], ohpFrac:[0.25,0.5,1.0], squatFrac:[1.0,1.5,2.0],
+  bench:[135,225,315],
   pullup:[10,15,20], pushup:[30,50,80], cardio:[9,8,6.5]   // cardio: mile-equiv ceilings, lower=better
 };
-// The ladders above (bench aside, see below) are the male, age 18-39 ladders. Profile sex and age scale them: a
-// woman's ladder is those values times BADGE_FEMALE (cardio: a slower pace, x1.11, about the men/women gap in mile
-// records); age scales every ladder by badgeAgeFactor (cardio: slower). These factors are set values,
-// not sourced -- edit here to tune. A male 18-39 profile, or one with no birthday, gets the ladders as written.
-const BADGE_FEMALE={ohp:.6,squat:.6,pullup:.5,pushup:.6,cardio:1.11};
+// The ladders above (bench, squat and ohp aside, see below) are the male, age 18-39 ladders. Profile sex and
+// age scale them: a woman's ladder is those values times BADGE_FEMALE (cardio: a slower pace, x1.11, about the
+// men/women gap in mile records); age scales every ladder by badgeAgeFactor (cardio: slower). These factors
+// are set values, not sourced -- edit here to tune. A male 18-39 profile, or one with no birthday, gets the
+// ladders as written.
+const BADGE_FEMALE={pullup:.5,pushup:.6,cardio:1.11};
 function badgeAgeFactor(age){ return age==null?1:age<16?.75:age<18?.85:age<40?1:age<50?.95:age<60?.88:age<70?.78:.68; }
 // Bench-Maxing is computed, not hand-set (Mr. Roni approved "Option A", 2026-09-25): the IPF GOODLIFT raw
 // bench-only formula turns 30 / 50 / 70 points into a pound target at your sex and body weight, and the
@@ -4089,6 +4090,55 @@ function thresholds_lb(sex,bwLb,points,age){
 }
 function benchBasis(){ const p=gProf()||{}, sex=p.sex==='male'||p.sex==='female'?p.sex:null, bwLb=gBW()*2.20462; return {sex,bwLb,age:gAge(),ok:!!sex&&bwLb>0}; }
 function benchLadder(){ const b=benchBasis(); return b.ok?BENCH_POINTS.map(p=>thresholds_lb(b.sex,b.bwLb,p,b.age)):BADGE_TIER_THRESH.bench.map(x=>Math.round(x*mccullochFactor(b.age)/5)*5); }
+// Leg-Maxing (squat) and Shoulder-Maxing (ohp): 1 rep, sourced standards, same approach as bench (Mr. Roni,
+// 2026-10-06 11:56am-11:58am: "they should all be 1 reps, just as how bench maxing is... same approach as
+// Bench: sourced 1-rep standards, adjusted for sex, age and body weight... whatever counts as the 1-rep lift
+// [for bench], so all three badges count the same way" -- standing rule for future Maxing badges too). No
+// official IPF GL coefficient exists for squat or OHP alone: confirmed against the IPF's own
+// IPF_GL_Coefficients-2020.pdf (powerlifting.sport), which lists exactly four rows -- Classic/Equipped
+// Powerlifting TOTAL and Classic/Equipped BENCH PRESS -- nothing per-lift for squat or deadlift (GL only
+// scores the full SBD total, or bench as its own IPF competition). Sourced instead from StrengthLog's 1RM
+// strength standards (strengthlog.com/squat-strength-standards-lb, /overhead-press-strength-standards-lb --
+// training logs of 15,314 men / 6,760 women for squat, 14,081 men / 5,711 women for OHP), the Intermediate /
+// Advanced / Elite rows -> Bronze / Silver / Gold, linearly interpolated by body weight (lb), eased for age 41+
+// by the same McCulloch factor bench uses -- not badgeAgeFactor, to genuinely "count the same way" as bench.
+// This is a recalibration, not just dropping the old 5-rep minimum: the old squatFrac/ohpFrac fractions were
+// explicitly calibrated for a 5-rep set, so reusing them at 1 rep would have badged a true 1RM far too easily.
+// No grandfather clause for already-earned tiers under the old 5-rep numbers (bench got one when its formula
+// changed, 2026-09-25/BENCH_GL_FROM) -- not built here, flagged to him, one-line addition if he wants it.
+const SQUAT_STD={   // [bodyweight lb, Intermediate, Advanced, Elite lb]
+  male:[[110,155,175,274],[120,172,199,308],[130,187,220,339],[140,202,240,368],[150,216,258,394],
+    [160,228,275,419],[170,240,291,443],[180,251,307,465],[190,262,321,486],[200,272,335,506],
+    [210,281,348,525],[220,291,360,543],[230,299,372,561],[240,308,383,577],[250,316,394,593],
+    [260,323,405,608],[270,331,415,623],[280,338,424,637],[290,345,434,651],[300,351,443,664],[310,358,452,677]],
+  female:[[90,130,163,203],[100,134,170,218],[110,139,176,231],[120,143,182,244],[130,146,187,255],
+    [140,150,191,266],[150,153,196,275],[160,156,200,285],[170,158,207,293],[180,161,207,301],
+    [190,163,211,309],[200,166,214,316],[210,168,217,323],[220,170,220,330],[230,172,223,336],
+    [240,174,226,342],[250,176,228,348],[260,178,231,354]]
+};
+const OHP_STD={
+  male:[[110,75,82,94],[120,83,92,109],[130,90,101,122],[140,97,110,135],[150,103,118,146],
+    [160,109,126,157],[170,115,133,167],[180,120,140,177],[190,125,146,186],[200,129,152,195],
+    [210,134,158,203],[220,138,164,211],[230,142,169,218],[240,146,174,225],[250,149,179,232],
+    [260,153,183,239],[270,156,188,245],[280,160,192,251],[290,163,196,257],[300,166,200,263],[310,169,204,268]],
+  female:[[90,54,62,74],[100,56,65,80],[110,58,68,85],[120,60,71,90],[130,62,74,94],
+    [140,64,76,98],[150,65,79,102],[160,67,81,106],[170,68,83,109],[180,69,85,112],
+    [190,71,86,115],[200,72,88,118],[210,73,90,121],[220,74,91,123],[230,75,93,125],
+    [240,76,94,128],[250,77,95,130],[260,77,97,132]]
+};
+// Clamps outside the sourced bodyweight range (male 110-310, female 90-260); linear between rows otherwise.
+function interpStd(rows,bwLb){
+  if(bwLb<=rows[0][0]) return rows[0].slice(1);
+  if(bwLb>=rows[rows.length-1][0]) return rows[rows.length-1].slice(1);
+  for(let i=0;i<rows.length-1;i++){
+    const [w0,...v0]=rows[i], [w1,...v1]=rows[i+1];
+    if(bwLb<=w1){ const t=(bwLb-w0)/(w1-w0); return v0.map((v,j)=>v+(v1[j]-v)*t); }
+  }
+  return rows[rows.length-1].slice(1);
+}
+function stdLadder(table,sex,bwLb,age){
+  return interpStd(table[sex==='female'?'female':'male'],bwLb).map(v=>Math.round(v*mccullochFactor(age)/5)*5);
+}
 // The one line the bench popup uses to say where its numbers came from. No GOODLIFT points shown (Mr. Roni, 2026-09-30).
 function benchHowNote(){
   const b=benchBasis(), ag=mccullochFactor(b.age)!==1?`, eased for age ${b.age}`:'';
@@ -4146,10 +4196,10 @@ function benchTierOf(h){
   if(kept) r.all[0].tier=tOld;
   return {tier:kept?tOld:r.tier, value:kept?old:r.value, by:kept?r.all[0]:r.by, lifts:r.lifts, kept};
 }
-// Shoulder-Maxing: 5 reps, ladder is a fraction of body weight (no body weight = no tier, values still tracked).
+// Shoulder-Maxing: 1 rep, like bench; ladder is sourced lb standards (OHP_STD above, no body weight = no tier).
 function ohpTierOf(h){
   const bwLb=gBW()*2.20462;
-  return liftVariantsOf('ohp',h,5,bwLb>0?badgeT().ohpFrac.map(f=>f*bwLb):null);
+  return liftVariantsOf('ohp',h,1,bwLb>0?badgeT().ohpFrac:null);
 }
 // Cardio-Maxing substitutes (Mr. Roni, 2026-09-30): outdoor and treadmill running are plain alternatives, same unit,
 // no conversion. Tracked separately so the popup can give each its own section; the badge still takes whichever pace
@@ -4176,7 +4226,8 @@ function badgeT(){
   const fem=((gProf()||{}).sex==='female'), a=badgeAgeFactor(gAge()), B=BADGE_TIER_THRESH;
   const sc=(arr,k,rd)=>arr.map(x=>rd(x*(fem?BADGE_FEMALE[k]:1)*a));
   const r2=x=>Math.round(x*100)/100, r1=x=>Math.max(1,Math.round(x));
-  return {bench:benchLadder(), ohpFrac:sc(B.ohpFrac,'ohp',r2), squatFrac:sc(B.squatFrac,'squat',r2),
+  const sex=fem?'female':'male', bwLb=gBW()*2.20462, age=gAge();
+  return {bench:benchLadder(), ohpFrac:stdLadder(OHP_STD,sex,bwLb,age), squatFrac:stdLadder(SQUAT_STD,sex,bwLb,age),
     pullup:sc(B.pullup,'pullup',r1), pushup:sc(B.pushup,'pushup',r1),
     cardio:B.cardio.map(x=>Math.round(x*(fem?BADGE_FEMALE.cardio:1)/a*12)/12)};   // to the nearest 5 seconds
 }
@@ -4196,16 +4247,14 @@ function tierOfLiveLow(v,thr){ return v<=thr[2]?'gold':v<=thr[1]?'silver':v<=thr
 // popup can say exactly what was hit, not just the rule.
 function badgeTierForKey(key,h){
   if(key==='bench'||key==='ohp'||key==='squat'){
-    const minReps = key==='bench' ? 1 : 5;
     if(key==='bench'){ const r=benchTierOf(h); return {tier:r.tier, value:r.value, by:r.by&&r.by.label}; }
     if(key==='ohp'){ const r=ohpTierOf(h); return {tier:r.tier, value:r.value, by:r.by&&r.by.label}; }
-    let best=0;
+    let best=0;   // squat: 1 rep, like bench/ohp
     h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!isStdEx(ex,key,w))return;
-      (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); }));
+      (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=1){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); }));
     const T=badgeT();
     const bwLb=gBW()*2.20462; if(!(bwLb>0)) return {tier:null,value:best};
-    const frac=key==='ohp'?T.ohpFrac:T.squatFrac;
-    return {tier:tierOfLive(best,frac.map(f=>f*bwLb)), value:best};
+    return {tier:tierOfLive(best,T.squatFrac), value:best};
   }
   if(key==='pullup'||key==='pushup'){
     let best=0;
@@ -4236,8 +4285,8 @@ function metricBadgeInfo(key,tier,value,exName){
   const T=badgeT();
   const rules={
     bench:`Bronze / Silver / Gold — 1-rep barbell bench: ${T.bench.join(' / ')} lb.`+(sub?subNote:''),
-    ohp:`Bronze / Silver / Gold — standing barbell overhead press ×5: ${T.ohpFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`+(sub?subNote:''),
-    squat:`Bronze / Silver / Gold — barbell back squat ×5: ${T.squatFrac.map(f=>Math.round(f*100)+'%').join(' / ')} of bodyweight.`,
+    ohp:`Bronze / Silver / Gold — 1-rep standing barbell overhead press: ${T.ohpFrac.join(' / ')} lb.`+(sub?subNote:''),
+    squat:`Bronze / Silver / Gold — 1-rep barbell back squat: ${T.squatFrac.join(' / ')} lb.`,
     pullup:`Bronze / Silver / Gold — best set of strict pull-ups: ${T.pullup.join(' / ')} reps.`,
     pushup:`Bronze / Silver / Gold — best set of standard push-ups: ${T.pushup.join(' / ')} reps.`,
     cardio:`Bronze / Silver / Gold — best running mile pace: ${T.cardio.map(fmtClock).join(' / ')} /mi.`,
@@ -5285,10 +5334,10 @@ function computeBadges() {
   const benchR=benchTierOf(h3), benchT=benchR.tier, benchStd=!benchBasis().ok, bench=benchR.value;
   // "245 lb (Dumbbell bench)" -- the value and the lift that reached the highest tier (Mr. Roni, 2026-09-30).
   const benchBy=r=>r.value>0?`${Math.round(r.value)} lb`+(r.by&&r.by.key!=='bench'?` (${r.by.label})`:''):'';
-  const ohpBy=r=>`${Math.round(r.value)} lb x5`+(r.by&&r.by.key!=='ohp'?` (${r.by.label})`:'');
+  const ohpBy=r=>`${Math.round(r.value)} lb`+(r.by&&r.by.key!=='ohp'?` (${r.by.label})`:'');
   const ohpR=ohpTierOf(h3), ohp=ohpR.value, ohpT=haveBW?ohpR.tier:null;
-  const sq=bestLb(sqPred,5);
-  const sqT=haveBW?tierOf(sq,TH.squatFrac.map(f=>f*bwLb)):null;
+  const sq=bestLb(sqPred,1);
+  const sqT=haveBW?tierOf(sq,TH.squatFrac):null;
   const r0=x=>Math.round(x);
   // Render the three tier thresholds, bolding (in accent) the ones unlocked.
   const tline=(best,thr)=>thr.map(x=>best>=x?`<b style="color:var(--accent)">${r0(x)}</b>`:`${r0(x)}`).join(' / ');
@@ -5327,11 +5376,11 @@ function computeBadges() {
   // All-time bests (kept even when the 3-month tier has dropped) -- shown in the popup.
   const cardioTierOf=v=>v<=TH.cardio[2]?'gold':v<=TH.cardio[1]?'silver':v<=TH.cardio[0]?'bronze':null;
   const pullF=(ex,w)=>repBadgeEx(ex,'pullup',w), pushF=(ex,w)=>repBadgeEx(ex,'pushup',w);
-  const ohpAll=ohpTierOf(h), oA=ohpAll.value, qA=bestLb(sqPred,5,h), puA=bestSetReps(pullF,h), psA=bestSetReps(pushF,h);
+  const ohpAll=ohpTierOf(h), oA=ohpAll.value, qA=bestLb(sqPred,1,h), puA=bestSetReps(pullF,h), psA=bestSetReps(pushF,h);
   const ALL={
     'Bench-Maxing':(()=>{ const r=benchTierOf(h); return r.value>0&&{v:benchBy(r),tier:r.tier}; })(),
     'Shoulder-Maxing':haveBW&&oA>0&&{v:ohpBy(ohpAll),tier:ohpAll.tier},
-    'Leg-Maxing':haveBW&&qA>0&&{v:`${r0(qA)} lb x5`,tier:tierOf(qA,TH.squatFrac.map(f=>f*bwLb))},
+    'Leg-Maxing':haveBW&&qA>0&&{v:`${r0(qA)} lb`,tier:tierOf(qA,TH.squatFrac)},
     'Pull-up-Maxing':puA>0&&{v:`${puA} reps`,tier:tierOf(puA,TH.pullup)},
     'Push-up-Maxing':psA>0&&{v:`${psA} reps`,tier:tierOf(psA,TH.pushup)},
     'Cardio-Maxing':isFinite(cardioAll)&&{v:`${fmtClock(cardioAll)} per mile`,tier:cardioTierOf(cardioAll)},
@@ -5382,10 +5431,10 @@ function computeBadges() {
       desc: `${benchStd?'Standard 1-rep bench':'1-rep bench'} (lb): ${tline(bench,TH.bench)}`+(benchR.by&&benchR.by.key!=='bench'?` · ${benchR.by.label} ${Math.round(bench)}`:'')+(benchR.kept?' · kept from the old numbers':''),
       lifts:benchR.lifts},
     {icon:'dumbbell',color:MCOL.shoulders,name:'Shoulder-Maxing',tiered:true,tier:ohpT,earned:!!ohpT,needsWeight:!haveBW,
-      desc: !haveBW?'Enter body weight in Profile to unlock':`OHP ×5 (lb): ${tline(ohp,TH.ohpFrac.map(f=>f*bwLb))}`+(ohpR.by&&ohpR.by.key!=='ohp'?` · ${ohpR.by.label} ${Math.round(ohp)}`:''),
+      desc: !haveBW?'Enter body weight in Profile to unlock':`1-rep OHP (lb): ${tline(ohp,TH.ohpFrac)}`+(ohpR.by&&ohpR.by.key!=='ohp'?` · ${ohpR.by.label} ${Math.round(ohp)}`:''),
       lifts:haveBW?ohpR.lifts:undefined},
     {icon:'dumbbell',color:MCOL.legs,name:'Leg-Maxing',tiered:true,tier:sqT,earned:!!sqT,needsWeight:!haveBW,
-      desc: !haveBW?'Enter body weight in Profile to unlock':`Squat ×5 (lb): ${tline(sq,TH.squatFrac.map(f=>f*bwLb))}`},
+      desc: !haveBW?'Enter body weight in Profile to unlock':`1-rep squat (lb): ${tline(sq,TH.squatFrac)}`},
     {icon:'trophy',color:'#ffd700',name:'1000lb Club',desc: bestSingle>0?`Best single-session Big-3: ${r0(bestSingle)} lb / 1000`:'Barbell bench + back squat + deadlift ≥ 1000 lb in one workout',earned:club,
       sections: bestParts?[
         {t:'Bench',rows:[['Your best in that workout',r0(bestParts.bench)+' lb'+(bestParts.benchBy&&bestParts.benchBy.key!=='bench'?` (${bestParts.benchBy.label}, credited)`:'')]]},
@@ -5417,7 +5466,7 @@ function computeBadges() {
       ]},
   ];
   list.forEach(b=>{ if(ALL[b.name]) b.all=ALL[b.name]; });
-  const CUR={'Bench-Maxing':benchBy(benchR),'Shoulder-Maxing':haveBW&&ohp>0?ohpBy(ohpR):'','Leg-Maxing':haveBW&&sq>0?`${r0(sq)} lb x5`:'',
+  const CUR={'Bench-Maxing':benchBy(benchR),'Shoulder-Maxing':haveBW&&ohp>0?ohpBy(ohpR):'','Leg-Maxing':haveBW&&sq>0?`${r0(sq)} lb`:'',
     'Pull-up-Maxing':pullBest>0?`${pullBest} reps`:'','Push-up-Maxing':pushBest>0?`${pushBest} reps`:'','Cardio-Maxing':isFinite(cardioBest)?`${fmtClock(cardioBest)}/mi`:''};
   list.forEach(b=>{ if(CUR[b.name]!==undefined) b.curV=CUR[b.name]; });
   // Jacked (Mr. Roni, 2026-09-24): every Monthly-reset and 3-month-reset badge earned, the tiered ones all at Gold.
@@ -5442,8 +5491,8 @@ const TIERC={bronze:'#cd7f32',silver:'#b8b8c8',gold:'#ffd700'};
 // Tap-to-explain text for each badge.
 const BADGE_HOW={
   get 'Bench-Maxing'(){ const T=badgeT(); return `Barbell flat bench, 1 rep. Flat dumbbell bench counts at +15% (both dumbbells together), Smith machine flat bench at -15%. Bronze ${T.bench[0]}, Silver ${T.bench[1]}, Gold ${T.bench[2]} lb. `+benchHowNote(); },
-  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)); return `Standing barbell overhead press, 5 reps, vs your body weight (set it in Profile). Standing dumbbell press counts at +15% (both dumbbells together). Seated presses, including the Smith machine one, don't count. Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}%.`+badgeAdjNote(); },
-  get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)); return `Barbell back squat, 5 reps, vs your body weight (set it in Profile). Bronze ${T[0]}%, Silver ${T[1]}%, Gold ${T[2]}%.`+badgeAdjNote(); },
+  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac; return `Standing barbell overhead press, 1 rep, vs sourced strength standards for your sex and body weight (set it in Profile). Standing dumbbell press counts at +15% (both dumbbells together). Seated presses, including the Smith machine one, don't count. Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]} lb.`+badgeAdjNote(); },
+  get 'Leg-Maxing'(){ const T=badgeT().squatFrac; return `Barbell back squat, 1 rep, vs sourced strength standards for your sex and body weight (set it in Profile). Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]} lb.`+badgeAdjNote(); },
   '1000lb Club':'Barbell flat bench press + barbell back squat + conventional barbell deadlift from one workout, summed to 1000 lb or more. Flat dumbbell bench counts at +15%, Smith machine bench at -15%; no other variations.',
   'PR-Maxing':'Hit 7 personal records within any rolling 7-day window. Only the last 3 months count.',
   'Consistency-Maxing':'Finish a workout 7 days in a row. Only the last 3 months count.',
@@ -5464,9 +5513,9 @@ const BADGE_DETAIL={
     exHow:[{t:'No barbell bench? Dumbbell counts too',body:'Flat Dumbbell Bench Press, both hands. Log both dumbbells added together; it gets +15% (two 50 lb dumbbells = 100 lb logged, credited 115 lb).'},
       {t:'Smith machine counts too',body:'Flat Smith Machine Bench Press, credited at -15% (100 lb logged = 85 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],
     tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'}; },
-  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Standing barbell overhead press (Standing Military Press), 5 reps, measured against your body weight — set it in Profile. Seated presses (Barbell Shoulder Press and Smith Machine Overhead Shoulder Press are seated too, whatever the name), push press, behind-the-neck, other variations and custom exercises don\'t count.',
-    exHow:[{t:'Dumbbells count too',body:'Standing Dumbbell Press, both hands. Log both dumbbells added together; it gets +15% (two 50 lb dumbbells = 100 lb logged, credited 115 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
-  get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Barbell back squat (Barbell Squat), 5 reps, measured against your body weight — set it in Profile. Front squats, Smith machine and custom exercises don\'t count.',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac; return {how:'Standing barbell overhead press (Standing Military Press), 1 rep, measured against sourced strength standards for your sex and body weight — set it in Profile. Seated presses (Barbell Shoulder Press and Smith Machine Overhead Shoulder Press are seated too, whatever the name), push press, behind-the-neck, other variations and custom exercises don\'t count.',
+    exHow:[{t:'Dumbbells count too',body:'Standing Dumbbell Press, both hands. Log both dumbbells added together; it gets +15% (two 50 lb dumbbells = 100 lb logged, credited 115 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+  get 'Leg-Maxing'(){ const T=badgeT().squatFrac; return {how:'Barbell back squat (Barbell Squat), 1 rep, measured against sourced strength standards for your sex and body weight — set it in Profile. Front squats, Smith machine and custom exercises don\'t count.',tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
   '1000lb Club':{how:'Your best barbell flat bench press + barbell back squat + conventional barbell deadlift, all from the same workout, added together to 1000 lb or more. The bench can also be a flat dumbbell bench (both dumbbells together +15%) or a flat Smith machine bench (-15%). No front squat, Smith squat, sumo or custom exercises.'},
   get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return {how:'Most reps in one set of strict pull-ups (Pullups, palms facing away). Chin-ups, assisted, band, scapular and custom exercises don\'t count.',tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
   get 'Push-up-Maxing'(){ const T=badgeT().pushup; return {how:'Most reps in one set of standard push-ups (Pushups), not summed across sets. Incline, knee, other variations and custom exercises don\'t count.',tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
