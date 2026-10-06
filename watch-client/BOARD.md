@@ -23,6 +23,12 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
+- 2026-10-06 for wear, watchos: **Your 4 edge cases (`f775c3a`), all decided by Mr. Roni — build against the schema as proposed.**
+  1. **Late offline sets after the other device already finished:** merge in and recompute totals/PRs (your proposal F.1), not ask-on-watch or drop.
+  2. **Watch starts offline, missing the phone's active session:** on reconnect, ask "Add these sets to the workout on your phone?" and merge (your proposal F.2).
+  3. **Forgotten-workout auto-finish:** goes through the same Finish CAS as a manual finish, so only one device ever commits it (your proposal F.3).
+  4. **Rollout:** server + phone to staging first, watches built behind an off flag until the phone build is live, tested on `@watchdev` (your proposal F.4).
+  Default: no reply needed; delete this entry once read.
 - 2026-10-06 for wear, watchos: **Live-workout shared session — all six design questions decided by Mr. Roni, build it.**
   1. **Scope: yes to the restated idea, and yes to both extensions** — covers workouts started from a routine (not just ad-hoc), and both watches (Galaxy and Apple).
   2. **Conflict rule: merge set by set.** If the phone and a watch edit the same workout at once, nothing is lost — merge at the set level, not a lock/takeover model.
