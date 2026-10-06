@@ -2977,16 +2977,23 @@ function confirmAESelection() {
 // ACTIVE WORKOUT
 // ============================================================
 let aw=null, wt=null, ws=0, rt=null, restSec=0, awStart=0, restEnd=0, awTouch=0;
-const STALE_MS = 90*60*1000;   // auto-finish after 1.5h with no activity
+// Auto-finish a forgotten workout on whichever limit hits first (Mr. Roni, 2026-10-05
+// 10:44pm): 30 min with no input at all, or 70 min total even with some activity in it.
+const STALE_IDLE_MS = 30*60*1000, STALE_TOTAL_MS = 70*60*1000;
+function awIsStale() { return aw && awStart && ((awTouch && Date.now()-awTouch>STALE_IDLE_MS) || Date.now()-awStart>STALE_TOTAL_MS); }
 
 // Persist the in-progress workout so a reload/crash/screen-lock doesn't lose it.
 function saveAW() { if(aw){ awTouch=Date.now(); S.s('activeWorkout',{aw,awStart,awTouch}); } }
 function clearAW() { try{ localStorage.removeItem('jk_activeWorkout'); }catch(e){} }
 
-// Stop a forgotten session: publish it if anything was logged, else discard.
+// Stop a forgotten session: publish it if anything was logged, else discard. Any set with a
+// weight or reps typed into it but never tapped done is counted as done first (Mr. Roni,
+// 2026-10-05 10:47pm: "lock all the typed out workouts") -- a blank, untouched set still
+// doesn't count towards anything.
 function autoFinishStale() {
   if(!aw) return;
   clearInterval(wt); clearInterval(rt);
+  aw.exercises.forEach(e=>e.sets.forEach(s=>{ if(!s.done&&(s.weight>0||s.reps>0)) s.done=true; }));
   const ts=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   if(ts>0){ finishW(true); toast('Workout auto-finished after inactivity','ok'); }
   else { clearAW(); aw=null; sp('home'); toast('Inactive workout discarded','ok'); }
@@ -2998,7 +3005,7 @@ function maybeResumeAW() {
   const hasWork=(saved.aw.exercises||[]).some(e=>(e.sets||[]).length);
   if(!hasWork){ clearAW(); return; }
   aw=saved.aw; awStart=saved.awStart||Date.now(); awTouch=saved.awTouch||awStart;
-  if(Date.now()-awTouch > STALE_MS) { autoFinishStale(); return; }  // dead timer → resolve it
+  if(awIsStale()) { autoFinishStale(); return; }  // dead timer → resolve it, tells him now that the app is open
   showConfirm('Resume your unfinished workout?').then(ok=>{
     if(ok) { beginW(); } else { aw=null; clearAW(); }
   });
@@ -3073,7 +3080,7 @@ function beginW() {
 }
 
 function updWT() {
-  if(aw && awTouch && (Date.now()-awTouch)>STALE_MS){ autoFinishStale(); return; }
+  if(awIsStale()){ autoFinishStale(); return; }
   ws=Math.max(0,Math.floor((Date.now()-awStart)/1000));
   const t=String(Math.floor(ws/60)).padStart(2,'0')+':'+String(ws%60).padStart(2,'0');
   document.getElementById('awTimer').textContent=t;
