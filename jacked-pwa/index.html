@@ -2996,9 +2996,12 @@ function clearAW() { try{ localStorage.removeItem('jk_activeWorkout'); }catch(e)
 // the wire contract the watches build against is WATCH_BRIDGE.md A17. Table:
 // supabase/migrations/20261006_live_workouts.sql (one row per account, CAS on `rev`).
 //  • `aw` itself is the shared doc. Every exercise gets a stable `lid`, every set a `sid`, and
-//    each carries a change stamp u (epoch ms) + d (device id, the tiebreak). Workout-level
-//    fields (name, swaps, rest timer, exercise order) are stamped in `aw.mu`. Deletions are
-//    tombstones in `aw.tomb` {id:{u,d}}, never just absent.
+//    each carries a change stamp u (epoch ms) + ud (device id, the tiebreak); an edit stamps
+//    max(now, old u + 1). Workout-level fields are stamped in `aw.stamps` {name,notes,swaps,order},
+//    the rest timer carries its own u/ud. Deletions are tombstones, never just absent: in memory
+//    `aw.tomb` {id:{u,ud,p:parent lid for a set}}; on the wire they sit inline in place,
+//    {sid|lid, del:true, u, ud} (liveIn/liveOut convert) -- the format the Galaxy build uses
+//    (BOARD.md 472a92e).
 //  • Stamps come from diffing against the last stamped state (`_liveShadow`) on every
 //    saveAW(), so no mutation path has to remember to stamp anything itself.
 //  • Merge (mergeLive): newest stamp per set / per exercise header / per workout field wins;
@@ -3015,51 +3018,57 @@ let LIVE_POLL_MS=5000;                  // Realtime fallback while a workout is 
 const LIVE_STALE_MS=STALE_TOTAL_MS;     // an 'active' row untouched this long is abandoned; the next Start replaces it
 const LIVE_FINISH_TIMEOUT_MS=4000;      // no answer by then = finish offline, settle with the server later
 const LIVE_Q_KEY='jacked_liveFinishQ', LIVE_DECLINED_KEY='jacked_liveDeclined';   // device state, never in the blob
-const LIVE_Z={u:0,d:''};
+const LIVE_Z={u:0,ud:''};
 let _liveShadow=null, _liveDirty=false, _livePushT=null, _liveBusy=null, _liveAgain=false, _livePollAt=0,
-    _liveChan=null, _liveSolo=null, _liveAsk=null, _liveHold=false, _finLock=null, _liveLastC=0, _liveOffered=new Set();
+    _liveChan=null, _liveSolo=null, _liveAsk=null, _liveHold=false, _finLock=null, _liveOffered=new Set();
 const _liveStats={writes:0, casMiss:0, commits:0, dupFinish:0, recomputes:0};
 function liveDevice(){
   let d=null; try{ d=localStorage.getItem('jacked_deviceId'); }catch(_){}
   if(!d){ d='phone-'+Math.random().toString(36).slice(2,10); try{ localStorage.setItem('jacked_deviceId',d); }catch(_){} }
   return d;
 }
-function liveC(){ _liveLastC=Math.max(_liveLastC+1, Date.now()*1000); return _liveLastC; }   // creation order
 function liveId(p){ return p+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
-function liveGt(a,b){ a=a||LIVE_Z; b=b||LIVE_Z; return a.u!==b.u ? a.u>b.u : String(a.d||'')>String(b.d||''); }
-const LIVE_META=new Set(['lid','sid','c','u','d','sets','imgUrl']);
+function liveGt(a,b){ a=a||LIVE_Z; b=b||LIVE_Z; return (a.u||0)!==(b.u||0) ? (a.u||0)>(b.u||0) : String(a.ud||'')>String(b.ud||''); }
+const LIVE_META=new Set(['lid','sid','u','ud','sets','imgUrl']);
 function liveSig(o){ const r={}; Object.keys(o||{}).forEach(k=>{ if(!LIVE_META.has(k)) r[k]=o[k]; }); return canonJson(r); }
 function liveWSig(a,k){ return k==='order' ? (a.exercises||[]).map(e=>e.lid).join(',') : canonJson(a[k]===undefined?null:a[k]); }
-const LIVE_WFIELDS=['name','swaps','rest','order'];
+const LIVE_WFIELDS=['name','notes','swaps','order'];
 
 // Stamp whatever changed since the last stamp. Returns true when anything did.
 function liveStamp(){
   if(!aw||!Array.isArray(aw.exercises)) return false;
-  const now=Date.now(), st={u:now,d:liveDevice()}, sh=_liveShadow, ns={e:{},s:{},w:{}};
+  const now=Date.now(), me=liveDevice(), sh=_liveShadow, ns={e:{},s:{},p:{},w:{},r:null};
+  const next=u=>Math.max(now,(u||0)+1);   // an edit always beats the version it was made on, even with clock skew
   let ch=false;
-  aw.tomb=aw.tomb||{}; aw.mu=aw.mu||{};
+  aw.tomb=aw.tomb||{}; aw.stamps=aw.stamps||{};
   if(!aw.startedAt) aw.startedAt=awStart||now;
+  if(!aw.startedBy) aw.startedBy='phone';
   aw.exercises.forEach(e=>{
-    if(!e.lid){ e.lid=liveId('x'); e.c=liveC(); }
+    if(!e.lid) e.lid=liveId('x');
     const sig=liveSig(e);
-    if(!e.u || (sh&&sh.e[e.lid]!==undefined&&sh.e[e.lid]!==sig)){ e.u=now; e.d=st.d; ch=true; }
-    ns.e[e.lid]=sig;
+    if(!e.u || (sh&&sh.e[e.lid]&&sh.e[e.lid].sig!==sig)){ e.u=next(e.u); e.ud=me; ch=true; }
+    ns.e[e.lid]={sig,u:e.u};
     (e.sets||[]).forEach(s=>{
-      if(!s.sid){ s.sid=liveId('s'); s.c=liveC(); }
+      if(!s.sid) s.sid=liveId('s');
       const ss=liveSig(s);
-      if(!s.u || (sh&&sh.s[s.sid]!==undefined&&sh.s[s.sid]!==ss)){ s.u=now; s.d=st.d; ch=true; }
-      ns.s[s.sid]=ss;
+      if(!s.u || (sh&&sh.s[s.sid]&&sh.s[s.sid].sig!==ss)){ s.u=next(s.u); s.ud=me; ch=true; }
+      ns.s[s.sid]={sig:ss,u:s.u}; ns.p[s.sid]=e.lid;
     });
   });
   if(sh){
-    Object.keys(sh.e).forEach(id=>{ if(!(id in ns.e)){ aw.tomb[id]=st; ch=true; } });
-    Object.keys(sh.s).forEach(id=>{ if(!(id in ns.s)){ aw.tomb[id]=st; ch=true; } });
+    Object.keys(sh.e).forEach(id=>{ if(!(id in ns.e)){ aw.tomb[id]={u:next(sh.e[id].u),ud:me}; ch=true; } });
+    Object.keys(sh.s).forEach(id=>{ if(!(id in ns.s)){ aw.tomb[id]={u:next(sh.s[id].u),ud:me,p:sh.p[id]}; ch=true; } });
   }
   LIVE_WFIELDS.forEach(k=>{
-    const sig=liveWSig(aw,k);
-    if(!aw.mu[k] || (sh&&sh.w[k]!==sig)){ aw.mu[k]=st; ch=true; }
+    const sig=liveWSig(aw,k), st=aw.stamps[k];
+    if(!st || (sh&&sh.w[k]!==sig)){ aw.stamps[k]={u:next(st&&st.u),ud:me}; ch=true; }
     ns.w[k]=sig;
   });
+  if(aw.rest){
+    const rs=canonJson([aw.rest.endsAt,aw.rest.dur]);
+    if(!aw.rest.u || (sh&&sh.r!==rs)){ aw.rest={...aw.rest,u:next(aw.rest.u),ud:me}; ch=true; }
+    ns.r=rs;
+  }
   _liveShadow=ns;
   if(ch) _liveDirty=true;
   return ch;
@@ -3070,7 +3079,7 @@ function liveRebase(){ _liveShadow=null; if(aw){ const d=_liveDirty; liveStamp()
 // The doc that goes on the wire: aw minus device-only bits. Custom-exercise photos (data: URLs)
 // never leave this device, same rule as history.
 function liveWire(a){
-  const {_pairFrom,...w}=a;
+  const {_pairFrom,mu,...w}=a;
   return {...w, v:1, exercises:(w.exercises||[]).map(({imgUrl,...e})=>({...e, sets:(e.sets||[]).map(s=>({...s}))}))};
 }
 // Doc -> aw, keeping this device's image for each exercise (or the library's).
@@ -3085,58 +3094,95 @@ function liveFromWire(doc, local){
 function liveTouch(doc){
   let t=0; const m=s=>{ if(s&&s.u>t) t=s.u; };
   (doc.exercises||[]).forEach(e=>{ m(e); (e.sets||[]).forEach(m); });
-  Object.values(doc.mu||{}).forEach(m); Object.values(doc.tomb||{}).forEach(m);
+  Object.values(doc.stamps||{}).forEach(m); Object.values(doc.tomb||{}).forEach(m); m(doc.rest);
   return t;
 }
 
-// Pure merge of two docs of the SAME session.
+// `primary`'s order, plus each item only `secondary` has, placed right after its nearest
+// predecessor there. Merges always pass the server row as primary, so every device adopts the
+// row's order and they converge.
+function liveSeq(primary, secondary, key){
+  const out=primary.slice(), have=new Set(out.map(key));
+  secondary.forEach((x,i)=>{
+    const k=key(x); if(have.has(k)) return;
+    let at=-1;
+    for(let j=i-1;j>=0&&at<0;j--){ const pk=key(secondary[j]); at=out.findIndex(y=>key(y)===pk); }
+    out.splice(at+1,0,x); have.add(k);
+  });
+  return out;
+}
+// Pure merge of two docs of the SAME session (in-memory form, tombstones in .tomb). `a` is the
+// server's copy when there is one.
 function mergeLive(a,b){
   if(!a) return b; if(!b) return a;
   const tomb={...(a.tomb||{})};
   Object.entries(b.tomb||{}).forEach(([k,s])=>{ if(!tomb[k]||liveGt(s,tomb[k])) tomb[k]=s; });
   const dead=(id,st)=>!!tomb[id] && !liveGt(st,tomb[id]);
-  const out={...a}, am=a.mu||{}, bm=b.mu||{}, mu={};
+  const out={...b,...a}, as=a.stamps||{}, bs=b.stamps||{}, stamps={};
   out.startedAt=Math.min(a.startedAt||Infinity, b.startedAt||Infinity); if(!isFinite(out.startedAt)) delete out.startedAt;
-  ['name','swaps','rest'].forEach(k=>{
-    const src=liveGt(bm[k],am[k])?b:a, s=(src===b?bm:am)[k];
+  ['name','notes','swaps'].forEach(k=>{
+    const useB=liveGt(bs[k],as[k]), src=useB?b:a, st=useB?bs[k]:as[k];
     if(src[k]===undefined) delete out[k]; else out[k]=src[k];
-    if(s) mu[k]=s;
+    if(st) stamps[k]=st;
   });
-  const key=(e,i)=>e.lid||('nolid:'+e.exId+':'+i);
+  const rest=!a.rest?b.rest:!b.rest?a.rest:(liveGt(b.rest,a.rest)?b.rest:a.rest);
+  if(rest) out.rest=rest; else delete out.rest;
+  const key=(e,i)=>e.lid||('nolid:'+e.exId);
   const ea=new Map((a.exercises||[]).map((e,i)=>[key(e,i),e])), eb=new Map((b.exercises||[]).map((e,i)=>[key(e,i),e]));
   const exs=new Map();
   new Set([...ea.keys(),...eb.keys()]).forEach(k=>{
     const x=ea.get(k), y=eb.get(k);
     const head=!x?y:!y?x:(liveGt(y,x)?y:x);
     if(dead(k,head)) return;
-    const sets=new Map();
-    [...((x&&x.sets)||[]), ...((y&&y.sets)||[])].forEach((s,i)=>{
-      const sk=s.sid||('nosid:'+k+':'+i), cur=sets.get(sk);
-      if(!cur||liveGt(s,cur)) sets.set(sk,s);
-    });
-    const live=[...sets.entries()].filter(([sk,s])=>!dead(sk,s)).map(([,s])=>s)
-      .sort((p,q)=>((p.c||0)-(q.c||0))||String(p.sid||'').localeCompare(String(q.sid||'')));
-    exs.set(k,{...head, sets:live});
+    const sk=(s,i)=>s.sid||('nosid:'+i);
+    const xs=(x&&x.sets)||[], ys=(y&&y.sets)||[];
+    const vx=new Map(xs.map((s,i)=>[sk(s,i),s])), vy=new Map(ys.map((s,i)=>[sk(s,i),s]));
+    const sets=liveSeq(xs.map(sk), ys.map(sk), v=>v).map(id=>{
+      const p=vx.get(id), q=vy.get(id); return !p?q:!q?p:(liveGt(q,p)?q:p);
+    }).filter((s,i)=>!dead(s.sid,s));
+    exs.set(k,{...head, sets});
   });
-  const ow=liveGt(bm.order,am.order)?b:a; mu.order=(ow===b?bm:am).order;
-  if(!mu.order) delete mu.order;
-  const ordered=[];
-  (ow.exercises||[]).forEach((e,i)=>{ const k=key(e,i); if(exs.has(k)){ ordered.push(exs.get(k)); exs.delete(k); } });
-  [...exs.values()].sort((p,q)=>(p.c||0)-(q.c||0)).forEach(e=>ordered.push(e));
-  out.exercises=ordered; out.mu=mu; out.tomb=tomb;
+  const bWins=liveGt(bs.order,as.order), w=bWins?b:a, o=bWins?a:b;
+  if(bWins?bs.order:as.order) stamps.order=bWins?bs.order:as.order;
+  const order=liveSeq((w.exercises||[]).map(key), (o.exercises||[]).map(key), v=>v);
+  out.exercises=order.filter(k=>exs.has(k)).map(k=>exs.get(k));
+  out.stamps=stamps; out.tomb=tomb; delete out.mu;
   return out;
+}
+
+// Wire <-> memory. On the wire a delete stays in place, {sid|lid, del:true, u, ud} (Galaxy build,
+// BOARD.md 472a92e); in memory those live in .tomb so no screen code ever meets one.
+function liveIn(w){
+  if(!w||typeof w!=='object') return w;
+  const tomb={}, exercises=[];
+  (w.exercises||[]).forEach(e=>{
+    if(e.del){ if(e.lid) tomb[e.lid]={u:e.u||0,ud:e.ud||''}; return; }
+    const sets=[];
+    (e.sets||[]).forEach(s=>{ if(s.del){ if(s.sid) tomb[s.sid]={u:s.u||0,ud:s.ud||'',p:e.lid}; } else sets.push(s); });
+    exercises.push({...e,sets});
+  });
+  return {...w, exercises, tomb, stamps:w.stamps||{}};
+}
+function liveOut(doc){
+  const {tomb,mu,_pairFrom,...w}=doc, t=tomb||{};
+  w.exercises=(doc.exercises||[]).map(({imgUrl,...e})=>({...e, sets:[...(e.sets||[]),
+    ...Object.entries(t).filter(([,s])=>s.p&&s.p===e.lid).map(([sid,s])=>({sid,del:true,u:s.u,ud:s.ud}))]}));
+  Object.entries(t).filter(([,s])=>!s.p).forEach(([lid,s])=>w.exercises.push({lid,del:true,u:s.u,ud:s.ud}));
+  w.v=1;
+  return w;
 }
 
 // Fold a separately-started session (this device's) into another device's live one: same
 // exercise -> its sets are appended, otherwise the exercise is added. Ids are kept.
 function liveFold(target, mine){
-  const out=JSON.parse(JSON.stringify(target)), now=Date.now(), st={u:now,d:liveDevice()};
-  (mine.exercises||[]).forEach(me=>{
-    const t=(out.exercises||[]).find(e=>e.exId===me.exId);
-    if(t) (me.sets||[]).forEach(s=>t.sets.push({...s,u:now,d:st.d}));
-    else out.exercises.push({...me,u:now,d:st.d,sets:(me.sets||[]).map(s=>({...s,u:now,d:st.d}))});
+  const out=JSON.parse(JSON.stringify(target)), now=Date.now(), me=liveDevice();
+  const st=u=>({u:Math.max(now,(u||0)+1),ud:me});
+  (mine.exercises||[]).forEach(me2=>{
+    const t=(out.exercises||[]).find(e=>e.exId===me2.exId);
+    if(t) (me2.sets||[]).forEach(s=>t.sets.push({...s,...st(s.u)}));
+    else out.exercises.push({...me2,...st(me2.u),sets:(me2.sets||[]).map(s=>({...s,...st(s.u)}))});
   });
-  out.mu={...(out.mu||{}),order:st};
+  out.stamps={...(out.stamps||{}),order:st(out.stamps&&out.stamps.order&&out.stamps.order.u)};
   out.startedAt=Math.min(out.startedAt||Infinity, mine.startedAt||Infinity);
   return out;
 }
@@ -3147,12 +3193,14 @@ async function liveRead(code){
   const { data, error } = await SUPA.from('live_workouts')
     .select('session_id,status,doc,rev,updated_at,updated_by,hr,kcal,stats_at').eq('code',code).maybeSingle();
   if(error) throw error;
+  if(data) data.doc=liveIn(data.doc);
   return data||null;
 }
+const liveWirePatch=p=>p.doc?{...p,doc:liveOut(p.doc)}:p;
 // Compare-and-swap on rev: lands only if nobody wrote since we read `rev`.
 async function liveCas(code, rev, patch){
   const { data, error } = await SUPA.from('live_workouts')
-    .update({...patch, rev:rev+1, updated_at:new Date().toISOString(), updated_by:liveDevice()})
+    .update({...liveWirePatch(patch), rev:rev+1, updated_at:new Date().toISOString(), updated_by:liveDevice()})
     .eq('code',code).eq('rev',rev).select('rev');
   if(error) throw error;
   if(data&&data.length){ _liveStats.writes++; return true; }
@@ -3160,7 +3208,7 @@ async function liveCas(code, rev, patch){
 }
 async function liveInsert(code, patch){
   const { error } = await SUPA.from('live_workouts')
-    .insert({code, rev:1, updated_at:new Date().toISOString(), updated_by:liveDevice(), ...patch});
+    .insert({code, rev:1, updated_at:new Date().toISOString(), updated_by:liveDevice(), ...liveWirePatch(patch)});
   if(error){ if(error.code==='23505'){ _liveStats.casMiss++; return false; } throw error; }   // someone inserted first
   _liveStats.writes++; return true;
 }
@@ -3168,6 +3216,9 @@ const liveFresh=row=>row && row.status==='active' && Date.now()-(Date.parse(row.
 function liveFrom(dev){
   const d=String(dev||'').toLowerCase();
   return d.startsWith('watchos')?'Apple Watch':(d.startsWith('wear')||d.includes('watch'))?'watch':d.startsWith('phone')?'other phone':'other device';
+}
+// Who to name in a prompt: the device that started it (doc.startedBy), else the last writer.
+function liveWho(row){ return liveFrom((row&&row.doc&&row.doc.startedBy)||(row&&row.updated_by));
 }
 function liveDeclined(){ try{ const a=JSON.parse(localStorage.getItem(LIVE_DECLINED_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(_){ return []; } }
 function liveDecline(id){ try{ localStorage.setItem(LIVE_DECLINED_KEY, JSON.stringify([...liveDeclined(),id].slice(-20))); }catch(_){} }
@@ -3242,7 +3293,10 @@ function liveAdopt(doc){
 function liveRender(){
   const box=document.getElementById('wSession'), el=document.activeElement;
   if(box&&el&&box.contains(el)&&el.matches&&el.matches('input')){ setTimeout(()=>{ if(aw) liveRender(); },800); return; }
-  if(aw){ renderWS(); const n=document.getElementById('awName'); if(n) n.textContent=aw.name; }
+  if(!aw) return;
+  const t=awTouch; renderWS(); awTouch=t;   // another device's change is not activity HERE (idle clock: liveTouch)
+  S.s('activeWorkout',{aw,awStart,awTouch});
+  const n=document.getElementById('awName'); if(n) n.textContent=aw.name;
 }
 function liveApplyRest(){
   const r=aw&&aw.rest, bar=document.getElementById('restBar');
@@ -3262,7 +3316,7 @@ function liveShowStats(row){
 async function liveOtherSession(row){
   if(_liveAsk===aw.id||_cfResolve) return 'asking';   // never stack on another open confirm (one resolver)
   const mineId=aw.id; _liveAsk=mineId;
-  const yes=await showConfirm(`A workout is already in progress on your ${liveFrom(row.updated_by)}. Add this workout's sets to it?`,{okText:'Add to it',cancelText:'Keep separate'});
+  const yes=await showConfirm(`A workout is already in progress on your ${liveWho(row)}. Add this workout's sets to it?`,{okText:'Add to it',cancelText:'Keep separate'});
   _liveAsk=null;
   if(!aw||aw.id!==mineId) return 'gone';
   if(!yes){ _liveSolo=mineId; toast('This workout stays on this phone','ok'); return 'solo'; }
@@ -3317,7 +3371,7 @@ async function liveIdle(row){
   const id=row.session_id;
   if(row.updated_by===liveDevice()||_liveOffered.has(id)||liveDeclined().includes(id)||gH().some(w=>w&&w.id===id)||_cfResolve) return 'idle';
   _liveOffered.add(id);
-  const ok=await showConfirm(`Resume the workout from your ${liveFrom(row.updated_by)}?`,{okText:'Resume',cancelText:'Not now'});
+  const ok=await showConfirm(`Resume the workout from your ${liveWho(row)}?`,{okText:'Resume',cancelText:'Not now'});
   if(!ok){ liveDecline(id); return 'declined'; }
   return await liveResumeRemote();
 }
@@ -3377,8 +3431,8 @@ async function liveClaimFinish(doc){
         if(await liveCas(code,row.rev,{session_id:doc.id,status:'finished',doc,hr:null,kcal:null,stats_at:null})) return {won:true,doc,rev:row.rev+1};
         continue;
       }
-      const merged=mergeLive(row.doc,doc);
-      if(row.status==='finished') return {lost:true,row,merged};
+      const merged=mergeLive(row.doc,doc); merged.finishedBy=doc.finishedBy;
+      if(row.status==='finished') return doc.finishedBy&&row.doc.finishedBy===doc.finishedBy ? {won:true,doc:row.doc,rev:row.rev} : {lost:true,row,merged:mergeLive(row.doc,doc)};
       if(await liveCas(code,row.rev,{status:'finished',doc:merged})) return {won:true,doc:merged,rev:row.rev+1};
     }
     throw new Error('version contention');
@@ -3402,7 +3456,7 @@ async function liveFlushFinishQ(){
         const row=await liveRead(code);
         if(!row){ done=await liveInsert(code,{session_id:doc.id,status:'finished',doc}); continue; }
         if(row.session_id!==doc.id){ done=true; break; }   // a newer session owns the row now
-        const merged=mergeLive(row.doc,doc);
+        const merged=mergeLive(row.doc,doc); if(row.status!=='finished') merged.finishedBy=doc.finishedBy;
         if(row.status==='finished'&&canonJson(merged)===canonJson(row.doc)){ liveRecompute(row.doc,row.rev,false); done=true; break; }
         if(await liveCas(code,row.rev,{status:'finished',doc:merged})){ liveRecompute(merged,row.rev+1,false); done=true; }
       }
@@ -3435,10 +3489,20 @@ function liveBoot(){ if(!liveOn()) return; liveSubscribe(); liveFlushFinishQ().t
 // weight or reps typed into it but never tapped done is counted as done first (Mr. Roni,
 // 2026-10-05 10:47pm: "lock all the typed out workouts") -- a blank, untouched set still
 // doesn't count towards anything.
-function autoFinishStale() {
+function autoFinishStale(synced) {
   if(!aw||_finLock) return;   // a Finish is already committing this workout (finish lock)
   clearInterval(wt); clearInterval(rt);
-  aw.exercises.forEach(e=>e.sets.forEach(s=>{ if(!s.done&&(s.weight>0||s.reps>0)) s.done=true; }));
+  // Shared with another device: re-read the live row first, so its newest sets count and its
+  // activity can show the workout is not idle after all (Phil's review, BOARD.md cd9895b 2a/2d).
+  if(!synced&&liveOn()&&_liveSolo!==aw.id){
+    const id=aw.id;
+    liveSync().then(()=>{ if(!aw||aw.id!==id||_finLock) return;
+      if(awIsStale()) autoFinishStale(true); else { clearInterval(wt); wt=setInterval(updWT,1000); } });
+    return;
+  }
+  // Lock in only sets typed HERE: on a shared workout the watch's pre-filled rows are not his (2c).
+  const me=liveDevice(), shared=aw.exercises.some(e=>(e.ud&&e.ud!==me)||e.sets.some(s=>s.ud&&s.ud!==me));
+  aw.exercises.forEach(e=>e.sets.forEach(s=>{ if(!s.done&&(s.weight>0||s.reps>0)&&(!shared||!s.ud||s.ud===me)) s.done=true; }));
   const ts=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   if(ts>0){ finishW(true); toast('Workout auto-finished after inactivity','ok'); }
   else { liveDiscard(aw.id); clearAW(); aw=null; sp('home'); toast('Inactive workout discarded','ok'); }
@@ -4825,6 +4889,9 @@ function _finishWContinue(auto,ts) {
     _commitFinish(endTs,0); return;
   }
   const busy=_liveBusy||Promise.resolve();
+  // Finish nonce (doc.finishedBy): if the winning CAS's reply is lost, the retry recognises its own
+  // win in the row instead of taking it for another device's Finish.
+  aw.finishedBy=liveDevice()+':'+Math.random().toString(36).slice(2,10);
   busy.then(()=>aw&&aw.id===id?liveClaimFinish(liveWire(aw)):null).then(r=>{
     if(!r||!aw||aw.id!==id) return;   // a sync that was in flight closed it (ended on the other device)
     if(r.lost){ _finLock=null; liveSync(); return; }   // already finished elsewhere: close here, merging in any sets it lacks
@@ -4832,13 +4899,13 @@ function _finishWContinue(auto,ts) {
     _commitFinish(endTs,r.rev||0);
   });
 }
-// Strip the live-sync bookkeeping (ids, stamps) from exercises going into history, and any
+// Strip the live-sync change stamps from exercises going into history, and any
 // custom exercise's local photo (a data: URL) -- history syncs to Supabase and rides the JSON
 // export, and that photo must never leave this device. Snapshot the note in effect tonight.
 function liveHistExercises(exs){
   return (exs||[]).map(e=>{
-    const {lid,c,u,d,...e2}=e;
-    e2.sets=(e.sets||[]).map(({sid,c,u,d,...s})=>s);
+    const {u,ud,...e2}=e;   // lid/sid stay: the watch's late-set merge matches by sid (BOARD.md 472a92e)
+    e2.sets=(e.sets||[]).map(({u,ud,...s})=>s);
     if(e2.imgUrl&&String(e2.imgUrl).startsWith('data:')) e2.imgUrl=null;
     const n=exNote(e2.exId);
     return n?{...e2,note:n}:e2;
@@ -4859,7 +4926,7 @@ function buildFinishRec(a,startTs,endTs){
   const prList=commitPRs(a);              // PRs committed ONLY now, on finish
   _liveStats.commits++;
   // Switch bookkeeping and live-sync state stay out of history.
-  const {swaps:_sw,_pairFrom:_pf,tomb:_t,mu:_m,rest:_r,startedAt:_sa,v:_v,...awRec}=a;
+  const {swaps:_sw,_pairFrom:_pf,tomb:_t,mu:_m,stamps:_st,rest:_r,startedAt:_sa,startedBy:_sb,finishedBy:_fb,v:_v,...awRec}=a;
   const rec={...awRec,duration:dur,sets:ts,totalVolume:Math.round(vol),prCount:prList.length,prSets:prList.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps}))};
   rec.exercises=liveHistExercises(rec.exercises);
   if(!rec.name || rec.name==='Quick Workout') rec.name=autoNameWorkout(rec.exercises);
@@ -4940,9 +5007,9 @@ function restTick() {
   document.getElementById('restDisp').textContent = restSec>=60 ? Math.floor(restSec/60)+':'+String(restSec%60).padStart(2,'0') : restSec;
   if (restSec<=0) { clearInterval(rt); document.getElementById('restBar').classList.remove('show'); document.body.classList.remove('resting'); haptic('success',false); }
 }
-function startRest(s) { restEnd=Date.now()+s*1000; if(aw) aw.rest={endsAt:restEnd,dur:s}; clearInterval(rt); document.getElementById('restBar').classList.add('show'); document.body.classList.add('resting'); restTick(); rt=setInterval(restTick,250); }
+function startRest(s) { restEnd=Date.now()+s*1000; if(aw) aw.rest={...(aw.rest||{}),endsAt:restEnd,dur:s}; clearInterval(rt); document.getElementById('restBar').classList.add('show'); document.body.classList.add('resting'); restTick(); rt=setInterval(restTick,250); }
 function adjRest(d) { restEnd=Math.max(Date.now()+5000, restEnd+d*1000); if(aw&&aw.rest){ aw.rest={...aw.rest,endsAt:restEnd}; saveAW(); } restTick(); }
-function skipRest() { if(aw&&aw.rest){ aw.rest=null; if(!_finLock) saveAW(); } clearInterval(rt); document.getElementById('restBar').classList.remove('show'); document.body.classList.remove('resting'); }
+function skipRest() { if(aw&&aw.rest&&aw.rest.endsAt>Date.now()){ aw.rest={...aw.rest,endsAt:Date.now()}; if(!_finLock) saveAW(); } clearInterval(rt); document.getElementById('restBar').classList.remove('show'); document.body.classList.remove('resting'); }
 
 // ============================================================
 // PLATE CALCULATOR (works in the user's chosen unit)
