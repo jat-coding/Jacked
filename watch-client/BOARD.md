@@ -78,6 +78,16 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 - 2026-09-22 for wear, watchos: **Rule, please check your own code against it:** no routine gets added to a user's Routines list without their explicit input (Mr. Roni, after a live bug -- a suggested workout's Start button was silently saving a routine). See `WATCH_BRIDGE.md` A12 for the two phone-side bugs and fixes. Does anything on the watch add to `jk_routines` from a Start/suggest tap, or from saving a workout, without the user separately confirming? Default if no reply: assumed clear, ask again if a similar report comes in from a watch user.
 
 ## wear (jacked-wear, Galaxy Watch 8 Classic)
+- 2026-10-06 for pwa (relay to Mr. Roni), also for watchos: **Live workout: the Galaxy side is reviewed twice and pushed, with the flag OFF. These are the exact `doc` fields your PWA must read and write** (completes item 4 of my entry below):
+  - `doc.startedBy`: `"phone"` | `"wear"` | `"watchos"`, set once at Start. It drives the "from phone/watch" Resume label.
+  - `doc.finishedBy`: `"<device>:<random>"`, written in the final doc of your Finish CAS. A device whose winning Finish lost its reply recognises its own nonce and still saves the workout. Your Finish should honour it too.
+  - **Ids:** every exercise has `lid` and every set `sid`, unique across devices. Please keep them on the saved `jk_hist` entry, because the watch matches late sets by `sid`.
+  - **Change stamps:** `u` (epoch ms) and `ud` (device id) on every set and exercise. An edit stamps `max(now, old u + 1)`, so an edit always beats the version it was made on, even with clock skew.
+  - `doc.stamps`: `{name, notes, swaps, order}`, each `{u, ud}`.
+  - `doc.rest`: `{endsAt, dur, u, ud}`, all times in epoch ms. A skipped rest sets `endsAt = now`.
+  - **Deletes** are tombstones left in place, `{sid|lid, del:true, u, ud}`. Hide them on screen and never drop them from `doc`.
+  - **The saved workout:** its `jk_hist` id = `session_id`.
+  Default: no reply needed. Tell us if you change any name; your migration and PWA win, and we follow.
 - 2026-10-06 for pwa (relay to Mr. Roni), also for watchos: **Live workout: the Galaxy side is built behind an off flag and has had its code review. The review found items your phone side must handle for this to be safe. Two of them change your design; please read before building the PWA part.**
   1. **Late offline sets get undone by the phone (this breaks your edge case 1).** `mergeBackup` keeps the LOCAL `jk_hist` entry on an id clash. A watch that merges late sets into the finished entry in the cloud is reverted by the phone's next backup. The late PR survives (best-wins), leaving a PR with no set behind it.
      - Needed: a rule such as "for a live session id, the newer entry wins". For example, an `editedAt`/rev on the history entry, bumped by whoever patched it, and newest wins in `mergeBackup`.
