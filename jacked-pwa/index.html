@@ -7599,25 +7599,34 @@ function syncScrollLock(){
   }
 }
 new MutationObserver(syncScrollLock).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
-// Can something inside an open popup scroll by dy (content delta, + = down)? Walks up from the touched element; an
-// inner scroller at its edge hands over to an outer one, never to the page.
-function _popupCanScroll(t,dy){
+// Can something inside an open popup scroll by dx/dy (content delta, +dy = down, +dx = right)? Walks up from the
+// touched element; an inner scroller at its edge hands over to an outer one, never to the page. Checks both axes
+// independently -- a horizontal-only scroller (e.g. a .chips row) has scrollHeight<=clientHeight and was never
+// matched here before 2026-10-06, so the body-scroll-lock below ate every touchmove over it inside any open modal
+// and the row looked frozen (Mr. Roni, 2026-10-05 8:58pm, Switch Exercise picker: couldn't reach Legs+).
+function _popupCanScroll(t,dx,dy){
   for(let el=t&&t.nodeType===1?t:t&&t.parentElement; el&&el!==document.body&&el.id!=='jkRoot'; el=el.parentElement){
-    if(el.scrollHeight<=el.clientHeight+1) continue;
-    const oy=getComputedStyle(el).overflowY; if(oy!=='auto'&&oy!=='scroll') continue;
-    if(dy>0?el.scrollTop+el.clientHeight<el.scrollHeight-1:dy<0?el.scrollTop>0:true) return true;
+    if(dx&&el.scrollWidth>el.clientWidth+1){
+      const ox=getComputedStyle(el).overflowX;
+      if((ox==='auto'||ox==='scroll')&&(dx>0?el.scrollLeft+el.clientWidth<el.scrollWidth-1:el.scrollLeft>0)) return true;
+    }
+    if(dy&&el.scrollHeight>el.clientHeight+1){
+      const oy=getComputedStyle(el).overflowY;
+      if((oy==='auto'||oy==='scroll')&&(dy>0?el.scrollTop+el.clientHeight<el.scrollHeight-1:el.scrollTop>0)) return true;
+    }
   }
   return false;
 }
 const _slOn=()=>_sl&&!_sl.rot;
-document.addEventListener('wheel',e=>{ if(_slOn()&&!e.ctrlKey&&!_popupCanScroll(e.target,e.deltaY)) e.preventDefault(); },{passive:false});
-let _slTY=null;
-document.addEventListener('touchstart',e=>{ _slTY=e.touches.length===1?e.touches[0].clientY:null; },{passive:true});
+document.addEventListener('wheel',e=>{ if(_slOn()&&!e.ctrlKey&&!_popupCanScroll(e.target,e.deltaX,e.deltaY)) e.preventDefault(); },{passive:false});
+let _slTY=null,_slTX=null;
+document.addEventListener('touchstart',e=>{ const one=e.touches.length===1; _slTY=one?e.touches[0].clientY:null; _slTX=one?e.touches[0].clientX:null; },{passive:true});
 document.addEventListener('touchmove',e=>{
   if(!_slOn()||_slTY===null||e.touches.length!==1) return;
   const t=e.target; if(t&&t.matches&&t.matches('input[type=range]')) return;
   const y=e.touches[0].clientY, dy=_slTY-y; _slTY=y;
-  if(dy!==0&&!_popupCanScroll(t,dy)&&e.cancelable) e.preventDefault();
+  const x=e.touches[0].clientX, dx=_slTX-x; _slTX=x;
+  if((dx!==0||dy!==0)&&!_popupCanScroll(t,dx,dy)&&e.cancelable) e.preventDefault();
 },{passive:false});
 
 // In-app replacement for window.confirm()/window.prompt(). iOS Safari drops
