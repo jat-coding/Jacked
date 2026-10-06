@@ -807,7 +807,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 </div>
 
 <!-- Add Exercise Picker (multi-select) -->
-<div class="mo" id="aeModal">
+<div class="mo" id="aeModal" style="z-index:220">
   <div class="md ae-md">
     <div class="ae-top">
       <div class="drag-handle"></div>
@@ -854,6 +854,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <div class="fg"><label>Date</label><input type="date" id="weDate"></div>
     </div>
     <div id="weContent"></div>
+    <button class="btn bg sm wf" style="margin-bottom:8px" onclick="openAEModal('weAdd')">+ Add Exercise</button>
     <div class="sep"></div>
     <button class="btn ba wf" onclick="saveWE()">Save Changes</button>
   </div>
@@ -2664,6 +2665,7 @@ function saveCE() {
     if (_aeTarget==='routineReplace') { rExs[_aeReplaceIdx]=newId; cm('aeModal'); renderREP(); toast('Exercise created & added ✓','ok'); return; }
     if (_aeTarget==='workout') { addExToWorkout(newId); cm('aeModal'); toast('Exercise created & added ✓','ok'); return; }
     if (_aeTarget==='workoutReplace') { replaceExAt(_aeReplaceIdx,newId); cm('aeModal'); toast('Exercise created & added ✓','ok'); return; }
+    if (_aeTarget==='weAdd') { weAddEx(newId); cm('aeModal'); toast('Exercise created & added ✓','ok'); return; }
     // routine multi-select: auto-select it so it's included when "Add Selected" is tapped
     _aeSelected.add(newId);
     document.getElementById('aeSearch').value=''; aeFlt=null;
@@ -2928,6 +2930,7 @@ function toggleAEItem(id) {
   // Single-select immediate-action modes
   if (_aeTarget==='workout') { addExToWorkout(id); cm('aeModal'); return; }
   if (_aeTarget==='workoutReplace') { replaceExAt(_aeReplaceIdx,id); cm('aeModal'); return; }
+  if (_aeTarget==='weAdd') { weAddEx(id); cm('aeModal'); return; }
   if (_aeTarget==='routineReplace') {
     if (rExs.includes(id)&&rExs[_aeReplaceIdx]!==id) { toast('Already in routine','err'); return; }
     rExs[_aeReplaceIdx]=id; cm('aeModal'); renderREP(); return;
@@ -4619,6 +4622,20 @@ function weTogDone(ei,si){ const s=weDraft.exercises[ei].sets[si]; if(s){ s.done
 function weAddSet(ei){ const e=weDraft.exercises[ei]; (e.sets=e.sets||[]).push({weight:0,reps:0,done:true}); renderWE(); }
 function weRemoveSet(ei){ const e=weDraft.exercises[ei]; if((e.sets||[]).length>1){ e.sets.pop(); renderWE(); } }
 function weRemoveEx(ei){ showConfirm('Remove this exercise from the workout?').then(ok=>{ if(!ok) return; weDraft.exercises.splice(ei,1); renderWE(); }); }
+// Adding an exercise to an already-finished workout (Mr. Roni, 2026-10-05 10:51pm: "forgot
+// to add something"). A new set here starts done:true, unlike an active workout's seedSets
+// (done:false) -- this is already-completed history, not something still being logged.
+function weAddEx(id){
+  if (!weDraft) return;
+  if (weDraft.exercises.find(e=>e.exId===id)) { toast('Already in workout','err'); return; }
+  const ex=byId(id);
+  weDraft.exercises.push({
+    exId:id, name:ex.name, muscle:ex.muscle||'', equip:ex.equip||'', assist:ex.assist||false,
+    tracking:ex.tracking||'weight_reps', imgUrl:imgUrl(ex)||null,
+    sets:[{weight:0,reps:0,done:true}]
+  });
+  renderWE();
+}
 function saveWE(){
   if(!weDraft) return;
   weDraft.name=document.getElementById('weName').value.trim()||weDraft.name||'Workout';
