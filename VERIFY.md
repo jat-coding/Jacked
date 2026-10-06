@@ -35,7 +35,7 @@ system libs on the desktop host — resolved 2026-09-15
 7. **Anything touching the active workout (`aw`), Finish/auto-finish, `commitPRs`, `mergeBackup`'s
    `jk_hist` rule, or `live_workouts`** (live shared workout, WATCH_BRIDGE.md A17, added 2026-10-06):
    the `live*` suites in `tests/e2e/live.mjs` must stay green — run them alone with
-   `JK_ONLY=liveWrites,liveConcurrent,liveFinishOnce,liveFinishLock,liveLateSets,liveLifecycle node tests/e2e/run.mjs`.
+   `JK_ONLY=liveWrites,liveConcurrent,liveFinishOnce,liveFinishLock,liveLateSets,liveLifecycle,liveFinishEdges node tests/e2e/run.mjs`.
    They drive TWO real app pages against one shared in-memory row (stubbed Supabase client), so
    they catch double commits and lost sets that a single page never shows. A new mutation path on
    `aw` needs nothing special (stamping diffs on `saveAW()`), but it must end in `saveAW()` /
@@ -46,6 +46,12 @@ system libs on the desktop host — resolved 2026-09-15
    `supabase/tests/live_workouts_test.mjs` — copy `supabase/` next to a `node_modules` with
    `@electric-sql/pglite`, ESM ignores NODE_PATH) including the rollback. Never apply a migration
    to the real project without Mr. Roni's explicit go for that migration.
+
+9. **Before building anything the watches also implement**, read `git log origin/main -- watch-client/`
+   (not just the staging copy of `BOARD.md`): Phil's team pushes to `main`, and on 2026-10-06 three
+   overnight commits there (`3584bf1`, `cd9895b`, `472a92e`) fixed the exact `doc` format and found phone-side
+   bugs after the build brief was written. Caught only because `jacked-push.sh` merged `main` in and the
+   commit list showed them; build to what the other client already shipped unless there is a reason not to.
 
 ## Screens/data that matter for this kind of change
 

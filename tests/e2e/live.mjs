@@ -88,6 +88,8 @@ async function startShared(db, A, sets) {
   await ev(A, () => { clearTimeout(_livePushT); return liveSync(); });
   return db.row.session_id;
 }
+// Live (not deleted) entries of a wire-format list: deletes stay inline as {sid|lid, del:true, u, ud}.
+const live = a => (a || []).filter(x => !x.del);
 const snap = d => ev(d, () => ({ aw: aw ? JSON.parse(JSON.stringify(aw)) : null, hist: gH(), prs: gPR(), stats: { ..._liveStats } }));
 
 // 1. Every change while a workout is open writes live_workouts, debounced, separate from the backup.
@@ -100,7 +102,7 @@ export async function liveWrites() {
   const sets = r ? r.doc.exercises[0].sets : [];
   check('live: one debounced write for a burst of edits, row = this session', db.ops.length === 1 && db.ops[0][0] === 'insert' && r.session_id === id && r.status === 'active' && r.rev === 1 && r.updated_by === 'phone-A', JSON.stringify(db.ops));
   check('live: doc carries the typed sets', sets.length === 2 && sets[0].weight === 100 && sets[0].reps === 5 && sets[1].weight === 90, JSON.stringify(sets));
-  check('live: stable ids + change stamps on every exercise and set', r.doc.exercises.every(e => e.lid && e.u > 0 && e.d === 'phone-A' && e.sets.every(s => s.sid && s.u > 0 && s.d === 'phone-A')) && r.doc.mu && r.doc.mu.order, JSON.stringify(r.doc.exercises[0]));
+  check('live: stable ids + change stamps on every exercise and set', r.doc.exercises.every(e => e.lid && e.u > 0 && e.ud === 'phone-A' && e.sets.every(s => s.sid && s.u > 0 && s.ud === 'phone-A')) && r.doc.stamps && r.doc.stamps.order && r.doc.stamps.name && r.doc.startedBy === 'phone' && r.doc.v === 1 && !('tomb' in r.doc), JSON.stringify(r.doc.exercises[0]));
   await ev(A, () => { aw.exercises[0].imgUrl = 'data:image/png;base64,AAAA'; uSet(0, 1, 'reps', '8'); });
   await wait(1900);
   check('live: next edit is a version-checked update (rev 2)', db.row.rev === 2 && db.ops.length === 2 && db.ops[1][0] === 'update' && db.row.doc.exercises[0].sets[1].reps === 8, JSON.stringify(db.ops));
@@ -121,7 +123,7 @@ export async function liveConcurrent() {
   const miss0 = db.casMiss;
   db.barrier(2);
   await Promise.all([ev(A, () => liveSync()), ev(B, () => liveSync())]);
-  const s = db.row.doc.exercises[0].sets;
+  const s = live(db.row.doc.exercises[0].sets);
   check('live: concurrent writers raced on the same rev (one CAS missed)', db.casMiss - miss0 >= 1, `casMiss ${db.casMiss - miss0}, ops ${JSON.stringify(db.ops)}`);
   check('live: both concurrent edits survive on the server', s.length === 2 && s[0].weight === 100 && s[1].reps === 12, JSON.stringify(s));
   await ev(A, () => liveSync()); await ev(B, () => liveSync());
@@ -134,8 +136,10 @@ export async function liveConcurrent() {
   await ev(A, () => liveSync());
   const [a2, b2] = [await snap(A), await snap(B)];
   const deadSid = a.aw.exercises[0].sets[1].sid;
-  check('live: a deleted set stays deleted (tombstone beats the stale copy)', db.row.doc.exercises[0].sets.length === 1 && !!db.row.doc.tomb[deadSid] && b2.aw.exercises[0].sets.length === 1, JSON.stringify(db.row.doc.exercises[0].sets));
-  check('live: the edit made alongside the delete survives', a2.aw.exercises[0].sets[0].reps === 7 && db.row.doc.exercises[0].sets[0].weight === 100, JSON.stringify(a2.aw.exercises[0].sets));
+  const tombs = db.row.doc.exercises[0].sets.filter(x => x.del);
+  check('live: a deleted set stays deleted (tombstone beats the stale copy)', live(db.row.doc.exercises[0].sets).length === 1 && b2.aw.exercises[0].sets.length === 1, JSON.stringify(db.row.doc.exercises[0].sets));
+  check('live: the delete is an inline tombstone {sid, del:true, u, ud} on the wire, hidden on screen', tombs.some(x => x.sid === deadSid && x.u > 0 && x.ud === 'phone-A' && Object.keys(x).length === 4) && !b2.aw.exercises[0].sets.some(x => x.del || x.sid === deadSid), JSON.stringify(tombs));
+  check('live: the edit made alongside the delete survives', a2.aw.exercises[0].sets[0].reps === 7 && live(db.row.doc.exercises[0].sets)[0].weight === 100, JSON.stringify(a2.aw.exercises[0].sets));
   // An exercise added on one device appears on the other.
   await ev(B, () => { addExToWorkout('cex2'); clearTimeout(_livePushT); return liveSync(); });
   await ev(A, () => liveSync());
@@ -159,7 +163,10 @@ export async function liveFinishOnce() {
   check('live finish: PRs committed exactly once (one device)', a.stats.commits + b.stats.commits === 1 && (a.prs.cex1 ? 1 : 0) + (b.prs.cex1 ? 1 : 0) === 1, JSON.stringify([a.stats, b.stats]));
   check('live finish: row marked finished, both devices closed the workout', db.row.status === 'finished' && !a.aw && !b.aw, db.row.status);
   const W = n(a) ? A : B, L = W === A ? B : A, w0 = W === A ? a : b;
-  check('live finish: the history entry id is the session id minted at Start', w0.hist.some(x => x.id === sid && x.lrev >= 1));
+  const he = w0.hist.find(x => x.id === sid);
+  check('live finish: the history entry id is the session id minted at Start', he && he.lrev >= 1);
+  check('live finish: history keeps lid/sid (watch late-set matching), drops stamps and live state', he.exercises[0].lid && he.exercises[0].sets[0].sid && !('u' in he.exercises[0].sets[0]) && !('ud' in he.exercises[0]) && !('stamps' in he) && !('finishedBy' in he) && !('tomb' in he), JSON.stringify(he.exercises[0]));
+  check('live finish: final doc carries the winner\'s finish nonce', /^(phone-A|wear-B):[a-z0-9]+$/.test(db.row.doc.finishedBy || ''), db.row.doc.finishedBy);
   // A repeat Finish of the same workout on the winner (e.g. a stale copy resumed): no second commit.
   await ev(W, doc => { aw = liveFromWire(doc, null); awStart = aw.startedAt; _finLock = null; _finishWContinue(false); }, db.row.doc);
   await wait(400);
@@ -228,7 +235,7 @@ export async function liveLateSets() {
   db.offline.delete('wear-B');
   const r = await ev(B, () => liveSync());
   const b = await snap(B);
-  check('live late: reconnecting device merges its late set into the finished row', r === 'late-merged' && db.row.status === 'finished' && db.row.doc.exercises[0].sets.length === 2 && !b.aw, `${r} ${JSON.stringify(db.row.doc.exercises[0].sets.map(s => s.weight))}`);
+  check('live late: reconnecting device merges its late set into the finished row', r === 'late-merged' && db.row.status === 'finished' && live(db.row.doc.exercises[0].sets).length === 2 && !b.aw, `${r} ${JSON.stringify(live(db.row.doc.exercises[0].sets).map(s => s.weight))}`);
   check('live late: the late device holds the full workout, not a second one', b.hist.filter(w => w.id === sid).length === 1 && b.hist.length === 1 && b.hist[0].sets === 2, JSON.stringify(b.hist.map(w => [w.id, w.sets])));
   await ev(A, () => liveSync());
   const a1 = await snap(A), e = a1.hist.find(w => w.id === sid);
@@ -290,4 +297,44 @@ export async function liveLifecycle() {
   await A.ctx.close(); await B.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle];
+// A winning Finish whose reply is lost still saves (finish nonce); auto-finish on a shared workout
+// re-reads the row first and never locks in the watch's pre-filled rows (Phil's review, cd9895b).
+export async function liveFinishEdges() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const sid = await startShared(db, A, [[100, 5, true]]);
+  // Reply lost: the CAS lands on the server but A is told nothing changed, so A re-reads.
+  let dropped = false;
+  const h0 = db.handle;
+  db.handle = async (st, dev) => { const r = await h0(st, dev); if (!dropped && st.op === 'update' && st.row.status === 'finished') { dropped = true; return { data: [], error: null }; } return r; };
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(1000);
+  db.handle = h0;
+  const a = await snap(A);
+  check('live nonce: a winning Finish whose reply was lost is recognised and saved once', dropped && db.row.status === 'finished' && a.hist.filter(w => w.id === sid).length === 1 && a.stats.commits === 1 && !a.aw, JSON.stringify(a.stats));
+  // Auto-finish, shared: A typed set 1; the watch pre-filled set 2 (not done). Only A's typed set locks in.
+  db.row = null;
+  const sid2 = await startShared(db, A, [[90, 5, false]]);
+  await ev(B, () => liveResumeRemote());
+  await ev(B, () => { addSet(0); const s = aw.exercises[0].sets[1]; s.weight = 95; s.reps = 5; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => liveSync());
+  await ev(A, () => { awTouch = Date.now() - 31 * 60000; autoFinishStale(); });
+  await wait(1500);
+  const a2 = await snap(A), e = a2.hist.find(w => w.id === sid2);
+  check('live auto-finish (shared): only the set typed on this device is locked in, not the watch\'s pre-filled row', e && e.sets === 1 && e.exercises[0].sets.length === 2 && e.exercises[0].sets[0].done === true && e.exercises[0].sets[1].done === false && db.row.status === 'finished', JSON.stringify(e && e.exercises[0].sets.map(s => [s.weight, s.done])));
+  // Auto-finish re-reads first: the watch logged a set the phone had not pulled -> not idle, no finish.
+  const bClose = await ev(B, () => liveSync());   // the watch sees that finish and closes its copy
+  await ev(B, () => { cm('fsModal'); });
+  db.row = null;
+  const sid3 = await startShared(db, A, [[0, 0, false]]);
+  await ev(B, () => liveResumeRemote());
+  await ev(B, () => { const s = aw.exercises[0].sets[0]; s.weight = 70; s.reps = 8; s.done = true; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => { awTouch = Date.now() - 31 * 60000; autoFinishStale(); });
+  await wait(1200);
+  const a3 = await snap(A);
+  check('live auto-finish (shared): re-reads the row first; the watch\'s fresh set keeps the workout open (no blank discard)', a3.aw && a3.aw.id === sid3 && a3.aw.exercises[0].sets[0].done === true && db.row.status === 'active' && !a3.hist.some(w => w.id === sid3), JSON.stringify({ aw: !!a3.aw, st: db.row.status }));
+  check('live auto-finish (shared): the other device closes on the finished row', bClose === 'closed', bClose);
+  check('live finish edges: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges];
