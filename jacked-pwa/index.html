@@ -3570,25 +3570,29 @@ const BENCH_GL_FROM=+new Date(2026,8,27);   // local midnight, 27 Sep 2026
 function benchLegacyT(){ const fem=(gProf()||{}).sex==='female', a=badgeAgeFactor(gAge()); return BADGE_TIER_THRESH.bench.map(x=>Math.max(5,Math.round(x*(fem?.6:1)*a/5)*5)); }
 // Bench-Maxing, Shoulder-Maxing and the 1000lb Club bench leg also take a dumbbell and a Smith machine version of the
 // lift (Mr. Roni, 2026-10-02 4:29-4:32pm, replacing the 9/30 sourced pair / 0.83 dumbbell conversion and the Smith
-// hold): barbell = 100% of the logged weight, dumbbell = both dumbbells together +15%, Smith machine = -15%. The app logs
-// a dumbbell's weight PER HAND (like Hevy), so the pair is 2 x the logged weight: two 50 lb dumbbells = 100 x 1.15 = 115.
-// This credited number is ONLY what the badge compares -- the set, its PR and every other ranking keep the real weight.
-// Each lift sits on the tier it reached; the badge takes the highest and names the lift that reached it.
+// hold; convention reversed 2026-10-05 -- see below): barbell = 100% of the logged weight, dumbbell = +15%, Smith
+// machine = -15%. The app logs a dumbbell exercise's weight as the TOTAL of both dumbbells added together (Mr. Roni,
+// 2026-10-05: his own 10/2 "per hand, like Hevy" convention was double-counting -- 2x45lb logged as 90 was read as
+// per-hand and doubled to 180 before the +15%, badging 207 instead of ~104; a Hevy CSV import's dumbbell weight is
+// genuinely per-hand, and by his explicit choice that is NOT corrected on import, so an imported dumbbell set is
+// credited low until re-logged by hand). This credited number is ONLY what the badge compares -- the set, its PR and
+// every other ranking keep the real weight. Each lift sits on the tier it reached; the badge takes the highest and
+// names the lift that reached it.
 const BADGE_DB_BONUS=1.15, BADGE_SMITH_CUT=0.85;
 const LIFT_VARIANTS={
   bench:[
     {key:'bench', label:'Barbell bench', mult:1},
-    {key:'benchDb', label:'Dumbbell bench', mult:BADGE_DB_BONUS, pair:true},
+    {key:'benchDb', label:'Dumbbell bench', mult:BADGE_DB_BONUS},
     {key:'benchSmith', label:'Smith machine bench', mult:BADGE_SMITH_CUT},
   ],
   ohp:[
     {key:'ohp', label:'Barbell overhead press', mult:1},
-    {key:'ohpDb', label:'Dumbbell overhead press', mult:BADGE_DB_BONUS, pair:true},
+    {key:'ohpDb', label:'Dumbbell overhead press', mult:BADGE_DB_BONUS},
     {key:'ohpSmith', label:'Smith machine overhead press', mult:BADGE_SMITH_CUT},   // empty id list today (BADGE_STD.ohpSmith)
   ],
 };
 function liftVariant(ex,badge,w){ return LIFT_VARIANTS[badge].find(v=>isStdEx(ex,v.key,w))||null; }
-function creditLb(v,lb){ return lb*(v.pair?2:1)*v.mult; }   // logged lb -> the lb the badge compares
+function creditLb(v,lb){ return lb*v.mult; }   // logged lb (already the total, for a dumbbell pair) -> the lb the badge compares
 // Best credited set per variant (sets with >= minReps reps), each placed on ladder T (null = no ladder, e.g. no body weight).
 function liftVariantsOf(badge,h,minReps,T,each){
   const V=LIFT_VARIANTS[badge], lifts=V.map(x=>({key:x.key,label:x.label,v:0,rawLb:0}));
@@ -4874,11 +4878,11 @@ function badgeShownName(n){ return n==='1000lb Club-Maxing' ? '1000lb Club' : n;
 // Full-screen achievement popup: same icon as the list, title, then the summary in a text hierarchy.
 const BADGE_DETAIL={
   get 'Bench-Maxing'(){ const T=badgeT().bench; return {how:'Barbell flat bench press (Barbell Bench Press, medium grip), 1 rep. Incline, decline, close-grip, other bench variations and custom exercises don\'t count. '+benchHowNote(),
-    exHow:[{t:'No barbell bench? Dumbbell counts too',body:'Flat Dumbbell Bench Press, both hands. Log one dumbbell\'s weight; both together get +15% (two 50 lb dumbbells = 100 lb, credited 115 lb).'},
+    exHow:[{t:'No barbell bench? Dumbbell counts too',body:'Flat Dumbbell Bench Press, both hands. Log both dumbbells added together; it gets +15% (two 50 lb dumbbells = 100 lb logged, credited 115 lb).'},
       {t:'Smith machine counts too',body:'Flat Smith Machine Bench Press, credited at -15% (100 lb logged = 85 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],
     tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'}; },
   get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Standing barbell overhead press (Standing Military Press), 5 reps, measured against your body weight — set it in Profile. Seated presses (Barbell Shoulder Press and Smith Machine Overhead Shoulder Press are seated too, whatever the name), push press, behind-the-neck, other variations and custom exercises don\'t count.',
-    exHow:[{t:'Dumbbells count too',body:'Standing Dumbbell Press, both hands. Log one dumbbell\'s weight; both together get +15% (two 50 lb dumbbells = 100 lb, credited 115 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
+    exHow:[{t:'Dumbbells count too',body:'Standing Dumbbell Press, both hands. Log both dumbbells added together; it gets +15% (two 50 lb dumbbells = 100 lb logged, credited 115 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
   get 'Leg-Maxing'(){ const T=badgeT().squatFrac.map(f=>Math.round(f*100)+'% of body weight'); return {how:'Barbell back squat (Barbell Squat), 5 reps, measured against your body weight — set it in Profile. Front squats, Smith machine and custom exercises don\'t count.',tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
   '1000lb Club':{how:'Your best barbell flat bench press + barbell back squat + conventional barbell deadlift, all from the same workout, added together to 1000 lb or more. The bench can also be a flat dumbbell bench (both dumbbells together +15%) or a flat Smith machine bench (-15%). No front squat, Smith squat, sumo or custom exercises.'},
   get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return {how:'Most reps in one set of strict pull-ups (Pullups, palms facing away). Chin-ups, assisted, band, scapular and custom exercises don\'t count.',tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote()}; },
