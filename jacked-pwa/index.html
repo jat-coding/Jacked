@@ -2135,7 +2135,8 @@ function renderCal() {
     const ds=`${cY}-${String(cM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isT=ds===today, isF=ds>today, wk=wd.has(ds);
     let c='cd';
-    if(isT) c+=' today'; else if(isF) c+=' future'; else if(wk) c+=' worked'; else c+=' missed';
+    if(isF) c+=' future'; else if(wk) c+=' worked'; else if(!isT) c+=' missed';
+    if(isT) c+=' today';
     html+=`<div class="${c}" style="cursor:pointer" onclick="openDay('${ds}')">${d}</div>`;
   }
   document.getElementById('calGrid').innerHTML=html;
