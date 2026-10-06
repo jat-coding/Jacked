@@ -32,6 +32,21 @@ system libs on the desktop host — resolved 2026-09-15
    exercise renders with no photo) — screenshot or Playwright-assert this, don't just trust
    the data shape.
 
+7. **Anything touching the active workout (`aw`), Finish/auto-finish, `commitPRs`, `mergeBackup`'s
+   `jk_hist` rule, or `live_workouts`** (live shared workout, WATCH_BRIDGE.md A17, added 2026-10-06):
+   the `live*` suites in `tests/e2e/live.mjs` must stay green — run them alone with
+   `JK_ONLY=liveWrites,liveConcurrent,liveFinishOnce,liveFinishLock,liveLateSets,liveLifecycle node tests/e2e/run.mjs`.
+   They drive TWO real app pages against one shared in-memory row (stubbed Supabase client), so
+   they catch double commits and lost sets that a single page never shows. A new mutation path on
+   `aw` needs nothing special (stamping diffs on `saveAW()`), but it must end in `saveAW()` /
+   `renderWS()` or the change never reaches the other device. When a test here passes on the first
+   try, break the code it guards once (mutation check) and confirm it fails: two of these tests
+   passed against broken code until rewritten (the Playwright round-trip hid the race window).
+8. **Any new or changed file in `supabase/migrations/`**: run its PGlite test (pattern:
+   `supabase/tests/live_workouts_test.mjs` — copy `supabase/` next to a `node_modules` with
+   `@electric-sql/pglite`, ESM ignores NODE_PATH) including the rollback. Never apply a migration
+   to the real project without Mr. Roni's explicit go for that migration.
+
 ## Screens/data that matter for this kind of change
 
 - Exercise Library tab (add/search/filter by muscle group + Cardio chip)
