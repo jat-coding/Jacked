@@ -3719,7 +3719,9 @@ function renderWS() {
         const inp3=tracking==='reps_only'?`<div class="ps">—</div>`
           :showBW?`<div class="ps" style="font-weight:600">${gBW()?dW(gBW())+uL():'set BW'}</div>`
           :`<input class="si${sc}" type="number" inputmode="decimal" min="0" step="0.5" value="${wVal}" placeholder="${wPlace}" oninput="uSet(${ei},${si},'weight',this.value,${wConv})">`;
-        const inp4=tracking==='duration'?`<div class="ps">—</div>`:`<input class="si${sc}" type="number" inputmode="numeric" min="0" value="${rVal}" placeholder="${rPlace}" oninput="uSet(${ei},${si},'reps',this.value)">`;
+        const inp4=tracking==='duration'?`<div class="ps">—</div>`
+          :tracking==='distance'?`<input class="si${sc}" type="number" inputmode="decimal" min="0" step="0.01" value="${rVal}" placeholder="${rPlace}" oninput="uSet(${ei},${si},'reps',this.value)">`
+          :`<input class="si${sc}" type="number" inputmode="numeric" min="0" value="${rVal}" placeholder="${rPlace}" oninput="uSet(${ei},${si},'reps',this.value)">`;
         return `<div class="sr">
           <div class="sn">${si+1}${isPR?'<span style="color:#ffd700"> ★</span>':''}</div>
           <div class="ps">${prevStr}</div>
