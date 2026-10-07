@@ -4357,8 +4357,25 @@ const DUR_UNIT_LABEL={sec:'Secs',min:'Mins',hr:'Hrs'};
 // WorkoutExercise): session-local override first, else the exercise's own
 // saved default (set via Edit Exercise), else seconds.
 function durUnit(ex){ return (ex&&ex.durUnit) || (ex&&ex.exId&&byId(ex.exId).durUnit) || 'sec'; }
-function toDispDur(sec,u){ return sec>0 ? Math.round((sec/DUR_UNIT_SEC[u])*100)/100 : 0; }
-function fromDispDur(v,u){ return Math.round((parseFloat(v)||0)*DUR_UNIT_SEC[u]); }
+// Same stopwatch notation as the cardio clock field (clockToMin/minToClock below):
+// decimal digits are the literal count of the next-smaller unit, not a fraction of
+// the bigger one. hr field: H.MM (digits are minutes). min field: M.SS (digits are
+// seconds). sec field has no smaller unit, so it's unaffected -- plain seconds.
+function toDispDur(sec,u){
+  if(!(sec>0)) return 0;
+  if(u==='sec') return Math.round(sec);
+  if(u==='min'){ const m=Math.floor(sec/60), s=Math.round(sec%60); return s>0?`${m}.${String(s).padStart(2,'0')}`:`${m}`; }
+  const h=Math.floor(sec/3600), m=Math.round((sec%3600)/60);
+  return m>0?`${h}.${String(m).padStart(2,'0')}`:`${h}`;
+}
+function fromDispDur(v,u){
+  const s=String(v==null?'':v).trim(); if(!s) return 0;
+  if(u==='sec') return Math.round(parseFloat(s)||0);
+  const [wStr,fStr='']=s.split('.');
+  let whole=parseInt(wStr,10)||0, sub=parseInt(fStr,10)||0;
+  if(sub>=60){ whole+=Math.floor(sub/60); sub%=60; }
+  return u==='min' ? whole*60+sub : whole*3600+sub*60;
+}
 // Cardio time field (distance tracking): the decimal digits ARE the seconds, typed as on a
 // stopwatch (5.30 -> 5m30s), not a fraction of a minute -- no math for the user (Mr. Roni, 2026-10-06).
 // Stored/used everywhere else (pace, PRs) as plain decimal minutes, so convert at the edges only.
