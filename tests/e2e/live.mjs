@@ -182,7 +182,7 @@ export async function liveFinishOnce() {
   await A.ctx.close(); await B.ctx.close();
 }
 
-// 5. Same device: manual Finish (confirm open) and the 30/70-min auto-finish fire together -> one commit.
+// 5. Same device: manual Finish (confirm open) and the 30/90-min auto-finish fire together -> one commit.
 export async function liveFinishLock() {
   const db = makeDb(); const A = await device(db, 'phone-A');
   // 'same-tick': the confirmed manual Finish and the auto timer fire in one JS tick, before the

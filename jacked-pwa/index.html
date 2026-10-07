@@ -2983,8 +2983,9 @@ function confirmAESelection() {
 // ============================================================
 let aw=null, wt=null, ws=0, rt=null, restSec=0, awStart=0, restEnd=0, awTouch=0;
 // Auto-finish a forgotten workout on whichever limit hits first (Mr. Roni, 2026-10-05
-// 10:44pm): 30 min with no input at all, or 70 min total even with some activity in it.
-const STALE_IDLE_MS = 30*60*1000, STALE_TOTAL_MS = 70*60*1000;
+// 10:44pm): 30 min with no input at all, or 90 min total even with some activity in it
+// (raised from 70 min 2026-10-07 to cover a long workout shared with a watch).
+const STALE_IDLE_MS = 30*60*1000, STALE_TOTAL_MS = 90*60*1000;
 function awIsStale() { return aw && awStart && ((awTouch && Date.now()-awTouch>STALE_IDLE_MS) || Date.now()-awStart>STALE_TOTAL_MS); }
 
 // Persist the in-progress workout so a reload/crash/screen-lock doesn't lose it.
@@ -8469,7 +8470,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.72';
+const BUILD = 'v1.10.73';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
