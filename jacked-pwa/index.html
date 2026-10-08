@@ -4685,10 +4685,17 @@ function prOkAfterRepair(r, cutIso){ return !r||!!r.repaired||+new Date(r.date||
 function enforcePRRepairs(){
   try{
     const cut=S.g('prRepair'); if(!cut) return 0;
-    const prs=gPR(); let n=0;
+    const prs=gPR(), cardio=gCardioPR(), hold=gHoldPR(); let n=0, nc=0, nh=0;
     Object.keys(cut).forEach(id=>{ if(!prOkAfterRepair(prs[id],cut[id])){ const r=setRepairedPR(prs,id,cut[id]); console.info('[repair] stale record replaced',id,r); n++; } });
+    // Cardio/hold records (2026-10-08): same rule, rebuilt from history.
+    Object.keys(cut).forEach(id=>{
+      if(cardio[id]&&!prOkAfterRepair(cardio[id],cut[id])){ console.info('[repair] stale cardio record replaced',id,setRepairedCardioPR(cardio,id,cut[id])); nc++; }
+      if(hold[id]&&!prOkAfterRepair(hold[id],cut[id])){ console.info('[repair] stale hold record replaced',id,setRepairedHoldPR(hold,id,cut[id])); nh++; }
+    });
     if(n) S.s('prs',prs);
-    return n;
+    if(nc) S.s('cardioPR',cardio);
+    if(nh) S.s('holdPR',hold);
+    return n+nc+nh;
   }catch(e){ console.warn('[repair] enforce failed',e); return 0; }
 }
 // ── Reset PR per exercise (Mr. Roni 2026-10-02, 3:26-3:33pm) ─────────────────────────────────────────────────
@@ -4743,16 +4750,23 @@ function mergePRReset(a,b){
 // touched workout's prCount (+ prSets) loses its old-replay PRs for those exercises and gains the new ones, and
 // their jk_prs records are rebuilt from prReplay and stamped/marked like repairBackExtBW (merge can't bring the old
 // ones back). Other exercises' PRs in those workouts, and every other workout, are left exactly as stored.
+// Cardio/timed holds (2026-10-08, stale "7:00/mi" badge after editing a run to 7:24): their PRs are rebuilt too, and
+// their jk_cardioPR/jk_holdPR records (setRepairedCardioPR/setRepairedHoldPR). What a workout counted for them is
+// read from its stored prSets when it has them (an earlier edit may already have left those out of step with replay).
 function commitHistRepair(hist2, exIds, at){
+  const prev=gH(), prevById=new Map(prev.map(w=>[w.id,w]));
   const has=w=>(w.exercises||[]).some(ex=>exIds.has(ex.exId));
-  const wids=new Set(gH().filter(has).map(w=>w.id));
+  const wids=new Set(prev.filter(has).map(w=>w.id));
   const before=prReplay();
   S.s('hist',hist2);
-  const after=prReplay(), mine=(rp,id)=>(rp.get(id)||NO_PRS).list.filter(p=>exIds.has(p.exId)&&!p.cardio&&!p.hold);
+  const after=prReplay(), mine=(rp,id)=>(rp.get(id)||NO_PRS).list.filter(p=>exIds.has(p.exId));
+  const ch=p=>p.cardio||p.hold;
+  const chAt=(w,p)=>{ const ex=(w.exercises||[])[p.ei]; return !!ex&&ex.exId===p.exId&&(isCardio(ex)||isHold(ex)); };
   const workouts=[];
   const hist3=hist2.map(w=>{
     if(!wids.has(w.id)&&!has(w)) return w;
-    const o=mine(before,w.id), n=mine(after,w.id);
+    let o=mine(before,w.id); const n=mine(after,w.id), pw=prevById.get(w.id);
+    if(pw&&Array.isArray(pw.prSets)) o=[...o.filter(p=>!ch(p)),...pw.prSets.filter(p=>exIds.has(p.exId)&&chAt(pw,p))];
     if(!o.length&&!n.length) return w;
     const w2={...w};
     if(typeof w.prCount==='number') w2.prCount=Math.max(0,w.prCount-o.length+n.length);
@@ -4761,10 +4775,117 @@ function commitHistRepair(hist2, exIds, at){
     return w2;
   });
   S.s('hist',hist3);
-  const prs=gPR(), cut=S.g('prRepair')||{}, out={};
-  exIds.forEach(id=>{ out[id]=setRepairedPR(prs,id,at); if(!cut[id]||cut[id]>at) cut[id]=at; });
+  // Which records each exercise has: weight (jk_prs, as before), cardio, hold -- from its entries before and after.
+  const kinds=new Map([...exIds].map(id=>[id,new Set()]));
+  [...prev,...hist3].forEach(w=>(w.exercises||[]).forEach(ex=>{ const k=kinds.get(ex.exId); if(k) k.add(isCardio(ex)?'c':isHold(ex)?'h':'w'); }));
+  const prs=gPR(), cardio=gCardioPR(), hold=gHoldPR(), cut=S.g('prRepair')||{}, out={};
+  let cDirty=false, hDirty=false;
+  exIds.forEach(id=>{
+    const k=kinds.get(id);
+    if(k.has('w')||!k.size) out[id]=setRepairedPR(prs,id,at);
+    if(k.has('c')){ out[id]=setRepairedCardioPR(cardio,id,at); cDirty=true; }
+    if(k.has('h')){ out[id]=setRepairedHoldPR(hold,id,at); hDirty=true; }
+    if(!cut[id]||cut[id]>at) cut[id]=at;
+  });
   S.s('prs',prs); S.s('prRepair',cut);
+  if(cDirty) S.s('cardioPR',cardio);
+  if(hDirty) S.s('holdPR',hold);
   return {workouts,prs:out};
+}
+// Cardio / timed-hold record as history has it now: the same best-of rule as prReplay (fastest mile-equivalent,
+// longest hold; earliest wins a tie), plus cardio's longest distance. Workouts before a Reset PR don't count.
+function chHistBest(exId){
+  const reset=(S.g('prReset')||{})[exId], from=reset?+new Date(reset):-Infinity;
+  let c=null, h=null, far=null;
+  gH().map((w,i)=>({w,i})).sort((a,b)=>(new Date(a.w.date)-new Date(b.w.date))||(a.i-b.i)).forEach(({w})=>{
+    if(+new Date(w.date)<from) return;
+    (w.exercises||[]).forEach(ex=>{
+      if(ex.exId!==exId) return;
+      const b=prBest(ex);
+      if(isCardio(ex)){
+        if(b&&(!c||mileEquiv(b.weight,b.reps)<mileEquiv(c.dist,c.time))) c={dist:b.weight,time:b.reps,date:w.date};
+        (ex.sets||[]).forEach(s=>{ if(s.done&&s.weight>0&&s.reps>0&&(!far||s.weight>far.dist)) far={dist:s.weight,date:w.date}; });
+      } else if(isHold(ex)&&b&&(!h||b.weight>h.sec)) h={sec:b.weight,date:w.date};
+    });
+  });
+  return {c,h,far};
+}
+// Replace jk_cardioPR[exId] / jk_holdPR[exId] with the record history supports, stamped `repaired` (mergeCardioPRs /
+// mergeHoldPRs then let it beat any copy older than the repair, even a faster/longer one). An unchanged record keeps its date.
+function setRepairedCardioPR(cardio, exId, at){
+  const old=cardio[exId], {c,far}=chHistBest(exId);
+  if(!c){ delete cardio[exId]; return {old,now:null}; }
+  const same=old&&old.dist===c.dist&&old.time===c.time&&old.date;
+  const now={...(old||{}),dist:c.dist,time:c.time,date:same?old.date:c.date,repaired:at};
+  now.maxDist=far.dist; now.maxDate=(old&&old.maxDist===far.dist&&old.maxDate)||far.date;
+  cardio[exId]=now;
+  return {old,now};
+}
+function setRepairedHoldPR(hold, exId, at){
+  const old=hold[exId], {h}=chHistBest(exId);
+  if(!h){ delete hold[exId]; return {old,now:null}; }
+  hold[exId]={...(old||{}),sec:h.sec,date:old&&old.sec===h.sec&&old.date?old.date:h.date,repaired:at};
+  return {old,now:hold[exId]};
+}
+// Cardio/hold exercises an Edit Workout save changed (sets, tracking, position, or the workout's date): saveWE repairs
+// only these. Weight lifts are not looked at -- their save path is unchanged.
+function chTouched(a, b){
+  const key=w=>{ const m=new Map(); (w&&w.exercises||[]).forEach((ex,ei)=>{ if(isCardio(ex)||isHold(ex)) m.set(ex.exId,(m.get(ex.exId)||'')+JSON.stringify([ei,ex.tracking,ex.sets])); }); return m; };
+  const ka=key(a), kb=key(b), moved=!!a&&!!b&&a.date!==b.date, ids=new Set();
+  new Set([...ka.keys(),...kb.keys()]).forEach(id=>{ if(id&&id!=='?'&&(moved||ka.get(id)!==kb.get(id))) ids.add(id); });
+  return ids;
+}
+
+// ── One-shot repair: cardio/hold PRs left stale by edits before v1.10.74 (2026-10-08) ──────────────────────────
+// Mr. Roni, 2026-10-08 10:42am: also fix the badges already stale. Until now Edit Workout never touched PRs, so an
+// edited run/hold kept the badge (prSets) and record it was finished with. Flags a cardio/hold exercise when
+//  (a) a stored prSets entry no longer matches the set it points at (that set was edited after the finish),
+//  (b) its jk_cardioPR/jk_holdPR record is not any done set in history any more (edited or deleted away), or
+//  (c) a done set in history beats its record (edited faster/longer; sets before a Reset PR don't count),
+// then commitHistRepair on those exercises with the history as stored. Nothing else is touched. Once per device
+// (flag below, never backed up; applyBundle clears it so restored data is checked too). Idempotent anyway.
+const CH_REPAIR_FLAG='jacked_repairCardioHold1';
+const chEq=(a,b)=>Math.abs((a||0)-(b||0))<1e-6;
+function chStaleIds(){
+  const hist=gH(), ids=new Set(), cardio=gCardioPR(), hold=gHoldPR(), resets=S.g('prReset')||{};
+  hist.forEach(w=>{
+    if(!Array.isArray(w.prSets)) return;
+    w.prSets.forEach(p=>{
+      const ex=(w.exercises||[])[p.ei]; if(!ex||ex.exId!==p.exId||!(isCardio(ex)||isHold(ex))) return;
+      const s=(ex.sets||[])[p.si];
+      if(!s||!s.done||!chEq(s.weight,p.weight)||(isCardio(ex)&&!chEq(s.reps,p.reps))) ids.add(p.exId);
+    });
+  });
+  const sets=new Map();   // exId -> [{c,weight,reps,date}] every done cardio/hold set
+  hist.forEach(w=>(w.exercises||[]).forEach(ex=>{
+    const c=isCardio(ex); if(!c&&!isHold(ex)) return;
+    (ex.sets||[]).forEach(s=>{ if(s.done&&s.weight>0&&(!c||s.reps>0)){ if(!sets.has(ex.exId)) sets.set(ex.exId,[]); sets.get(ex.exId).push({c,weight:s.weight,reps:s.reps,date:w.date}); } });
+  }));
+  const after=(id,d)=>!resets[id]||+new Date(d)>=+new Date(resets[id]);
+  Object.keys(cardio).forEach(id=>{
+    const r=cardio[id]; if(!(r&&r.dist>0&&r.time>0)) return;
+    const mine=(sets.get(id)||[]).filter(x=>x.c);
+    if(!mine.some(x=>chEq(x.weight,r.dist)&&chEq(x.reps,r.time))) ids.add(id);
+    else if(mine.some(x=>after(id,x.date)&&mileEquiv(x.weight,x.reps)<mileEquiv(r.dist,r.time)-1e-9)) ids.add(id);
+  });
+  Object.keys(hold).forEach(id=>{
+    const r=hold[id]; if(!(r&&r.sec>0)) return;
+    const mine=(sets.get(id)||[]).filter(x=>!x.c);
+    if(!mine.some(x=>chEq(x.weight,r.sec))) ids.add(id);
+    else if(mine.some(x=>after(id,x.date)&&x.weight>r.sec)) ids.add(id);
+  });
+  return ids;
+}
+function repairCardioHoldPRs(){
+  try{
+    if(localStorage.getItem(CH_REPAIR_FLAG)) return null;
+    const at=new Date().toISOString(), exIds=chStaleIds();
+    let log={at,build:BUILD,exIds:[...exIds],workouts:[],prs:{}};
+    if(exIds.size){ log={...log,...commitHistRepair(gH(),exIds,at)}; console.info('[repair] cardio/hold PRs stale after edits — fixed',log); }
+    else console.info('[repair] cardio/hold PRs: nothing to fix on this device');
+    localStorage.setItem(CH_REPAIR_FLAG, JSON.stringify({build:BUILD,at,exIds:log.exIds.length,workouts:log.workouts.length}));
+    return log;
+  }catch(e){ console.warn('[repair] cardio/hold PRs failed, will retry next launch',e); return null; }
 }
 
 // ── One-shot repair: Mr. Roni's 9/25 dips, body weight typed into "+ Added" (v1.10.59) ────────────────────────
@@ -5284,7 +5405,10 @@ function saveWE(){
   const ts=weDraft.exercises.reduce((a,e)=>a+(e.sets||[]).filter(s=>s.done).length,0);
   const vol=weDraft.exercises.reduce((a,e)=>a+(isWT(e)?(e.sets||[]).filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*Math.max(0,s.reps||0)),0):0),0);
   weDraft.sets=ts; weDraft.totalVolume=Math.round(vol);
-  const h=gH(); const idx=h.findIndex(x=>x.id===weId); if(idx>=0) h[idx]=weDraft; S.s('hist',h);
+  const h=gH(); const idx=h.findIndex(x=>x.id===weId), old=idx>=0?h[idx]:null; if(idx>=0) h[idx]=weDraft;
+  // Cardio/holds whose sets changed get their PR badge + record rebuilt from history (2026-10-08); weight lifts as before.
+  const ch=old?chTouched(old,weDraft):new Set();
+  if(ch.size) commitHistRepair(h,ch,new Date().toISOString()); else S.s('hist',h);
   cm('weModal'); renderHome(); if(typeof syncMe==='function') syncMe();
   toast('Workout updated ✓','ok'); weId=null; weDraft=null;
 }
@@ -7287,18 +7411,28 @@ function mergePRRepair(a,b){
   Object.keys(b).forEach(k=>{ if(!out[k]||+new Date(b[k])<+new Date(out[k])) out[k]=b[k]; });
   return Object.keys(out).length?out:undefined;
 }
+// Cardio/hold records rebuilt from history carry `repaired` (setRepairedCardioPR/setRepairedHoldPR, 2026-10-08): such a
+// record wins outright over a copy last set before it (that copy is what the repair replaced, e.g. the 7:00/mi of a run
+// since edited to 7:24), even a faster/longer one. A record set after the repair is compared the normal way.
+const _chT=r=>Math.max(+new Date(r.date||r.maxDate||0)||0, +new Date(r.repaired||0)||0);
+function chRepairedWinner(x,y){
+  if(y.repaired&&_chT(x)<+new Date(y.repaired)) return y;
+  if(x.repaired&&_chT(y)<+new Date(x.repaired)) return x;
+  return null;
+}
 // Timed holds: the longer hold wins, per exercise.
 function mergeHoldPRs(a,b){
   a=(a&&typeof a==='object')?a:{}; b=(b&&typeof b==='object')?b:{};
   const out={};
-  new Set([...Object.keys(a),...Object.keys(b)]).forEach(exId=>{ const x=a[exId]||{}, y=b[exId]||{}; out[exId]=(y.sec||0)>(x.sec||0)?{...y}:{...x}; });
+  new Set([...Object.keys(a),...Object.keys(b)]).forEach(exId=>{ const x=a[exId]||{}, y=b[exId]||{}, r=chRepairedWinner(x,y); out[exId]=r?{...r}:(y.sec||0)>(x.sec||0)?{...y}:{...x}; });
   return out;
 }
 function mergeCardioPRs(a,b){
   a=(a&&typeof a==='object')?a:{}; b=(b&&typeof b==='object')?b:{};
   const out={};
   new Set([...Object.keys(a),...Object.keys(b)]).forEach(exId=>{
-    const x=a[exId]||{}, y=b[exId]||{};
+    const x=a[exId]||{}, y=b[exId]||{}, r=chRepairedWinner(x,y);
+    if(r){ out[exId]={...r}; return; }
     const base = mileEquiv(y.dist||0,y.time||0) < mileEquiv(x.dist||0,x.time||0) ? {...y} : {...x};
     const maxSide = (x.maxDist||0) >= (y.maxDist||0) ? x : y;   // keep the longer distance
     base.maxDist=maxSide.maxDist; base.maxDate=maxSide.maxDate;
@@ -8053,7 +8187,7 @@ function applyBundle(bundle,{wipe=false}={}){
     return {ok:false,...res};
   }
   localStorage.removeItem(BACKEXT_REPAIR_FLAG);   // restored data gets its own one-shot repair check on the reload
-  localStorage.removeItem(DIP_REPAIR_FLAG); localStorage.removeItem(RELABEL_FLAG);
+  localStorage.removeItem(DIP_REPAIR_FLAG); localStorage.removeItem(RELABEL_FLAG); localStorage.removeItem(CH_REPAIR_FLAG);
   return {ok:true,...res};
 }
 
@@ -8487,7 +8621,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.73';
+const BUILD = 'v1.10.74';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
@@ -8535,6 +8669,7 @@ healBareStrings();
 // Before checkOnboarding(): its cloud pull/backup must merge the repaired numbers, not the stale ones.
 repairBackExtBW();
 repairDipAdded();
+repairCardioHoldPRs();
 enforcePRRepairs();
 enforcePRResets();
 checkOnboarding();

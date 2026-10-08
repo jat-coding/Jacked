@@ -3348,12 +3348,148 @@ async function bodyWeightMerge() {
   check('bw merge: no console errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+// ── Cardio/hold PR badge after Edit Workout (2026-10-08, tasks/2026-10-08-pr-badge-cardio-hold-repair.md) ─────────
+// Reported: a run edited to 7:24/mi kept its "7:00" PR badge in the day popup. saveWE now rebuilds cardio/hold PRs
+// (prSets, prCount, jk_cardioPR/jk_holdPR) for the cardio/hold exercises an edit touched; weight lifts are untouched.
+const RUN = 'bi_run_outdoor';
+const chPS = (exId, ei, weight, reps) => ({ exId, ei, si: 0, weight, reps });
+const plank = sec => ({ exId: 'Plank', name: 'Plank', muscle: 'abdominals', tracking: 'duration', sets: [{ weight: sec, reps: 0, done: true }] });
+function chSeed() {
+  const W0 = { ...wk('2026-09-05', [ex('Run', [[1, 7.1]], 'distance')]), id: 'wrun0', prCount: 1, prSets: [chPS(RUN, 0, 1, 7.1)] };
+  const W1 = { ...wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]]), ex('Run', [[1, 7]], 'distance')]), id: 'wrun1', prCount: 2 };
+  W1.prSets = [chPS('Barbell_Bench_Press_-_Medium_Grip', 0, W1.exercises[0].sets[0].weight, 5), chPS(RUN, 1, 1, 7)];
+  const P0 = { ...wk('2026-09-06', [plank(50)]), id: 'wpl0', prCount: 1, prSets: [chPS('Plank', 0, 50, 0)] };
+  const P1 = { ...wk('2026-09-11', [plank(60)]), id: 'wpl1', prCount: 1, prSets: [chPS('Plank', 0, 60, 0)] };
+  const prs = { 'Barbell_Bench_Press_-_Medium_Grip': { weight: W1.exercises[0].sets[0].weight, reps: 5, date: W1.date } };
+  const cardioPR = { [RUN]: { dist: 1, time: 7, date: W1.date, maxDist: 1, maxDate: W0.date } };
+  const holdPR = { Plank: { sec: 60, date: P1.date } };
+  return { hist: [W0, P0, W1, P1], prs, cardioPR, holdPR };
+}
+const chState = page => page.evaluate(() => ({ hist: gH(), prs: localStorage.getItem('jk_prs'), cardio: gCardioPR(), hold: gHoldPR(),
+  cut: localStorage.getItem('jk_prRepair'), flag: localStorage.getItem(CH_REPAIR_FLAG) }));
+const dayText = (page, ds) => page.evaluate(ds => { openDay(ds); const t = document.getElementById('dayContent').textContent; cm('dayModal'); return t; }, ds);
+// Edit Workout through the real modal: open, type into the box, tap Save Changes.
+async function weEdit(page, wid, sel, value) {
+  await page.evaluate(wid => openWE(wid), wid); await page.waitForTimeout(100);
+  await page.locator(`#weContent input[oninput^="${sel}"]`).fill(value);
+  await page.locator('#weModal button[onclick="saveWE()"]').click(); await page.waitForTimeout(150);
+}
+async function cardioHoldEdit() {
+  // (a) the exact report: the run is still the PR after the edit -> badge shows the edited pace.
+  {
+    const solo = { ...wk('2026-09-10', [ex('Run', [[1, 7]], 'distance')]), id: 'wsolo', prCount: 1, prSets: [chPS(RUN, 0, 1, 7)] };
+    const { page, ctx, errors } = await phone({ seed: { hist: [solo], cardioPR: { [RUN]: { dist: 1, time: 7, date: solo.date, maxDist: 1, maxDate: solo.date } } }, now: SEP15 });
+    const t0 = await dayText(page, '2026-09-10');
+    check('cardio edit: seeded day popup shows the 7:00/mi PR', t0.includes('7:00/mi'), t0);
+    await weEdit(page, 'wsolo', "weUpd(0,0,'reps'", '7.24');
+    const t1 = await dayText(page, '2026-09-10'), st = await chState(page), w = st.hist[0];
+    check('cardio edit: run edited to 7:24 -> day popup shows 7:24/mi, not 7:00', t1.includes('1 mi · 7:24/mi') && !t1.includes('7:00'), t1);
+    check('cardio edit: prSets/prCount follow the edit (still 1 PR, 7.4 min)', w.prCount === 1 && w.prSets.length === 1 && Math.abs(w.prSets[0].reps - 7.4) < 1e-9, JSON.stringify(w.prSets));
+    check('cardio edit: jk_cardioPR record now 1 mi in 7.4 min, stamped repaired', Math.abs(st.cardio[RUN].time - 7.4) < 1e-9 && st.cardio[RUN].dist === 1 && !!st.cardio[RUN].repaired, JSON.stringify(st.cardio[RUN]));
+    check('cardio edit (solo): no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  // Slower than an older run -> no longer a PR: star gone, record falls back to the older run; faster again -> back.
+  const seed = chSeed();
+  const { page, ctx, errors } = await phone({ seed, now: SEP15 });
+  const s0 = await chState(page);
+  check('cardio edit: consistent seed is left alone by the one-shot repair (flag set, nothing changed)', JSON.stringify(s0.hist) === JSON.stringify(seed.hist) && JSON.parse(s0.flag).exIds === 0 && s0.cut === null, s0.flag);
+  await weEdit(page, 'wrun1', "weUpd(1,0,'reps'", '7.24');
+  let t = await dayText(page, '2026-09-10'), st = await chState(page), w = st.hist.find(x => x.id === 'wrun1');
+  check('cardio edit: run edited 7:00 -> 7:24 (slower than the 7:06 on 9/5) -> no run star, no 7:00 in the popup', !t.includes('7:00') && !t.includes('/mi') && t.includes('★ 1 PR'), t);
+  check('cardio edit: prCount 2 -> 1, prSets keeps the bench entry only', w.prCount === 1 && w.prSets.length === 1 && w.prSets[0].exId === 'Barbell_Bench_Press_-_Medium_Grip', JSON.stringify(w.prSets));
+  check('cardio edit: record falls back to the 9/5 run (7.1 min)', st.cardio[RUN].time === 7.1 && !!st.cardio[RUN].repaired, JSON.stringify(st.cardio[RUN]));
+  check('cardio edit: bench record untouched', st.prs === JSON.stringify(seed.prs));
+  await weEdit(page, 'wrun1', "weUpd(1,0,'reps'", '6.50');
+  t = await dayText(page, '2026-09-10'); st = await chState(page); w = st.hist.find(x => x.id === 'wrun1');
+  check('cardio edit: edited faster (6:50) -> PR again, popup shows 6:50/mi', t.includes('1 mi · 6:50/mi') && w.prCount === 2 && w.prSets.length === 2, t);
+  check('cardio edit: record follows (6:50)', Math.abs(st.cardio[RUN].time - (6 + 50 / 60)) < 1e-9, JSON.stringify(st.cardio[RUN]));
+  check('cardio edit: older 9/5 run entry unchanged', JSON.stringify(st.hist.find(x => x.id === 'wrun0')) === JSON.stringify(seed.hist[0]));
+  // Timed hold: 60s edited to 45s (shorter than the 50s on 9/6) -> no star, record back to 50s; then 70s -> PR 1:10.
+  await weEdit(page, 'wpl1', "weUpd(0,0,'weight'", '45');
+  t = await dayText(page, '2026-09-11'); st = await chState(page); w = st.hist.find(x => x.id === 'wpl1');
+  check('hold edit: plank 60s -> 45s -> no PR star, no "1:00 hold" in the popup', !t.includes('hold') && !t.includes('★') && w.prCount === 0 && w.prSets.length === 0, t);
+  check('hold edit: jk_holdPR back to the 50s hold, stamped repaired', st.hold.Plank.sec === 50 && !!st.hold.Plank.repaired, JSON.stringify(st.hold.Plank));
+  await weEdit(page, 'wpl1', "weUpd(0,0,'weight'", '70');
+  t = await dayText(page, '2026-09-11'); st = await chState(page);
+  check('hold edit: 70s -> PR again, popup shows 1:10 hold, record 70s', t.includes('1:10 hold') && st.hold.Plank.sec === 70, t);
+  // Sync: the old cloud copy (7:00 / 60s records) can't come back over the repaired ones; a later real PR still wins.
+  const m = await page.evaluate(([RUN]) => {
+    const local = collectBackup();
+    const stale = mergeBackup({ jk_cardioPR: { [RUN]: { dist: 1, time: 6, date: '2026-09-10T18:00:00.000Z', maxDist: 3, maxDate: '2026-09-01T18:00:00.000Z' } }, jk_holdPR: { Plank: { sec: 999, date: '2026-09-11T18:00:00.000Z' } } }, local);
+    const later = new Date(Date.now() + 864e5).toISOString();
+    const fresh = mergeBackup({ jk_cardioPR: { [RUN]: { dist: 1, time: 6, date: later } }, jk_holdPR: { Plank: { sec: 120, date: later } } }, local);
+    return { stale: [stale.jk_cardioPR[RUN].time, stale.jk_holdPR.Plank.sec], fresh: [fresh.jk_cardioPR[RUN].time, fresh.jk_holdPR.Plank.sec] };
+  }, [RUN]);
+  check('cardio/hold merge: a stale cloud record (faster/longer, older than the repair) loses to the repaired one', Math.abs(m.stale[0] - (6 + 50 / 60)) < 1e-9 && m.stale[1] === 70, JSON.stringify(m.stale));
+  check('cardio/hold merge: a record set after the repair still wins the normal way', m.fresh[0] === 6 && m.fresh[1] === 120, JSON.stringify(m.fresh));
+  check('cardio/hold edit: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function weightEditUnchanged() {
+  // (c) A weight-lift edit saves exactly as before: no repair call, no PR/record change (out of scope, Mr. Roni 2026-10-08).
+  const seed = chSeed();
+  const { page, ctx, errors } = await phone({ seed, now: SEP15 });
+  await page.evaluate(() => { window._chCalls = []; const orig = commitHistRepair; window.commitHistRepair = (h, ids, at) => { _chCalls.push([...ids]); return orig(h, ids, at); }; });
+  const before = await chState(page);
+  await weEdit(page, 'wrun1', "weUpd(0,0,'weight'", '190');
+  const a = await chState(page), w = a.hist.find(x => x.id === 'wrun1'), w0 = seed.hist.find(x => x.id === 'wrun1');
+  check('weight edit: bench 185 -> 190 saved to history', Math.round(w.exercises[0].sets[0].weight * LB) === 190, String(w.exercises[0].sets[0].weight * LB));
+  check('weight edit: no repair call fired', (await page.evaluate(() => _chCalls.length)) === 0);
+  check('weight edit: prCount/prSets exactly as stored before (unchanged behaviour)', w.prCount === w0.prCount && JSON.stringify(w.prSets) === JSON.stringify(w0.prSets), JSON.stringify(w.prSets));
+  check('weight edit: jk_prs, cardio/hold records and jk_prRepair byte-for-byte unchanged', a.prs === before.prs && JSON.stringify(a.cardio) === JSON.stringify(before.cardio) && JSON.stringify(a.hold) === JSON.stringify(before.hold) && a.cut === null);
+  check('weight edit: totalVolume recomputed as before (190 x 5)', Math.round(w.totalVolume * LB) === 950, String(w.totalVolume));
+  // A save that changes nothing on the run (name only) doesn't repair it either; touching the run calls it for the run only.
+  await page.evaluate(() => { openWE('wrun1'); document.getElementById('weName').value = 'Renamed'; saveWE(); });
+  check('weight edit: rename-only save fires no repair', (await page.evaluate(() => _chCalls.length)) === 0);
+  await weEdit(page, 'wrun1', "weUpd(1,0,'reps'", '7.05');
+  const calls = await page.evaluate(() => _chCalls);
+  check('mixed workout: editing the run repairs the run only (bench not passed in)', calls.length === 1 && calls[0].join() === RUN, JSON.stringify(calls));
+  check('weight edit: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function cardioHoldBackfill() {
+  // (b) History as the old Edit Workout left it: sets edited, badges/records not. W1's run 7:00 -> 7:24 (prSets/record say 7:00),
+  // P1's plank 60s -> 45s (prSets/record say 60s). The one-shot fixes both on launch, once, and nothing else.
+  const seed = chSeed();
+  seed.hist[2].exercises[1].sets[0].reps = 7.4;
+  seed.hist[3].exercises[0].sets[0].weight = 45;
+  const okRow = { ...wk('2026-09-12', [ex('Rowing', [[2, 9]], 'distance', 'row_erg')]), id: 'wrow', prCount: 1, prSets: [chPS('row_erg', 0, 2, 9)] };
+  seed.hist.push(okRow); seed.cardioPR.row_erg = { dist: 2, time: 9, date: okRow.date, maxDist: 2, maxDate: okRow.date };
+  const { page, ctx, errors } = await phone({ seed, now: SEP15 });
+  const a = await chState(page), w1 = a.hist.find(x => x.id === 'wrun1'), p1 = a.hist.find(x => x.id === 'wpl1');
+  const t = await dayText(page, '2026-09-10'), tp = await dayText(page, '2026-09-11');
+  check('backfill: stale 7:00 run badge gone from the day popup (7:24 is slower than the 7:06 on 9/5)', !t.includes('7:00') && !t.includes('/mi') && t.includes('★ 1 PR'), t);
+  check('backfill: W1 prCount 2 -> 1, bench prSets entry kept', w1.prCount === 1 && w1.prSets.length === 1 && w1.prSets[0].exId === 'Barbell_Bench_Press_-_Medium_Grip', JSON.stringify(w1.prSets));
+  check('backfill: run record 7:00 -> the 9/5 7.1 min run, stamped repaired', a.cardio[RUN].time === 7.1 && !!a.cardio[RUN].repaired, JSON.stringify(a.cardio[RUN]));
+  check('backfill: stale 1:00 plank badge gone, record back to 50s', !tp.includes('hold') && p1.prCount === 0 && a.hold.Plank.sec === 50 && !!a.hold.Plank.repaired, tp + JSON.stringify(a.hold));
+  check('backfill: healthy cardio exercise (rower) and its workout untouched', JSON.stringify(a.cardio.row_erg) === JSON.stringify(seed.cardioPR.row_erg) && JSON.stringify(a.hist.find(x => x.id === 'wrow')) === JSON.stringify(okRow));
+  check('backfill: weight records untouched', a.prs === JSON.stringify(seed.prs));
+  check('backfill: flag set, records the 2 exercises it fixed', JSON.parse(a.flag).exIds === 2, a.flag);
+  // Once: a second launch changes nothing; with the flag cleared it finds nothing left to fix and says so.
+  await page.reload(); await page.waitForTimeout(300);
+  const b = await chState(page);
+  check('backfill: second launch changes nothing', JSON.stringify(b.hist) === JSON.stringify(a.hist) && JSON.stringify(b.cardio) === JSON.stringify(a.cardio) && JSON.stringify(b.hold) === JSON.stringify(a.hold));
+  const logs = []; page.on('console', m => { if (m.text().includes('[repair] cardio/hold')) logs.push(m.text()); });
+  await page.evaluate(() => localStorage.removeItem(CH_REPAIR_FLAG)); await page.reload(); await page.waitForTimeout(300);
+  const c = await chState(page);
+  check('backfill: re-run without the flag is a no-op (idempotent) and logs "nothing to fix"', JSON.stringify(c.hist) === JSON.stringify(a.hist) && !!c.flag && logs.some(l => l.includes('nothing to fix')), logs.join(' | '));
+  // Restore the stale copy (login restore clears the flag): the next launch fixes it again and logs it.
+  await page.evaluate(seed => { applyBundle({ jk_hist: seed.hist, jk_prs: seed.prs, jk_cardioPR: seed.cardioPR, jk_holdPR: seed.holdPR, jk_prof: { name: 'Tester', username: '@tester', code: '@tester' }, jk_settings: { wUnit: 'lb' } }, { wipe: true });
+    localStorage.setItem('jk_appVersion', APP_VERSION); }, seed);
+  check('backfill: applyBundle clears the one-shot flag', (await page.evaluate(() => localStorage.getItem(CH_REPAIR_FLAG))) === null);
+  await page.reload(); await page.waitForTimeout(300);
+  const d = await chState(page);
+  check('backfill: restored stale copy is fixed again on the next launch, logged via [repair]', d.hist.find(x => x.id === 'wrun1').prCount === 1 && d.cardio[RUN].time === 7.1 && d.hold.Plank.sec === 50 && logs.some(l => l.includes('stale after edits')), logs.join(' | '));
+  check('backfill: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

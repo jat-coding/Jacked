@@ -55,6 +55,17 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ## APP-WIDE (watch must mirror)
 
+### A18. Editing a logged cardio/hold set rebuilds its PR — build v1.10.74 (staging)
+Mr. Roni, 2026-10-08 (a run edited to 7:24/mi kept its "7:00" PR badge). **Rule:** when Edit Workout saves a
+change to a cardio (`tracking:'distance'`) or timed-hold (`'duration'`) exercise (sets, tracking, position, or the
+workout's date), the phone replays history for THOSE exercises only: each affected `jk_hist` entry's `prSets` +
+`prCount` follow the replay, and `jk_cardioPR[exId]` / `jk_holdPR[exId]` are rebuilt from history (fastest
+mile-equivalent / longest hold; sets before a Reset PR don't count) and **stamped `repaired: <ISO>`**. Weight-lift
+edits are unchanged (no recompute). **Merge:** in `jk_cardioPR`/`jk_holdPR`, a record with `repaired` beats any copy
+whose own time (`max(date, repaired)`) is older than that stamp, even a faster/longer one; otherwise best-wins as
+before. A watch that edits logged cardio/holds should do the same; a watch that merges these maps should honour
+`repaired` (or at least keep the field). One-shot device repair `jacked_repairCardioHold1` fixes already-stale ones.
+
 ### A17. Live shared workout (phone <-> watch): the server record + sync contract — build v1.10.72 (staging)
 Mr. Roni, 2026-10-06 (`BOARD.md` `c9bd1dc` six answers + `c7d9f25` four edge cases), built on Phil's `f775c3a`
 schema and **matching the Galaxy build's doc format (`472a92e`) and review items (`cd9895b`)** — names below are
@@ -376,6 +387,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 10-08 | staging | v1.10.74: Edit Workout rebuilds cardio/hold PRs (`prSets`, `prCount`, `jk_cardioPR`/`jk_holdPR` with a `repaired` stamp) for the cardio/hold exercises an edit changed; weight lifts unchanged; cardio/hold merges let a `repaired` record beat older copies; one-shot `jacked_repairCardioHold1` backfill. Also ships `bcd66f7` (timed-hold stopwatch notation, H.MM / M.SS). Contract: A18 | APP-WIDE |
 | 10-06 | staging | v1.10.72: live shared workout, phase 1 (server + phone). New table `live_workouts` (migration written, NOT applied), `aw` carries `lid`/`sid`/stamps/`mu`/`tomb`, doc format = the Galaxy build's (`472a92e`: `u`/`ud`, `stamps`, inline `del` tombstones, `startedBy`/`finishedBy`), CAS on `rev`, set-level merge, finish lock + finish CAS, auto-finish re-reads the row and only locks in this device's sets, late-set recompute with `lrev`; `mergeBackup()` keeps the higher-`lrev` `jk_hist` entry on an id clash; history keeps `lid`/`sid`. Contract: A17 | APP-WIDE |
 | 10-02 | staging | v1.10.70: body-weight import merge rule (Mr. Roni yes, 11:28pm). `mergeBackup()` unions `jk_bwlog` by date (local wins on a shared date) and derives `jk_bw` from the latest-dated entry, so weights the Jacked Sync companion imports from Health Connect survive the phone's next backup. No new storage keys | APP-WIDE |
 | 10-02 | staging | v1.10.69: (1) Shoulder-Maxing no longer counts `Barbell_Shoulder_Press` or `Smith_Machine_Overhead_Shoulder_Press` (both seated in the library); only `Standing_Military_Press` x1 and `Standing_Dumbbell_Press` pair x1.15; no Smith OHP credit (library has no standing one). (2) The v1.8.27 any-change prompt (add/remove/reorder on finishing a ROUTINE workout) is back, asked right AFTER the v1.10.68 switch prompt; switched slots count as unchanged in it. Finish-summary "Update <routine>" button no longer hidden. No new storage keys | APP-WIDE |
