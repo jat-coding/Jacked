@@ -86,7 +86,7 @@ of the table fails and the phone finishes locally exactly as before.
   A tombstone at least as new as the item deletes it (an exercise tombstone removes its sets). Order: the server
   row's order (exercises: the side with the newer `stamps.order`), items only the other side has go right after
   their nearest predecessor there. **The server row is always the first argument**, so all devices converge.
-- **Start / resume:** no row, a `finished`/`discarded` row, or an `active` row with `updated_at` over 70 min old:
+- **Start / resume:** no row, a `finished`/`discarded` row, or an `active` row with `updated_at` over 90 min old:
   Start takes the row. A fresh `active` row of ANOTHER session: "A workout is already in progress on your
   <device>. Add this workout's sets to it?" Yes = fold in (same `exId` -> sets appended, else exercise added, ids
   kept, then continue under its id); No = this workout stays local-only. A device with nothing open that sees a
@@ -97,8 +97,9 @@ of the table fails and the phone finishes locally exactly as before.
   winning reply was lost): it won, save normally. Same device: a finish lock + "already in `jk_hist`" check.
   No answer in 4 s / offline: finish locally, queue the doc, CAS it to `finished` when back online.
 - **Auto-finish vs a shared session (your 2a-2e):** (a) idle = no change from ANY device (newest `u` in `doc`;
-  pulling another device's change does not count as activity on the phone itself); (b) **70-min total cap is
-  unchanged — Mr. Roni's call, raised with him, not decided here**; (c) "lock in typed sets" only locks sets
+  pulling another device's change does not count as activity on the phone itself); (b) **decided, 2026-10-07:
+  total cap raised 70 -> 90 min, still applies to a shared workout** (`STALE_TOTAL_MS` / `LIVE_STALE_MS` in
+  `jacked-pwa/index.html`); (c) "lock in typed sets" only locks sets
   whose last change was made on THIS device (`ud`), never another device's pre-filled rows; (d) before deciding
   anything it re-reads the row (a fresh change there means not idle: no finish, no discard); (e) it finishes
   through the same CAS.
