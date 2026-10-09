@@ -1,8 +1,9 @@
 # Jacked — User Feedback Log
 
 In-app feedback (Profile → Feedback) is saved to the Supabase `feedback` table.
-On request ("pull feedback"), Claude fetches new rows and logs them here, dated
-and labelled with whether the change has been made.
+A daily 6pm job (scripts/jacked-feedback-review.py in the agent repo) pulls new rows,
+triages them against the current app, marks the not-worth-it ones wontfix in Supabase,
+and logs every row here (#id = Supabase row id). Worth-building items stay `new`.
 
 **Status key:** 🆕 new · ✅ added · ⛔ won't fix / deferred
 
