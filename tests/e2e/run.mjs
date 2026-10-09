@@ -3348,12 +3348,45 @@ async function bodyWeightMerge() {
   check('bw merge: no console errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function androidBack() {
+  // In-app Feedback #9 (@dad, 2026-10-09): Android hardware/gesture back on a non-home
+  // tab should return Home instead of exiting the app. sp() pushes a history entry per
+  // non-home switch; a popstate listener forces Home if the tab active when it fires isn't.
+  const { page, ctx, errors } = await phone({});
+  const activeTab = () => page.evaluate(() => ['home', 'routines', 'exercises', 'metrics', 'leaderboard'].find(id => document.getElementById('page-' + id).classList.contains('active')));
+  await page.evaluate(() => sp('leaderboard'));
+  await page.waitForTimeout(100);
+  check('android back: switching to a non-home tab pushes a history entry', (await page.evaluate(() => history.state)).jkTab === 'leaderboard');
+  const beforeUrl = page.url();
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(150);
+  check('android back: back from a non-home tab lands on Home', await activeTab() === 'home', await activeTab());
+  check('android back: no real navigation away from index.html', page.url() === beforeUrl && page.url().includes('index.html'), page.url());
+  // Home itself never pushes an entry, so re-landing on Home from a tab switch or straight
+  // navigation can't trap back in a loop; the stack only grows 1:1 with real tab visits.
+  const len0 = await page.evaluate(() => history.length);
+  for (let i = 0; i < 5; i++) {
+    await page.evaluate(() => sp('routines'));
+    await page.waitForTimeout(50);
+    await page.evaluate(() => history.back());
+    await page.waitForTimeout(100);
+  }
+  const len1 = await page.evaluate(() => history.length);
+  check('android back: repeated tab -> back -> home cycles do not grow history unbounded', len1 - len0 <= 1, `${len0} -> ${len1}`);
+  check('android back: ends back on Home after the repeated cycles', await activeTab() === 'home', await activeTab());
+  const len2 = await page.evaluate(() => history.length);
+  await page.evaluate(() => sp('home'));
+  await page.waitForTimeout(80);
+  check('android back: Home does not push its own history entry', await page.evaluate(() => history.length) === len2);
+  check('android back: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

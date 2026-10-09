@@ -1899,9 +1899,11 @@ function haptic(kind='light',fromTap=true){
   }catch(_){}
   return false;
 }
+const JK_TABS=['home','routines','exercises','metrics','leaderboard'];
 function sp(id) {
   const tgt=document.getElementById('page-'+id);
-  if(tgt && !tgt.classList.contains('active')) haptic();
+  const switching=tgt && !tgt.classList.contains('active');
+  if(switching) haptic();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   const page = document.getElementById('page-'+id);
@@ -1915,7 +1917,17 @@ function sp(id) {
   else if (id==='metrics')     renderMetricsPage();
   else if (id==='leaderboard') refreshFriends();
   updateResumeBar();
+  // Android hardware/gesture back on a non-home tab should return to Home, not exit the
+  // app (in-app Feedback #9) -- give it a history entry to consume instead of the default.
+  if (switching && id!=='home') { try{ history.pushState({jkTab:id},'',location.pathname); }catch(_){} }
 }
+// Fires when the back button pops the entry sp() pushed above. Only Home-vs-other-tab
+// back is in scope (Feedback #9) -- modal-close-on-back and the active-workout page are
+// deliberately untouched.
+window.addEventListener('popstate', function(){
+  const activeTab = JK_TABS.find(id=>{ const el=document.getElementById('page-'+id); return el && el.classList.contains('active'); });
+  if (activeTab && activeTab!=='home') sp('home');
+});
 function sap() {
   if(!document.getElementById('page-active').classList.contains('active')) haptic();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
