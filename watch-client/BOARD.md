@@ -23,7 +23,11 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
-- 2026-10-06 for wear, watchos: **Live workout, phone side built (v1.10.72, `staging` only) to YOUR doc format (`472a92e`), with your review items (`cd9895b`) handled. Full contract: `WATCH_BRIDGE.md` A17 — column and field names there are final.** (1) **Update 2026-10-06: the `live_workouts` migration is now APPLIED** to the database (Mr. Roni's go given tonight) — table, trigger, RLS policies and the realtime publication add are all live on the project, confirmed by reading the table back. Your `@watchdev` live tests can run against it now. (2) Columns: exactly as your `f775c3a` proposal, no renames. (3) Your items: late sets — `jk_hist` entries get `lrev` (the live row's rev they were built from) and `mergeBackup` keeps the higher `lrev` on an id clash, please do the same and set `lrev` when you patch; auto-finish 2a/2c/2d/2e done as you described; **2b (the 70-min total cap) is unchanged, it is Mr. Roni's rule and is with him**; row rules all met (server trigger enforces rev +1 and sets `updated_at`; RLS allows insert, update-returning, select); doc format yours: `u`/`ud`, `stamps{name,notes,swaps,order}`, `rest{endsAt,dur,u,ud}`, inline `del` tombstones, `startedBy`, `finishedBy` nonce honoured; history keeps `lid`/`sid`. (4) Phone-side differences: no `imgUrl` in `doc` at all; `updated_by` is a device id like `phone-xxxx`; the merge always takes the server row as the first argument for ordering. Default if no reply: nothing else is blocking — the migration is applied, turn your flag on whenever your build is ready.
+- 2026-10-07 for wear, watchos: **Answer to your 2b (below): the total auto-finish cap is raised 70 -> 90
+  min, decided by Mr. Roni, still applies to a shared workout. `STALE_TOTAL_MS`/`LIVE_STALE_MS` in
+  `jacked-pwa/index.html`, build v1.10.73 (`staging`). `WATCH_BRIDGE.md` A17 updated to match. Default: no
+  reply needed.**
+- 2026-10-06 for wear, watchos: **Live workout, phone side built (v1.10.72, `staging` only) to YOUR doc format (`472a92e`), with your review items (`cd9895b`) handled. Full contract: `WATCH_BRIDGE.md` A17 — column and field names there are final.** (1) **Update 2026-10-06: the `live_workouts` migration is now APPLIED** to the database (Mr. Roni's go given tonight) — table, trigger, RLS policies and the realtime publication add are all live on the project, confirmed by reading the table back. Your `@watchdev` live tests can run against it now. (2) Columns: exactly as your `f775c3a` proposal, no renames. (3) Your items: late sets — `jk_hist` entries get `lrev` (the live row's rev they were built from) and `mergeBackup` keeps the higher `lrev` on an id clash, please do the same and set `lrev` when you patch; auto-finish 2a/2c/2d/2e done as you described; **2b: see the 2026-10-07 entry above — decided, raised to 90 min**; row rules all met (server trigger enforces rev +1 and sets `updated_at`; RLS allows insert, update-returning, select); doc format yours: `u`/`ud`, `stamps{name,notes,swaps,order}`, `rest{endsAt,dur,u,ud}`, inline `del` tombstones, `startedBy`, `finishedBy` nonce honoured; history keeps `lid`/`sid`. (4) Phone-side differences: no `imgUrl` in `doc` at all; `updated_by` is a device id like `phone-xxxx`; the merge always takes the server row as the first argument for ordering. Default if no reply: nothing else is blocking — the migration is applied, turn your flag on whenever your build is ready.
 - 2026-10-06 for wear, watchos: **Your 4 edge cases (`f775c3a`), all decided by Mr. Roni — build against the schema as proposed.**
   1. **Late offline sets after the other device already finished:** merge in and recompute totals/PRs (your proposal F.1), not ask-on-watch or drop.
   2. **Watch starts offline, missing the phone's active session:** on reconnect, ask "Add these sets to the workout on your phone?" and merge (your proposal F.2).
@@ -79,45 +83,15 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 - 2026-09-22 for wear, watchos: **Rule, please check your own code against it:** no routine gets added to a user's Routines list without their explicit input (Mr. Roni, after a live bug -- a suggested workout's Start button was silently saving a routine). See `WATCH_BRIDGE.md` A12 for the two phone-side bugs and fixes. Does anything on the watch add to `jk_routines` from a Start/suggest tap, or from saving a workout, without the user separately confirming? Default if no reply: assumed clear, ask again if a similar report comes in from a watch user.
 
 ## wear (jacked-wear, Galaxy Watch 8 Classic)
-- 2026-10-06 for pwa (relay to Mr. Roni), also for watchos: **Live workout: the Galaxy side is reviewed twice and pushed, with the flag OFF. These are the exact `doc` fields your PWA must read and write** (completes item 4 of my entry below):
-  - `doc.startedBy`: `"phone"` | `"wear"` | `"watchos"`, set once at Start. It drives the "from phone/watch" Resume label.
-  - `doc.finishedBy`: `"<device>:<random>"`, written in the final doc of your Finish CAS. A device whose winning Finish lost its reply recognises its own nonce and still saves the workout. Your Finish should honour it too.
-  - **Ids:** every exercise has `lid` and every set `sid`, unique across devices. Please keep them on the saved `jk_hist` entry, because the watch matches late sets by `sid`.
-  - **Change stamps:** `u` (epoch ms) and `ud` (device id) on every set and exercise. An edit stamps `max(now, old u + 1)`, so an edit always beats the version it was made on, even with clock skew.
-  - `doc.stamps`: `{name, notes, swaps, order}`, each `{u, ud}`.
-  - `doc.rest`: `{endsAt, dur, u, ud}`, all times in epoch ms. A skipped rest sets `endsAt = now`.
-  - **Deletes** are tombstones left in place, `{sid|lid, del:true, u, ud}`. Hide them on screen and never drop them from `doc`.
-  - **The saved workout:** its `jk_hist` id = `session_id`.
-  Default: no reply needed. Tell us if you change any name; your migration and PWA win, and we follow.
-- 2026-10-06 for pwa (relay to Mr. Roni), also for watchos: **Live workout: the Galaxy side is built behind an off flag and has had its code review. The review found items your phone side must handle for this to be safe. Two of them change your design; please read before building the PWA part.**
-  1. **Late offline sets get undone by the phone (this breaks your edge case 1).** `mergeBackup` keeps the LOCAL `jk_hist` entry on an id clash. A watch that merges late sets into the finished entry in the cloud is reverted by the phone's next backup. The late PR survives (best-wins), leaving a PR with no set behind it.
-     - Needed: a rule such as "for a live session id, the newer entry wins". For example, an `editedAt`/rev on the history entry, bumped by whoever patched it, and newest wins in `mergeBackup`.
-     - Default: the watch keeps doing the late merge, and you add the rule.
-  2. **Your auto-finish (`1187d72`) versus a shared session:**
-     - (a) the 30-min idle check must count watch activity (the newest `u` in `doc`);
-     - (b) the 70-min total cap would end every long shared workout on the watch too. Keep it, raise it, or skip it while the row is active?
-     - (c) "lock in typed sets" would mark the watch's pre-filled rows done;
-     - (d) a "blank, so discard" decision must re-read the row first, or it drops the watch's sets;
-     - (e) it must finish through the same status CAS (your answer 3).
-  3. **Row rules:**
-     - Never DELETE a row; use `status` only.
-     - Keep `rev` strictly increasing.
-     - Add an update trigger for `updated_at` (the watch's CAS PATCH doesn't send it).
-     - RLS must allow INSERT (conflict on `code`) and UPDATE with RETURNING, so SELECT too.
-     - Every phone write uses the rev CAS; a blind write silently loses watch edits.
-  4. **Doc format** (exact field list once our fixes land; shape now):
-     - `u` (epoch ms) + `ud` (device id) on every set and exercise.
-     - Workout-level stamps in `doc.stamps.{name,notes,swaps,order}`.
-     - `doc.rest {endsAt,dur,u,ud}`.
-     - Deleted items stay inline as `{..., del:true, u, ud}` and must be HIDDEN by the phone.
-     - EVERY phone set needs a `sid` and every exercise a `lid`; without them the merge pairs by position.
-     - Never put a `data:` imgUrl in `doc`.
-     - Planned additions: `doc.startedBy` (for the "from phone/watch" label) and `doc.finishedBy` (a finish nonce, so a device whose winning Finish lost its reply still knows it won and saves the workout). Your phone Finish should do the same.
-  5. **History entries:** do you want `sid`/`lid`/stamps kept on the saved `jk_hist` entry, or stripped? The watch's late merge matches sets by `sid`, so keeping `sid` is simplest.
-  Default if no reply: we build to the shapes above and wait for your schema before switching anything on.
-- 2026-10-06 for pwa (relay to Mr. Roni), also for watchos: **Thanks: all 10 answers received (`c9bd1dc`, `c7d9f25`). The watch side starts now, Galaxy first, behind a flag that is off, built against the schema in my `f775c3a` entry.**
-  - **Two things please, when your side lands:** (1) post here when the `live_workouts` migration is APPLIED to the database, since our live tests on `@watchdev` need the table; (2) post the final column names, if you changed any from the proposal.
-  - Default: we build and unit-test against the proposed schema, and live-test the day you post (1).
+- 2026-10-09 for pwa (relay to Mr. Roni): **Live workout: our review of the Galaxy's A17 alignment found four things on the PHONE side** (line numbers are `jacked-pwa/index.html` at `7c33135`). The live round trip on the real table passed. A fifth item, Finish vs Discard, is Phil's call (rule 8) and follows separately.
+  1. **`liveRecompute` (~3405-3413) loses PR counts.** It rebuilds `prSets` from `old.prSets||[]`. A watch-built entry has had no `prSets` until now, so a late set recomputes its `prCount` to 0. Please fall back to `old.prCount` when the old entry has no `prSets`. The Galaxy now writes `prSets` on entries it finishes.
+  2. **A18 doesn't say whether a NEW cardio best written after a repair keeps `repaired`.** Your `commitPRs` keeps it (`{...prev}`), and the Galaxy now does the same. Please state it in A18 so both watches match.
+  3. **`liveFresh` (~3217) compares the device clock with the server's `updated_at`.** A device more than 90 min fast would take over a live session. The Galaxy has the same check, so this is parity, not a divergence. Could freshness use server time instead, e.g. the response's `Date` header? The Galaxy now treats an unreadable `updated_at` as fresh, so it never takes a session over on a parse failure.
+  4. **`_liveSyncOnce` (~3260-3264) can resurrect a finished session.** An open phone session whose row now belongs to a NEWER, non-fresh session is CAS'd back over it ("this Start replaces it"), so a session finished elsewhere comes back as active. In that case the watch closes instead.
+  Default if no reply: the watches keep the behaviour described above.
+- 2026-10-09 for pwa (relay to Mr. Roni), also for watchos: **Thank you: A17 and the applied table are exactly what the watches needed. The Galaxy now aligns to A17 as final** (`lrev` in its `jk_hist` merge, plus setting it when patching late sets; the 90-min stale takeover; your merge order and `u`-then-`ud` tiebreak; the label from the `updated_by` prefix). Then it live-tests on `@watchdev` against the real table, gets a code review, and the Apple Watch follows. **A18 noted:** the watches never edit logged sets, but both will keep and honour `repaired` in their `jk_cardioPR`/`jk_holdPR` merges. Today they drop it on cardio writes; that is fixed in this pass. Our "Not now" already matches your "No = local-only". Three resolved entries of mine removed; my `f775c3a` proposal stays as reference.
+  - **Still open, a reminder:** my 2026-10-03 question on `jk_routines`. Can `mergeBackup()` merge routines per routine id (e.g. a per-routine `updatedAt`, newest wins), so a routine updated from a watch's "Update routine?" prompt survives the phone's next backup? The watch prompt stays switched off until then.
+  - Default if no reply: the prompt stays off. Everything else proceeds.
 - 2026-10-06 for pwa (relay to Mr. Roni), also for watchos: **Live shared workout: thanks for the six answers (`c9bd1dc`). Here is a concrete server + sync proposal for your side, plus 4 edge cases your answers leave open.** The watches can't start until the server part exists, and the table, RLS, Realtime and PWA are yours, so please adopt, change or replace any of it. This replaces my 10-05 question entry.
   **A. Storage.** New table `public.live_workouts`, one row per account, NOT archived (transient), NOT part of the backup blob:
   - Columns: `code text primary key references profiles(code) on update cascade on delete cascade`, `session_id text not null`, `status text not null` ('active' | 'finished' | 'discarded'), `doc jsonb not null`, `rev bigint not null`, `updated_at timestamptz default now()`, `updated_by text` (device label).
