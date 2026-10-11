@@ -1131,7 +1131,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <label>Or add by username</label>
       <input type="text" id="afCode" placeholder="@username" autocapitalize="none" autocorrect="off" maxlength="21" style="letter-spacing:1px;font-family:var(--fh);font-size:18px;font-weight:700">
     </div>
-    <button class="btn ba wf" onclick="doAF()" style="margin-bottom:12px">Add Friend</button>
+    <button class="btn ba wf" id="afSendBtn" onclick="doAF()" style="margin-bottom:12px">Add Friend</button>
   </div>
 </div>
 
@@ -7105,7 +7105,7 @@ function renderLB() {
     <div class="qc">
       ${avHTML(f)}
       <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(f.name)}</div><div style="font-size:11px;color:var(--muted)">${esc(f.username)}</div></div>
-      <div style="display:flex;gap:6px"><button class="btn ba xs" onclick="acceptFr('${f.code}')">Accept</button><button class="btn bd xs" onclick="rmFr('${f.code}')">Decline</button></div>
+      <div style="display:flex;gap:6px"><button class="btn ba xs" onclick="acceptFr('${f.code}',event)">Accept</button><button class="btn bd xs" onclick="rmFr('${f.code}')">Decline</button></div>
     </div>`).join('');}
   else pw.style.display='none';
 }
@@ -7121,17 +7121,28 @@ async function rmFr(id) {
   }
   S.s('friends',gFr().filter(f=>f.id!==id&&f.code!==id)); renderLB(); toast('Removed','ok');
 }
-async function acceptFr(id) {
+// Spamming the Accept button (or a second tab/device accepting the same request) must not
+// stack repeat "Friend added!" toasts: a per-code guard blocks a second call while the first
+// is still in flight, and .eq('status','pending') below makes a stale repeat tap that lands
+// after the first already accepted the row update 0 rows instead of "succeeding" again.
+const _acceptBusy=new Set();
+async function acceptFr(id, ev) {
+  const btn = ev && ev.currentTarget;
   if (supaEnabled()) {
     const my=(gProf()||{}).code; if(!my) return;
-    // Only the RECIPIENT can accept (server rule), so match the request they sent to me.
-    let ok=false;
+    if (_acceptBusy.has(id)) return;
+    _acceptBusy.add(id); if (btn) btn.disabled=true;
+    let ok=false, err=null;
     try{ const {data,error}=await SUPA.from('friend_requests').update({status:'accepted'})
-        .eq('from_code',id).eq('to_code',my).select('id');
-      if(error) console.warn('acceptFr',error); else ok=!!(data&&data.length);
-    }catch(e){ console.warn('acceptFr',e); }
+        .eq('from_code',id).eq('to_code',my).eq('status','pending').select('id');
+      if(error){ console.warn('acceptFr',error); err=error; } else ok=!!(data&&data.length);
+    }catch(e){ console.warn('acceptFr',e); err=e; }
+    _acceptBusy.delete(id); if (btn) btn.disabled=false;
     await refreshFriends();
-    if(ok) toast('Friend added! ✓','ok'); else toast('Could not accept — try again','err');
+    if(ok) toast('Friend added! ✓','ok');
+    else if(err) toast('Could not accept — try again','err');
+    // else: already accepted (a stale repeat tap, or another device got there first) -- the
+    // refresh above drops the stale pending card; nothing new happened, so nothing to announce.
     return;
   }
   const fs=gFr(); const f=fs.find(x=>x.id===id||x.code===id);
@@ -7180,48 +7191,70 @@ function handleInviteLink(){
   toast('Tap Add Friend to connect with '+c,'ok');
 }
 
+let _doAFBusy=false;
 async function doAF() {
   const code=normU(document.getElementById('afCode').value);
   if (!code||validU(code)) { toast('Enter a valid username','err'); return; }
   const myCode=(gProf()||{}).code||'';
   if (code===myCode) { toast("That's your own username!",'err'); return; }
+  // A double-tap or rapid repeat tap before the first request round-trips must not be able
+  // to fire a second one -- that's how duplicate pending rows (and stacked accept toasts) got
+  // created. Disabling the button for the duration of the await closes that window; the
+  // friend_requests_from_to_unique index is the backstop if two different devices still race.
+  if (_doAFBusy) return;
+  _doAFBusy=true;
+  const btn=document.getElementById('afSendBtn'); if (btn) btn.disabled=true;
 
-  if (supaEnabled()) {
-    try{
-      await syncMe(); // make sure my profile row exists
-      let tgt=null;
-      try { tgt = await publicProfile(code); } catch(e){ console.warn('doAF lookup',e); toast('Network error — try again','err'); return; }
-      if (!tgt) { toast('No user with that username yet','err'); return; }
-      // A request never self-accepts (server-enforced): the other person has to accept it.
-      // The one exception is a request THEY already sent me -- adding them back accepts it.
-      const { data: rows, error: qErr } = await SUPA.from('friend_requests').select('id,from_code,to_code,status')
-        .or(`and(from_code.eq.${myCode},to_code.eq.${code}),and(from_code.eq.${code},to_code.eq.${myCode})`);
-      if (qErr) { console.warn('doAF lookup',qErr); toast('Network error — try again','err'); return; }
-      const mine=(rows||[]).find(r=>r.from_code===myCode), theirs=(rows||[]).find(r=>r.from_code===code);
-      const done=()=>{ document.getElementById('afCode').value=''; cm('afModal'); return refreshFriends(); };
-      if ((mine&&mine.status==='accepted')||(theirs&&theirs.status==='accepted')) { toast('Already friends!','err'); return; }
-      if (theirs && theirs.status==='pending') {
-        const { data:up, error } = await SUPA.from('friend_requests').update({status:'accepted'}).eq('id',theirs.id).select('id');
-        if (error || !(up&&up.length)) { console.warn('doAF accept',error); toast('Could not accept — try again','err'); return; }
-        toast(`${code} had already asked you — you're friends now ✓`,'ok'); await done(); return;
-      }
-      if (mine && mine.status==='pending') { toast('You already sent a request — waiting for them to accept','ok'); await done(); return; }
-      if (mine) await SUPA.from('friend_requests').delete().eq('id',mine.id);   // stale (declined) row: clear it so a fresh request can go out
-      const { error } = await SUPA.from('friend_requests').insert({from_code:myCode,to_code:code,status:'pending'});
-      if (error) { console.warn('doAF send',error); toast('Could not send the request — try again','err'); return; }
-      toast(`Request sent to ${code} — they'll need to accept it`,'ok');
-      await done();
-    }catch(e){ console.warn('doAF',e); toast('Network error — try again','err'); }
-    return;
+  try {
+    if (supaEnabled()) {
+      try{
+        await syncMe(); // make sure my profile row exists
+        let tgt=null;
+        try { tgt = await publicProfile(code); } catch(e){ console.warn('doAF lookup',e); toast('Network error — try again','err'); return; }
+        if (!tgt) { toast('No user with that username yet','err'); return; }
+        // A request never self-accepts (server-enforced): the other person has to accept it.
+        // The one exception is a request THEY already sent me -- adding them back accepts it.
+        const { data: rows, error: qErr } = await SUPA.from('friend_requests').select('id,from_code,to_code,status')
+          .or(`and(from_code.eq.${myCode},to_code.eq.${code}),and(from_code.eq.${code},to_code.eq.${myCode})`);
+        if (qErr) { console.warn('doAF lookup',qErr); toast('Network error — try again','err'); return; }
+        const mine=(rows||[]).find(r=>r.from_code===myCode), theirs=(rows||[]).find(r=>r.from_code===code);
+        const done=()=>{ document.getElementById('afCode').value=''; cm('afModal'); return refreshFriends(); };
+        if ((mine&&mine.status==='accepted')||(theirs&&theirs.status==='accepted')) { toast('Already friends!','err'); return; }
+        if (theirs && theirs.status==='pending') {
+          // .eq('status','pending') makes this idempotent against a second near-simultaneous
+          // accept (another tab/device, or a stale repeat tap): it updates 0 rows instead of
+          // re-reporting success, so the "you're friends now" toast can't fire twice.
+          const { data:up, error } = await SUPA.from('friend_requests').update({status:'accepted'}).eq('id',theirs.id).eq('status','pending').select('id');
+          if (error) { console.warn('doAF accept',error); toast('Could not accept — try again','err'); return; }
+          if (up&&up.length) toast(`${code} had already asked you — you're friends now ✓`,'ok');
+          await done(); return;
+        }
+        if (mine && mine.status==='pending') { toast('You already sent a request — waiting for them to accept','ok'); await done(); return; }
+        if (mine) await SUPA.from('friend_requests').delete().eq('id',mine.id);   // stale (declined) row: clear it so a fresh request can go out
+        const { error } = await SUPA.from('friend_requests').insert({from_code:myCode,to_code:code,status:'pending'});
+        if (error) {
+          // 23505 = unique_violation on friend_requests_from_to_unique: another tab/device
+          // won the race and already sent this exact request. Same outcome either way.
+          if (error.code==='23505') { toast('You already sent a request — waiting for them to accept','ok'); await done(); return; }
+          console.warn('doAF send',error); toast('Could not send the request — try again','err'); return;
+        }
+        toast(`Request sent to ${code} — they'll need to accept it`,'ok');
+        await done();
+      }catch(e){ console.warn('doAF',e); toast('Network error — try again','err'); }
+      return;
+    }
+
+    // Local fallback (no backend configured)
+    const fs=gFr();
+    if (fs.find(f=>f.code===code&&!f.pending)) { toast('Already friends!','err'); return; }
+    const pending=fs.find(f=>f.code===code&&f.pending);
+    if (pending) { acceptFr(pending.id); document.getElementById('afCode').value=''; cm('afModal'); return; }
+    toast('Friend request sent! They need to enter your code too to connect.','ok');
+    document.getElementById('afCode').value=''; cm('afModal');
+  } finally {
+    _doAFBusy=false;
+    if (btn) btn.disabled=false;
   }
-
-  // Local fallback (no backend configured)
-  const fs=gFr();
-  if (fs.find(f=>f.code===code&&!f.pending)) { toast('Already friends!','err'); return; }
-  const pending=fs.find(f=>f.code===code&&f.pending);
-  if (pending) { acceptFr(pending.id); document.getElementById('afCode').value=''; cm('afModal'); return; }
-  toast('Friend request sent! They need to enter your code too to connect.','ok');
-  document.getElementById('afCode').value=''; cm('afModal');
 }
 
 // ============================================================
