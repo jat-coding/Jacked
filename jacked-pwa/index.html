@@ -1326,7 +1326,8 @@ const _ICON={
   calendarCheck:`<path d='M11.5 21h-5.5a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v6'/><path d='M16 3v4'/><path d='M8 3v4'/><path d='M4 11h16'/><path d='M15 19l2 2l4 -4'/>`,
   crown:`<path d='M12 6l4 6l5 -4l-2 10h-14l-2 -10l5 4l4 -6'/>`,
   trash:`<path d='M4 7l16 0'/><path d='M10 11l0 6'/><path d='M14 11l0 6'/><path d='M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12'/><path d='M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3'/>`,
-  chevron:`<path d='M6 9l6 6l6 -6'/>`
+  chevron:`<path d='M6 9l6 6l6 -6'/>`,
+  info:`<path d='M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0'/><path d='M12 9h.01'/><path d='M11 12h1v4h1'/>`
 };
 function exIcon(muscle,size=24){
   const m=(muscle||'').toLowerCase();
@@ -5951,21 +5952,25 @@ function toggleCard(id){ const s=gSet(); const h=new Set(s.hiddenCards||[]); h.h
 
 // Strength standards, as a fraction of bodyweight, per muscle group and sex:
 // [t1,t2,t3,t4] = [beginner floor, BUILDING starts, STRONG starts, ELITE starts]. Below t2 is
-// Needs Work. chest/shoulders/legs match the Bench/Shoulder/Leg-Maxing badge lifts; back
-// (bent-over row) and glutes (hip thrust) come off Strength Level's published bodyweight-ratio
-// tables (strengthlevel.com). Triceps (close-grip bench) uses the chest ladder: Strength Level's close-grip
-// and flat bench standards are within ~5% of each other (2026-09-25; it was ~15% harder before, which
-// under-ranked triceps). biceps (barbell curl) and core (cable crunch) only publish two reference points
-// there, so their bands are interpolated.
+// Needs Work. Every row is Strength Level's published bodyweight-ratio standard for the group's reference lift
+// (strengthlevel.com/strength-standards/<lift>/lb, "Bodyweight Ratio" table, read 2026-10-08; Beginner/Novice/
+// Intermediate/Advanced -> the four cut points, same mapping as TRI_ISO_STD; their Elite tier is unused):
+//   chest = Bench Press, shoulders = Shoulder Press (standing barbell overhead press), legs = Squat,
+//   back = Bent Over Row (Strength Level files it under Back; Deadlift is "Whole Body"), glutes = Hip Thrust,
+//   biceps = Barbell Curl, triceps = Close Grip Bench Press (loaded triceps compounds; isolation moves use
+//   TRI_ISO_STD), core = Cable Crunch (its only weighted core lift with a published ratio table; sit-ups and
+//   ab-wheel rollouts are rep-count standards, not a 1RM ratio). Strength Level's female Cable Crunch
+//   Beginner-Advanced ratios are identical to the male ones, as published.
+// Replaces the earlier hand-picked numbers (back's male row was already identical to the source).
 const STRENGTH_STD = {
-  chest:     {male:[.5,.75,1.0,1.5],   female:[.3,.45,.6,.9]},
-  shoulders: {male:[.25,.375,.5,.75],  female:[.15,.22,.3,.45]},
-  legs:      {male:[1.0,1.25,1.5,2.0], female:[.6,.75,.9,1.2]},
-  back:      {male:[.5,.75,1.0,1.5],   female:[.3,.45,.65,1.0]},
-  glutes:    {male:[.5,1.0,1.6,2.5],   female:[.4,.8,1.3,2.0]},
-  biceps:    {male:[.25,.4,.55,.85],   female:[.15,.24,.33,.5]},
-  triceps:   {male:[.5,.75,1.0,1.5],   female:[.3,.45,.6,.9]},
-  core:      {male:[.3,.55,.8,1.2],    female:[.18,.33,.48,.72]},
+  chest:     {male:[.50,1.00,1.25,1.50], female:[.30,.50,.75,1.10]},
+  shoulders: {male:[.35,.55,.80,1.05],  female:[.20,.35,.50,.70]},
+  legs:      {male:[.75,1.25,1.75,2.25], female:[.50,.75,1.25,1.75]},
+  back:      {male:[.50,.75,1.00,1.50],  female:[.30,.45,.70,.95]},
+  glutes:    {male:[.50,1.25,1.75,2.75], female:[.50,1.00,1.75,2.50]},
+  biceps:    {male:[.25,.40,.60,.80],    female:[.10,.25,.40,.55]},
+  triceps:   {male:[.50,.75,1.25,1.50],  female:[.30,.50,.75,1.05]},
+  core:      {male:[.25,.50,.75,1.25],   female:[.25,.50,.75,1.25]},
 };
 // How a group's strength ratio is built (Mr. Roni approved 2026-09-19):
 //  - last 90 days only, so an untrained group drops back down
@@ -6228,7 +6233,36 @@ function cardBody(){
       <div class="mr-bar"><div class="mr-fill" style="width:${Math.round(p*100)}%;background:${heatColor(p)}"></div></div>
       <span class="badge ${r.b}" style="min-width:74px;justify-content:center">${r.l}</span>
     </div>`;}).join('');
-  return {id:'body',title:'Muscle Map',html:body+(has?tier:'')+'<div style="font-size:12px;color:var(--muted);margin:14px 0 10px">'+sub+'</div>'+rows};
+  const info=mode==='strength'?`<button class="btn bg ic xs" style="flex-shrink:0;display:inline-flex" onclick="muscleMapInfo()" aria-label="How the muscle rankings are scored">${uic('info','var(--text2)',16)}</button>`:'';
+  return {id:'body',title:'Muscle Map',html:body+(has?tier:'')+'<div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px"><div style="flex:1;font-size:12px;color:var(--muted)">'+sub+'</div>'+info+'</div>'+rows};
+}
+// Muscle Map "how it's scored" explainer (Mr. Roni, 2026-10-08: "explained in an info button right above the
+// rankings"). Reuses the badge popup (#badgeFull) so it looks and closes like every other info page. The
+// "Strong at" column reads the live STRENGTH_STD row for the user's sex, so the copy can't drift from the math.
+const MM_LIFT={chest:'Bench press',shoulders:'Overhead press',legs:'Squat',back:'Barbell row',glutes:'Hip thrust',biceps:'Barbell curl',triceps:'Close-grip bench',core:'Cable crunch'};
+function muscleMapInfo(){
+  const sex=(gProf()||{}).sex==='female'?'female':'male', x=v=>+(+v).toFixed(2)+'\u00d7';
+  const tiers=[['Needs Work',TIER_COL.need,'Below Novice'],['Building',TIER_COL.build,'Novice'],['Strong',TIER_COL.strong,'Intermediate'],['Elite',TIER_COL.elite,'Advanced']]
+    .map(([n,c,sl])=>`<div class="bf-tier"><span style="color:${c};font-weight:800;letter-spacing:.5px">${n}</span><span style="margin-left:auto;font-weight:600;color:var(--text2)">${sl}</span></div>`).join('');
+  const lifts=MGROUPS.filter(g=>STRENGTH_STD[g]).map(g=>`<div class="bf-tier"><span style="font-weight:700">${MGNAME[g]}</span><span style="color:var(--muted);font-size:13px">${MM_LIFT[g]||''}</span><span style="margin-left:auto;font-weight:800">${x(STRENGTH_STD[g][sex][2])}</span></div>`).join('');
+  document.getElementById('badgeFullBody').innerHTML=`
+    <div class="bf-icon" style="box-shadow:0 0 0 1px ${TIER_COL.strong}55,0 0 60px -6px ${TIER_COL.strong}66">${uic('target',TIER_COL.strong,84)}</div>
+    <div class="bf-status" style="color:${TIER_COL.strong}">Muscle Map</div>
+    <div class="bf-title">How it's scored</div>
+    <div class="bf-stat">How strong each muscle group is for your size, measured against real lifters.</div>
+    <div class="bf-sep"></div>
+    <div class="bf-h">What it measures</div><div class="bf-body">Your heaviest lift for each muscle group, divided by your body weight. Benching 1.25 times your body weight scores the same whether you weigh 150 lb or 220 lb. You never have to test a true max: it's estimated from the weight and reps you logged.</div>
+    <div class="bf-h">Your best, not your average</div><div class="bf-body">Each group looks at your best few exercises for that muscle (your top 3, using the best set of each), not every set you've done. Warm-ups and light days never drag it down. Triceps and core use your single strongest exercise, and a big compound lift also gives credit to the other muscles it works.</div>
+    <div class="bf-h">Last 90 days only</div><div class="bf-body">Only workouts from the last 90 days count. Stop training a group and its rank slides back down; train it again and it comes back.</div>
+    <div class="bf-h">Adjusted for you</div><div class="bf-body">Men and women have separate standards, and the targets get easier for lifters under 18 and 40 or older. Set your sex, birthday and body weight in Profile to get yours.</div>
+    <div class="bf-h">Where the numbers come from</div><div class="bf-body">The cutoffs are the published strength standards from Strength Level (strengthlevel.com), built from millions of lifts logged by real lifters. Their tiers map onto ours like this:</div>
+    <div class="bf-tiers">${tiers}</div>
+    <div class="bf-h">Strong starts at</div><div class="bf-body" style="margin-bottom:10px">Your one-rep max on each group's benchmark lift, as a multiple of body weight (${sex==='female'?'women':'men'}'s standard, before any age adjustment):</div>
+    <div class="bf-tiers">${lifts}</div>`;
+  _badgeOpen=null;
+  document.getElementById('badgeStartBtn').style.display='none';
+  document.getElementById('badgeFull').classList.add('open');
+  document.getElementById('badgeFull').scrollTop=0;
 }
 
 function cardOverview(){
