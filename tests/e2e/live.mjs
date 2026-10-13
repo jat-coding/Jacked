@@ -9,13 +9,19 @@ import { phone, check } from './harness.mjs';
 const CEX = [
   { id: 'cex1', name: 'Barbell Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
   { id: 'cex2', name: 'Barbell Row', muscle: 'back', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
+  { id: 'cex3', name: 'Leg Press', muscle: 'legs', equip: 'machine', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
+  { id: 'cex4', name: 'Incline Curl', muscle: 'biceps', equip: 'dumbbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
 ];
-const SEED = { cex: CEX, routines: [{ id: 'r1', name: 'Push', desc: '', exercises: ['cex1'] }] };
+const SEED = { cex: CEX, routines: [
+  { id: 'r1', name: 'Push', desc: '', exercises: ['cex1'] },
+  { id: 'r2', name: 'Full', desc: '', exercises: ['cex1', 'cex2'] },
+] };
 const wait = ms => new Promise(r => setTimeout(r, ms));
+const LIVE_FINISH_WAIT = 7000;   // past the app's 4 s finish bounds, short of its 10 s request timeout: Finish must not need the stuck request to die first
 const clone = v => (v == null ? v : JSON.parse(JSON.stringify(v)));
 
 function makeDb() {
-  const db = { row: null, ops: [], casMiss: 0, offline: new Set(), other: [], gate: null };
+  const db = { row: null, ops: [], casMiss: 0, offline: new Set(), other: [], gate: null, hang: 0 };
   // Hold the next n reads until all n have arrived, so two devices read the same rev and race.
   db.barrier = n => {
     const waiting = [];
@@ -25,6 +31,7 @@ function makeDb() {
   };
   db.handle = async (st, dev) => {
     if (db.offline.has(dev)) return { data: null, error: { message: 'TypeError: Failed to fetch' } };
+    if (db.hang > 0 && st.table === 'live_workouts') { db.hang--; return new Promise(() => {}); }   // a request that never answers (half-open socket)
     if (st.table !== 'live_workouts') {
       if (st.op !== 'select') db.other.push(st.table + ':' + st.op);
       return { data: null, error: { message: 'stub: table not served' } };
@@ -337,4 +344,289 @@ export async function liveFinishEdges() {
   await A.ctx.close(); await B.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges];
+// A live-claim that rejects outright (not the ordinary offline/CAS-contention paths
+// liveClaimFinish already recovers from itself) must still finish the workout locally rather
+// than strand the user on the active-workout screen (2026-10-12 bug). Monkeypatches
+// liveClaimFinish directly so the failure reaches _finishWContinue's own promise chain,
+// which previously had no .catch() at all.
+export async function liveFinishClaimFails() {
+  const db = makeDb(); const A = await device(db, 'phone-A');
+  // Reject outright.
+  const sid = await startShared(db, A, [[100, 5, true]]);
+  await ev(A, () => { window.liveClaimFinish = () => Promise.reject(new Error('stub claim failure')); });
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(800);
+  const a = await snap(A);
+  check('live finish claim rejects: the workout still finishes locally instead of hanging', !a.aw && a.hist.filter(w => w.id === sid).length === 1 && a.stats.commits === 1, JSON.stringify({ aw: !!a.aw, hist: a.hist.map(w => w.id), stats: a.stats }));
+  check('live finish claim rejects: the failed claim is queued so the server catches up later', (await ev(A, () => liveQ().length)) === 1);
+  check('live finish claim rejects: home is shown, not left on the active-workout screen', await ev(A, () => document.getElementById('page-home').classList.contains('active')));
+  // A second Finish attempt (or just starting a fresh workout) is not itself stuck behind the old lock.
+  await ev(A, () => { startEmpty(); addExToWorkout('cex1'); });
+  const resumed = await ev(A, () => aw && aw.id);
+  check('live finish claim rejects: a new workout can be started right after (lock not stuck)', !!resumed && resumed !== sid, String(resumed));
+  await ev(A, () => { cancelW(); }); await ev(A, () => _cfDone(true));
+
+  // Resolves to nothing usable (no error, just a falsy/empty result) -- same stuck risk, different trigger.
+  db.row = null;
+  const sid2 = await startShared(db, A, [[90, 5, true]]);
+  await ev(A, () => { window.liveClaimFinish = () => Promise.resolve(null); });
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(800);
+  const b = await snap(A);
+  check('live finish claim returns falsy: the workout still finishes locally instead of hanging', !b.aw && b.hist.filter(w => w.id === sid2).length === 1, JSON.stringify({ aw: !!b.aw, hist: b.hist.map(w => w.id) }));
+  check('live finish claim fails: no console errors', A.errors.length === 0, A.errors.join(' | '));
+  await A.ctx.close();
+}
+
+// Two devices switch DIFFERENT exercise slots in the same shared routine workout at the same
+// moment. mergeLive() used to treat aw.swaps as one whole-field value (same as name/notes) --
+// a stamp-timestamp last-write-wins that silently drops whichever side's switch lost the race,
+// instead of unioning two genuinely different keys (2026-10-12 adversarial find). The visible
+// consequence: the Finish routine-update prompt describes the lost switch as an unrelated
+// add+remove ("added Leg Press; removed Barbell Bench Press") instead of "switched Barbell
+// Bench Press -> Leg Press", even though the final exercise list itself still ends up correct.
+export async function liveConcurrentSwaps() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  await ev(A, () => { startRW('r2'); clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveResumeRemote());
+  await ev(A, () => { replaceExAt(0, 'cex3'); clearTimeout(_livePushT); });
+  await ev(B, () => { replaceExAt(1, 'cex4'); clearTimeout(_livePushT); });
+  db.barrier(2);
+  await Promise.all([ev(A, () => liveSync()), ev(B, () => liveSync())]);
+  await ev(A, () => liveSync()); await ev(B, () => liveSync());
+  const [a, b] = [await snap(A), await snap(B)];
+  check('live swaps race: both concurrent switches land on the server, not just the last writer', !!db.row.doc.swaps && db.row.doc.swaps.cex1 === 'cex3' && db.row.doc.swaps.cex2 === 'cex4', JSON.stringify(db.row.doc.swaps));
+  const fullSwaps = s => s && s.cex1 === 'cex3' && s.cex2 === 'cex4' && Object.keys(s).length === 2;
+  check('live swaps race: both devices converge on the full swap map', fullSwaps(a.aw.swaps) && fullSwaps(b.aw.swaps), JSON.stringify([a.aw.swaps, b.aw.swaps]));
+  // Finish on A: the routine-update prompt must credit both as switches, not a spurious add+remove.
+  await ev(A, () => { aw.exercises[0].sets[0] = { weight: 50, reps: 5, done: true }; saveAW(); });
+  const p = ev(A, () => maybeUpdateRoutine());
+  await wait(200);
+  const msg = await ev(A, () => document.getElementById('cfMsg').textContent);
+  await ev(A, () => _cfDone(true));
+  await p;
+  check('live swaps race: the routine-update prompt credits both switches, not a spurious add+remove', /Barbell Bench Press → Leg Press/.test(msg) && /Barbell Row → Incline Curl/.test(msg) && !/added/.test(msg) && !/removed/.test(msg), msg);
+  check('live swaps race: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+// A live sync whose request never answers (half-open socket on flaky cell signal: fetch has no
+// timeout of its own) must not hold Finish hostage. _finishWContinue waited on the in-flight
+// sync (_liveBusy) with no bound before even starting the claim -- which has its own 4 s
+// timeout -- so Finish hung on the active-workout screen with _finLock set, and every later
+// tap of Finish was swallowed by that lock (2026-10-12 adversarial find). Same for auto-finish:
+// it cleared the workout clock, then waited on a sync that never came back, so it never fired.
+export async function liveFinishHungSync() {
+  const db = makeDb(); const A = await device(db, 'phone-A');
+  const sid = await startShared(db, A, [[100, 5, true]]);
+  db.hang = 1;
+  await ev(A, () => { liveSync(); });   // the read inside this sync never answers
+  await wait(100);
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(LIVE_FINISH_WAIT);
+  const a = await snap(A);
+  check('live hung sync: Finish still completes (saved once, off the workout screen) instead of hanging', !a.aw && a.hist.filter(w => w.id === sid).length === 1 && a.stats.commits === 1 && (await ev(A, () => document.getElementById('page-home').classList.contains('active'))), JSON.stringify({ aw: !!a.aw, hist: a.hist.map(w => w.id), stats: a.stats }));
+  check('live hung sync: the finish reached the server (or is queued to)', db.row.status === 'finished' || (await ev(A, () => liveQ().length)) === 1, db.row.status);
+  // Auto-finish behind a hung sync: same trap.
+  await ev(A, () => { _liveBusy = null; });   // a reload would also drop the hung promise; isolate the second case
+  db.row = null;
+  const sid2 = await startShared(db, A, [[80, 5, true]]);
+  db.hang = 1;
+  await ev(A, () => { awTouch = Date.now() - 31 * 60000; autoFinishStale(); });
+  await wait(LIVE_FINISH_WAIT);
+  const b = await snap(A);
+  check('live hung sync: auto-finish still fires when its re-read never answers', !b.aw && b.hist.filter(w => w.id === sid2).length === 1, JSON.stringify({ aw: !!b.aw, hist: b.hist.map(w => w.id) }));
+  // And live sync itself recovers: a stuck request times out instead of wedging _liveBusy for the session.
+  await ev(A, () => { startEmpty(); addExToWorkout('cex1'); clearTimeout(_livePushT); });
+  db.hang = 1;
+  const r = await Promise.race([ev(A, () => liveSync()), wait(15000).then(() => 'still hung after 15s')]);
+  const r2 = await Promise.race([ev(A, () => liveSync()), wait(5000).then(() => 'still hung')]);
+  check('live hung sync: a stuck request times out and the next sync goes through', r === 'error' && (r2 === 'written' || r2 === 'replaced' || r2 === 'inserted'), r + ' / ' + r2);
+  check('live hung sync: no console errors', A.errors.length === 0, A.errors.join(' | '));
+  await A.ctx.close();
+}
+
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale, liveEndedElsewhere];
+
+// The app is killed (swiped away) right after tapping Finish: the Finish claim reached the
+// server and flipped the row to 'finished', but the local commit never ran. On reopening, the
+// resumed copy met its OWN finished row, took it for another device's finish, and closed
+// without saving anything -- the workout vanished from history, with a "finished on your other
+// phone" toast (2026-10-12 adversarial find). Also: Switch Exercise onto the exercise already in
+// that slot used to wipe its logged sets; and a double-tapped Finish still commits exactly once.
+export async function liveFinishResumed() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const sid = await startShared(db, A, [[100, 5, true]]);
+  const saved = await ev(A, () => JSON.stringify(aw));   // what jk_activeWorkout holds at the Finish tap
+  const won = await ev(A, () => { aw.finishedBy = liveDevice() + ':n1'; return liveClaimFinish(liveWire(aw)).then(r => !!r.won); });
+  // Reopen: a fresh page state resumes the saved copy (no finish nonce in it, no lock).
+  await ev(A, s => { aw = JSON.parse(s); _finLock = null; _liveShadow = null; liveRebase(); beginW(); }, saved);
+  const res = await ev(A, () => liveSync());
+  const a = await snap(A);
+  const toastTxt = await ev(A, () => document.getElementById('tc').textContent);
+  check('live finish resumed: a Finish the server took before the app died is still saved to history, once', won && db.row.status === 'finished' && res === 'closed-mine' && a.hist.filter(w => w.id === sid).length === 1 && a.hist.find(w => w.id === sid).sets === 1 && !a.aw, JSON.stringify({ res, hist: a.hist.map(w => w.id) }));
+  check('live finish resumed: the toast does not blame "your other phone" for this phone\'s own finish', !/other phone/.test(toastTxt), toastTxt);
+  check('live finish resumed: its PR is committed', (a.prs.cex1 || {}).weight === 100, JSON.stringify(a.prs));
+  await ev(A, () => { cm('fsModal'); });
+  // Another device seeing that same finished row still commits nothing (it was not its Finish).
+  await ev(B, () => { aw = null; return liveSync(); });
+  check('live finish resumed: the other device does not create its own copy', !(await snap(B)).hist.some(w => w.id === sid));
+  // Switch Exercise onto the exercise already in the slot: a no-op, not a wipe.
+  db.row = null;
+  await startShared(db, A, [[100, 5, true], [100, 5, true]]);
+  await ev(A, () => { switchEx(0); toggleAEItem('cex1'); });
+  const b = await snap(A);
+  check('switch to itself: the slot keeps its 2 logged sets and records no swap', b.aw.exercises[0].sets.filter(s => s.done).length === 2 && !(b.aw.swaps && Object.keys(b.aw.swaps).length), JSON.stringify({ sets: b.aw.exercises[0].sets, swaps: b.aw.swaps }));
+  // Double-tapped Finish: two confirm calls, one OK -> exactly one commit.
+  const c0 = (await snap(A)).stats.commits;
+  await ev(A, () => { finishW(); finishW(); });
+  await ev(A, () => _cfDone(true));
+  await wait(300);
+  await ev(A, () => { if (_cfResolve) _cfDone(true); });
+  await wait(1500);
+  const c = await snap(A);
+  check('double-tap Finish: one commit, workout closed', !c.aw && c.stats.commits === c0 + 1, JSON.stringify(c.stats));
+  check('live finish resumed: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+// The phone's Reorder Exercises modal is open while the watch adds (or removes) an exercise.
+// Its rows were keyed by array index, so dropping a row in the now-stale list rebuilt
+// aw.exercises from the wrong indices: the watch's new exercise -- sets logged on it and all --
+// fell off the end, got tombstoned, and was deleted on BOTH devices (2026-10-12 adversarial find).
+const dragFirstBelowSecond = () => {
+  const cont = document.getElementById('reorderList'), rows = [...cont.children];
+  const grip = rows[0].querySelector('.cdrag'), r0 = rows[0].getBoundingClientRect();
+  grip.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, clientY: r0.top + r0.height / 2, bubbles: true }));
+  cont.insertBefore(rows[1], rows[0]);
+  window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7 }));
+};
+export async function liveReorderStale() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const ids = d => ev(d, () => aw.exercises.map(e => e.exId).join());
+  await ev(A, () => { startRW('r2'); aw.exercises[0].sets[0] = { weight: 50, reps: 5, done: true }; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveResumeRemote());
+  await ev(A, () => openReorder());
+  await ev(B, () => { addExToWorkout('cex3'); aw.exercises[2].sets[0] = { weight: 200, reps: 8, done: true }; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => liveSync());
+  await ev(A, dragFirstBelowSecond);
+  await ev(A, () => { clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveSync());
+  const [a1, b1] = [await ids(A), await ids(B)];
+  const bSet = await ev(B, () => { const e = aw.exercises.find(x => x.exId === 'cex3'); return e ? e.sets[0].weight : null; });
+  check('live reorder (stale list): the watch\'s new exercise + its logged set survive a drag on the phone, both devices', a1 === 'cex2,cex1,cex3' && b1 === a1 && bSet === 200, a1 + ' / ' + b1 + ' / ' + bSet);
+  // Reverse: the watch REMOVES an exercise while the phone's list is open; a drag must not
+  // resurrect it or shuffle the wrong rows.
+  await ev(A, () => { cm('reorderModal'); openReorder(); });   // list now: cex2, cex1, cex3
+  await ev(B, () => { rmEx(aw.exercises.findIndex(e => e.exId === 'cex2')); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => liveSync());
+  await ev(A, dragFirstBelowSecond);   // stale rows: [cex2(gone), cex1, cex3] -> drag cex2 below cex1
+  await ev(A, () => { clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveSync());
+  const [a2, b2] = [await ids(A), await ids(B)];
+  check('live reorder (stale list): an exercise the watch removed stays removed, the rest keep their order', a2 === 'cex1,cex3' && b2 === a2, a2 + ' / ' + b2);
+  check('live reorder stale: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+// Phone opens Switch Exercise on one slot; while the picker is open the watch removes (or
+// moves) an exercise. The picker remembered the slot by INDEX, so the pick replaced whatever
+// exercise now sat there -- wiping its logged sets on both devices (2026-10-12 adversarial find).
+export async function liveSwitchStale() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const exs = d => ev(d, () => aw.exercises.map(e => e.exId + ':' + e.sets.filter(s => s.done).map(s => s.weight).join('+')).join());
+  await ev(A, () => { startRW('r2'); aw.exercises[1].sets[0] = { weight: 60, reps: 8, done: true }; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveResumeRemote());
+  // 1) The watch removes the very exercise being switched: nothing else is touched.
+  await ev(A, () => switchEx(0));
+  await ev(B, () => { rmEx(0); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => liveSync());
+  await ev(A, () => toggleAEItem('cex4'));
+  const a1 = await exs(A), t1 = await ev(A, () => document.getElementById('tc').textContent);
+  check('live switch (stale slot): the watch removed it -> no other exercise is replaced, he is told', a1 === 'cex2:60' && /removed on your other device/.test(t1) && !(await ev(A, () => document.getElementById('aeModal').classList.contains('open'))), a1 + ' | ' + t1);
+  // 2) The watch MOVES exercises while the picker is open: the switch lands on the one he tapped.
+  await ev(A, () => { addExToWorkout('cex1'); clearTimeout(_livePushT); return liveSync(); });   // phone: [Row(60), Bench]
+  await ev(B, () => liveSync());
+  await ev(A, () => switchEx(1));   // switch Bench
+  await ev(B, () => { moveEx(0, 1); clearTimeout(_livePushT); return liveSync(); });   // watch: [Bench, Row(60)]
+  await ev(A, () => liveSync());
+  await ev(A, () => toggleAEItem('cex3'));
+  const a2 = await exs(A);
+  check('live switch (stale slot): the watch reordered -> the tapped exercise is switched, the logged one is kept', a2 === 'cex3:,cex2:60', a2);
+  check('live switch stale: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+// The phone is typing a weight while the watch removes an earlier exercise. liveRender holds
+// the redraw back while an input has focus (never under his thumb), but aw is already merged,
+// so the focused box's inline uSet(1,0,...) -- and the next tap on a stale "done" box -- hit
+// whatever exercise now sits at that index (2026-10-12 adversarial find: 135 typed into
+// Barbell Row's box landed on Leg Press). wsAt() maps the drawn index to the live one.
+export async function liveTypingStale() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const w = (d, id) => ev(d, id => { const e = aw.exercises.find(x => x.exId === id); return e ? e.sets.map(s => [Math.round(s.weight * 2.20462), s.reps, !!s.done]) : null; }, id);
+  await ev(A, () => { startRW('r2'); addExToWorkout('cex3'); clearTimeout(_livePushT); return liveSync(); });   // [Bench, Row, Leg Press]
+  await ev(B, () => liveResumeRemote());
+  await A.page.locator('#wSession input.si').nth(2).tap();   // Row, set 1, weight box
+  await ev(B, () => { rmEx(0); clearTimeout(_livePushT); return liveSync(); });   // the watch removes Bench meanwhile
+  await ev(A, () => liveSync());
+  await A.page.keyboard.type('135');
+  check('live typing (stale layout): a weight typed into Row\'s box lands on Row, not on Leg Press', (await w(A, 'cex2'))[0][0] === 135 && (await w(A, 'cex3'))[0][0] === 0, JSON.stringify([await w(A, 'cex2'), await w(A, 'cex3')]));
+  // The next tap -- Row's "done" box in the still-stale drawing -- ticks Row's set.
+  await A.page.locator('#wSession .sd').nth(1).tap();
+  await wait(100);
+  check('live typing (stale layout): tapping Row\'s done box ticks Row\'s set, not Leg Press\'s', (await w(A, 'cex2'))[0][2] === true && (await w(A, 'cex3'))[0][2] === false, JSON.stringify([await w(A, 'cex2'), await w(A, 'cex3')]));
+  // A box whose set the watch deleted is ignored rather than throwing or landing elsewhere.
+  await ev(A, () => { renderWS(); });
+  await A.page.locator('#wSession input.si').nth(2).tap();   // Leg Press, set 1, weight
+  await ev(B, () => liveSync());
+  await ev(B, () => { const e = aw.exercises.findIndex(x => x.exId === 'cex3'); aw.exercises.splice(e, 1); renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => liveSync());
+  await A.page.keyboard.type('9');
+  check('live typing (stale layout): typing into an exercise the watch removed changes nothing else', (await w(A, 'cex3')) === null && (await w(A, 'cex2'))[0][0] === 135, JSON.stringify(await ev(A, () => aw.exercises.map(e => e.exId))));
+  check('live typing stale: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+// Phone loses signal, finishes the shared workout offline, starts a new one and reconnects: the
+// queued finish and the new session land back to back, so the watch never sees the 'finished'
+// row -- only a different session on it. It used to treat that as "a workout is already in
+// progress on your other phone, add this workout's sets to it?": "Add" double-counted its
+// already-saved sets into the new workout, "Keep separate" left a zombie copy that later saved a
+// duplicate (2026-10-12 adversarial find). Now it closes, unless closing could drop data.
+export async function liveEndedElsewhere() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const prompts = () => ev(B, () => _cfLog.splice(0));
+  await ev(B, () => { window._cfLog = []; window.showConfirm = m => { _cfLog.push(m); return Promise.resolve(false); }; });
+  const run = async ({ unsent = false, seenLongAgo = false } = {}) => {
+    db.row = null;
+    const sid = await startShared(db, A, [[100, 5, true]]);
+    await ev(B, () => { aw = null; _liveSolo = null; return liveResumeRemote(); });
+    db.offline.add('phone-A');
+    await ev(B, () => { addSet(0); const s = aw.exercises[0].sets[1]; s.weight = 110; s.reps = 3; s.done = true; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+    await ev(A, () => { _finishWContinue(false); });
+    await wait(1200);
+    await ev(A, () => { cm('fsModal'); startRW('r1'); aw.exercises[0].sets[0] = { weight: 120, reps: 2, done: true }; renderWS(); clearTimeout(_livePushT); });
+    const sid2 = await ev(A, () => aw.id);
+    db.offline.delete('phone-A');
+    await ev(A, () => liveFlushFinishQ().then(() => liveSync()));
+    if (unsent) await ev(B, () => { addSet(0); const s = aw.exercises[0].sets[2]; s.weight = 115; s.reps = 2; s.done = true; renderWS(); clearTimeout(_livePushT); });
+    if (seenLongAgo) await ev(B, () => { _liveSeenAt = Date.now() - 91 * 60000; });
+    const res = await ev(B, () => liveSync());
+    const a = await snap(A), b = await snap(B);
+    return { sid, sid2, res, a, b, p: await prompts() };
+  };
+  const r1 = await run();
+  check('live ended elsewhere: the watch closes the finished workout instead of offering to fold it into the new one', r1.res === 'ended' && !r1.b.aw && r1.p.length === 0, JSON.stringify({ res: r1.res, p: r1.p }));
+  check('live ended elsewhere: the finished workout is saved once on the phone with the watch\'s set; the new session owns the row', r1.a.hist.filter(w => w.id === r1.sid).length === 1 && r1.a.hist.find(w => w.id === r1.sid).sets === 2 && db.row.session_id === r1.sid2 && db.row.status === 'active' && !r1.b.hist.some(w => w.id === r1.sid));
+  // Sets typed on the watch that never reached the server: closing would drop them -> the old offer stands.
+  await ev(A, () => { cm('fsModal'); aw = null; clearAW(); });
+  const r2 = await run({ unsent: true });
+  check('live ended elsewhere: with an unsent set on the watch it still offers (never silently drops a set)', r2.res === 'solo' && r2.b.aw && r2.p.length === 1, JSON.stringify({ res: r2.res, p: r2.p }));
+  // Last saw its session on the row longer ago than the stale window: replacement may mean abandoned -> the old offer stands.
+  await ev(A, () => { cm('fsModal'); aw = null; clearAW(); });
+  const r3 = await run({ seenLongAgo: true });
+  check('live ended elsewhere: when the replacement could be staleness it still offers', r3.res === 'solo' && r3.p.length === 1, JSON.stringify({ res: r3.res, p: r3.p }));
+  check('live ended elsewhere: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}

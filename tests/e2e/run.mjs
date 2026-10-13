@@ -1106,9 +1106,12 @@ async function portraitLock() {
   // Unchanged: portrait, keyboard-shrunk portrait, tablet, desktop.
   { const { page, ctx } = await phone({ width: 390, height: 844, angle: 0 });
     const s = await st(page), nav = await R(page, 'nav');
-    check('portrait: no data-rot, no transform, guard hidden', s.rot === null && s.tf === 'none' && s.guard === 'none' && s.pos !== 'fixed', JSON.stringify(s));
+    // body is position:fixed unconditionally now (2026-10-12, document never scrolls -- see
+    // jacked-pwa/index.html), so s.pos no longer distinguishes the rotate-lock from plain
+    // portrait; data-rot/transform/guard still do.
+    check('portrait: no data-rot, no transform, guard hidden', s.rot === null && s.tf === 'none' && s.guard === 'none', JSON.stringify(s));
     check('portrait: nav is a wide pill at the bottom', nav.w > nav.h * 3 && nav.bottom > 800 && nav.bottom <= 844, JSON.stringify(nav));
-    check('portrait: #jkRoot is layout-transparent (display:contents)', await page.evaluate(() => getComputedStyle(document.getElementById('jkRoot')).display === 'contents'));
+    check('portrait: #jkRoot is the one scroll container (position:absolute, overflow-y:auto)', await page.evaluate(() => { const c = getComputedStyle(document.getElementById('jkRoot')); return c.position === 'absolute' && c.overflowY === 'auto'; }));
     await page.screenshot({ path: `${SHOTS}/lock-portrait-unchanged.png` }); await ctx.close(); }
   { // keyboard-shrunk portrait (~360x300 layout viewport reads as landscape); worst case: device reports angle 90 anyway.
     for (const a of [0, 90]) {
@@ -1118,7 +1121,7 @@ async function portraitLock() {
       await ctx.close(); } }
   { const { page, ctx } = await phone({ width: 1024, height: 768, angle: 90 });
     const s = await st(page);
-    check('tablet landscape 1024x768 (portrait-natural, angle 90): untouched', s.tf === 'none' && s.guard === 'none' && s.pos !== 'fixed', JSON.stringify(s));
+    check('tablet landscape 1024x768 (portrait-natural, angle 90): untouched', s.tf === 'none' && s.guard === 'none', JSON.stringify(s));
     await ctx.close(); }
   { const { page, ctx } = await phone({ width: 1000, height: 500, angle: 0 });
     const s = await st(page);
@@ -1439,7 +1442,7 @@ async function typeRulebook() {
     await page.evaluate(p => sp(p), pg); await page.waitForTimeout(300);
     all[pg] = await page.evaluate(measure);
     if (pg === 'home' || pg === 'metrics') await page.screenshot({ path: `${SHOTS}/rulebook-${pg}-393.png`, fullPage: false });
-    if (pg === 'metrics') { await page.evaluate(() => window.scrollTo(0, 400)); await page.waitForTimeout(150); await page.screenshot({ path: `${SHOTS}/rulebook-metrics-scrolled-393.png` }); }
+    if (pg === 'metrics') { await page.evaluate(() => document.getElementById('jkRoot').scrollTo(0, 400)); await page.waitForTimeout(150); await page.screenshot({ path: `${SHOTS}/rulebook-metrics-scrolled-393.png` }); }
     if (pg === 'leaderboard') await page.screenshot({ path: `${SHOTS}/rulebook-friends-393.png` });
     check(`rulebook: ${pg} no page errors`, errors.length === 0, errors.join(' | '));
     await ctx.close();
@@ -2790,6 +2793,10 @@ async function popupScrollLock() {
   await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
   const Y = 600;
   const pageTop = () => page.evaluate(() => document.querySelector('.page.active').getBoundingClientRect().top);
+  // #jkRoot is the real scroll container now (2026-10-12, see jacked-pwa/index.html); window
+  // never scrolls, so these suites read/set the lock target there instead of window.scrollY.
+  const jScrollTo = y => page.evaluate(y => document.getElementById('jkRoot').scrollTo(0, y), y);
+  const jScrollY = () => page.evaluate(() => document.getElementById('jkRoot').scrollTop);
   const OPEN = {
     recap: () => openRecap(2026, 7), badge: () => badgeInfo(computeBadges()[0].name), achievements: () => openAch(),
     profile: () => om('profModal'), friendProfile: () => om('fpModal'), workoutDetail: () => om('wdModal'), lightbox: () => om('avLightbox'),
@@ -2798,36 +2805,36 @@ async function popupScrollLock() {
   const CLOSE = { recap: 'closeRecap()', badge: 'closeBadgeFull()', achievements: 'closeAch()', profile: "cm('profModal')", friendProfile: "cm('fpModal')",
     workoutDetail: "cm('wdModal')", lightbox: "cm('avLightbox')", confirm: "document.getElementById('cfCancel')?document.getElementById('cfCancel').click():cm('confirmModal')", exInfo: "cm('exInfoModal')", cardOrder: "cm('cardOrderModal')" };
   for (const [name, open] of Object.entries(OPEN)) {
-    await page.evaluate(y => window.scrollTo(0, y), Y); await page.waitForTimeout(50);
-    const y0 = await page.evaluate(() => window.scrollY), t0 = await pageTop();
+    await jScrollTo(Y); await page.waitForTimeout(50);
+    const y0 = await jScrollY(), t0 = await pageTop();
     await page.evaluate(`(${open.toString()})()`); await page.waitForTimeout(150);
-    const yOpen = await page.evaluate(() => window.scrollY);
+    const yOpen = await jScrollY();
     await page.mouse.move(195, 420); await page.mouse.wheel(0, 900); await page.waitForTimeout(150);
     const c = await ctx.newCDPSession(page);
     await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 195, y: 600 }] });
     for (let k = 1; k <= 8; k++) await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 195, y: 600 - k * 50 }] });
     await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await c.detach();
     await page.waitForTimeout(250);
-    const yAfter = await page.evaluate(() => window.scrollY), t1 = await pageTop();
-    check(`scroll lock: ${name}: wheel + swipe over the popup leave window.scrollY unchanged`, yAfter === yOpen, `${yOpen} -> ${yAfter}`);
+    const yAfter = await jScrollY(), t1 = await pageTop();
+    check(`scroll lock: ${name}: wheel + swipe over the popup leave the scroll position unchanged`, yAfter === yOpen, `${yOpen} -> ${yAfter}`);
     check(`scroll lock: ${name}: the page behind doesn't move`, Math.abs(t1 - t0) < 1, `${t0} -> ${t1}`);
     await page.evaluate(CLOSE[name]); await page.waitForTimeout(150);
-    const yClosed = await page.evaluate(() => window.scrollY);
+    const yClosed = await jScrollY();
     check(`scroll lock: ${name}: closing puts the page back where it was`, yClosed === y0 && y0 > 0, `${y0} -> ${yClosed}`);
   }
   // Nested: a confirm over the profile popup; closing the confirm keeps the lock until the profile closes too.
-  await page.evaluate(y => window.scrollTo(0, y), Y);
+  await jScrollTo(Y);
   await page.evaluate(() => { om('profModal'); showConfirm('Sure?'); }); await page.waitForTimeout(100);
   await page.evaluate(() => { const b = document.getElementById('cfCancel'); b ? b.click() : cm('confirmModal'); }); await page.waitForTimeout(100);
   const mid = await page.evaluate(() => ({ locked: document.documentElement.classList.contains('popup-lock'), open: !!document.querySelector('#profModal.open') }));
   check('scroll lock: nested: closing the confirm keeps the page pinned while the profile is open', mid.locked && mid.open, JSON.stringify(mid));
   await page.evaluate(() => cm('profModal')); await page.waitForTimeout(100);
-  const end = await page.evaluate(() => ({ locked: document.documentElement.classList.contains('popup-lock'), y: window.scrollY }));
+  const end = { locked: await page.evaluate(() => document.documentElement.classList.contains('popup-lock')), y: await jScrollY() };
   check('scroll lock: nested: closing the last popup releases it and restores the spot', !end.locked && end.y === Y, JSON.stringify(end));
   // Backdrop tap closes and releases too.
   await page.evaluate(() => om('profModal')); await page.waitForTimeout(100);
   await page.mouse.click(195, 30); await page.waitForTimeout(150);
-  const bd = await page.evaluate(() => ({ open: !!document.querySelector('.mo.open'), locked: document.documentElement.classList.contains('popup-lock'), y: window.scrollY }));
+  const bd = { open: await page.evaluate(() => !!document.querySelector('.mo.open')), locked: await page.evaluate(() => document.documentElement.classList.contains('popup-lock')), y: await jScrollY() };
   check('scroll lock: backdrop tap closes and unpins', !bd.open && !bd.locked && bd.y === Y, JSON.stringify(bd));
   // A long popup still scrolls its own content.
   await page.evaluate(() => openAch()); await page.waitForTimeout(150);
@@ -2850,15 +2857,16 @@ async function navPinned() {
   const { page, ctx, errors } = await phone({ seed: { hist, friends, closeBuddies: friends.slice(0, 4).map(f => f.code), bw: 180 / LB }, now: SEP15 });
   await page.evaluate(() => { window.__wo = 0; Object.defineProperty(window, 'orientation', { get: () => window.__wo, configurable: true }); });
   await page.evaluate(() => sp('leaderboard')); await page.waitForTimeout(400);
+  // #jkRoot is the real scroll container now (2026-10-12); window never scrolls.
   const nav = () => page.evaluate(() => { const b = document.querySelector('nav').getBoundingClientRect(), nb = parseFloat(getComputedStyle(document.querySelector('nav')).bottom);
-    return { bottom: b.bottom, want: innerHeight - nb, w: b.width, h: b.height, y: window.scrollY, pos: document.body.style.position, top: document.body.style.top }; });
+    return { bottom: b.bottom, want: innerHeight - nb, w: b.width, h: b.height, y: document.getElementById('jkRoot').scrollTop, pos: document.body.style.position, top: document.body.style.top }; });
   const pinned = n => Math.abs(n.bottom - n.want) < 1 && n.h < 90 && n.w > 300;
   const swipe = async (dy, x = 195, y0 = 620) => { const c = await ctx.newCDPSession(page);
     await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y0 }] });
     for (let k = 1; k <= 10; k++) await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y0 - k * dy / 10 }] });
     await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await c.detach(); await page.waitForTimeout(250); };
   let n = await nav();
-  check('nav pinned: Friends tab is long enough to scroll, nav starts at the viewport bottom', pinned(n) && (await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)) > 600, JSON.stringify(n));
+  check('nav pinned: Friends tab is long enough to scroll, nav starts at the viewport bottom', pinned(n) && (await page.evaluate(() => { const r = document.getElementById('jkRoot'); return r.scrollHeight - r.clientHeight; })) > 600, JSON.stringify(n));
   await swipe(350); n = await nav();
   check('nav pinned: touch-scrolling Friends moves the page, nav stays at the bottom', n.y > 100 && pinned(n), JSON.stringify(n));
   await page.mouse.move(195, 400); await page.mouse.wheel(0, 300); await page.waitForTimeout(200); n = await nav();
@@ -2870,10 +2878,10 @@ async function navPinned() {
   const bad = [];
   // A loaded machine (other headless browsers running) can still be laying out after the fixed waits: wait until
   // scrollY holds still for 5 frames before reading it, so the check measures the lock, not render lag.
-  const settle = () => page.evaluate(() => new Promise(res => { let last = -1, same = 0, n = 0; const f = () => { const y = scrollY; same = y === last ? same + 1 : 0; last = y; if (same >= 5 || ++n > 120) res(); else requestAnimationFrame(f); }; requestAnimationFrame(f); }));
+  const settle = () => page.evaluate(() => new Promise(res => { let last = -1, same = 0, n = 0; const f = () => { const y = document.getElementById('jkRoot').scrollTop; same = y === last ? same + 1 : 0; last = y; if (same >= 5 || ++n > 120) res(); else requestAnimationFrame(f); }; requestAnimationFrame(f); }));
   for (const [name, open, close] of OPEN) {
-    await page.evaluate(() => { sp('leaderboard'); window.scrollTo(0, 500); }); await page.waitForTimeout(60); await settle();
-    const y0 = await page.evaluate(() => window.scrollY);
+    await page.evaluate(() => { sp('leaderboard'); document.getElementById('jkRoot').scrollTo(0, 500); }); await page.waitForTimeout(60); await settle();
+    const y0 = await page.evaluate(() => document.getElementById('jkRoot').scrollTop);
     await page.evaluate(open); await page.waitForTimeout(120); await settle();
     const o = await nav();
     await swipe(300, 195, 700); await page.mouse.move(195, 420); await page.mouse.wheel(0, 500); await page.waitForTimeout(120);
@@ -2891,13 +2899,13 @@ async function navPinned() {
   check('nav pinned: a long popup (Achievements) still touch-scrolls its own content', achT > 50, String(achT));
   check('nav pinned: lock released after the last popup', !(await page.evaluate(() => document.documentElement.classList.contains('popup-lock'))));
   // A popup that switches tabs: the new tab starts at its top, nav at the bottom.
-  await page.evaluate(() => { window.scrollTo(0, 500); om('profModal'); }); await page.waitForTimeout(80);
+  await page.evaluate(() => { document.getElementById('jkRoot').scrollTo(0, 500); om('profModal'); }); await page.waitForTimeout(80);
   await page.evaluate(() => { sp('metrics'); cm('profModal'); }); await page.waitForTimeout(150); n = await nav();
   check('nav pinned: a popup that switched tabs lands on the new tab at its top, nav pinned', n.y === 0 && pinned(n), JSON.stringify(n));
   // Portrait-lock rotate path: turn to landscape (fake lock), use popups there, turn back, and around a rotation mid-popup.
   const rotate = async (a) => { const [w, h] = a ? [844, 390] : [390, 844]; await page.setViewportSize({ width: w, height: h });
     await page.evaluate(a => { window.__wo = a === 270 ? -90 : a; dispatchEvent(new Event('orientationchange')); dispatchEvent(new Event('resize')); }, a); await page.waitForTimeout(250); };
-  await page.evaluate(() => { sp('leaderboard'); window.scrollTo(0, 400); }); await page.waitForTimeout(80);
+  await page.evaluate(() => { sp('leaderboard'); document.getElementById('jkRoot').scrollTo(0, 400); }); await page.waitForTimeout(80);
   await rotate(90);
   const land = await page.evaluate(() => ({ rot: document.documentElement.getAttribute('data-rot'), tf: getComputedStyle(document.body).transform }));
   await page.evaluate(() => om('fpModal')); await page.waitForTimeout(100); await page.evaluate(() => cm('fpModal'));
@@ -2906,11 +2914,11 @@ async function navPinned() {
   check('nav pinned: landscape lock engaged, popups used there, back to portrait: nav at the bottom', land.rot === '90' && land.tf !== 'none' && pinned(n), JSON.stringify({ land, n }));
   await swipe(300); n = await nav();
   check('nav pinned: after the rotate path, scrolling keeps the nav at the bottom', pinned(n), JSON.stringify(n));
-  await page.evaluate(() => { window.scrollTo(0, 300); om('fpModal'); }); await page.waitForTimeout(80);
+  await page.evaluate(() => { document.getElementById('jkRoot').scrollTo(0, 300); om('fpModal'); }); await page.waitForTimeout(80);
   await rotate(270); const midRot = await page.evaluate(() => ({ top: document.body.style.top, w: document.body.style.width })); await page.evaluate(() => cm('fpModal')); await page.waitForTimeout(80);
   await rotate(0); await swipe(200); n = await nav();
   check('nav pinned: popup open across a rotation (portrait -> landscape -> close -> portrait): no inline body offset, nav pinned while scrolling', midRot.top === '' && midRot.w === '' && pinned(n), JSON.stringify({ midRot, n }));
-  await page.evaluate(() => { window.scrollTo(0, 300); }); await rotate(90); await page.evaluate(() => om('fpModal')); await page.waitForTimeout(80);
+  await page.evaluate(() => { document.getElementById('jkRoot').scrollTo(0, 300); }); await rotate(90); await page.evaluate(() => om('fpModal')); await page.waitForTimeout(80);
   await rotate(0); await page.evaluate(() => cm('fpModal')); await page.waitForTimeout(80); await swipe(200); n = await nav();
   check('nav pinned: popup opened in landscape, closed in portrait: nav pinned while scrolling', pinned(n) && !(await page.evaluate(() => document.getElementById('jkRoot').style.overflow)), JSON.stringify(n));
   check('nav pinned: no page errors', errors.length === 0, errors.join(' | '));
@@ -3254,22 +3262,20 @@ async function routineSwapPrompt() {
   const reset = () => page.evaluate(R1 => { S.s('routines', [R1]); S.s('hist', []); _cf.length = 0; cm('fsModal'); }, R1);
   const sw = (ei, id) => page.evaluate(([ei, id]) => { switchEx(ei); toggleAEItem(id); }, [ei, id]);
   const logSet = () => page.evaluate(() => { const s = aw.exercises[0].sets[0]; s.weight = 50; s.reps = 5; s.done = true; saveAW(); });
-  // Manual finish: OK the "Finish and save" confirm, then answer each routine prompt that shows, in order
-  // ('yes'/'no' answers every prompt; an array answers them one by one). Returns every confirm text.
+  // Manual finish: OK the "Finish and save" confirm, then answer the one routine-update prompt if it shows.
   const finish = async answer => {
     await page.evaluate(() => { finishW(); });
     await page.waitForTimeout(100); await page.click('#cfOk'); await page.waitForTimeout(250);
-    for (let i = 0; answer && i < 3 && await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open')); i++) {
-      const a = Array.isArray(answer) ? answer[i] : answer;
-      await page.click(a === 'yes' ? '#cfOk' : '#cfCancel'); await page.waitForTimeout(250);
+    if (answer && await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open'))) {
+      await page.click(answer === 'yes' ? '#cfOk' : '#cfCancel'); await page.waitForTimeout(250);
     }
     return page.evaluate(() => [..._cf]);
   };
   const summaryBtn = () => page.evaluate(() => /Update "/.test(document.getElementById('fsContent').textContent));
-  const isSwap = m => / → /.test(m || ''), isAny = m => /^You (added|removed|changed the order)/.test(m || '');
+  const isSwap = m => / → /.test(m || ''), isAny = m => /^You (added|removed|switched|changed the order)/.test(m || '');
 
-  // 1) A switch B -> D plus an add, a reorder and a remove in one session: BOTH prompts show, switch first.
-  //    Yes to the switch, keep to the rest: only the switch is written back.
+  // 1) A switch B -> D plus an add, a reorder and a remove in one session: exactly ONE combined
+  //    prompt covers every change (not one prompt per kind of change -- 2026-10-12 bug).
   await reset();
   await page.evaluate(() => startRW('r1')); await logSet();
   await sw(1, 'cD');
@@ -3277,39 +3283,48 @@ async function routineSwapPrompt() {
   check('swap prompt: switch is remembered on the saved live workout (survives reload)', JSON.stringify(saved) === '{"cB":"cD"}', JSON.stringify(saved));
   await page.evaluate(() => { addExToWorkout('cF'); moveEx(0, 1); });
   await page.evaluate(() => { rmEx(aw.exercises.findIndex(e => e.exId === 'cC')); });
-  let msgs = await finish(['yes', 'no']);
-  check('both prompts: switch + add/remove shows the switch prompt, then the any-change prompt', msgs.length === 3 && isSwap(msgs[1]) && /Bravo Row → Delta Press/.test(msgs[1]) && /"Push"/.test(msgs[1]) && isAny(msgs[2]), JSON.stringify(msgs));
-  check('both prompts: the any-change prompt names the add and the remove, not the switch again', /added Foxtrot Curl/.test(msgs[2]) && /removed Charlie Squat/.test(msgs[2]) && !/Bravo|Delta/.test(msgs[2]), msgs[2]);
-  let after = JSON.parse(await routine());
-  check('swap prompt: accept replaces the switched slot in place (A, D, C)', after.exercises.join() === 'cA,cD,cC', after.exercises.join());
-  check('swap prompt: accept leaves every other routine field alone (name, desc, section)', JSON.stringify({ ...after, exercises: R1.exercises }) === JSON.stringify(R1), JSON.stringify(after));
-  check('both prompts: keep on the any-change prompt -> the add/reorder/remove are not written back', !after.exercises.includes('cF') && after.exercises.includes('cC') && after.exercises[0] === 'cA');
+  let msgs = await finish('no');
+  check('combined prompt: a switch + add + reorder + remove together produce exactly ONE routine prompt', msgs.length === 2 && isSwap(msgs[1]) && /Bravo Row → Delta Press/.test(msgs[1]) && /added Foxtrot Curl/.test(msgs[1]) && /removed Charlie Squat/.test(msgs[1]) && /"Push"/.test(msgs[1]), JSON.stringify(msgs));
+  check('combined prompt: declining leaves the routine completely untouched (no partial swap applied)', (await routine()) === JSON.stringify(R1));
   const h = await page.evaluate(() => gH());
-  check('swap prompt: workout still saved; switch bookkeeping not stored in history', h.length === 1 && !('swaps' in h[0]) && h[0].exercises.some(e => e.exId === 'cD'), JSON.stringify(Object.keys(h[0] || {})));
-  check('both prompts: finish summary "Update routine" button is back when the routine still differs', await summaryBtn());
+  check('combined prompt: workout still saved even when the routine prompt is declined', h.length === 1 && !('swaps' in h[0]) && h[0].exercises.some(e => e.exId === 'cD'), JSON.stringify(Object.keys(h[0] || {})));
+  check('combined prompt: finish summary "Update routine" button is back when the routine still differs', await summaryBtn());
   await page.screenshot({ path: SHOTS + '/routine-swap-summary.png' });
 
-  // 1b) Same session, yes to both: the routine becomes the session's list (D, A, F).
+  // 1b) Same session, accept the one prompt: switch, add, reorder and remove all land together.
   await reset();
   await page.evaluate(() => startRW('r1')); await logSet(); await sw(1, 'cD');
   await page.evaluate(() => { addExToWorkout('cF'); moveEx(0, 1); rmEx(aw.exercises.findIndex(e => e.exId === 'cC')); });
   msgs = await finish('yes');
-  check('both prompts: yes to both writes the switch, add, reorder and remove (D, A, F)', msgs.length === 3 && JSON.parse(await routine()).exercises.join() === 'cD,cA,cF', await routine());
-  check('both prompts: nothing left to offer on the summary after yes to both', !(await summaryBtn()));
+  check('combined prompt: accepting the one prompt writes the switch, add, reorder and remove together (D, A, F)', msgs.length === 2 && JSON.parse(await routine()).exercises.join() === 'cD,cA,cF', await routine());
+  check('combined prompt: nothing left to offer on the summary after accepting', !(await summaryBtn()));
 
-  // 1c) Keep the switch, yes to the rest: the add is written back, the declined switch is not.
+  // 1c) An "ineffective" second switch (its target already sits elsewhere in the routine,
+  //     unswapped) reads as a plain removal, but still inside the SAME one prompt as the
+  //     effective switch -- this exact mix used to produce two separate prompts (2026-10-12 bug).
   await reset();
-  await page.evaluate(() => startRW('r1')); await logSet(); await sw(1, 'cD'); await page.evaluate(() => addExToWorkout('cF'));
-  msgs = await finish(['no', 'yes']);
-  check('both prompts: keep the switch, accept the add -> routine A, B, C, F (switch not written)', msgs.length === 3 && /added Foxtrot Curl/.test(msgs[2]) && !/Delta/.test(msgs[2]) && JSON.parse(await routine()).exercises.join() === 'cA,cB,cC,cF', JSON.stringify(msgs) + ' ' + await routine());
+  await page.evaluate(() => startRW('r1')); await logSet();
+  await sw(1, 'cD');                   // effective: B -> D
+  await page.evaluate(() => rmEx(0));  // plain removal of A (not a swap)
+  await sw(1, 'cA');                   // C's slot (now index 1) -> A: A is already in the routine
+                                        // and unswapped, so this one is NOT effective -- reads as "removed C"
+  msgs = await finish('no');
+  check('combined prompt: an effective switch + an "ineffective" one give exactly ONE prompt, not two', msgs.length === 2, JSON.stringify(msgs));
+  check('combined prompt: that one prompt names the real switch and the fallback removal together', /Bravo Row → Delta Press/.test(msgs[1]) && /removed Charlie Squat/.test(msgs[1]), msgs[1]);
+  check('combined prompt: decline leaves the routine untouched even though one swap had already matched', (await routine()) === JSON.stringify(R1));
+  await reset();
+  await page.evaluate(() => startRW('r1')); await logSet();
+  await sw(1, 'cD'); await page.evaluate(() => rmEx(0)); await sw(1, 'cA');
+  msgs = await finish('yes');
+  check('combined prompt: accepting writes exactly the session\'s final list (D, A)', JSON.parse(await routine()).exercises.join() === 'cD,cA', await routine());
 
-  // 2) Decline a switch-only session: routine byte-identical, no any-change prompt about the switch.
+  // 2) Decline a switch-only session: routine byte-identical, no further prompt.
   await reset();
   const before2 = await routine();
   await page.evaluate(() => startRW('r1')); await logSet(); await sw(0, 'cD');
   await page.evaluate(() => { finishW(); }); await page.waitForTimeout(100); await page.click('#cfOk'); await page.waitForTimeout(250);
   const pop = await page.evaluate(() => ({ t: document.getElementById('cfMsg').textContent, ok: document.getElementById('cfOk').textContent, no: document.getElementById('cfCancel').textContent }));
-  check('swap prompt: buttons read "Update routine" / "Keep routine"', pop.ok === 'Update routine' && pop.no === 'Keep routine', JSON.stringify(pop));
+  check('swap prompt: buttons read "Update routine" / "Keep original"', pop.ok === 'Update routine' && pop.no === 'Keep original', JSON.stringify(pop));
   await page.screenshot({ path: SHOTS + '/routine-swap-prompt.png' });
   await page.click('#cfCancel'); await page.waitForTimeout(250);
   check('swap prompt: declining a switch-only session asks nothing more', (await page.evaluate(() => _cf.length)) === 2 && !(await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open'))), JSON.stringify(await page.evaluate(() => _cf)));

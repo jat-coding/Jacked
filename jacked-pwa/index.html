@@ -43,9 +43,17 @@ try{screen.orientation.addEventListener('change',set)}catch(e){}})();
   --ah:100vh;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}
-html,body{height:100%;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
+/* 2026-10-12 (recurrence of the 10/2 nav-float bug, this time with no popup involved): the
+   document itself must never scroll. iOS WebKit can re-layout a position:fixed sibling (nav)
+   a frame or more behind a touch-driven scroll of the document/body, which is what let it
+   visibly detach and float mid-content -- independent of any JS scroll-lock, which only ever
+   addressed the popup case. html/body are pinned to the viewport and never scroll; #jkRoot
+   (below) becomes the one real scroll container, same pattern already used for the rotated
+   landscape frame. -webkit-overflow-scrolling:touch is dropped here -- it only ever does
+   anything on an overflow:auto/scroll element, never on the document root, so it was dead. */
+html,body{height:100%;overscroll-behavior:none;position:fixed;inset:0;overflow:hidden}
 /* Phone-first: stop pinch/double-tap zoom and rubber-band sliding. */
-body{background:var(--bg);color:var(--text);font-family:var(--fb);overflow-x:hidden;touch-action:pan-y;padding-bottom:var(--sab)}
+body{background:var(--bg);color:var(--text);font-family:var(--fb);touch-action:pan-y}
 
 html{--navB:max(8px,calc(var(--sab) - 14px))}
 nav{position:fixed;left:12px;right:12px;bottom:var(--navB);background:var(--bg2);border:1px solid var(--border);border-radius:30px;display:flex;z-index:100;padding:5px}
@@ -442,11 +450,14 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
    the device's natural orientation is landscape (tablet/desktop window, angle 0), data-rot
    is unset and we fall back to hiding the app behind a rotate prompt. max-height:600px keeps
    desktop/tablet landscape usable. Runtime screen.orientation.lock() is also attempted.
-   Everything lives under #jkRoot: it is display:contents in portrait (no layout effect) and
-   becomes the scroller in the rotated frame, so position:fixed layers (nav, modals, toasts,
-   sheets) resolve against the transformed body and rotate with it without scrolling. */
+   Everything lives under #jkRoot: it is the one scroll container in portrait now too (2026-10-12
+   -- see the html,body comment above), filling the fixed/non-scrolling body via inset:0, so
+   position:fixed layers (nav, modals, toasts, sheets) stay outside the scrolling layer and
+   resolve against the real viewport; in the rotated frame it becomes the scroller inside the
+   transformed body instead, so those same fixed layers resolve against the transformed body
+   and rotate with it without scrolling. */
 #rotateGuard{display:none}
-#jkRoot{display:contents}
+#jkRoot{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
 /* min-width guard: with interactive-widget=resizes-content, the on-screen keyboard
    shrinks the LAYOUT viewport, and CSS `orientation` is derived from the viewport —
    not the device. A keyboard-shrunk portrait viewport reads as landscape and used to
@@ -2683,7 +2694,7 @@ function saveCE() {
     _ceReturn=null;
     if (_aeTarget==='routineReplace') { rExs[_aeReplaceIdx]=newId; cm('aeModal'); renderREP(); toast('Exercise created & added ✓','ok'); return; }
     if (_aeTarget==='workout') { addExToWorkout(newId); cm('aeModal'); toast('Exercise created & added ✓','ok'); return; }
-    if (_aeTarget==='workoutReplace') { replaceExAt(_aeReplaceIdx,newId); cm('aeModal'); toast('Exercise created & added ✓','ok'); return; }
+    if (_aeTarget==='workoutReplace') { if(aeReplaceInWorkout(newId)) toast('Exercise created & added ✓','ok'); return; }
     if (_aeTarget==='weAdd') { weAddEx(newId); cm('aeModal'); toast('Exercise created & added ✓','ok'); return; }
     // routine multi-select: auto-select it so it's included when "Add Selected" is tapped
     _aeSelected.add(newId);
@@ -2852,10 +2863,26 @@ function saveR() {
 let _aeTarget = null;     // 'routine' | 'workout' | 'workoutReplace' | 'routineReplace'
 let _aeSelected = new Set(); // IDs selected this session
 let _aeReplaceIdx = -1;   // index being replaced in switch modes
+let _aeReplaceLid = null; // workoutReplace: the slot's live id, so the pick lands on the right exercise
+// The slot a workout Switch Exercise was opened on, re-found by live id at pick time: while the
+// picker is open the watch can remove or reorder exercises, and the opening index would then
+// point at a different exercise -- whose logged sets the switch wiped (2026-10-12 adversarial
+// find). -1 = that exercise no longer exists.
+function aeWorkoutIdx(){
+  if(!aw) return -1;
+  if(!_aeReplaceLid) return aw.exercises[_aeReplaceIdx]?_aeReplaceIdx:-1;
+  return aw.exercises.findIndex(e=>e.lid===_aeReplaceLid);
+}
+function aeReplaceInWorkout(id){
+  const i=aeWorkoutIdx(); cm('aeModal');
+  if(i<0){ toast('That exercise was removed on your other device','err'); return false; }
+  replaceExAt(i,id); return true;
+}
 
 function openAEModal(target, idx) {
   _aeTarget = target;
   _aeReplaceIdx = (idx==null?-1:idx);
+  _aeReplaceLid = (target==='workoutReplace'&&aw&&aw.exercises[_aeReplaceIdx]&&aw.exercises[_aeReplaceIdx].lid)||null;
   _aeSelected = new Set();
   aeFlt = null;
   // Switching an exercise: open pre-filtered to its own muscle group (Warm-up/Cardio included).
@@ -2948,7 +2975,7 @@ function renderAEList() {
 function toggleAEItem(id) {
   // Single-select immediate-action modes
   if (_aeTarget==='workout') { addExToWorkout(id); cm('aeModal'); return; }
-  if (_aeTarget==='workoutReplace') { replaceExAt(_aeReplaceIdx,id); cm('aeModal'); return; }
+  if (_aeTarget==='workoutReplace') { aeReplaceInWorkout(id); return; }
   if (_aeTarget==='weAdd') { weAddEx(id); cm('aeModal'); return; }
   if (_aeTarget==='routineReplace') {
     if (rExs.includes(id)&&rExs[_aeReplaceIdx]!==id) { toast('Already in routine','err'); return; }
@@ -3036,10 +3063,23 @@ const LIVE_DEBOUNCE_MS=1200;
 let LIVE_POLL_MS=5000;                  // Realtime fallback while a workout is open
 const LIVE_STALE_MS=STALE_TOTAL_MS;     // an 'active' row untouched this long is abandoned; the next Start replaces it
 const LIVE_FINISH_TIMEOUT_MS=4000;      // no answer by then = finish offline, settle with the server later
+// fetch has no timeout of its own: on a half-open socket (weak cell signal, just back from the
+// background) a request can sit unanswered for minutes, and one stuck read held _liveBusy -- and
+// every Finish / auto-finish waiting on it -- hostage (2026-10-12 adversarial find). Every live
+// request gives up after this; a CAS that did land anyway is simply seen on the next read.
+const LIVE_REQ_TIMEOUT_MS=10000;
+function liveTimed(q, ms=LIVE_REQ_TIMEOUT_MS){
+  let to; return Promise.race([q, new Promise((_,rej)=>{ to=setTimeout(()=>rej(new Error('live request timeout')),ms); })]).finally(()=>clearTimeout(to));
+}
+// Wait for p, but never longer than ms (resolves undefined then). For waits on an in-flight sync.
+function liveSettle(p, ms=LIVE_FINISH_TIMEOUT_MS){
+  let to; return Promise.race([Promise.resolve(p).catch(()=>{}), new Promise(r=>{ to=setTimeout(r,ms); })]).finally(()=>clearTimeout(to));
+}
 const LIVE_Q_KEY='jacked_liveFinishQ', LIVE_DECLINED_KEY='jacked_liveDeclined';   // device state, never in the blob
 const LIVE_Z={u:0,ud:''};
 let _liveShadow=null, _liveDirty=false, _livePushT=null, _liveBusy=null, _liveAgain=false, _livePollAt=0,
-    _liveChan=null, _liveSolo=null, _liveAsk=null, _liveHold=false, _finLock=null, _liveOffered=new Set();
+    _liveChan=null, _liveSolo=null, _liveAsk=null, _liveHold=false, _finLock=null, _liveOffered=new Set(),
+    _liveSeen=null, _liveSeenAt=0;   // the session id this device last saw ON the row (resumed, wrote or read it there), and when
 const _liveStats={writes:0, casMiss:0, commits:0, dupFinish:0, recomputes:0};
 function liveDevice(){
   let d=null; try{ d=localStorage.getItem('jacked_deviceId'); }catch(_){}
@@ -3139,11 +3179,23 @@ function mergeLive(a,b){
   const dead=(id,st)=>!!tomb[id] && !liveGt(st,tomb[id]);
   const out={...b,...a}, as=a.stamps||{}, bs=b.stamps||{}, stamps={};
   out.startedAt=Math.min(a.startedAt||Infinity, b.startedAt||Infinity); if(!isFinite(out.startedAt)) delete out.startedAt;
-  ['name','notes','swaps'].forEach(k=>{
+  ['name','notes'].forEach(k=>{
     const useB=liveGt(bs[k],as[k]), src=useB?b:a, st=useB?bs[k]:as[k];
     if(src[k]===undefined) delete out[k]; else out[k]=src[k];
     if(st) stamps[k]=st;
   });
+  // swaps is a from->to MAP, not a scalar like name/notes: two devices switching DIFFERENT
+  // slots at once each hold one genuinely new key, so whole-field last-write-wins silently
+  // drops whichever side lost the stamp race (2026-10-12 adversarial find -- the Finish
+  // routine-update prompt then describes a real switch as an unrelated add+remove). Union the
+  // keys instead; a same-key conflict (both sides re-swap the same slot) still resolves to
+  // whichever side's stamp is newer, same as before.
+  {
+    const useB=liveGt(bs.swaps,as.swaps), aSw=a.swaps||{}, bSw=b.swaps||{};
+    const merged=useB?{...aSw,...bSw}:{...bSw,...aSw};
+    if(Object.keys(merged).length) out.swaps=merged; else delete out.swaps;
+    const st=useB?bs.swaps:as.swaps; if(st) stamps.swaps=st;
+  }
   const rest=!a.rest?b.rest:!b.rest?a.rest:(liveGt(b.rest,a.rest)?b.rest:a.rest);
   if(rest) out.rest=rest; else delete out.rest;
   const key=(e,i)=>e.lid||('nolid:'+e.exId);
@@ -3209,8 +3261,8 @@ function liveFold(target, mine){
 function liveOn(){ const p=gProf(); return supaEnabled() && !!(p&&p.code); }
 function liveCode(){ return gProf().code; }
 async function liveRead(code){
-  const { data, error } = await SUPA.from('live_workouts')
-    .select('session_id,status,doc,rev,updated_at,updated_by,hr,kcal,stats_at').eq('code',code).maybeSingle();
+  const { data, error } = await liveTimed(SUPA.from('live_workouts')
+    .select('session_id,status,doc,rev,updated_at,updated_by,hr,kcal,stats_at').eq('code',code).maybeSingle());
   if(error) throw error;
   if(data) data.doc=liveIn(data.doc);
   return data||null;
@@ -3218,16 +3270,16 @@ async function liveRead(code){
 const liveWirePatch=p=>p.doc?{...p,doc:liveOut(p.doc)}:p;
 // Compare-and-swap on rev: lands only if nobody wrote since we read `rev`.
 async function liveCas(code, rev, patch){
-  const { data, error } = await SUPA.from('live_workouts')
+  const { data, error } = await liveTimed(SUPA.from('live_workouts')
     .update({...liveWirePatch(patch), rev:rev+1, updated_at:new Date().toISOString(), updated_by:liveDevice()})
-    .eq('code',code).eq('rev',rev).select('rev');
+    .eq('code',code).eq('rev',rev).select('rev'));
   if(error) throw error;
   if(data&&data.length){ _liveStats.writes++; return true; }
   _liveStats.casMiss++; return false;
 }
 async function liveInsert(code, patch){
-  const { error } = await SUPA.from('live_workouts')
-    .insert({code, rev:1, updated_at:new Date().toISOString(), updated_by:liveDevice(), ...liveWirePatch(patch)});
+  const { error } = await liveTimed(SUPA.from('live_workouts')
+    .insert({code, rev:1, updated_at:new Date().toISOString(), updated_by:liveDevice(), ...liveWirePatch(patch)}));
   if(error){ if(error.code==='23505'){ _liveStats.casMiss++; return false; } throw error; }   // someone inserted first
   _liveStats.writes++; return true;
 }
@@ -3242,6 +3294,7 @@ function liveWho(row){ return liveFrom((row&&row.doc&&row.doc.startedBy)||(row&&
 function liveDeclined(){ try{ const a=JSON.parse(localStorage.getItem(LIVE_DECLINED_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(_){ return []; } }
 function liveDecline(id){ try{ localStorage.setItem(LIVE_DECLINED_KEY, JSON.stringify([...liveDeclined(),id].slice(-20))); }catch(_){} }
 
+function liveSeen(at){ _liveSeen=aw.id; _liveSeenAt=at||Date.now(); }
 function liveSchedule(ms=LIVE_DEBOUNCE_MS){
   if(!liveOn()) return;
   clearTimeout(_livePushT); _livePushT=setTimeout(()=>{ _livePushT=null; liveSync(); }, ms);
@@ -3271,15 +3324,25 @@ async function _liveSyncOnce(){
     liveStamp();
     const mine=liveWire(aw);
     if(!row){
-      if(await liveInsert(code,{session_id:aw.id,status:'active',doc:mine})){ _liveDirty=false; return 'inserted'; }
+      if(await liveInsert(code,{session_id:aw.id,status:'active',doc:mine})){ _liveDirty=false; liveSeen(); return 'inserted'; }
       continue;
     }
     if(row.session_id!==aw.id){
+      // Our session WAS on the row and another one has replaced it: the row is only ever replaced
+      // once the session on it is finished/discarded/abandoned, so ours was ended elsewhere (e.g. the
+      // phone finished it offline, started a new one and reconnected -- the finish and the new start
+      // land back to back, so this device never sees the 'finished' row). Close, don't offer to fold
+      // an already-saved workout into the new one (2026-10-12 adversarial find: "Add to it" double-
+      // counted its sets; "Keep separate" left a zombie copy that later saved a duplicate).
+      // Only when that can't be staleness (we saw it on the row within the stale window) and nothing
+      // typed here is still unsent -- otherwise the old offer stands, so no set is ever dropped.
+      if(_liveSeen===aw.id&&Date.now()-_liveSeenAt<LIVE_STALE_MS&&!_liveDirty){ liveCloseRemote(null,'ended',row.updated_by); return 'ended'; }
       if(liveFresh(row)) return await liveOtherSession(row);
       // A finished/discarded/abandoned earlier session: this Start replaces it.
-      if(await liveCas(code,row.rev,{session_id:aw.id,status:'active',doc:mine,hr:null,kcal:null,stats_at:null})){ _liveDirty=false; return 'replaced'; }
+      if(await liveCas(code,row.rev,{session_id:aw.id,status:'active',doc:mine,hr:null,kcal:null,stats_at:null})){ _liveDirty=false; liveSeen(); return 'replaced'; }
       continue;
     }
+    liveSeen(Date.parse(row.updated_at));
     if(row.status==='discarded'){ liveCloseRemote(null,'discarded',row.updated_by); return 'discarded'; }
     const merged=mergeLive(row.doc, mine);
     if(row.status==='finished'){ const r=await liveLate(code,row,merged); if(r==='retry-late') continue; return r; }
@@ -3359,9 +3422,20 @@ async function liveLate(code,row,merged){
     liveCloseRemote(merged,'late',row.updated_by);
     return 'late-merged';
   }
+  // THIS device's own Finish won the claim, but the app died before committing it (swiped away
+  // right after tapping Finish), so the resumed copy meets its own finished row. Nobody else
+  // will commit it -- do it now (2026-10-12 adversarial find: the workout used to vanish from
+  // history, with a toast blaming "your other phone").
+  if(liveMine(row)&&!gH().some(w=>w&&w.id===row.doc.id)){
+    liveRecompute(row.doc,row.rev,true);
+    liveCloseRemote(row.doc,'mine',row.updated_by);
+    return 'closed-mine';
+  }
   liveCloseRemote(row.doc,'finished',row.updated_by);
   return 'closed';
 }
+// Was this finished row's Finish claimed from this device? (finish nonce: liveDevice()+':'+random)
+function liveMine(row){ return !!(row&&row.doc&&String(row.doc.finishedBy||'').startsWith(liveDevice()+':')); }
 // Close the local copy after another device ended the session.
 function liveCloseRemote(doc,why,by){
   clearTimeout(_livePushT); clearInterval(wt); clearInterval(rt);
@@ -3369,6 +3443,7 @@ function liveCloseRemote(doc,why,by){
   clearAW(); aw=null; _liveShadow=null; _finLock=null; sp('home');
   const from=liveFrom(by);
   if(why==='discarded'){ toast(`Workout discarded on your ${from}`,'ok'); return; }
+  if(why==='ended'){ toast(`This workout was ended on your ${from}`,'ok'); [5000,30000].forEach(ms=>setTimeout(()=>{ cloudPullMerge().then(c=>{ if(c) reRenderActivePage(); }).catch(()=>{}); },ms)); return; }
   if(why==='late'){ toast(`Your extra sets were added to the workout finished on your ${from}`,'ok'); return; }
   // Summary from the finished doc; the finishing device committed history + PRs, and they
   // arrive here through the normal backup pull.
@@ -3377,7 +3452,7 @@ function liveCloseRemote(doc,why,by){
   const sec=Math.max(0,Math.floor((liveTouch(doc)-(a.startedAt||liveTouch(doc)))/1000));
   const dur=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');
   showFinishSummary({name:(!a.name||a.name==='Quick Workout')?autoNameWorkout(a.exercises):a.name,dur,ts,vol:Math.round(vol),prList:[],rid:null,rname:'',ids:a.exercises.map(e=>e.exId)});
-  toast(`Workout finished on your ${from}`,'ok');
+  toast(why==='mine'?'Workout saved':`Workout finished on your ${from}`,'ok');
   [5000,30000].forEach(ms=>setTimeout(()=>{ cloudPullMerge().then(c=>{ if(c) reRenderActivePage(); }).catch(()=>{}); },ms));
 }
 
@@ -3399,7 +3474,7 @@ async function liveResumeRemote(){
   let row; try{ row=await liveRead(liveCode()); }catch(e){ console.warn('live read',e); return 'error'; }
   if(!liveFresh(row)||aw) return 'gone';
   aw=liveFromWire(row.doc,null); awStart=aw.startedAt||Date.now(); awTouch=Math.max(liveTouch(row.doc),Date.now());
-  _finLock=null; _liveSolo=null; liveRebase(); _liveDirty=false;
+  _finLock=null; _liveSolo=null; liveSeen(Date.parse(row.updated_at)); liveRebase(); _liveDirty=false;
   beginW(); liveApplyRest();
   return 'resumed';
 }
@@ -3515,7 +3590,7 @@ function autoFinishStale(synced) {
   // activity can show the workout is not idle after all (Phil's review, BOARD.md cd9895b 2a/2d).
   if(!synced&&liveOn()&&_liveSolo!==aw.id){
     const id=aw.id;
-    liveSync().then(()=>{ if(!aw||aw.id!==id||_finLock) return;
+    liveSettle(liveSync()).then(()=>{ if(!aw||aw.id!==id||_finLock) return;
       if(awIsStale()) autoFinishStale(true); else { clearInterval(wt); wt=setInterval(updWT,1000); } });
     return;
   }
@@ -3763,6 +3838,21 @@ function renderWS() {
   document.getElementById('wSession').innerHTML=h;
   if(typeof _wMiniSync==='function') _wMiniSync();
   saveAW();
+  _wsDrawn=aw.exercises.map(e=>({lid:e.lid,sids:(e.sets||[]).map(s=>s.sid)}));   // after saveAW: ids are stamped by then
+}
+// The layout the workout screen was last DRAWN with, by live id. Its inline handlers carry
+// those indices, and a live merge can replace aw underneath while the redraw is held back
+// (liveRender never redraws under his thumb mid-typing). A stale index then hit the wrong
+// exercise or set -- a weight typed into Row's box landed on Leg Press after the watch
+// removed Bench (2026-10-12 adversarial find). wsAt maps a drawn [ei,si] to the current one;
+// -1 = that exercise/set is gone. Identity whenever the drawing is current.
+let _wsDrawn=null;
+function wsAt(ei,si){
+  const d=aw&&_wsDrawn&&_wsDrawn[ei];
+  if(!d||!d.lid) return [ei,si];
+  const e=aw.exercises.findIndex(x=>x.lid===d.lid); if(e<0) return [-1,-1];
+  const sid=si==null?null:d.sids[si]; if(!sid) return [e,si];
+  return [e, aw.exercises[e].sets.findIndex(x=>x.sid===sid)];
 }
 
 function addExToWorkout(id) {
@@ -3812,9 +3902,10 @@ function unlinkSuperset(ei){
 }
 
 // Swap the exercise at index ei for a different one (keeps position, resets sets).
-function switchEx(ei) { if(aw&&aw.exercises[ei]) openAEModal('workoutReplace',ei); }
+function switchEx(ei) { [ei]=wsAt(ei); if(aw&&aw.exercises[ei]) openAEModal('workoutReplace',ei); }
 function replaceExAt(ei,id) {
   if (!aw||!aw.exercises[ei]) return;
+  if (aw.exercises[ei].exId===id) return;   // picked the one already there: a switch would wipe its logged sets for nothing
   if (aw.exercises.some((e,i)=>i!==ei&&e.exId===id)) { toast('Already in workout','err'); return; }
   if (aw.routineId) noteSwap(aw.exercises[ei].exId,id);
   const ex=byId(id);
@@ -3839,6 +3930,7 @@ function moveEx(ei,dir) {
 
 function uSet(ei,si,f,v,conv) {
   if(!aw) return;
+  [ei,si]=wsAt(ei,si); if(ei<0||si<0) return;
   const ex=aw.exercises[ei];
   ex.sets[si][f] = conv==='dur' ? fromDispDur(v,durUnit(ex)) : conv==='clock' ? clockToMin(v) : conv ? fromDisp(v) : (parseFloat(v)||0);
   saveAW();
@@ -3862,6 +3954,7 @@ function setSuggestion(ex,si){
 
 function togSet(ei,si) {
   if (!aw) return;
+  [ei,si]=wsAt(ei,si); if(ei<0||si<0) return;
   const ex=aw.exercises[ei], set=ex.sets[si];
   set.done=!set.done;
   if (set.done) {
@@ -3878,13 +3971,14 @@ function togSet(ei,si) {
 
 function addSet(ei) {
   if (!aw) return;
+  [ei]=wsAt(ei); if(ei<0) return;
   // New set is blank; the previous set shows as a greyed placeholder. Typing
   // starts from zero; checking it without typing adopts the greyed value (togSet).
   aw.exercises[ei].sets.push({weight:0, reps:0, done:false});
   renderWS();
 }
 
-function setCable(ei,v) { if(aw){ aw.exercises[ei].cable=v; saveAW(); renderWS(); } }
+function setCable(ei,v) { [ei]=wsAt(ei); if(aw&&aw.exercises[ei]){ aw.exercises[ei].cable=v; saveAW(); renderWS(); } }
 // Pure bodyweight movement (pull-up, push-up, leg raise, dip…) — uses your body
 // weight as the load, with NO weight input. "Weighted ..." variants and assisted
 // machines are excluded (they keep/handle their own weight).
@@ -3919,7 +4013,7 @@ function effWeight(ex,s){
   if(isBodyweightEx(ex)) return gBW();
   return w;
 }
-function setBWMode(ei,m){ if(!aw||!aw.exercises[ei]) return; aw.exercises[ei].bwMode=m; renderWS(); }
+function setBWMode(ei,m){ [ei]=wsAt(ei); if(!aw||!aw.exercises[ei]) return; aw.exercises[ei].bwMode=m; renderWS(); }
 // Only weight/bodyweight lifts contribute to "lbs lifted" volume and weight PRs.
 // Distance/duration/reps-only must NOT be counted as weight.
 // Plain or assisted bodyweight movement (push-up, pull-up, dip...): the logged "weight" is your own body, not
@@ -4491,19 +4585,24 @@ function metricBadgeInfo(key,tier,value,exName){
   om('achModal');
 }
 
-function removeSet(ei){ if(aw){ const s=aw.exercises[ei].sets; if(s.length>1){ s.pop(); renderWS(); } } }
+function removeSet(ei){ [ei]=wsAt(ei); if(aw&&aw.exercises[ei]){ const s=aw.exercises[ei].sets; if(s.length>1){ s.pop(); renderWS(); } } }
 
 // Reorder modal — drag (desktop) or arrows (touch-friendly).
 function openReorder(){ if(!aw||!aw.exercises.length) return; renderReorder(); om('reorderModal'); }
 function renderReorder(){
   const el=document.getElementById('reorderList'); if(!el) return;
   el.style.position='relative';
-  el.innerHTML=aw.exercises.map((ex,i)=>`<div class="ro-row" data-id="${i}">
+  el.innerHTML=aw.exercises.map((ex,i)=>`<div class="ro-row" data-id="${esc(roKey(ex,i))}">
     <span style="font-family:var(--fh);font-weight:700;color:var(--muted);width:18px">${i+1}</span>
     <span style="flex:1;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ex.name)}</span>
     <div class="cdrag" aria-label="Drag to reorder" onpointerdown="cardDragStart(event)"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg></div>
   </div>`).join('');
 }
+// Rows are keyed by the exercise's live id, not its index: the list can be stale by the time
+// it is dropped (the watch added/removed an exercise while it was open), and old indices then
+// pointed at the wrong exercises -- one the watch had just added was dropped from aw and
+// tombstoned on every device (2026-10-12 adversarial find).
+function roKey(ex,i){ return ex.lid||('i'+i); }
 function moveReorder(i,dir){ reorderMove(i,i+dir); }
 function reorderMove(from,to){
   if(from<0||to<0||to>=aw.exercises.length||from===to) return;
@@ -4525,7 +4624,7 @@ const gExNotes=()=>S.g('exNotes')||{};
 function exNote(exId){ return gExNotes()[exId]||''; }
 function setExNote(exId,v){ const n=gExNotes(); v=(v||'').trim(); if(v) n[exId]=v; else delete n[exId]; markExNotePending(exId); S.s('exNotes',n); }
 
-function rmEx(ei) { if(!aw)return; aw.exercises.splice(ei,1); renderWS(); }
+function rmEx(ei) { if(!aw)return; [ei]=wsAt(ei); if(ei<0) return; aw.exercises.splice(ei,1); renderWS(); }
 
 const gCardioPR=()=>S.g('cardioPR')||{};   // {exId:{dist,time,date, maxDist,maxDate}} — best effort + longest
 function isCardio(ex){ return ((ex&&ex.tracking)||'')==='distance'; }
@@ -4575,7 +4674,7 @@ function minToClock(min){
   const m=Math.floor(min), s=Math.round((min-m)*60);
   return s>0 ? `${m}.${String(s).padStart(2,'0')}` : `${m}`;
 }
-function setDurUnit(ei,u){ if(aw&&aw.exercises[ei]){ aw.exercises[ei].durUnit=u; renderWS(); } }
+function setDurUnit(ei,u){ [ei]=wsAt(ei); if(aw&&aw.exercises[ei]){ aw.exercises[ei].durUnit=u; renderWS(); } }
 function setDurUnitWE(ei,u){ if(weDraft&&weDraft.exercises[ei]){ weDraft.exercises[ei].durUnit=u; renderWE(); } }
 // Total distance (miles) logged across a saved workout's cardio exercises.
 function workoutDistance(w){ return (w&&w.exercises||[]).reduce((a,e)=> a + (((e.tracking||'')==='distance')?(e.sets||[]).reduce((b,s)=>b+(s.weight||0),0):0), 0); }
@@ -5174,46 +5273,36 @@ function finishW(auto) {
   if (auto) { _finishWContinue(auto,ts); return; }
   showConfirm(ts===0 ? 'No sets logged — finish anyway?' : 'Finish and save this workout?').then(async ok=>{
     if(!ok) return;
-    const sw=await maybeApplySwaps();
-    await maybeUpdateRoutine(sw);
+    await maybeUpdateRoutine();
     _finishWContinue(auto,ts);
   });
 }
-// A routine workout where Switch Exercise was used: one prompt on finish covering every
-// switch. Yes replaces just those slots in the routine's exercise list, in place
-// (Mr. Roni, 2026-10-02). Adds, removes and reorders are asked about separately, right
-// after, by maybeUpdateRoutine. Returns {eff: the switches asked about, yes} or null.
-async function maybeApplySwaps(){
-  if(!aw||!aw.routineId||!aw.swaps) return null;
-  const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return null;
-  const before=r.exercises||[], now=new Set(aw.exercises.map(e=>e.exId));
-  // Only switches of an exercise the routine has, to one still in the session (switched in
-  // then removed = a removal) and not already elsewhere in the routine (no duplicates).
-  const eff={};
-  Object.entries(aw.swaps).forEach(([from,to])=>{
-    if(from!==to&&before.includes(from)&&now.has(to)&&!(before.includes(to)&&!aw.swaps[to])) eff[from]=to;
-  });
-  const pairs=Object.entries(eff); if(!pairs.length) return null;
-  const nm=id=>byId(id).name;
-  const list=pairs.map(([f,t])=>nm(f)+' → '+nm(t)).join(', ');
-  const yes=await showConfirm(`You switched ${list}. Update the routine "${r.name}" with ${pairs.length>1?'these switches':'this switch'}?`,{okText:'Update routine',cancelText:'Keep routine'});
-  if(yes){ r.exercises=before.map(id=>eff[id]||id); S.s('routines',rs); toast('Routine updated','ok'); }
-  return {eff,yes};
-}
-// The v1.8.27 any-change prompt, restored to run alongside the switch prompt (Mr. Roni,
-// 2026-10-02 5:35pm): if exercises were added, removed or reordered, ask whether to write
-// that back. Switches were already asked about, so a switched slot counts as unchanged here
-// (a declined switch keeps the routine's original exercise) and is never asked twice.
-async function maybeUpdateRoutine(sw){
+// A routine workout whose exercise list ended up different from the routine's -- switches,
+// adds, removes, reorders, any mix -- gets exactly ONE prompt on finish covering every change
+// together (Mr. Roni, 2026-10-12: a separate prompt per kind of change read as "asked per
+// exercise"). A switch is worded as "A → B" inside that one prompt; an "ineffective" switch
+// (its target already sits elsewhere in the routine, unswapped -- would duplicate it) falls
+// back to reading as a plain add/remove, same as before, just inside the same prompt. One
+// yes/no applies or discards every change together; nothing is written before the decision.
+async function maybeUpdateRoutine(){
   if(!aw||!aw.routineId) return;
   const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return;
-  const back={}; if(sw&&!sw.yes) Object.entries(sw.eff).forEach(([f,t])=>{ back[t]=f; });
-  const before=(r.exercises||[]).slice();
-  const after=[...new Set(aw.exercises.map(e=>back[e.exId]||e.exId).filter(x=>x&&x!=='?'))];
+  const before=(r.exercises||[]).slice(), now=new Set(aw.exercises.map(e=>e.exId));
+  // Effective switches: an exercise the routine has, switched to one still in the session,
+  // and not already elsewhere in the routine un-switched (would otherwise duplicate it).
+  const eff={};
+  if(aw.swaps) Object.entries(aw.swaps).forEach(([from,to])=>{
+    if(from!==to&&before.includes(from)&&now.has(to)&&!(before.includes(to)&&!aw.swaps[to])) eff[from]=to;
+  });
+  const after=[...new Set(aw.exercises.map(e=>e.exId).filter(x=>x&&x!=='?'))];
   if(before.length===after.length&&before.every((id,i)=>id===after[i])) return;
   const nm=id=>{ const e=byId(id); return e?e.name:'exercise'; };
-  const added=after.filter(id=>!before.includes(id)).map(nm), removed=before.filter(id=>!after.includes(id)).map(nm);
+  const swapPairs=Object.entries(eff);
+  const swappedFrom=new Set(swapPairs.map(([f])=>f)), swappedTo=new Set(swapPairs.map(([,t])=>t));
+  const added=after.filter(id=>!before.includes(id)&&!swappedTo.has(id)).map(nm);
+  const removed=before.filter(id=>!after.includes(id)&&!swappedFrom.has(id)).map(nm);
   const parts=[];
+  if(swapPairs.length) parts.push('switched '+swapPairs.map(([f,t])=>nm(f)+' → '+nm(t)).join(', '));
   if(added.length) parts.push('added '+added.join(', '));
   if(removed.length) parts.push('removed '+removed.join(', '));
   if(!parts.length) parts.push('changed the order');
@@ -5281,16 +5370,29 @@ function _finishWContinue(auto,ts) {
     const p=gProf(); if(p&&p.code&&_liveSolo!==id) liveQueueFinish(liveWire(aw));   // signed out/offline: settle the live row later
     _commitFinish(endTs,0); return;
   }
-  const busy=_liveBusy||Promise.resolve();
+  const busy=liveSettle(_liveBusy);   // let an in-flight sync land first, but never wait on it forever
   // Finish nonce (doc.finishedBy): if the winning CAS's reply is lost, the retry recognises its own
   // win in the row instead of taking it for another device's Finish.
   aw.finishedBy=liveDevice()+':'+Math.random().toString(36).slice(2,10);
   busy.then(()=>aw&&aw.id===id?liveClaimFinish(liveWire(aw)):null).then(r=>{
-    if(!r||!aw||aw.id!==id) return;   // a sync that was in flight closed it (ended on the other device)
+    if(!aw||aw.id!==id) return;   // a sync that was in flight closed it (ended on the other device, which already released the lock)
+    if(!r) return _finishLocalFallback(id,endTs);   // claim resolved to nothing usable: don't hang, commit locally
     if(r.lost){ _finLock=null; liveSync(); return; }   // already finished elsewhere: close here, merging in any sets it lacks
     if(r.doc){ aw=liveFromWire(r.doc,aw); awStart=aw.startedAt||awStart; }   // includes the other device's last sets
     _commitFinish(endTs,r.rev||0);
+  }).catch(e=>{
+    console.warn('live finish claim failed, committing locally',e);   // never leave him stuck on the workout screen
+    _finishLocalFallback(id,endTs);
   });
+}
+// Finish never got a usable answer from the server (claim rejected, timed out past its own
+// retries, or resolved to nothing) -- commit locally rather than strand the user on the active
+// workout screen with nothing saved. Mirrors the plain offline branch above. Always releases
+// _finLock, even when the workout changed out from under us while we were waiting.
+function _finishLocalFallback(id,endTs){
+  if(!aw||aw.id!==id){ _finLock=null; return; }
+  const p=gProf(); if(p&&p.code&&_liveSolo!==id) liveQueueFinish(liveWire(aw));   // tell the server later
+  _commitFinish(endTs,0);
 }
 // Strip the live-sync change stamps from exercises going into history, and any
 // custom exercise's local photo (a data: URL) -- history syncs to Supabase and rides the JSON
@@ -6747,8 +6849,11 @@ function cardDragStart(e){
     window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
     const ids=[...cont.children].map(x=>x.dataset.id);
     if(cont.id==='reorderList'){
-      // Workout exercises: ids are the old indices in their new order.
-      const old=aw.exercises; aw.exercises=ids.map(i=>old[+i]).filter(Boolean);
+      // Workout exercises: ids are roKey()s in their new order. Anything not in the list
+      // (arrived from another device after it was drawn) keeps its place at the end.
+      const old=aw.exercises, byKey=new Map(old.map((x,i)=>[roKey(x,i),x]));
+      const moved=ids.map(k=>byKey.get(k)).filter(Boolean);
+      aw.exercises=[...moved,...old.filter(x=>!moved.includes(x))];
       renderReorder(); renderWS(); saveAW(); return;
     }
     if(cont.id==='routineOrderList'){
@@ -8648,8 +8753,12 @@ document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.
 // nav keeps its scroll-0 place in the document, so it sits Y px up the screen and rides along with the scroll. The
 // page is no longer moved at all: wheel and touch drags over a popup are cancelled unless an element inside the popup
 // can still scroll that way, so body style and window.scrollY never change and there is nothing to restore.
-// In the rotated landscape frame #jkRoot is the scroller; overflow:hidden on it is enough there (touch coordinates are
-// screen axes, not the app's, so the drag filter below is skipped).
+// In the rotated landscape frame #jkRoot is the scroller and touch coordinates are screen axes
+// (not the app's), so the drag filter below is skipped in favor of a hard overflow:hidden lock.
+// 2026-10-12: #jkRoot is also the scroller in plain portrait now (see its CSS above), but there
+// the drag filter (_popupCanScroll + preventDefault below) is precise and already stops it --
+// no overflow toggle needed outside the rotated case. Either way #jkRoot now holds the real
+// scroll position, so the "new tab starts at its top" reset always targets it, not window.
 const SCROLL_LOCK_SEL='.mo.open,#achFull.open,#badgeFull.open,#recapFull.open';
 let _sl=null;   // {page, rot} while pinned
 function syncScrollLock(){
@@ -8664,7 +8773,7 @@ function syncScrollLock(){
     const s=_sl; _sl=null;
     if(root) root.style.overflow='';
     html.classList.remove('popup-lock');
-    if(s.page!==pg){ if(s.rot&&root) root.scrollTop=0; else window.scrollTo(0,0); }   // a popup switched tabs: new tab from its top
+    if(s.page!==pg&&root) root.scrollTop=0;   // a popup switched tabs: new tab from its top
   }
 }
 new MutationObserver(syncScrollLock).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
@@ -8701,8 +8810,8 @@ document.addEventListener('touchmove',e=>{
 // Active-workout mini stat bar: shows once the big .wstats tile has scrolled up under the
 // fixed header, hides again above it. Checked on scroll, not on a timer -- cheap (one
 // getBoundingClientRect) and only does anything while page-active is the visible page.
-// #jkRoot only scrolls in the rotated-landscape frame (see its CSS above); window scrolls
-// in the normal portrait case, so both are listened for and share this one handler.
+// #jkRoot is the one real scroll container now (portrait and the rotated-landscape frame
+// alike, see its CSS above) -- window never scrolls, but its listener is harmless to keep.
 function _wMiniSync(){
   const page=document.querySelector('.page.active');
   const mini=document.getElementById('wMini');
