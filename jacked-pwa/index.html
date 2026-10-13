@@ -3145,11 +3145,23 @@ function mergeLive(a,b){
   const dead=(id,st)=>!!tomb[id] && !liveGt(st,tomb[id]);
   const out={...b,...a}, as=a.stamps||{}, bs=b.stamps||{}, stamps={};
   out.startedAt=Math.min(a.startedAt||Infinity, b.startedAt||Infinity); if(!isFinite(out.startedAt)) delete out.startedAt;
-  ['name','notes','swaps'].forEach(k=>{
+  ['name','notes'].forEach(k=>{
     const useB=liveGt(bs[k],as[k]), src=useB?b:a, st=useB?bs[k]:as[k];
     if(src[k]===undefined) delete out[k]; else out[k]=src[k];
     if(st) stamps[k]=st;
   });
+  // swaps is a from->to MAP, not a scalar like name/notes: two devices switching DIFFERENT
+  // slots at once each hold one genuinely new key, so whole-field last-write-wins silently
+  // drops whichever side lost the stamp race (2026-10-12 adversarial find -- the Finish
+  // routine-update prompt then describes a real switch as an unrelated add+remove). Union the
+  // keys instead; a same-key conflict (both sides re-swap the same slot) still resolves to
+  // whichever side's stamp is newer, same as before.
+  {
+    const useB=liveGt(bs.swaps,as.swaps), aSw=a.swaps||{}, bSw=b.swaps||{};
+    const merged=useB?{...aSw,...bSw}:{...bSw,...aSw};
+    if(Object.keys(merged).length) out.swaps=merged; else delete out.swaps;
+    const st=useB?bs.swaps:as.swaps; if(st) stamps.swaps=st;
+  }
   const rest=!a.rest?b.rest:!b.rest?a.rest:(liveGt(b.rest,a.rest)?b.rest:a.rest);
   if(rest) out.rest=rest; else delete out.rest;
   const key=(e,i)=>e.lid||('nolid:'+e.exId);

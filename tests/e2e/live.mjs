@@ -9,8 +9,13 @@ import { phone, check } from './harness.mjs';
 const CEX = [
   { id: 'cex1', name: 'Barbell Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
   { id: 'cex2', name: 'Barbell Row', muscle: 'back', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
+  { id: 'cex3', name: 'Leg Press', muscle: 'legs', equip: 'machine', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
+  { id: 'cex4', name: 'Incline Curl', muscle: 'biceps', equip: 'dumbbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true },
 ];
-const SEED = { cex: CEX, routines: [{ id: 'r1', name: 'Push', desc: '', exercises: ['cex1'] }] };
+const SEED = { cex: CEX, routines: [
+  { id: 'r1', name: 'Push', desc: '', exercises: ['cex1'] },
+  { id: 'r2', name: 'Full', desc: '', exercises: ['cex1', 'cex2'] },
+] };
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const clone = v => (v == null ? v : JSON.parse(JSON.stringify(v)));
 
@@ -371,4 +376,37 @@ export async function liveFinishClaimFails() {
   await A.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails];
+// Two devices switch DIFFERENT exercise slots in the same shared routine workout at the same
+// moment. mergeLive() used to treat aw.swaps as one whole-field value (same as name/notes) --
+// a stamp-timestamp last-write-wins that silently drops whichever side's switch lost the race,
+// instead of unioning two genuinely different keys (2026-10-12 adversarial find). The visible
+// consequence: the Finish routine-update prompt describes the lost switch as an unrelated
+// add+remove ("added Leg Press; removed Barbell Bench Press") instead of "switched Barbell
+// Bench Press -> Leg Press", even though the final exercise list itself still ends up correct.
+export async function liveConcurrentSwaps() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  await ev(A, () => { startRW('r2'); clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveResumeRemote());
+  await ev(A, () => { replaceExAt(0, 'cex3'); clearTimeout(_livePushT); });
+  await ev(B, () => { replaceExAt(1, 'cex4'); clearTimeout(_livePushT); });
+  db.barrier(2);
+  await Promise.all([ev(A, () => liveSync()), ev(B, () => liveSync())]);
+  await ev(A, () => liveSync()); await ev(B, () => liveSync());
+  const [a, b] = [await snap(A), await snap(B)];
+  check('live swaps race: both concurrent switches land on the server, not just the last writer', !!db.row.doc.swaps && db.row.doc.swaps.cex1 === 'cex3' && db.row.doc.swaps.cex2 === 'cex4', JSON.stringify(db.row.doc.swaps));
+  const fullSwaps = s => s && s.cex1 === 'cex3' && s.cex2 === 'cex4' && Object.keys(s).length === 2;
+  check('live swaps race: both devices converge on the full swap map', fullSwaps(a.aw.swaps) && fullSwaps(b.aw.swaps), JSON.stringify([a.aw.swaps, b.aw.swaps]));
+  // Finish on A: the routine-update prompt must credit both as switches, not a spurious add+remove.
+  await ev(A, () => { aw.exercises[0].sets[0] = { weight: 50, reps: 5, done: true }; saveAW(); });
+  const p = ev(A, () => maybeUpdateRoutine());
+  await wait(200);
+  const msg = await ev(A, () => document.getElementById('cfMsg').textContent);
+  await ev(A, () => _cfDone(true));
+  await p;
+  check('live swaps race: the routine-update prompt credits both switches, not a spurious add+remove', /Barbell Bench Press → Leg Press/.test(msg) && /Barbell Row → Incline Curl/.test(msg) && !/added/.test(msg) && !/removed/.test(msg), msg);
+  check('live swaps race: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps];
+
