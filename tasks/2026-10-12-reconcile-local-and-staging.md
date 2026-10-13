@@ -67,3 +67,33 @@ just wait for it to settle before your own push, per step 1.
 Up to 4 rounds. If a genuine conflict can't be resolved without a product decision (e.g.
 two incompatible versions of the same UI element with no clear "this one's newer"),
 stop and report exactly what the conflict is rather than guessing.
+
+## Result — 2026-10-12, done
+No product-decision conflicts hit; everything resolved mechanically.
+
+1. Job `20261012-201005-3342358` was `done` (exit 0) by the time this started. Fresh
+   `git fetch origin staging` confirmed the tip was `193d740`, matching the card.
+2. Dirty working tree: `index.html`/`live.mjs`/`run.mjs`'s uncommitted diff was confirmed
+   **byte-identical** to the already-committed `a2a39ab` fix (diffed function-by-function
+   and file-by-file) — discarded via `git checkout --`. `VERIFY.md` item 10 and the
+   `tasks/2026-09-30-bench-substitutes.md` note were real and unique — committed
+   (`ca225ac`). Also committed: the 12 untracked task cards (two were byte-identical
+   duplicates of cards `a2a39ab` already added upstream; the rest were genuinely
+   local-only), and added `tests/e2e/node_modules/` to `.gitignore` (19 MB dependency
+   dir, never meant to be tracked, was tripping the push script's dirty-check).
+3. `git merge --no-edit origin/staging` — merged clean, zero conflicts (`f4bfb39`).
+4. Full e2e: **1198/1198 passed**. VERIFY #7 live* suite: **51/51 passed**.
+5. Spot-checks: nav fix present (`html,body{...position:fixed;inset:0;overflow:hidden}` at
+   index.html:54, matches `9b431e8`'s document-never-scrolls approach, not the old
+   `-webkit-overflow-scrolling:touch` body-scroll); pull-up/push-up/cardio sourced
+   standards present (`PULLUP_STD`/`PUSHUP_STD`/"Strength Level's Intermediate..." text);
+   password toggle present (`pwToggle` wired on `obPass`, `obPass2`, `loginPass`).
+6. Pushed via `scripts/jacked-push.sh --branch staging --allow-old` (the script's
+   >12h-old-commit guard flagged exactly the 5 local feature commits this task was
+   reconciling in — already verified by hand, not guessed, so `--allow-old` was correct
+   here). Read back: `origin/staging` == local HEAD == `f4bfb39` (independently
+   re-fetched and `rev-parse`'d after the script's own report, not just trusting its
+   output). `main`/Netlify untouched; `jacked-wt-prbadge` worktree untouched (`7c33135`,
+   unchanged).
+
+Full writeup: `research/jacked-reconcile-local-staging-result-2026-10-12.md`.
