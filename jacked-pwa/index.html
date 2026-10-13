@@ -244,7 +244,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 /* Mini stat bar, just below the fixed .ab header -- shown only once the big .wstats tile has
    scrolled out of view (Mr. Roni, 2026-10-05 9:46pm: lost sight of weight/sets once scrolled
    into the exercise list). Low-profile on purpose -- a thin line, not a second big tile. */
-.wmini{position:fixed;top:calc(76px + var(--sat));left:16px;right:16px;z-index:85;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:5px 14px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:11px;color:var(--muted);opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .15s,transform .15s}
+.wmini{position:fixed;top:calc(76px + var(--sat));left:16px;right:16px;z-index:85;background:rgba(10,10,11,.96);border:1px solid var(--border2);border-radius:10px;padding:5px 14px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:11px;color:var(--muted);opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .15s,transform .15s;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .wmini.show{opacity:1;transform:translateY(0)}
 .wmini b{color:var(--accent);font-weight:800;font-size:12px}
 .wstats-v{font-family:var(--fh);font-size:24px;font-weight:800;color:var(--accent);line-height:1}
