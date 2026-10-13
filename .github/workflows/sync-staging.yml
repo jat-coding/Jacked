@@ -1,17 +1,17 @@
-# Mirrors main to the `staging` branch on pushes to main. Netlify builds `staging` as a branch deploy
+# Mirrors main to the `staging` branch. Netlify builds `staging` as a branch deploy
 # (staging--jacked-trainer.netlify.app) so changes can be verified before anything goes live.
 # Production publishing is locked in Netlify; going live is a manual step.
 #
-# Skipped when: the push only touches docs (watch-client/**, *.md), or staging is already AHEAD of
-# main (work is pushed to staging first for review). A plain fast-forward push would be rejected then,
-# and the run used to fail and email everyone. Staging is never force-pushed.
+# Manual trigger only (2026-10-10, Mr. Roni: pushes to main were auto-spinning a second Netlify
+# branch deploy on every commit, burning credits on top of the stop_builds leak). Run it by hand
+# from the Actions tab when you actually want staging to pick up main.
+#
+# Skipped when: staging is already AHEAD of main (work is pushed to staging first for review).
+# A plain fast-forward push would be rejected then, and the run used to fail and email everyone.
+# Staging is never force-pushed.
 name: sync-staging
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - 'watch-client/**'
-      - '**.md'
+  workflow_dispatch: {}
 permissions:
   contents: write
 concurrency: sync-staging
