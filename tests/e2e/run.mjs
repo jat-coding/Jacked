@@ -8,6 +8,7 @@ const SHOTS = process.env.SHOTS || '/tmp/jk16/shots';
 fs.mkdirSync(SHOTS, { recursive: true });
 const badges = page => page.evaluate(() => computeBadges().map(b => ({ name: b.name, earned: b.earned, tier: b.tier || null, desc: b.desc, detail: b.detail })));
 const badge = async (page, n) => (await badges(page)).find(b => b.name === n);
+const fmtClockT = m => { const t = Math.round(m * 60); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 const SEP15 = new Date('2026-09-15T12:00:00-06:00');
 // Sep 2026 monthly badges already done, so the all-gold seed can hold Jacked (it needs the Monthly-reset badges too).
 const MB_SEP = { '2026-09': { group: 'biceps', target: 4, done: true, comeback: true } };
@@ -1221,7 +1222,8 @@ async function suggestTrained() {
 }
 
 async function badgeLadders() {
-  // Badge ladders scale with profile sex and age; the male 18-39 (and no-birthday) ladders never move.
+  // Badge ladders scale with profile sex and age. Pull-up / Push-up / Cardio-Maxing are sourced per sex, age and (reps)
+  // body weight since 2026-10-13 (sourcedRepCardio below); with no body weight they use Strength Level's all-weights row.
   const ladders = async prof => {
     const { page, ctx, errors } = await phone({ seed: { prof: { name: 'T', username: '@t', code: '@t', ...prof }, hist: [] }, now: new Date('2026-09-25T19:14:00-06:00') });
     const r = await page.evaluate(() => { const T = badgeT(); return { T, how: BADGE_HOW['Pull-up-Maxing'], det: BADGE_DETAIL['Bench-Maxing'] }; });
@@ -1229,11 +1231,13 @@ async function badgeLadders() {
   };
   const j = a => JSON.stringify(a);
   const m = await ladders({ sex: 'male', birthday: '1995-01-01' });
+  const m26 = await ladders({ sex: 'male', birthday: '2000-01-01' });
   // ohpFrac/squatFrac are sourced lb ladders now (2026-10-06), not fractions of body weight; with no body weight
   // set they clamp to the lowest sourced bodyweight row (110 lb male / 90 lb female).
-  check('badge ladders: male 30 keeps the original ladders', j(m.T.bench) === '[135,225,315]' && j(m.T.ohpFrac) === '[75,80,95]' && j(m.T.squatFrac) === '[155,175,275]' && j(m.T.pullup) === '[10,15,20]' && j(m.T.pushup) === '[30,50,80]' && j(m.T.cardio) === '[9,8,6.5]', j(m.T));
+  const clk = a => a.map(x => fmtClockT(x)).join(' ');
+  check('badge ladders: male 30 keeps the original lift ladders; pull/push/mile are the sourced no-body-weight rows', j(m.T.bench) === '[135,225,315]' && j(m.T.ohpFrac) === '[75,80,95]' && j(m.T.squatFrac) === '[155,175,275]' && j(m.T.pullup) === '[13,21,30]' && j(m.T.pushup) === '[39,62,87]' && clk(m.T.cardio) === '6:40 5:50 5:10', j(m.T));
   const none = await ladders({});
-  check('badge ladders: no sex or birthday set = male ladders', j(none.T) === j(m.T), j(none.T));
+  check('badge ladders: no sex or birthday set = male ladders (prime age)', j(none.T) === j(m26.T), j(none.T) + ' vs ' + j(m26.T));
   const f = await ladders({ sex: 'female', birthday: '1995-01-01' });
   check('badge ladders: female 30 is lower on every hand-set strength ladder', f.T.ohpFrac.every((x, i) => x < m.T.ohpFrac[i]) && f.T.squatFrac.every((x, i) => x < m.T.squatFrac[i]) && f.T.pullup.every((x, i) => x < m.T.pullup[i]) && f.T.pushup.every((x, i) => x < m.T.pushup[i]), j(f.T));
   check('badge ladders: female 30 mile ladder is slower', f.T.cardio.every((x, i) => x > m.T.cardio[i]), j(f.T.cardio));
@@ -1244,10 +1248,10 @@ async function badgeLadders() {
   const teen = await ladders({ sex: 'male', birthday: '2010-01-01' });
   check('badge ladders: a 16-year-old is scaled down on the hand-set ladders', teen.T.pullup[2] < m.T.pullup[2], j(teen.T));
   check('badge ladders: bench has no youth factor (Foster skipped)', j(teen.T.bench) === j(m.T.bench), j(teen.T.bench));
-  check('badge ladders: description text follows the ladder and says it is adjusted', /Bronze 5, Silver 8, Gold 10/.test(f.how) && /Adjusted for your profile/.test(f.how) && f.det.tiers[2][1] === f.T.bench[2] + ' lb', f.how + ' | ' + j(f.det));
+  check('badge ladders: description text follows the ladder and names its source', /Bronze 6, Silver 12, Gold 19\./.test(f.how) && /Strength Level's Intermediate, Advanced and Elite pull-up standards for women aged 31 at any body weight/.test(f.how) && f.det.tiers[2][1] === f.T.bench[2] + ' lb', f.how + ' | ' + j(f.det));
   check('badge ladders: bench popup says it is the standard ladder when body weight is missing', /1 rep\..*Standard numbers: set your sex and body weight in Profile/.test(f.det.how), f.det.how);
   check('badge ladders: male description has no adjusted note', !/Adjusted/.test(m.how), m.how);
-  check('badge ladders: no page errors', [m, none, f, old, teen].every(x => x.errors.length === 0), '');
+  check('badge ladders: no page errors', [m, m26, none, f, old, teen].every(x => x.errors.length === 0), '');
 }
 
 // Bench-Maxing from the IPF GOODLIFT formula (Mr. Roni approved "Option A", 2026-09-25): 30 / 50 / 70 points at the
@@ -1313,6 +1317,60 @@ async function benchGoodlift() {
   check('bench goodlift: no page errors', errs.length === 0, errs.join(' | '));
 }
 
+// Pull-up / Push-up / Cardio-Maxing on sourced standards (2026-10-12/13): Strength Level reps by sex x age x body weight,
+// Running Level mile times x WMA/USATF 2025 age factors. Sets logged before STD_REPS_FROM keep the old tier if higher,
+// until they age out of the 3-month window (same rule as bench's GOODLIFT switch).
+async function sourcedRepCardio() {
+  const OCT20 = new Date('2026-10-20T12:00:00-06:00');
+  const P = (sex, birthday) => ({ name: 'T', username: '@t', code: '@t', sex, birthday });
+  const open = async (seed, now = OCT20) => phone({ seed: { hist: [], ...seed }, now });
+  const probe = page => page.evaluate(() => { const T = badgeT(), o = {}; computeBadges().forEach(b => { o[b.name] = { tier: b.tier || null, desc: b.desc }; });
+    return { T, o, live: { pullup: badgeTierForKey('pullup', gH()).tier, pushup: badgeTierForKey('pushup', gH()).tier, cardio: badgeTierForKey('cardio', gH()).tier },
+      how: { pu: BADGE_DETAIL['Pull-up-Maxing'].how, ps: BADGE_HOW['Push-up-Maxing'], c: BADGE_DETAIL['Cardio-Maxing'].how } }; });
+  const j = a => JSON.stringify(a), clk = a => a.map(fmtClockT).join(' ');
+  const errs = [];
+  const run = async (seed, now) => { const { page, ctx, errors } = await open(seed, now); const r = await probe(page); errs.push(...errors); await ctx.close(); return r; };
+
+  // Ladders straight from the source tables (strengthlevel.com API rows, read 2026-10-12).
+  let r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB });
+  check('sourced: male 26 at 180 lb = Strength Level pull-ups 13/21/28, push-ups 38/60/83', j(r.T.pullup) === '[13,21,28]' && j(r.T.pushup) === '[38,60,83]', j(r.T));
+  check('sourced: male 26 mile = Running Level 6:38/5:46/5:08 to the nearest 5 s', clk(r.T.cardio) === '6:40 5:45 5:10', clk(r.T.cardio));
+  const m26 = r;
+  r = await run({ prof: P('female', '2000-01-01'), bw: 140 / LB });
+  check('sourced: female 26 at 140 lb = pull-ups 6/12/19, push-ups 18/31/46, mile 7:45/6:50/6:05', j(r.T.pullup) === '[6,12,19]' && j(r.T.pushup) === '[18,31,46]' && clk(r.T.cardio) === '7:45 6:50 6:05', j(r.T) + ' ' + clk(r.T.cardio));
+  r = await run({ prof: P('male', '1966-01-01'), bw: 180 / LB });
+  check('sourced: male 60 at 180 lb = pull-ups 3/9/14, push-ups 21/37/54, mile eased by WMA 0.7901 to 8:25/7:20/6:30', j(r.T.pullup) === '[3,9,14]' && j(r.T.pushup) === '[21,37,54]' && clk(r.T.cardio) === '8:25 7:20 6:30', j(r.T) + ' ' + clk(r.T.cardio));
+  const light = await run({ prof: P('male', '2000-01-01'), bw: 140 / LB }), heavy = await run({ prof: P('male', '2000-01-01'), bw: 240 / LB });
+  check('sourced: a heavier man gets lower rep targets (140 lb vs 240 lb)', light.T.pullup.every((x, i) => x > heavy.T.pullup[i]) && light.T.pushup.every((x, i) => x > heavy.T.pushup[i]), j(light.T.pullup) + j(heavy.T.pullup) + j(light.T.pushup) + j(heavy.T.pushup));
+  check('sourced: body weight does not move the mile ladder', j(light.T.cardio) === j(heavy.T.cardio), j(light.T.cardio) + j(heavy.T.cardio));
+  r = await run({ prof: P('female', '1966-01-01'), bw: 160 / LB });
+  check('sourced: where the source says < 1 rep, the ladder still has three distinct tiers starting at 1', j(r.T.pullup) === '[1,2,7]', j(r.T.pullup));
+
+  // Tiers on sets logged after the switch: the new ladder only.
+  const at = (d, exs) => [wk(d, exs)];
+  r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: at('2026-10-15', [ex('Pull-up', [[0, 20]], 'bodyweight_reps'), ex('Push-up', [[0, 60]], 'bodyweight_reps'), ex('Run', [[1, 7]], 'distance')]) });
+  check('sourced: 20 pull-ups after the switch = Bronze (was Gold on the old 10/15/20)', r.o['Pull-up-Maxing'].tier === 'bronze' && r.live.pullup === 'bronze' && !/kept/.test(r.o['Pull-up-Maxing'].desc), j(r.o['Pull-up-Maxing']) + r.live.pullup);
+  check('sourced: 60 push-ups after the switch = Silver', r.o['Push-up-Maxing'].tier === 'silver' && r.live.pushup === 'silver', j(r.o['Push-up-Maxing']));
+  check('sourced: a 7:00 mile after the switch earns no Cardio-Maxing (Bronze is 6:40)', r.o['Cardio-Maxing'].tier === null && r.live.cardio === null, j(r.o['Cardio-Maxing']) + r.live.cardio);
+
+  // Grandfathered: the same sets logged before the switch keep their old tier, then age out after 3 months.
+  const pre = at('2026-10-05', [ex('Pull-up', [[0, 20]], 'bodyweight_reps'), ex('Push-up', [[0, 60]], 'bodyweight_reps'), ex('Run', [[1, 7]], 'distance')]);
+  r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: pre });
+  check('sourced: 20 pull-ups logged before the switch keep Gold, marked kept', r.o['Pull-up-Maxing'].tier === 'gold' && r.live.pullup === 'gold' && /kept from the old numbers/.test(r.o['Pull-up-Maxing'].desc), j(r.o['Pull-up-Maxing']) + r.live.pullup);
+  check('sourced: 60 push-ups logged before the switch keep Silver (old ladder also Silver: not marked kept)', r.o['Push-up-Maxing'].tier === 'silver' && !/kept/.test(r.o['Push-up-Maxing'].desc), j(r.o['Push-up-Maxing']));
+  check('sourced: a 7:00 mile logged before the switch keeps Silver, marked kept', r.o['Cardio-Maxing'].tier === 'silver' && r.live.cardio === 'silver' && /kept from the old numbers/.test(r.o['Cardio-Maxing'].desc), j(r.o['Cardio-Maxing']) + r.live.cardio);
+  r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: pre }, new Date('2027-01-10T12:00:00-06:00'));
+  check('sourced: the kept tiers expire once those sets are older than 3 months', r.o['Pull-up-Maxing'].tier === null && r.o['Cardio-Maxing'].tier === null, j([r.o['Pull-up-Maxing'], r.o['Cardio-Maxing']]));
+  r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: [...pre, ...at('2026-10-16', [ex('Pull-up', [[0, 29]], 'bodyweight_reps')])] });
+  check('sourced: a new set that beats the old tier on the new ladder is not marked kept', r.o['Pull-up-Maxing'].tier === 'gold' && !/kept/.test(r.o['Pull-up-Maxing'].desc), j(r.o['Pull-up-Maxing']));
+
+  // Popup copy names the real source, not a hand-set adjustment.
+  check('sourced: pull-up popup cites Strength Level for this sex, age and body weight', /Strength Level's Intermediate, Advanced and Elite pull-up standards for men aged 26 at 180 lb body weight\./.test(m26.how.pu) && !/Adjusted for your profile/.test(m26.how.pu), m26.how.pu);
+  check('sourced: push-up line cites Strength Level too', /Strength Level's .* push-up standards/.test(m26.how.ps), m26.how.ps);
+  check('sourced: cardio popup cites Running Level + WMA/USATF and says body weight is not used', /Running Level's Intermediate, Advanced and Elite mile times for men, adjusted to age 26 with the official WMA\/USATF age-grading factors\. Body weight isn't used/.test(m26.how.c), m26.how.c);
+  check('sourced: no page errors', errs.length === 0, errs.join(' | '));
+}
+
 // Single-button confirms ("Got it") sit centered at the bottom of the dialog (Mr. Roni, 2026-09-25).
 async function confirmCentered() {
   for (const w of [390, 360]) {
@@ -1333,7 +1391,7 @@ async function confirmCentered() {
 async function cardioOrder() {
   const { page, ctx, errors } = await phone({ width: 393, height: 852, seed: { hist: [wk('2026-09-05', [ex('Run', [[1, 7.5]], 'distance')])], bw: 80 }, now: SEP15 });
   const b = await badge(page, 'Cardio-Maxing');
-  const paces = (b.desc.split('—')[1] || '').replace(/<[^>]+>/g, '').split('/').map(x => x.trim());
+  const paces = (b.desc.split('—')[1] || '').split(' · ')[0].replace(/<[^>]+>/g, '').split('/').map(x => x.trim());
   const sec = t => { const [m, s] = t.split(':').map(Number); return m * 60 + s; };
   check('cardio order: list line is slowest to fastest, left to right', paces.length === 3 && sec(paces[0]) > sec(paces[1]) && sec(paces[1]) > sec(paces[2]), b.desc);
   const bench = await badge(page, 'Bench-Maxing');
@@ -3522,7 +3580,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
