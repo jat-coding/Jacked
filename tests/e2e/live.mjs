@@ -17,10 +17,11 @@ const SEED = { cex: CEX, routines: [
   { id: 'r2', name: 'Full', desc: '', exercises: ['cex1', 'cex2'] },
 ] };
 const wait = ms => new Promise(r => setTimeout(r, ms));
+const LIVE_FINISH_WAIT = 7000;   // past the app's 4 s finish bounds, short of its 10 s request timeout: Finish must not need the stuck request to die first
 const clone = v => (v == null ? v : JSON.parse(JSON.stringify(v)));
 
 function makeDb() {
-  const db = { row: null, ops: [], casMiss: 0, offline: new Set(), other: [], gate: null };
+  const db = { row: null, ops: [], casMiss: 0, offline: new Set(), other: [], gate: null, hang: 0 };
   // Hold the next n reads until all n have arrived, so two devices read the same rev and race.
   db.barrier = n => {
     const waiting = [];
@@ -30,6 +31,7 @@ function makeDb() {
   };
   db.handle = async (st, dev) => {
     if (db.offline.has(dev)) return { data: null, error: { message: 'TypeError: Failed to fetch' } };
+    if (db.hang > 0 && st.table === 'live_workouts') { db.hang--; return new Promise(() => {}); }   // a request that never answers (half-open socket)
     if (st.table !== 'live_workouts') {
       if (st.op !== 'select') db.other.push(st.table + ':' + st.op);
       return { data: null, error: { message: 'stub: table not served' } };
@@ -408,5 +410,41 @@ export async function liveConcurrentSwaps() {
   await A.ctx.close(); await B.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps];
+// A live sync whose request never answers (half-open socket on flaky cell signal: fetch has no
+// timeout of its own) must not hold Finish hostage. _finishWContinue waited on the in-flight
+// sync (_liveBusy) with no bound before even starting the claim -- which has its own 4 s
+// timeout -- so Finish hung on the active-workout screen with _finLock set, and every later
+// tap of Finish was swallowed by that lock (2026-10-12 adversarial find). Same for auto-finish:
+// it cleared the workout clock, then waited on a sync that never came back, so it never fired.
+export async function liveFinishHungSync() {
+  const db = makeDb(); const A = await device(db, 'phone-A');
+  const sid = await startShared(db, A, [[100, 5, true]]);
+  db.hang = 1;
+  await ev(A, () => { liveSync(); });   // the read inside this sync never answers
+  await wait(100);
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(LIVE_FINISH_WAIT);
+  const a = await snap(A);
+  check('live hung sync: Finish still completes (saved once, off the workout screen) instead of hanging', !a.aw && a.hist.filter(w => w.id === sid).length === 1 && a.stats.commits === 1 && (await ev(A, () => document.getElementById('page-home').classList.contains('active'))), JSON.stringify({ aw: !!a.aw, hist: a.hist.map(w => w.id), stats: a.stats }));
+  check('live hung sync: the finish reached the server (or is queued to)', db.row.status === 'finished' || (await ev(A, () => liveQ().length)) === 1, db.row.status);
+  // Auto-finish behind a hung sync: same trap.
+  await ev(A, () => { _liveBusy = null; });   // a reload would also drop the hung promise; isolate the second case
+  db.row = null;
+  const sid2 = await startShared(db, A, [[80, 5, true]]);
+  db.hang = 1;
+  await ev(A, () => { awTouch = Date.now() - 31 * 60000; autoFinishStale(); });
+  await wait(LIVE_FINISH_WAIT);
+  const b = await snap(A);
+  check('live hung sync: auto-finish still fires when its re-read never answers', !b.aw && b.hist.filter(w => w.id === sid2).length === 1, JSON.stringify({ aw: !!b.aw, hist: b.hist.map(w => w.id) }));
+  // And live sync itself recovers: a stuck request times out instead of wedging _liveBusy for the session.
+  await ev(A, () => { startEmpty(); addExToWorkout('cex1'); clearTimeout(_livePushT); });
+  db.hang = 1;
+  const r = await Promise.race([ev(A, () => liveSync()), wait(15000).then(() => 'still hung after 15s')]);
+  const r2 = await Promise.race([ev(A, () => liveSync()), wait(5000).then(() => 'still hung')]);
+  check('live hung sync: a stuck request times out and the next sync goes through', r === 'error' && (r2 === 'written' || r2 === 'replaced' || r2 === 'inserted'), r + ' / ' + r2);
+  check('live hung sync: no console errors', A.errors.length === 0, A.errors.join(' | '));
+  await A.ctx.close();
+}
+
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync];
 

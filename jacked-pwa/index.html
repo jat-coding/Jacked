@@ -3042,6 +3042,18 @@ const LIVE_DEBOUNCE_MS=1200;
 let LIVE_POLL_MS=5000;                  // Realtime fallback while a workout is open
 const LIVE_STALE_MS=STALE_TOTAL_MS;     // an 'active' row untouched this long is abandoned; the next Start replaces it
 const LIVE_FINISH_TIMEOUT_MS=4000;      // no answer by then = finish offline, settle with the server later
+// fetch has no timeout of its own: on a half-open socket (weak cell signal, just back from the
+// background) a request can sit unanswered for minutes, and one stuck read held _liveBusy -- and
+// every Finish / auto-finish waiting on it -- hostage (2026-10-12 adversarial find). Every live
+// request gives up after this; a CAS that did land anyway is simply seen on the next read.
+const LIVE_REQ_TIMEOUT_MS=10000;
+function liveTimed(q, ms=LIVE_REQ_TIMEOUT_MS){
+  let to; return Promise.race([q, new Promise((_,rej)=>{ to=setTimeout(()=>rej(new Error('live request timeout')),ms); })]).finally(()=>clearTimeout(to));
+}
+// Wait for p, but never longer than ms (resolves undefined then). For waits on an in-flight sync.
+function liveSettle(p, ms=LIVE_FINISH_TIMEOUT_MS){
+  let to; return Promise.race([Promise.resolve(p).catch(()=>{}), new Promise(r=>{ to=setTimeout(r,ms); })]).finally(()=>clearTimeout(to));
+}
 const LIVE_Q_KEY='jacked_liveFinishQ', LIVE_DECLINED_KEY='jacked_liveDeclined';   // device state, never in the blob
 const LIVE_Z={u:0,ud:''};
 let _liveShadow=null, _liveDirty=false, _livePushT=null, _liveBusy=null, _liveAgain=false, _livePollAt=0,
@@ -3227,8 +3239,8 @@ function liveFold(target, mine){
 function liveOn(){ const p=gProf(); return supaEnabled() && !!(p&&p.code); }
 function liveCode(){ return gProf().code; }
 async function liveRead(code){
-  const { data, error } = await SUPA.from('live_workouts')
-    .select('session_id,status,doc,rev,updated_at,updated_by,hr,kcal,stats_at').eq('code',code).maybeSingle();
+  const { data, error } = await liveTimed(SUPA.from('live_workouts')
+    .select('session_id,status,doc,rev,updated_at,updated_by,hr,kcal,stats_at').eq('code',code).maybeSingle());
   if(error) throw error;
   if(data) data.doc=liveIn(data.doc);
   return data||null;
@@ -3236,16 +3248,16 @@ async function liveRead(code){
 const liveWirePatch=p=>p.doc?{...p,doc:liveOut(p.doc)}:p;
 // Compare-and-swap on rev: lands only if nobody wrote since we read `rev`.
 async function liveCas(code, rev, patch){
-  const { data, error } = await SUPA.from('live_workouts')
+  const { data, error } = await liveTimed(SUPA.from('live_workouts')
     .update({...liveWirePatch(patch), rev:rev+1, updated_at:new Date().toISOString(), updated_by:liveDevice()})
-    .eq('code',code).eq('rev',rev).select('rev');
+    .eq('code',code).eq('rev',rev).select('rev'));
   if(error) throw error;
   if(data&&data.length){ _liveStats.writes++; return true; }
   _liveStats.casMiss++; return false;
 }
 async function liveInsert(code, patch){
-  const { error } = await SUPA.from('live_workouts')
-    .insert({code, rev:1, updated_at:new Date().toISOString(), updated_by:liveDevice(), ...liveWirePatch(patch)});
+  const { error } = await liveTimed(SUPA.from('live_workouts')
+    .insert({code, rev:1, updated_at:new Date().toISOString(), updated_by:liveDevice(), ...liveWirePatch(patch)}));
   if(error){ if(error.code==='23505'){ _liveStats.casMiss++; return false; } throw error; }   // someone inserted first
   _liveStats.writes++; return true;
 }
@@ -3533,7 +3545,7 @@ function autoFinishStale(synced) {
   // activity can show the workout is not idle after all (Phil's review, BOARD.md cd9895b 2a/2d).
   if(!synced&&liveOn()&&_liveSolo!==aw.id){
     const id=aw.id;
-    liveSync().then(()=>{ if(!aw||aw.id!==id||_finLock) return;
+    liveSettle(liveSync()).then(()=>{ if(!aw||aw.id!==id||_finLock) return;
       if(awIsStale()) autoFinishStale(true); else { clearInterval(wt); wt=setInterval(updWT,1000); } });
     return;
   }
@@ -5123,7 +5135,7 @@ function _finishWContinue(auto,ts) {
     const p=gProf(); if(p&&p.code&&_liveSolo!==id) liveQueueFinish(liveWire(aw));   // signed out/offline: settle the live row later
     _commitFinish(endTs,0); return;
   }
-  const busy=_liveBusy||Promise.resolve();
+  const busy=liveSettle(_liveBusy);   // let an in-flight sync land first, but never wait on it forever
   // Finish nonce (doc.finishedBy): if the winning CAS's reply is lost, the retry recognises its own
   // win in the row instead of taking it for another device's Finish.
   aw.finishedBy=liveDevice()+':'+Math.random().toString(36).slice(2,10);
