@@ -10,6 +10,9 @@
 .claude/
 .netlify/
 
+# Test dependencies
+tests/e2e/node_modules/
+
 # Transient working dirs
 Archive/
 Input Files/

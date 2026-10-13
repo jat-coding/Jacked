@@ -1,8 +1,18 @@
 ---
 project: Jacked
 date: 2026-09-30
-status: partial (dumbbell done; Smith machine STOPPED, needs his call)
+status: superseded 2026-10-02 -- see note below; Smith machine resolved, no sourced ratio used
 ---
+
+**2026-10-11 update:** the a/b/c sourced-ratio choice below was overtaken on 2026-10-02: Mr. Roni
+dropped the sourced-conversion approach entirely and set a flat convention for Bench-Maxing,
+Shoulder-Maxing and the 1000lb Club bench leg instead -- barbell 100%, dumbbell +15%
+(`BADGE_DB_BONUS=1.15`), Smith machine -15% (`BADGE_SMITH_CUT=0.85`) -- see `jacked-pwa/index.html`
+~line 4174-4184. Confirmed again 2026-10-11 11:43pm ("Smith should have a negative bonus and
+dumbbell should have a positive bonus like we established a long time ago") when this task's stale
+"needs his call" status surfaced as an open item; no code change needed, the -15%/+15% convention
+was already live and unchanged since 10-02. Dumbbell bonus here is on the TOTAL of both dumbbells
+logged together, not per-hand (2026-10-05 correction, same file).
 
 # Bench-Maxing substitutes (Smith machine, dumbbell)
 

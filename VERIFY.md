@@ -53,6 +53,16 @@ system libs on the desktop host — resolved 2026-09-15
    bugs after the build brief was written. Caught only because `jacked-push.sh` merged `main` in and the
    commit list showed them; build to what the other client already shipped unless there is a reason not to.
 
+10. **Adversarial pass, not just the deterministic suite** ([[jacked-finish-bugs-fixed-2026-10-12]]):
+    the double routine-update prompt and the Finish-workout stuck-on-screen bug both shipped to
+    staging and were only found by him using the real app, because the existing e2e suite only
+    exercised the happy path (no rejected/slow network, no "swap where the target already exists
+    in the routine"). Any change to the active-workout/finish/live-sync pipeline (VERIFY #7's list)
+    needs a written-first adversarial repro for its failure mode (force the dependency to fail/
+    reject/return garbage, race two devices, double-tap, go offline mid-action) BEFORE the fix, same
+    standard as the 2026-09-18 GPS stress test (4 real bugs found that way, see
+    memory/project/jacked-workout-app.md) — not just "all green" on tests written to the happy path.
+
 ## Screens/data that matter for this kind of change
 
 - Exercise Library tab (add/search/filter by muscle group + Cardio chip)
