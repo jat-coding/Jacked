@@ -3073,7 +3073,8 @@ function liveSettle(p, ms=LIVE_FINISH_TIMEOUT_MS){
 const LIVE_Q_KEY='jacked_liveFinishQ', LIVE_DECLINED_KEY='jacked_liveDeclined';   // device state, never in the blob
 const LIVE_Z={u:0,ud:''};
 let _liveShadow=null, _liveDirty=false, _livePushT=null, _liveBusy=null, _liveAgain=false, _livePollAt=0,
-    _liveChan=null, _liveSolo=null, _liveAsk=null, _liveHold=false, _finLock=null, _liveOffered=new Set();
+    _liveChan=null, _liveSolo=null, _liveAsk=null, _liveHold=false, _finLock=null, _liveOffered=new Set(),
+    _liveSeen=null, _liveSeenAt=0;   // the session id this device last saw ON the row (resumed, wrote or read it there), and when
 const _liveStats={writes:0, casMiss:0, commits:0, dupFinish:0, recomputes:0};
 function liveDevice(){
   let d=null; try{ d=localStorage.getItem('jacked_deviceId'); }catch(_){}
@@ -3288,6 +3289,7 @@ function liveWho(row){ return liveFrom((row&&row.doc&&row.doc.startedBy)||(row&&
 function liveDeclined(){ try{ const a=JSON.parse(localStorage.getItem(LIVE_DECLINED_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(_){ return []; } }
 function liveDecline(id){ try{ localStorage.setItem(LIVE_DECLINED_KEY, JSON.stringify([...liveDeclined(),id].slice(-20))); }catch(_){} }
 
+function liveSeen(at){ _liveSeen=aw.id; _liveSeenAt=at||Date.now(); }
 function liveSchedule(ms=LIVE_DEBOUNCE_MS){
   if(!liveOn()) return;
   clearTimeout(_livePushT); _livePushT=setTimeout(()=>{ _livePushT=null; liveSync(); }, ms);
@@ -3317,15 +3319,25 @@ async function _liveSyncOnce(){
     liveStamp();
     const mine=liveWire(aw);
     if(!row){
-      if(await liveInsert(code,{session_id:aw.id,status:'active',doc:mine})){ _liveDirty=false; return 'inserted'; }
+      if(await liveInsert(code,{session_id:aw.id,status:'active',doc:mine})){ _liveDirty=false; liveSeen(); return 'inserted'; }
       continue;
     }
     if(row.session_id!==aw.id){
+      // Our session WAS on the row and another one has replaced it: the row is only ever replaced
+      // once the session on it is finished/discarded/abandoned, so ours was ended elsewhere (e.g. the
+      // phone finished it offline, started a new one and reconnected -- the finish and the new start
+      // land back to back, so this device never sees the 'finished' row). Close, don't offer to fold
+      // an already-saved workout into the new one (2026-10-12 adversarial find: "Add to it" double-
+      // counted its sets; "Keep separate" left a zombie copy that later saved a duplicate).
+      // Only when that can't be staleness (we saw it on the row within the stale window) and nothing
+      // typed here is still unsent -- otherwise the old offer stands, so no set is ever dropped.
+      if(_liveSeen===aw.id&&Date.now()-_liveSeenAt<LIVE_STALE_MS&&!_liveDirty){ liveCloseRemote(null,'ended',row.updated_by); return 'ended'; }
       if(liveFresh(row)) return await liveOtherSession(row);
       // A finished/discarded/abandoned earlier session: this Start replaces it.
-      if(await liveCas(code,row.rev,{session_id:aw.id,status:'active',doc:mine,hr:null,kcal:null,stats_at:null})){ _liveDirty=false; return 'replaced'; }
+      if(await liveCas(code,row.rev,{session_id:aw.id,status:'active',doc:mine,hr:null,kcal:null,stats_at:null})){ _liveDirty=false; liveSeen(); return 'replaced'; }
       continue;
     }
+    liveSeen(Date.parse(row.updated_at));
     if(row.status==='discarded'){ liveCloseRemote(null,'discarded',row.updated_by); return 'discarded'; }
     const merged=mergeLive(row.doc, mine);
     if(row.status==='finished'){ const r=await liveLate(code,row,merged); if(r==='retry-late') continue; return r; }
@@ -3426,6 +3438,7 @@ function liveCloseRemote(doc,why,by){
   clearAW(); aw=null; _liveShadow=null; _finLock=null; sp('home');
   const from=liveFrom(by);
   if(why==='discarded'){ toast(`Workout discarded on your ${from}`,'ok'); return; }
+  if(why==='ended'){ toast(`This workout was ended on your ${from}`,'ok'); [5000,30000].forEach(ms=>setTimeout(()=>{ cloudPullMerge().then(c=>{ if(c) reRenderActivePage(); }).catch(()=>{}); },ms)); return; }
   if(why==='late'){ toast(`Your extra sets were added to the workout finished on your ${from}`,'ok'); return; }
   // Summary from the finished doc; the finishing device committed history + PRs, and they
   // arrive here through the normal backup pull.
@@ -3456,7 +3469,7 @@ async function liveResumeRemote(){
   let row; try{ row=await liveRead(liveCode()); }catch(e){ console.warn('live read',e); return 'error'; }
   if(!liveFresh(row)||aw) return 'gone';
   aw=liveFromWire(row.doc,null); awStart=aw.startedAt||Date.now(); awTouch=Math.max(liveTouch(row.doc),Date.now());
-  _finLock=null; _liveSolo=null; liveRebase(); _liveDirty=false;
+  _finLock=null; _liveSolo=null; liveSeen(Date.parse(row.updated_at)); liveRebase(); _liveDirty=false;
   beginW(); liveApplyRest();
   return 'resumed';
 }

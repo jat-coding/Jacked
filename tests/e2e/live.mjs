@@ -446,7 +446,7 @@ export async function liveFinishHungSync() {
   await A.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale];
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale, liveEndedElsewhere];
 
 // The app is killed (swiped away) right after tapping Finish: the Finish claim reached the
 // server and flipped the row to 'finished', but the local commit never ran. On reopening, the
@@ -585,5 +585,48 @@ export async function liveTypingStale() {
   await A.page.keyboard.type('9');
   check('live typing (stale layout): typing into an exercise the watch removed changes nothing else', (await w(A, 'cex3')) === null && (await w(A, 'cex2'))[0][0] === 135, JSON.stringify(await ev(A, () => aw.exercises.map(e => e.exId))));
   check('live typing stale: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+// Phone loses signal, finishes the shared workout offline, starts a new one and reconnects: the
+// queued finish and the new session land back to back, so the watch never sees the 'finished'
+// row -- only a different session on it. It used to treat that as "a workout is already in
+// progress on your other phone, add this workout's sets to it?": "Add" double-counted its
+// already-saved sets into the new workout, "Keep separate" left a zombie copy that later saved a
+// duplicate (2026-10-12 adversarial find). Now it closes, unless closing could drop data.
+export async function liveEndedElsewhere() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const prompts = () => ev(B, () => _cfLog.splice(0));
+  await ev(B, () => { window._cfLog = []; window.showConfirm = m => { _cfLog.push(m); return Promise.resolve(false); }; });
+  const run = async ({ unsent = false, seenLongAgo = false } = {}) => {
+    db.row = null;
+    const sid = await startShared(db, A, [[100, 5, true]]);
+    await ev(B, () => { aw = null; _liveSolo = null; return liveResumeRemote(); });
+    db.offline.add('phone-A');
+    await ev(B, () => { addSet(0); const s = aw.exercises[0].sets[1]; s.weight = 110; s.reps = 3; s.done = true; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+    await ev(A, () => { _finishWContinue(false); });
+    await wait(1200);
+    await ev(A, () => { cm('fsModal'); startRW('r1'); aw.exercises[0].sets[0] = { weight: 120, reps: 2, done: true }; renderWS(); clearTimeout(_livePushT); });
+    const sid2 = await ev(A, () => aw.id);
+    db.offline.delete('phone-A');
+    await ev(A, () => liveFlushFinishQ().then(() => liveSync()));
+    if (unsent) await ev(B, () => { addSet(0); const s = aw.exercises[0].sets[2]; s.weight = 115; s.reps = 2; s.done = true; renderWS(); clearTimeout(_livePushT); });
+    if (seenLongAgo) await ev(B, () => { _liveSeenAt = Date.now() - 91 * 60000; });
+    const res = await ev(B, () => liveSync());
+    const a = await snap(A), b = await snap(B);
+    return { sid, sid2, res, a, b, p: await prompts() };
+  };
+  const r1 = await run();
+  check('live ended elsewhere: the watch closes the finished workout instead of offering to fold it into the new one', r1.res === 'ended' && !r1.b.aw && r1.p.length === 0, JSON.stringify({ res: r1.res, p: r1.p }));
+  check('live ended elsewhere: the finished workout is saved once on the phone with the watch\'s set; the new session owns the row', r1.a.hist.filter(w => w.id === r1.sid).length === 1 && r1.a.hist.find(w => w.id === r1.sid).sets === 2 && db.row.session_id === r1.sid2 && db.row.status === 'active' && !r1.b.hist.some(w => w.id === r1.sid));
+  // Sets typed on the watch that never reached the server: closing would drop them -> the old offer stands.
+  await ev(A, () => { cm('fsModal'); aw = null; clearAW(); });
+  const r2 = await run({ unsent: true });
+  check('live ended elsewhere: with an unsent set on the watch it still offers (never silently drops a set)', r2.res === 'solo' && r2.b.aw && r2.p.length === 1, JSON.stringify({ res: r2.res, p: r2.p }));
+  // Last saw its session on the row longer ago than the stale window: replacement may mean abandoned -> the old offer stands.
+  await ev(A, () => { cm('fsModal'); aw = null; clearAW(); });
+  const r3 = await run({ seenLongAgo: true });
+  check('live ended elsewhere: when the replacement could be staleness it still offers', r3.res === 'solo' && r3.p.length === 1, JSON.stringify({ res: r3.res, p: r3.p }));
+  check('live ended elsewhere: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
   await A.ctx.close(); await B.ctx.close();
 }
