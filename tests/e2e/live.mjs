@@ -446,7 +446,7 @@ export async function liveFinishHungSync() {
   await A.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed];
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale];
 
 // The app is killed (swiped away) right after tapping Finish: the Finish claim reached the
 // server and flipped the row to 'finished', but the local commit never ran. On reopening, the
@@ -487,5 +487,44 @@ export async function liveFinishResumed() {
   const c = await snap(A);
   check('double-tap Finish: one commit, workout closed', !c.aw && c.stats.commits === c0 + 1, JSON.stringify(c.stats));
   check('live finish resumed: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+// The phone's Reorder Exercises modal is open while the watch adds (or removes) an exercise.
+// Its rows were keyed by array index, so dropping a row in the now-stale list rebuilt
+// aw.exercises from the wrong indices: the watch's new exercise -- sets logged on it and all --
+// fell off the end, got tombstoned, and was deleted on BOTH devices (2026-10-12 adversarial find).
+const dragFirstBelowSecond = () => {
+  const cont = document.getElementById('reorderList'), rows = [...cont.children];
+  const grip = rows[0].querySelector('.cdrag'), r0 = rows[0].getBoundingClientRect();
+  grip.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, clientY: r0.top + r0.height / 2, bubbles: true }));
+  cont.insertBefore(rows[1], rows[0]);
+  window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7 }));
+};
+export async function liveReorderStale() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const ids = d => ev(d, () => aw.exercises.map(e => e.exId).join());
+  await ev(A, () => { startRW('r2'); aw.exercises[0].sets[0] = { weight: 50, reps: 5, done: true }; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveResumeRemote());
+  await ev(A, () => openReorder());
+  await ev(B, () => { addExToWorkout('cex3'); aw.exercises[2].sets[0] = { weight: 200, reps: 8, done: true }; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => liveSync());
+  await ev(A, dragFirstBelowSecond);
+  await ev(A, () => { clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveSync());
+  const [a1, b1] = [await ids(A), await ids(B)];
+  const bSet = await ev(B, () => { const e = aw.exercises.find(x => x.exId === 'cex3'); return e ? e.sets[0].weight : null; });
+  check('live reorder (stale list): the watch\'s new exercise + its logged set survive a drag on the phone, both devices', a1 === 'cex2,cex1,cex3' && b1 === a1 && bSet === 200, a1 + ' / ' + b1 + ' / ' + bSet);
+  // Reverse: the watch REMOVES an exercise while the phone's list is open; a drag must not
+  // resurrect it or shuffle the wrong rows.
+  await ev(A, () => { cm('reorderModal'); openReorder(); });   // list now: cex2, cex1, cex3
+  await ev(B, () => { rmEx(aw.exercises.findIndex(e => e.exId === 'cex2')); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => liveSync());
+  await ev(A, dragFirstBelowSecond);   // stale rows: [cex2(gone), cex1, cex3] -> drag cex2 below cex1
+  await ev(A, () => { clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveSync());
+  const [a2, b2] = [await ids(A), await ids(B)];
+  check('live reorder (stale list): an exercise the watch removed stays removed, the rest keep their order', a2 === 'cex1,cex3' && b2 === a2, a2 + ' / ' + b2);
+  check('live reorder stale: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
   await A.ctx.close(); await B.ctx.close();
 }

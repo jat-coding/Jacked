@@ -4374,12 +4374,17 @@ function openReorder(){ if(!aw||!aw.exercises.length) return; renderReorder(); o
 function renderReorder(){
   const el=document.getElementById('reorderList'); if(!el) return;
   el.style.position='relative';
-  el.innerHTML=aw.exercises.map((ex,i)=>`<div class="ro-row" data-id="${i}">
+  el.innerHTML=aw.exercises.map((ex,i)=>`<div class="ro-row" data-id="${esc(roKey(ex,i))}">
     <span style="font-family:var(--fh);font-weight:700;color:var(--muted);width:18px">${i+1}</span>
     <span style="flex:1;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ex.name)}</span>
     <div class="cdrag" aria-label="Drag to reorder" onpointerdown="cardDragStart(event)"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg></div>
   </div>`).join('');
 }
+// Rows are keyed by the exercise's live id, not its index: the list can be stale by the time
+// it is dropped (the watch added/removed an exercise while it was open), and old indices then
+// pointed at the wrong exercises -- one the watch had just added was dropped from aw and
+// tombstoned on every device (2026-10-12 adversarial find).
+function roKey(ex,i){ return ex.lid||('i'+i); }
 function moveReorder(i,dir){ reorderMove(i,i+dir); }
 function reorderMove(from,to){
   if(from<0||to<0||to>=aw.exercises.length||from===to) return;
@@ -6598,8 +6603,11 @@ function cardDragStart(e){
     window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
     const ids=[...cont.children].map(x=>x.dataset.id);
     if(cont.id==='reorderList'){
-      // Workout exercises: ids are the old indices in their new order.
-      const old=aw.exercises; aw.exercises=ids.map(i=>old[+i]).filter(Boolean);
+      // Workout exercises: ids are roKey()s in their new order. Anything not in the list
+      // (arrived from another device after it was drawn) keeps its place at the end.
+      const old=aw.exercises, byKey=new Map(old.map((x,i)=>[roKey(x,i),x]));
+      const moved=ids.map(k=>byKey.get(k)).filter(Boolean);
+      aw.exercises=[...moved,...old.filter(x=>!moved.includes(x))];
       renderReorder(); renderWS(); saveAW(); return;
     }
     if(cont.id==='routineOrderList'){
