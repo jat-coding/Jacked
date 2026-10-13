@@ -1105,9 +1105,12 @@ async function portraitLock() {
   // Unchanged: portrait, keyboard-shrunk portrait, tablet, desktop.
   { const { page, ctx } = await phone({ width: 390, height: 844, angle: 0 });
     const s = await st(page), nav = await R(page, 'nav');
-    check('portrait: no data-rot, no transform, guard hidden', s.rot === null && s.tf === 'none' && s.guard === 'none' && s.pos !== 'fixed', JSON.stringify(s));
+    // body is position:fixed unconditionally now (2026-10-12, document never scrolls -- see
+    // jacked-pwa/index.html), so s.pos no longer distinguishes the rotate-lock from plain
+    // portrait; data-rot/transform/guard still do.
+    check('portrait: no data-rot, no transform, guard hidden', s.rot === null && s.tf === 'none' && s.guard === 'none', JSON.stringify(s));
     check('portrait: nav is a wide pill at the bottom', nav.w > nav.h * 3 && nav.bottom > 800 && nav.bottom <= 844, JSON.stringify(nav));
-    check('portrait: #jkRoot is layout-transparent (display:contents)', await page.evaluate(() => getComputedStyle(document.getElementById('jkRoot')).display === 'contents'));
+    check('portrait: #jkRoot is the one scroll container (position:absolute, overflow-y:auto)', await page.evaluate(() => { const c = getComputedStyle(document.getElementById('jkRoot')); return c.position === 'absolute' && c.overflowY === 'auto'; }));
     await page.screenshot({ path: `${SHOTS}/lock-portrait-unchanged.png` }); await ctx.close(); }
   { // keyboard-shrunk portrait (~360x300 layout viewport reads as landscape); worst case: device reports angle 90 anyway.
     for (const a of [0, 90]) {
@@ -1117,7 +1120,7 @@ async function portraitLock() {
       await ctx.close(); } }
   { const { page, ctx } = await phone({ width: 1024, height: 768, angle: 90 });
     const s = await st(page);
-    check('tablet landscape 1024x768 (portrait-natural, angle 90): untouched', s.tf === 'none' && s.guard === 'none' && s.pos !== 'fixed', JSON.stringify(s));
+    check('tablet landscape 1024x768 (portrait-natural, angle 90): untouched', s.tf === 'none' && s.guard === 'none', JSON.stringify(s));
     await ctx.close(); }
   { const { page, ctx } = await phone({ width: 1000, height: 500, angle: 0 });
     const s = await st(page);
@@ -1381,7 +1384,7 @@ async function typeRulebook() {
     await page.evaluate(p => sp(p), pg); await page.waitForTimeout(300);
     all[pg] = await page.evaluate(measure);
     if (pg === 'home' || pg === 'metrics') await page.screenshot({ path: `${SHOTS}/rulebook-${pg}-393.png`, fullPage: false });
-    if (pg === 'metrics') { await page.evaluate(() => window.scrollTo(0, 400)); await page.waitForTimeout(150); await page.screenshot({ path: `${SHOTS}/rulebook-metrics-scrolled-393.png` }); }
+    if (pg === 'metrics') { await page.evaluate(() => document.getElementById('jkRoot').scrollTo(0, 400)); await page.waitForTimeout(150); await page.screenshot({ path: `${SHOTS}/rulebook-metrics-scrolled-393.png` }); }
     if (pg === 'leaderboard') await page.screenshot({ path: `${SHOTS}/rulebook-friends-393.png` });
     check(`rulebook: ${pg} no page errors`, errors.length === 0, errors.join(' | '));
     await ctx.close();
@@ -2732,6 +2735,10 @@ async function popupScrollLock() {
   await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
   const Y = 600;
   const pageTop = () => page.evaluate(() => document.querySelector('.page.active').getBoundingClientRect().top);
+  // #jkRoot is the real scroll container now (2026-10-12, see jacked-pwa/index.html); window
+  // never scrolls, so these suites read/set the lock target there instead of window.scrollY.
+  const jScrollTo = y => page.evaluate(y => document.getElementById('jkRoot').scrollTo(0, y), y);
+  const jScrollY = () => page.evaluate(() => document.getElementById('jkRoot').scrollTop);
   const OPEN = {
     recap: () => openRecap(2026, 7), badge: () => badgeInfo(computeBadges()[0].name), achievements: () => openAch(),
     profile: () => om('profModal'), friendProfile: () => om('fpModal'), workoutDetail: () => om('wdModal'), lightbox: () => om('avLightbox'),
@@ -2740,36 +2747,36 @@ async function popupScrollLock() {
   const CLOSE = { recap: 'closeRecap()', badge: 'closeBadgeFull()', achievements: 'closeAch()', profile: "cm('profModal')", friendProfile: "cm('fpModal')",
     workoutDetail: "cm('wdModal')", lightbox: "cm('avLightbox')", confirm: "document.getElementById('cfCancel')?document.getElementById('cfCancel').click():cm('confirmModal')", exInfo: "cm('exInfoModal')", cardOrder: "cm('cardOrderModal')" };
   for (const [name, open] of Object.entries(OPEN)) {
-    await page.evaluate(y => window.scrollTo(0, y), Y); await page.waitForTimeout(50);
-    const y0 = await page.evaluate(() => window.scrollY), t0 = await pageTop();
+    await jScrollTo(Y); await page.waitForTimeout(50);
+    const y0 = await jScrollY(), t0 = await pageTop();
     await page.evaluate(`(${open.toString()})()`); await page.waitForTimeout(150);
-    const yOpen = await page.evaluate(() => window.scrollY);
+    const yOpen = await jScrollY();
     await page.mouse.move(195, 420); await page.mouse.wheel(0, 900); await page.waitForTimeout(150);
     const c = await ctx.newCDPSession(page);
     await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 195, y: 600 }] });
     for (let k = 1; k <= 8; k++) await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 195, y: 600 - k * 50 }] });
     await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await c.detach();
     await page.waitForTimeout(250);
-    const yAfter = await page.evaluate(() => window.scrollY), t1 = await pageTop();
-    check(`scroll lock: ${name}: wheel + swipe over the popup leave window.scrollY unchanged`, yAfter === yOpen, `${yOpen} -> ${yAfter}`);
+    const yAfter = await jScrollY(), t1 = await pageTop();
+    check(`scroll lock: ${name}: wheel + swipe over the popup leave the scroll position unchanged`, yAfter === yOpen, `${yOpen} -> ${yAfter}`);
     check(`scroll lock: ${name}: the page behind doesn't move`, Math.abs(t1 - t0) < 1, `${t0} -> ${t1}`);
     await page.evaluate(CLOSE[name]); await page.waitForTimeout(150);
-    const yClosed = await page.evaluate(() => window.scrollY);
+    const yClosed = await jScrollY();
     check(`scroll lock: ${name}: closing puts the page back where it was`, yClosed === y0 && y0 > 0, `${y0} -> ${yClosed}`);
   }
   // Nested: a confirm over the profile popup; closing the confirm keeps the lock until the profile closes too.
-  await page.evaluate(y => window.scrollTo(0, y), Y);
+  await jScrollTo(Y);
   await page.evaluate(() => { om('profModal'); showConfirm('Sure?'); }); await page.waitForTimeout(100);
   await page.evaluate(() => { const b = document.getElementById('cfCancel'); b ? b.click() : cm('confirmModal'); }); await page.waitForTimeout(100);
   const mid = await page.evaluate(() => ({ locked: document.documentElement.classList.contains('popup-lock'), open: !!document.querySelector('#profModal.open') }));
   check('scroll lock: nested: closing the confirm keeps the page pinned while the profile is open', mid.locked && mid.open, JSON.stringify(mid));
   await page.evaluate(() => cm('profModal')); await page.waitForTimeout(100);
-  const end = await page.evaluate(() => ({ locked: document.documentElement.classList.contains('popup-lock'), y: window.scrollY }));
+  const end = { locked: await page.evaluate(() => document.documentElement.classList.contains('popup-lock')), y: await jScrollY() };
   check('scroll lock: nested: closing the last popup releases it and restores the spot', !end.locked && end.y === Y, JSON.stringify(end));
   // Backdrop tap closes and releases too.
   await page.evaluate(() => om('profModal')); await page.waitForTimeout(100);
   await page.mouse.click(195, 30); await page.waitForTimeout(150);
-  const bd = await page.evaluate(() => ({ open: !!document.querySelector('.mo.open'), locked: document.documentElement.classList.contains('popup-lock'), y: window.scrollY }));
+  const bd = { open: await page.evaluate(() => !!document.querySelector('.mo.open')), locked: await page.evaluate(() => document.documentElement.classList.contains('popup-lock')), y: await jScrollY() };
   check('scroll lock: backdrop tap closes and unpins', !bd.open && !bd.locked && bd.y === Y, JSON.stringify(bd));
   // A long popup still scrolls its own content.
   await page.evaluate(() => openAch()); await page.waitForTimeout(150);
@@ -2792,15 +2799,16 @@ async function navPinned() {
   const { page, ctx, errors } = await phone({ seed: { hist, friends, closeBuddies: friends.slice(0, 4).map(f => f.code), bw: 180 / LB }, now: SEP15 });
   await page.evaluate(() => { window.__wo = 0; Object.defineProperty(window, 'orientation', { get: () => window.__wo, configurable: true }); });
   await page.evaluate(() => sp('leaderboard')); await page.waitForTimeout(400);
+  // #jkRoot is the real scroll container now (2026-10-12); window never scrolls.
   const nav = () => page.evaluate(() => { const b = document.querySelector('nav').getBoundingClientRect(), nb = parseFloat(getComputedStyle(document.querySelector('nav')).bottom);
-    return { bottom: b.bottom, want: innerHeight - nb, w: b.width, h: b.height, y: window.scrollY, pos: document.body.style.position, top: document.body.style.top }; });
+    return { bottom: b.bottom, want: innerHeight - nb, w: b.width, h: b.height, y: document.getElementById('jkRoot').scrollTop, pos: document.body.style.position, top: document.body.style.top }; });
   const pinned = n => Math.abs(n.bottom - n.want) < 1 && n.h < 90 && n.w > 300;
   const swipe = async (dy, x = 195, y0 = 620) => { const c = await ctx.newCDPSession(page);
     await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y0 }] });
     for (let k = 1; k <= 10; k++) await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y0 - k * dy / 10 }] });
     await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await c.detach(); await page.waitForTimeout(250); };
   let n = await nav();
-  check('nav pinned: Friends tab is long enough to scroll, nav starts at the viewport bottom', pinned(n) && (await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)) > 600, JSON.stringify(n));
+  check('nav pinned: Friends tab is long enough to scroll, nav starts at the viewport bottom', pinned(n) && (await page.evaluate(() => { const r = document.getElementById('jkRoot'); return r.scrollHeight - r.clientHeight; })) > 600, JSON.stringify(n));
   await swipe(350); n = await nav();
   check('nav pinned: touch-scrolling Friends moves the page, nav stays at the bottom', n.y > 100 && pinned(n), JSON.stringify(n));
   await page.mouse.move(195, 400); await page.mouse.wheel(0, 300); await page.waitForTimeout(200); n = await nav();
@@ -2812,10 +2820,10 @@ async function navPinned() {
   const bad = [];
   // A loaded machine (other headless browsers running) can still be laying out after the fixed waits: wait until
   // scrollY holds still for 5 frames before reading it, so the check measures the lock, not render lag.
-  const settle = () => page.evaluate(() => new Promise(res => { let last = -1, same = 0, n = 0; const f = () => { const y = scrollY; same = y === last ? same + 1 : 0; last = y; if (same >= 5 || ++n > 120) res(); else requestAnimationFrame(f); }; requestAnimationFrame(f); }));
+  const settle = () => page.evaluate(() => new Promise(res => { let last = -1, same = 0, n = 0; const f = () => { const y = document.getElementById('jkRoot').scrollTop; same = y === last ? same + 1 : 0; last = y; if (same >= 5 || ++n > 120) res(); else requestAnimationFrame(f); }; requestAnimationFrame(f); }));
   for (const [name, open, close] of OPEN) {
-    await page.evaluate(() => { sp('leaderboard'); window.scrollTo(0, 500); }); await page.waitForTimeout(60); await settle();
-    const y0 = await page.evaluate(() => window.scrollY);
+    await page.evaluate(() => { sp('leaderboard'); document.getElementById('jkRoot').scrollTo(0, 500); }); await page.waitForTimeout(60); await settle();
+    const y0 = await page.evaluate(() => document.getElementById('jkRoot').scrollTop);
     await page.evaluate(open); await page.waitForTimeout(120); await settle();
     const o = await nav();
     await swipe(300, 195, 700); await page.mouse.move(195, 420); await page.mouse.wheel(0, 500); await page.waitForTimeout(120);
@@ -2833,13 +2841,13 @@ async function navPinned() {
   check('nav pinned: a long popup (Achievements) still touch-scrolls its own content', achT > 50, String(achT));
   check('nav pinned: lock released after the last popup', !(await page.evaluate(() => document.documentElement.classList.contains('popup-lock'))));
   // A popup that switches tabs: the new tab starts at its top, nav at the bottom.
-  await page.evaluate(() => { window.scrollTo(0, 500); om('profModal'); }); await page.waitForTimeout(80);
+  await page.evaluate(() => { document.getElementById('jkRoot').scrollTo(0, 500); om('profModal'); }); await page.waitForTimeout(80);
   await page.evaluate(() => { sp('metrics'); cm('profModal'); }); await page.waitForTimeout(150); n = await nav();
   check('nav pinned: a popup that switched tabs lands on the new tab at its top, nav pinned', n.y === 0 && pinned(n), JSON.stringify(n));
   // Portrait-lock rotate path: turn to landscape (fake lock), use popups there, turn back, and around a rotation mid-popup.
   const rotate = async (a) => { const [w, h] = a ? [844, 390] : [390, 844]; await page.setViewportSize({ width: w, height: h });
     await page.evaluate(a => { window.__wo = a === 270 ? -90 : a; dispatchEvent(new Event('orientationchange')); dispatchEvent(new Event('resize')); }, a); await page.waitForTimeout(250); };
-  await page.evaluate(() => { sp('leaderboard'); window.scrollTo(0, 400); }); await page.waitForTimeout(80);
+  await page.evaluate(() => { sp('leaderboard'); document.getElementById('jkRoot').scrollTo(0, 400); }); await page.waitForTimeout(80);
   await rotate(90);
   const land = await page.evaluate(() => ({ rot: document.documentElement.getAttribute('data-rot'), tf: getComputedStyle(document.body).transform }));
   await page.evaluate(() => om('fpModal')); await page.waitForTimeout(100); await page.evaluate(() => cm('fpModal'));
@@ -2848,11 +2856,11 @@ async function navPinned() {
   check('nav pinned: landscape lock engaged, popups used there, back to portrait: nav at the bottom', land.rot === '90' && land.tf !== 'none' && pinned(n), JSON.stringify({ land, n }));
   await swipe(300); n = await nav();
   check('nav pinned: after the rotate path, scrolling keeps the nav at the bottom', pinned(n), JSON.stringify(n));
-  await page.evaluate(() => { window.scrollTo(0, 300); om('fpModal'); }); await page.waitForTimeout(80);
+  await page.evaluate(() => { document.getElementById('jkRoot').scrollTo(0, 300); om('fpModal'); }); await page.waitForTimeout(80);
   await rotate(270); const midRot = await page.evaluate(() => ({ top: document.body.style.top, w: document.body.style.width })); await page.evaluate(() => cm('fpModal')); await page.waitForTimeout(80);
   await rotate(0); await swipe(200); n = await nav();
   check('nav pinned: popup open across a rotation (portrait -> landscape -> close -> portrait): no inline body offset, nav pinned while scrolling', midRot.top === '' && midRot.w === '' && pinned(n), JSON.stringify({ midRot, n }));
-  await page.evaluate(() => { window.scrollTo(0, 300); }); await rotate(90); await page.evaluate(() => om('fpModal')); await page.waitForTimeout(80);
+  await page.evaluate(() => { document.getElementById('jkRoot').scrollTo(0, 300); }); await rotate(90); await page.evaluate(() => om('fpModal')); await page.waitForTimeout(80);
   await rotate(0); await page.evaluate(() => cm('fpModal')); await page.waitForTimeout(80); await swipe(200); n = await nav();
   check('nav pinned: popup opened in landscape, closed in portrait: nav pinned while scrolling', pinned(n) && !(await page.evaluate(() => document.getElementById('jkRoot').style.overflow)), JSON.stringify(n));
   check('nav pinned: no page errors', errors.length === 0, errors.join(' | '));

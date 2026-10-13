@@ -43,9 +43,17 @@ try{screen.orientation.addEventListener('change',set)}catch(e){}})();
   --ah:100vh;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}
-html,body{height:100%;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
+/* 2026-10-12 (recurrence of the 10/2 nav-float bug, this time with no popup involved): the
+   document itself must never scroll. iOS WebKit can re-layout a position:fixed sibling (nav)
+   a frame or more behind a touch-driven scroll of the document/body, which is what let it
+   visibly detach and float mid-content -- independent of any JS scroll-lock, which only ever
+   addressed the popup case. html/body are pinned to the viewport and never scroll; #jkRoot
+   (below) becomes the one real scroll container, same pattern already used for the rotated
+   landscape frame. -webkit-overflow-scrolling:touch is dropped here -- it only ever does
+   anything on an overflow:auto/scroll element, never on the document root, so it was dead. */
+html,body{height:100%;overscroll-behavior:none;position:fixed;inset:0;overflow:hidden}
 /* Phone-first: stop pinch/double-tap zoom and rubber-band sliding. */
-body{background:var(--bg);color:var(--text);font-family:var(--fb);overflow-x:hidden;touch-action:pan-y;padding-bottom:var(--sab)}
+body{background:var(--bg);color:var(--text);font-family:var(--fb);touch-action:pan-y}
 
 html{--navB:max(8px,calc(var(--sab) - 14px))}
 nav{position:fixed;left:12px;right:12px;bottom:var(--navB);background:var(--bg2);border:1px solid var(--border);border-radius:30px;display:flex;z-index:100;padding:5px}
@@ -438,11 +446,14 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
    the device's natural orientation is landscape (tablet/desktop window, angle 0), data-rot
    is unset and we fall back to hiding the app behind a rotate prompt. max-height:600px keeps
    desktop/tablet landscape usable. Runtime screen.orientation.lock() is also attempted.
-   Everything lives under #jkRoot: it is display:contents in portrait (no layout effect) and
-   becomes the scroller in the rotated frame, so position:fixed layers (nav, modals, toasts,
-   sheets) resolve against the transformed body and rotate with it without scrolling. */
+   Everything lives under #jkRoot: it is the one scroll container in portrait now too (2026-10-12
+   -- see the html,body comment above), filling the fixed/non-scrolling body via inset:0, so
+   position:fixed layers (nav, modals, toasts, sheets) stay outside the scrolling layer and
+   resolve against the real viewport; in the rotated frame it becomes the scroller inside the
+   transformed body instead, so those same fixed layers resolve against the transformed body
+   and rotate with it without scrolling. */
 #rotateGuard{display:none}
-#jkRoot{display:contents}
+#jkRoot{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
 /* min-width guard: with interactive-widget=resizes-content, the on-screen keyboard
    shrinks the LAYOUT viewport, and CSS `orientation` is derived from the viewport —
    not the device. A keyboard-shrunk portrait viewport reads as landscape and used to
@@ -8410,8 +8421,12 @@ document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.
 // nav keeps its scroll-0 place in the document, so it sits Y px up the screen and rides along with the scroll. The
 // page is no longer moved at all: wheel and touch drags over a popup are cancelled unless an element inside the popup
 // can still scroll that way, so body style and window.scrollY never change and there is nothing to restore.
-// In the rotated landscape frame #jkRoot is the scroller; overflow:hidden on it is enough there (touch coordinates are
-// screen axes, not the app's, so the drag filter below is skipped).
+// In the rotated landscape frame #jkRoot is the scroller and touch coordinates are screen axes
+// (not the app's), so the drag filter below is skipped in favor of a hard overflow:hidden lock.
+// 2026-10-12: #jkRoot is also the scroller in plain portrait now (see its CSS above), but there
+// the drag filter (_popupCanScroll + preventDefault below) is precise and already stops it --
+// no overflow toggle needed outside the rotated case. Either way #jkRoot now holds the real
+// scroll position, so the "new tab starts at its top" reset always targets it, not window.
 const SCROLL_LOCK_SEL='.mo.open,#achFull.open,#badgeFull.open,#recapFull.open';
 let _sl=null;   // {page, rot} while pinned
 function syncScrollLock(){
@@ -8426,7 +8441,7 @@ function syncScrollLock(){
     const s=_sl; _sl=null;
     if(root) root.style.overflow='';
     html.classList.remove('popup-lock');
-    if(s.page!==pg){ if(s.rot&&root) root.scrollTop=0; else window.scrollTo(0,0); }   // a popup switched tabs: new tab from its top
+    if(s.page!==pg&&root) root.scrollTop=0;   // a popup switched tabs: new tab from its top
   }
 }
 new MutationObserver(syncScrollLock).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
@@ -8463,8 +8478,8 @@ document.addEventListener('touchmove',e=>{
 // Active-workout mini stat bar: shows once the big .wstats tile has scrolled up under the
 // fixed header, hides again above it. Checked on scroll, not on a timer -- cheap (one
 // getBoundingClientRect) and only does anything while page-active is the visible page.
-// #jkRoot only scrolls in the rotated-landscape frame (see its CSS above); window scrolls
-// in the normal portrait case, so both are listened for and share this one handler.
+// #jkRoot is the one real scroll container now (portrait and the rotated-landscape frame
+// alike, see its CSS above) -- window never scrolls, but its listener is harmless to keep.
 function _wMiniSync(){
   const page=document.querySelector('.page.active');
   const mini=document.getElementById('wMini');
