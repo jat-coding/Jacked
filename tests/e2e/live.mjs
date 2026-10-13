@@ -446,7 +446,7 @@ export async function liveFinishHungSync() {
   await A.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale];
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale];
 
 // The app is killed (swiped away) right after tapping Finish: the Finish claim reached the
 // server and flipped the row to 'finished', but the local commit never ran. On reopening, the
@@ -554,5 +554,36 @@ export async function liveSwitchStale() {
   const a2 = await exs(A);
   check('live switch (stale slot): the watch reordered -> the tapped exercise is switched, the logged one is kept', a2 === 'cex3:,cex2:60', a2);
   check('live switch stale: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+// The phone is typing a weight while the watch removes an earlier exercise. liveRender holds
+// the redraw back while an input has focus (never under his thumb), but aw is already merged,
+// so the focused box's inline uSet(1,0,...) -- and the next tap on a stale "done" box -- hit
+// whatever exercise now sits at that index (2026-10-12 adversarial find: 135 typed into
+// Barbell Row's box landed on Leg Press). wsAt() maps the drawn index to the live one.
+export async function liveTypingStale() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const w = (d, id) => ev(d, id => { const e = aw.exercises.find(x => x.exId === id); return e ? e.sets.map(s => [Math.round(s.weight * 2.20462), s.reps, !!s.done]) : null; }, id);
+  await ev(A, () => { startRW('r2'); addExToWorkout('cex3'); clearTimeout(_livePushT); return liveSync(); });   // [Bench, Row, Leg Press]
+  await ev(B, () => liveResumeRemote());
+  await A.page.locator('#wSession input.si').nth(2).tap();   // Row, set 1, weight box
+  await ev(B, () => { rmEx(0); clearTimeout(_livePushT); return liveSync(); });   // the watch removes Bench meanwhile
+  await ev(A, () => liveSync());
+  await A.page.keyboard.type('135');
+  check('live typing (stale layout): a weight typed into Row\'s box lands on Row, not on Leg Press', (await w(A, 'cex2'))[0][0] === 135 && (await w(A, 'cex3'))[0][0] === 0, JSON.stringify([await w(A, 'cex2'), await w(A, 'cex3')]));
+  // The next tap -- Row's "done" box in the still-stale drawing -- ticks Row's set.
+  await A.page.locator('#wSession .sd').nth(1).tap();
+  await wait(100);
+  check('live typing (stale layout): tapping Row\'s done box ticks Row\'s set, not Leg Press\'s', (await w(A, 'cex2'))[0][2] === true && (await w(A, 'cex3'))[0][2] === false, JSON.stringify([await w(A, 'cex2'), await w(A, 'cex3')]));
+  // A box whose set the watch deleted is ignored rather than throwing or landing elsewhere.
+  await ev(A, () => { renderWS(); });
+  await A.page.locator('#wSession input.si').nth(2).tap();   // Leg Press, set 1, weight
+  await ev(B, () => liveSync());
+  await ev(B, () => { const e = aw.exercises.findIndex(x => x.exId === 'cex3'); aw.exercises.splice(e, 1); renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => liveSync());
+  await A.page.keyboard.type('9');
+  check('live typing (stale layout): typing into an exercise the watch removed changes nothing else', (await w(A, 'cex3')) === null && (await w(A, 'cex2'))[0][0] === 135, JSON.stringify(await ev(A, () => aw.exercises.map(e => e.exId))));
+  check('live typing stale: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
   await A.ctx.close(); await B.ctx.close();
 }

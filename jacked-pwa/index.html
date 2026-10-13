@@ -3820,6 +3820,21 @@ function renderWS() {
   document.getElementById('wSession').innerHTML=h;
   if(typeof _wMiniSync==='function') _wMiniSync();
   saveAW();
+  _wsDrawn=aw.exercises.map(e=>({lid:e.lid,sids:(e.sets||[]).map(s=>s.sid)}));   // after saveAW: ids are stamped by then
+}
+// The layout the workout screen was last DRAWN with, by live id. Its inline handlers carry
+// those indices, and a live merge can replace aw underneath while the redraw is held back
+// (liveRender never redraws under his thumb mid-typing). A stale index then hit the wrong
+// exercise or set -- a weight typed into Row's box landed on Leg Press after the watch
+// removed Bench (2026-10-12 adversarial find). wsAt maps a drawn [ei,si] to the current one;
+// -1 = that exercise/set is gone. Identity whenever the drawing is current.
+let _wsDrawn=null;
+function wsAt(ei,si){
+  const d=aw&&_wsDrawn&&_wsDrawn[ei];
+  if(!d||!d.lid) return [ei,si];
+  const e=aw.exercises.findIndex(x=>x.lid===d.lid); if(e<0) return [-1,-1];
+  const sid=si==null?null:d.sids[si]; if(!sid) return [e,si];
+  return [e, aw.exercises[e].sets.findIndex(x=>x.sid===sid)];
 }
 
 function addExToWorkout(id) {
@@ -3869,7 +3884,7 @@ function unlinkSuperset(ei){
 }
 
 // Swap the exercise at index ei for a different one (keeps position, resets sets).
-function switchEx(ei) { if(aw&&aw.exercises[ei]) openAEModal('workoutReplace',ei); }
+function switchEx(ei) { [ei]=wsAt(ei); if(aw&&aw.exercises[ei]) openAEModal('workoutReplace',ei); }
 function replaceExAt(ei,id) {
   if (!aw||!aw.exercises[ei]) return;
   if (aw.exercises[ei].exId===id) return;   // picked the one already there: a switch would wipe its logged sets for nothing
@@ -3897,6 +3912,7 @@ function moveEx(ei,dir) {
 
 function uSet(ei,si,f,v,conv) {
   if(!aw) return;
+  [ei,si]=wsAt(ei,si); if(ei<0||si<0) return;
   const ex=aw.exercises[ei];
   ex.sets[si][f] = conv==='dur' ? fromDispDur(v,durUnit(ex)) : conv==='clock' ? clockToMin(v) : conv ? fromDisp(v) : (parseFloat(v)||0);
   saveAW();
@@ -3920,6 +3936,7 @@ function setSuggestion(ex,si){
 
 function togSet(ei,si) {
   if (!aw) return;
+  [ei,si]=wsAt(ei,si); if(ei<0||si<0) return;
   const ex=aw.exercises[ei], set=ex.sets[si];
   set.done=!set.done;
   if (set.done) {
@@ -3936,13 +3953,14 @@ function togSet(ei,si) {
 
 function addSet(ei) {
   if (!aw) return;
+  [ei]=wsAt(ei); if(ei<0) return;
   // New set is blank; the previous set shows as a greyed placeholder. Typing
   // starts from zero; checking it without typing adopts the greyed value (togSet).
   aw.exercises[ei].sets.push({weight:0, reps:0, done:false});
   renderWS();
 }
 
-function setCable(ei,v) { if(aw){ aw.exercises[ei].cable=v; saveAW(); renderWS(); } }
+function setCable(ei,v) { [ei]=wsAt(ei); if(aw&&aw.exercises[ei]){ aw.exercises[ei].cable=v; saveAW(); renderWS(); } }
 // Pure bodyweight movement (pull-up, push-up, leg raise, dip…) — uses your body
 // weight as the load, with NO weight input. "Weighted ..." variants and assisted
 // machines are excluded (they keep/handle their own weight).
@@ -3977,7 +3995,7 @@ function effWeight(ex,s){
   if(isBodyweightEx(ex)) return gBW();
   return w;
 }
-function setBWMode(ei,m){ if(!aw||!aw.exercises[ei]) return; aw.exercises[ei].bwMode=m; renderWS(); }
+function setBWMode(ei,m){ [ei]=wsAt(ei); if(!aw||!aw.exercises[ei]) return; aw.exercises[ei].bwMode=m; renderWS(); }
 // Only weight/bodyweight lifts contribute to "lbs lifted" volume and weight PRs.
 // Distance/duration/reps-only must NOT be counted as weight.
 // Plain or assisted bodyweight movement (push-up, pull-up, dip...): the logged "weight" is your own body, not
@@ -4383,7 +4401,7 @@ function metricBadgeInfo(key,tier,value,exName){
   om('achModal');
 }
 
-function removeSet(ei){ if(aw){ const s=aw.exercises[ei].sets; if(s.length>1){ s.pop(); renderWS(); } } }
+function removeSet(ei){ [ei]=wsAt(ei); if(aw&&aw.exercises[ei]){ const s=aw.exercises[ei].sets; if(s.length>1){ s.pop(); renderWS(); } } }
 
 // Reorder modal — drag (desktop) or arrows (touch-friendly).
 function openReorder(){ if(!aw||!aw.exercises.length) return; renderReorder(); om('reorderModal'); }
@@ -4422,7 +4440,7 @@ const gExNotes=()=>S.g('exNotes')||{};
 function exNote(exId){ return gExNotes()[exId]||''; }
 function setExNote(exId,v){ const n=gExNotes(); v=(v||'').trim(); if(v) n[exId]=v; else delete n[exId]; markExNotePending(exId); S.s('exNotes',n); }
 
-function rmEx(ei) { if(!aw)return; aw.exercises.splice(ei,1); renderWS(); }
+function rmEx(ei) { if(!aw)return; [ei]=wsAt(ei); if(ei<0) return; aw.exercises.splice(ei,1); renderWS(); }
 
 const gCardioPR=()=>S.g('cardioPR')||{};   // {exId:{dist,time,date, maxDist,maxDate}} — best effort + longest
 function isCardio(ex){ return ((ex&&ex.tracking)||'')==='distance'; }
@@ -4472,7 +4490,7 @@ function minToClock(min){
   const m=Math.floor(min), s=Math.round((min-m)*60);
   return s>0 ? `${m}.${String(s).padStart(2,'0')}` : `${m}`;
 }
-function setDurUnit(ei,u){ if(aw&&aw.exercises[ei]){ aw.exercises[ei].durUnit=u; renderWS(); } }
+function setDurUnit(ei,u){ [ei]=wsAt(ei); if(aw&&aw.exercises[ei]){ aw.exercises[ei].durUnit=u; renderWS(); } }
 function setDurUnitWE(ei,u){ if(weDraft&&weDraft.exercises[ei]){ weDraft.exercises[ei].durUnit=u; renderWE(); } }
 // Total distance (miles) logged across a saved workout's cardio exercises.
 function workoutDistance(w){ return (w&&w.exercises||[]).reduce((a,e)=> a + (((e.tracking||'')==='distance')?(e.sets||[]).reduce((b,s)=>b+(s.weight||0),0):0), 0); }
