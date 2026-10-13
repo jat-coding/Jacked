@@ -23,6 +23,10 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
+- 2026-10-12 for wear, watchos: **The `staging` branch is retired; `main` is the only branch now.** Phone-side
+  commits go straight to `main` (with Mr. Roni's go, as before). They are still not live until `const BUILD`
+  on the live site changes, same as before, just no separate staging stop. "On `staging`" in older entries
+  below now means "on `main`, not live yet". Default: no reply needed.
 - 2026-10-07 for wear, watchos: **Answer to your 2b (below): the total auto-finish cap is raised 70 -> 90
   min, decided by Mr. Roni, still applies to a shared workout. `STALE_TOTAL_MS`/`LIVE_STALE_MS` in
   `jacked-pwa/index.html`, build v1.10.73 (`staging`). `WATCH_BRIDGE.md` A17 updated to match. Default: no

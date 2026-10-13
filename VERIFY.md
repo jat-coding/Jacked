@@ -22,11 +22,15 @@ system libs on the desktop host — resolved 2026-09-15
    data.
 4. `git status` clean commit before any push attempt (`scripts/jacked-push.sh` refuses
    otherwise).
-5. Push target: `staging` branch only, via `scripts/jacked-push.sh --branch staging` —
-   read back its PUSHED / VERDICT lines verbatim, don't just assume it worked.
-   **`main` / Netlify prod need Mr. Roni's explicit go each time** — never push main
-   without it in the same turn's instruction
-   ([[jacked-github-always-pushed-netlify-needs-his-ok-2026-09-20]]).
+5. Push target: **`main` is the only branch** (the `staging` branch was retired 2026-10-12;
+   `~/agent/research/jacked-delete-staging-execution-result-2026-10-12.md`). Commit on the local
+   checkout's `main` (served on :8090) and stop there: a post-commit hook pushes every commit to the
+   hidden backup ref `refs/backup/desktop` on GitHub (not a branch, nothing deploys it;
+   `scripts/jacked-push.sh --backup` does it by hand). **Pushing to `main` needs Mr. Roni's
+   explicit go each time**, in the same turn's instruction, via `scripts/jacked-push.sh` — read
+   back its PUSHED / VERDICT lines verbatim. Pushed is not live: Netlify production is locked
+   and publishes only on his separate go. `--branch staging` now stops on purpose; don't
+   follow an old brief that says otherwise.
 6. New exercises added to the library must render with the app's existing icon-placeholder
    convention (colored icon via `exIcon()`/`_ICON`/`MCOL`, matching how a user's own custom
    exercise renders with no photo) — screenshot or Playwright-assert this, don't just trust
@@ -48,7 +52,7 @@ system libs on the desktop host — resolved 2026-09-15
    to the real project without Mr. Roni's explicit go for that migration.
 
 9. **Before building anything the watches also implement**, read `git log origin/main -- watch-client/`
-   (not just the staging copy of `BOARD.md`): Phil's team pushes to `main`, and on 2026-10-06 three
+   (not just the local checkout's copy of `BOARD.md`): Phil's team pushes to `main`, and on 2026-10-06 three
    overnight commits there (`3584bf1`, `cd9895b`, `472a92e`) fixed the exact `doc` format and found phone-side
    bugs after the build brief was written. Caught only because `jacked-push.sh` merged `main` in and the
    commit list showed them; build to what the other client already shipped unless there is a reason not to.
