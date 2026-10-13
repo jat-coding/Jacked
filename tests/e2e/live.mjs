@@ -446,7 +446,7 @@ export async function liveFinishHungSync() {
   await A.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale];
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale];
 
 // The app is killed (swiped away) right after tapping Finish: the Finish claim reached the
 // server and flipped the row to 'finished', but the local commit never ran. On reopening, the
@@ -526,5 +526,33 @@ export async function liveReorderStale() {
   const [a2, b2] = [await ids(A), await ids(B)];
   check('live reorder (stale list): an exercise the watch removed stays removed, the rest keep their order', a2 === 'cex1,cex3' && b2 === a2, a2 + ' / ' + b2);
   check('live reorder stale: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+// Phone opens Switch Exercise on one slot; while the picker is open the watch removes (or
+// moves) an exercise. The picker remembered the slot by INDEX, so the pick replaced whatever
+// exercise now sat there -- wiping its logged sets on both devices (2026-10-12 adversarial find).
+export async function liveSwitchStale() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const exs = d => ev(d, () => aw.exercises.map(e => e.exId + ':' + e.sets.filter(s => s.done).map(s => s.weight).join('+')).join());
+  await ev(A, () => { startRW('r2'); aw.exercises[1].sets[0] = { weight: 60, reps: 8, done: true }; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveResumeRemote());
+  // 1) The watch removes the very exercise being switched: nothing else is touched.
+  await ev(A, () => switchEx(0));
+  await ev(B, () => { rmEx(0); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => liveSync());
+  await ev(A, () => toggleAEItem('cex4'));
+  const a1 = await exs(A), t1 = await ev(A, () => document.getElementById('tc').textContent);
+  check('live switch (stale slot): the watch removed it -> no other exercise is replaced, he is told', a1 === 'cex2:60' && /removed on your other device/.test(t1) && !(await ev(A, () => document.getElementById('aeModal').classList.contains('open'))), a1 + ' | ' + t1);
+  // 2) The watch MOVES exercises while the picker is open: the switch lands on the one he tapped.
+  await ev(A, () => { addExToWorkout('cex1'); clearTimeout(_livePushT); return liveSync(); });   // phone: [Row(60), Bench]
+  await ev(B, () => liveSync());
+  await ev(A, () => switchEx(1));   // switch Bench
+  await ev(B, () => { moveEx(0, 1); clearTimeout(_livePushT); return liveSync(); });   // watch: [Bench, Row(60)]
+  await ev(A, () => liveSync());
+  await ev(A, () => toggleAEItem('cex3'));
+  const a2 = await exs(A);
+  check('live switch (stale slot): the watch reordered -> the tapped exercise is switched, the logged one is kept', a2 === 'cex3:,cex2:60', a2);
+  check('live switch stale: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
   await A.ctx.close(); await B.ctx.close();
 }

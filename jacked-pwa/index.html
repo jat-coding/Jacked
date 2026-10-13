@@ -2689,7 +2689,7 @@ function saveCE() {
     _ceReturn=null;
     if (_aeTarget==='routineReplace') { rExs[_aeReplaceIdx]=newId; cm('aeModal'); renderREP(); toast('Exercise created & added ✓','ok'); return; }
     if (_aeTarget==='workout') { addExToWorkout(newId); cm('aeModal'); toast('Exercise created & added ✓','ok'); return; }
-    if (_aeTarget==='workoutReplace') { replaceExAt(_aeReplaceIdx,newId); cm('aeModal'); toast('Exercise created & added ✓','ok'); return; }
+    if (_aeTarget==='workoutReplace') { if(aeReplaceInWorkout(newId)) toast('Exercise created & added ✓','ok'); return; }
     if (_aeTarget==='weAdd') { weAddEx(newId); cm('aeModal'); toast('Exercise created & added ✓','ok'); return; }
     // routine multi-select: auto-select it so it's included when "Add Selected" is tapped
     _aeSelected.add(newId);
@@ -2858,10 +2858,26 @@ function saveR() {
 let _aeTarget = null;     // 'routine' | 'workout' | 'workoutReplace' | 'routineReplace'
 let _aeSelected = new Set(); // IDs selected this session
 let _aeReplaceIdx = -1;   // index being replaced in switch modes
+let _aeReplaceLid = null; // workoutReplace: the slot's live id, so the pick lands on the right exercise
+// The slot a workout Switch Exercise was opened on, re-found by live id at pick time: while the
+// picker is open the watch can remove or reorder exercises, and the opening index would then
+// point at a different exercise -- whose logged sets the switch wiped (2026-10-12 adversarial
+// find). -1 = that exercise no longer exists.
+function aeWorkoutIdx(){
+  if(!aw) return -1;
+  if(!_aeReplaceLid) return aw.exercises[_aeReplaceIdx]?_aeReplaceIdx:-1;
+  return aw.exercises.findIndex(e=>e.lid===_aeReplaceLid);
+}
+function aeReplaceInWorkout(id){
+  const i=aeWorkoutIdx(); cm('aeModal');
+  if(i<0){ toast('That exercise was removed on your other device','err'); return false; }
+  replaceExAt(i,id); return true;
+}
 
 function openAEModal(target, idx) {
   _aeTarget = target;
   _aeReplaceIdx = (idx==null?-1:idx);
+  _aeReplaceLid = (target==='workoutReplace'&&aw&&aw.exercises[_aeReplaceIdx]&&aw.exercises[_aeReplaceIdx].lid)||null;
   _aeSelected = new Set();
   aeFlt = null;
   // Switching an exercise: open pre-filtered to its own muscle group (Warm-up/Cardio included).
@@ -2954,7 +2970,7 @@ function renderAEList() {
 function toggleAEItem(id) {
   // Single-select immediate-action modes
   if (_aeTarget==='workout') { addExToWorkout(id); cm('aeModal'); return; }
-  if (_aeTarget==='workoutReplace') { replaceExAt(_aeReplaceIdx,id); cm('aeModal'); return; }
+  if (_aeTarget==='workoutReplace') { aeReplaceInWorkout(id); return; }
   if (_aeTarget==='weAdd') { weAddEx(id); cm('aeModal'); return; }
   if (_aeTarget==='routineReplace') {
     if (rExs.includes(id)&&rExs[_aeReplaceIdx]!==id) { toast('Already in routine','err'); return; }
