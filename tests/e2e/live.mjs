@@ -446,5 +446,46 @@ export async function liveFinishHungSync() {
   await A.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync];
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed];
 
+// The app is killed (swiped away) right after tapping Finish: the Finish claim reached the
+// server and flipped the row to 'finished', but the local commit never ran. On reopening, the
+// resumed copy met its OWN finished row, took it for another device's finish, and closed
+// without saving anything -- the workout vanished from history, with a "finished on your other
+// phone" toast (2026-10-12 adversarial find). Also: Switch Exercise onto the exercise already in
+// that slot used to wipe its logged sets; and a double-tapped Finish still commits exactly once.
+export async function liveFinishResumed() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const sid = await startShared(db, A, [[100, 5, true]]);
+  const saved = await ev(A, () => JSON.stringify(aw));   // what jk_activeWorkout holds at the Finish tap
+  const won = await ev(A, () => { aw.finishedBy = liveDevice() + ':n1'; return liveClaimFinish(liveWire(aw)).then(r => !!r.won); });
+  // Reopen: a fresh page state resumes the saved copy (no finish nonce in it, no lock).
+  await ev(A, s => { aw = JSON.parse(s); _finLock = null; _liveShadow = null; liveRebase(); beginW(); }, saved);
+  const res = await ev(A, () => liveSync());
+  const a = await snap(A);
+  const toastTxt = await ev(A, () => document.getElementById('tc').textContent);
+  check('live finish resumed: a Finish the server took before the app died is still saved to history, once', won && db.row.status === 'finished' && res === 'closed-mine' && a.hist.filter(w => w.id === sid).length === 1 && a.hist.find(w => w.id === sid).sets === 1 && !a.aw, JSON.stringify({ res, hist: a.hist.map(w => w.id) }));
+  check('live finish resumed: the toast does not blame "your other phone" for this phone\'s own finish', !/other phone/.test(toastTxt), toastTxt);
+  check('live finish resumed: its PR is committed', (a.prs.cex1 || {}).weight === 100, JSON.stringify(a.prs));
+  await ev(A, () => { cm('fsModal'); });
+  // Another device seeing that same finished row still commits nothing (it was not its Finish).
+  await ev(B, () => { aw = null; return liveSync(); });
+  check('live finish resumed: the other device does not create its own copy', !(await snap(B)).hist.some(w => w.id === sid));
+  // Switch Exercise onto the exercise already in the slot: a no-op, not a wipe.
+  db.row = null;
+  await startShared(db, A, [[100, 5, true], [100, 5, true]]);
+  await ev(A, () => { switchEx(0); toggleAEItem('cex1'); });
+  const b = await snap(A);
+  check('switch to itself: the slot keeps its 2 logged sets and records no swap', b.aw.exercises[0].sets.filter(s => s.done).length === 2 && !(b.aw.swaps && Object.keys(b.aw.swaps).length), JSON.stringify({ sets: b.aw.exercises[0].sets, swaps: b.aw.swaps }));
+  // Double-tapped Finish: two confirm calls, one OK -> exactly one commit.
+  const c0 = (await snap(A)).stats.commits;
+  await ev(A, () => { finishW(); finishW(); });
+  await ev(A, () => _cfDone(true));
+  await wait(300);
+  await ev(A, () => { if (_cfResolve) _cfDone(true); });
+  await wait(1500);
+  const c = await snap(A);
+  check('double-tap Finish: one commit, workout closed', !c.aw && c.stats.commits === c0 + 1, JSON.stringify(c.stats));
+  check('live finish resumed: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}

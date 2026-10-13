@@ -3389,9 +3389,20 @@ async function liveLate(code,row,merged){
     liveCloseRemote(merged,'late',row.updated_by);
     return 'late-merged';
   }
+  // THIS device's own Finish won the claim, but the app died before committing it (swiped away
+  // right after tapping Finish), so the resumed copy meets its own finished row. Nobody else
+  // will commit it -- do it now (2026-10-12 adversarial find: the workout used to vanish from
+  // history, with a toast blaming "your other phone").
+  if(liveMine(row)&&!gH().some(w=>w&&w.id===row.doc.id)){
+    liveRecompute(row.doc,row.rev,true);
+    liveCloseRemote(row.doc,'mine',row.updated_by);
+    return 'closed-mine';
+  }
   liveCloseRemote(row.doc,'finished',row.updated_by);
   return 'closed';
 }
+// Was this finished row's Finish claimed from this device? (finish nonce: liveDevice()+':'+random)
+function liveMine(row){ return !!(row&&row.doc&&String(row.doc.finishedBy||'').startsWith(liveDevice()+':')); }
 // Close the local copy after another device ended the session.
 function liveCloseRemote(doc,why,by){
   clearTimeout(_livePushT); clearInterval(wt); clearInterval(rt);
@@ -3407,7 +3418,7 @@ function liveCloseRemote(doc,why,by){
   const sec=Math.max(0,Math.floor((liveTouch(doc)-(a.startedAt||liveTouch(doc)))/1000));
   const dur=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');
   showFinishSummary({name:(!a.name||a.name==='Quick Workout')?autoNameWorkout(a.exercises):a.name,dur,ts,vol:Math.round(vol),prList:[],rid:null,rname:'',ids:a.exercises.map(e=>e.exId)});
-  toast(`Workout finished on your ${from}`,'ok');
+  toast(why==='mine'?'Workout saved':`Workout finished on your ${from}`,'ok');
   [5000,30000].forEach(ms=>setTimeout(()=>{ cloudPullMerge().then(c=>{ if(c) reRenderActivePage(); }).catch(()=>{}); },ms));
 }
 
@@ -3845,6 +3856,7 @@ function unlinkSuperset(ei){
 function switchEx(ei) { if(aw&&aw.exercises[ei]) openAEModal('workoutReplace',ei); }
 function replaceExAt(ei,id) {
   if (!aw||!aw.exercises[ei]) return;
+  if (aw.exercises[ei].exId===id) return;   // picked the one already there: a switch would wipe its logged sets for nothing
   if (aw.exercises.some((e,i)=>i!==ei&&e.exId===id)) { toast('Already in workout','err'); return; }
   if (aw.routineId) noteSwap(aw.exercises[ei].exId,id);
   const ex=byId(id);
