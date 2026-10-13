@@ -5003,46 +5003,36 @@ function finishW(auto) {
   if (auto) { _finishWContinue(auto,ts); return; }
   showConfirm(ts===0 ? 'No sets logged — finish anyway?' : 'Finish and save this workout?').then(async ok=>{
     if(!ok) return;
-    const sw=await maybeApplySwaps();
-    await maybeUpdateRoutine(sw);
+    await maybeUpdateRoutine();
     _finishWContinue(auto,ts);
   });
 }
-// A routine workout where Switch Exercise was used: one prompt on finish covering every
-// switch. Yes replaces just those slots in the routine's exercise list, in place
-// (Mr. Roni, 2026-10-02). Adds, removes and reorders are asked about separately, right
-// after, by maybeUpdateRoutine. Returns {eff: the switches asked about, yes} or null.
-async function maybeApplySwaps(){
-  if(!aw||!aw.routineId||!aw.swaps) return null;
-  const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return null;
-  const before=r.exercises||[], now=new Set(aw.exercises.map(e=>e.exId));
-  // Only switches of an exercise the routine has, to one still in the session (switched in
-  // then removed = a removal) and not already elsewhere in the routine (no duplicates).
-  const eff={};
-  Object.entries(aw.swaps).forEach(([from,to])=>{
-    if(from!==to&&before.includes(from)&&now.has(to)&&!(before.includes(to)&&!aw.swaps[to])) eff[from]=to;
-  });
-  const pairs=Object.entries(eff); if(!pairs.length) return null;
-  const nm=id=>byId(id).name;
-  const list=pairs.map(([f,t])=>nm(f)+' → '+nm(t)).join(', ');
-  const yes=await showConfirm(`You switched ${list}. Update the routine "${r.name}" with ${pairs.length>1?'these switches':'this switch'}?`,{okText:'Update routine',cancelText:'Keep routine'});
-  if(yes){ r.exercises=before.map(id=>eff[id]||id); S.s('routines',rs); toast('Routine updated','ok'); }
-  return {eff,yes};
-}
-// The v1.8.27 any-change prompt, restored to run alongside the switch prompt (Mr. Roni,
-// 2026-10-02 5:35pm): if exercises were added, removed or reordered, ask whether to write
-// that back. Switches were already asked about, so a switched slot counts as unchanged here
-// (a declined switch keeps the routine's original exercise) and is never asked twice.
-async function maybeUpdateRoutine(sw){
+// A routine workout whose exercise list ended up different from the routine's -- switches,
+// adds, removes, reorders, any mix -- gets exactly ONE prompt on finish covering every change
+// together (Mr. Roni, 2026-10-12: a separate prompt per kind of change read as "asked per
+// exercise"). A switch is worded as "A → B" inside that one prompt; an "ineffective" switch
+// (its target already sits elsewhere in the routine, unswapped -- would duplicate it) falls
+// back to reading as a plain add/remove, same as before, just inside the same prompt. One
+// yes/no applies or discards every change together; nothing is written before the decision.
+async function maybeUpdateRoutine(){
   if(!aw||!aw.routineId) return;
   const rs=gR(), r=rs.find(x=>x.id===aw.routineId); if(!r) return;
-  const back={}; if(sw&&!sw.yes) Object.entries(sw.eff).forEach(([f,t])=>{ back[t]=f; });
-  const before=(r.exercises||[]).slice();
-  const after=[...new Set(aw.exercises.map(e=>back[e.exId]||e.exId).filter(x=>x&&x!=='?'))];
+  const before=(r.exercises||[]).slice(), now=new Set(aw.exercises.map(e=>e.exId));
+  // Effective switches: an exercise the routine has, switched to one still in the session,
+  // and not already elsewhere in the routine un-switched (would otherwise duplicate it).
+  const eff={};
+  if(aw.swaps) Object.entries(aw.swaps).forEach(([from,to])=>{
+    if(from!==to&&before.includes(from)&&now.has(to)&&!(before.includes(to)&&!aw.swaps[to])) eff[from]=to;
+  });
+  const after=[...new Set(aw.exercises.map(e=>e.exId).filter(x=>x&&x!=='?'))];
   if(before.length===after.length&&before.every((id,i)=>id===after[i])) return;
   const nm=id=>{ const e=byId(id); return e?e.name:'exercise'; };
-  const added=after.filter(id=>!before.includes(id)).map(nm), removed=before.filter(id=>!after.includes(id)).map(nm);
+  const swapPairs=Object.entries(eff);
+  const swappedFrom=new Set(swapPairs.map(([f])=>f)), swappedTo=new Set(swapPairs.map(([,t])=>t));
+  const added=after.filter(id=>!before.includes(id)&&!swappedTo.has(id)).map(nm);
+  const removed=before.filter(id=>!after.includes(id)&&!swappedFrom.has(id)).map(nm);
   const parts=[];
+  if(swapPairs.length) parts.push('switched '+swapPairs.map(([f,t])=>nm(f)+' → '+nm(t)).join(', '));
   if(added.length) parts.push('added '+added.join(', '));
   if(removed.length) parts.push('removed '+removed.join(', '));
   if(!parts.length) parts.push('changed the order');
@@ -5115,11 +5105,24 @@ function _finishWContinue(auto,ts) {
   // win in the row instead of taking it for another device's Finish.
   aw.finishedBy=liveDevice()+':'+Math.random().toString(36).slice(2,10);
   busy.then(()=>aw&&aw.id===id?liveClaimFinish(liveWire(aw)):null).then(r=>{
-    if(!r||!aw||aw.id!==id) return;   // a sync that was in flight closed it (ended on the other device)
+    if(!aw||aw.id!==id) return;   // a sync that was in flight closed it (ended on the other device, which already released the lock)
+    if(!r) return _finishLocalFallback(id,endTs);   // claim resolved to nothing usable: don't hang, commit locally
     if(r.lost){ _finLock=null; liveSync(); return; }   // already finished elsewhere: close here, merging in any sets it lacks
     if(r.doc){ aw=liveFromWire(r.doc,aw); awStart=aw.startedAt||awStart; }   // includes the other device's last sets
     _commitFinish(endTs,r.rev||0);
+  }).catch(e=>{
+    console.warn('live finish claim failed, committing locally',e);   // never leave him stuck on the workout screen
+    _finishLocalFallback(id,endTs);
   });
+}
+// Finish never got a usable answer from the server (claim rejected, timed out past its own
+// retries, or resolved to nothing) -- commit locally rather than strand the user on the active
+// workout screen with nothing saved. Mirrors the plain offline branch above. Always releases
+// _finLock, even when the workout changed out from under us while we were waiting.
+function _finishLocalFallback(id,endTs){
+  if(!aw||aw.id!==id){ _finLock=null; return; }
+  const p=gProf(); if(p&&p.code&&_liveSolo!==id) liveQueueFinish(liveWire(aw));   // tell the server later
+  _commitFinish(endTs,0);
 }
 // Strip the live-sync change stamps from exercises going into history, and any
 // custom exercise's local photo (a data: URL) -- history syncs to Supabase and rides the JSON

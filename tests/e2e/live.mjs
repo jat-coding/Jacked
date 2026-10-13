@@ -337,4 +337,38 @@ export async function liveFinishEdges() {
   await A.ctx.close(); await B.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges];
+// A live-claim that rejects outright (not the ordinary offline/CAS-contention paths
+// liveClaimFinish already recovers from itself) must still finish the workout locally rather
+// than strand the user on the active-workout screen (2026-10-12 bug). Monkeypatches
+// liveClaimFinish directly so the failure reaches _finishWContinue's own promise chain,
+// which previously had no .catch() at all.
+export async function liveFinishClaimFails() {
+  const db = makeDb(); const A = await device(db, 'phone-A');
+  // Reject outright.
+  const sid = await startShared(db, A, [[100, 5, true]]);
+  await ev(A, () => { window.liveClaimFinish = () => Promise.reject(new Error('stub claim failure')); });
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(800);
+  const a = await snap(A);
+  check('live finish claim rejects: the workout still finishes locally instead of hanging', !a.aw && a.hist.filter(w => w.id === sid).length === 1 && a.stats.commits === 1, JSON.stringify({ aw: !!a.aw, hist: a.hist.map(w => w.id), stats: a.stats }));
+  check('live finish claim rejects: the failed claim is queued so the server catches up later', (await ev(A, () => liveQ().length)) === 1);
+  check('live finish claim rejects: home is shown, not left on the active-workout screen', await ev(A, () => document.getElementById('page-home').classList.contains('active')));
+  // A second Finish attempt (or just starting a fresh workout) is not itself stuck behind the old lock.
+  await ev(A, () => { startEmpty(); addExToWorkout('cex1'); });
+  const resumed = await ev(A, () => aw && aw.id);
+  check('live finish claim rejects: a new workout can be started right after (lock not stuck)', !!resumed && resumed !== sid, String(resumed));
+  await ev(A, () => { cancelW(); }); await ev(A, () => _cfDone(true));
+
+  // Resolves to nothing usable (no error, just a falsy/empty result) -- same stuck risk, different trigger.
+  db.row = null;
+  const sid2 = await startShared(db, A, [[90, 5, true]]);
+  await ev(A, () => { window.liveClaimFinish = () => Promise.resolve(null); });
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(800);
+  const b = await snap(A);
+  check('live finish claim returns falsy: the workout still finishes locally instead of hanging', !b.aw && b.hist.filter(w => w.id === sid2).length === 1, JSON.stringify({ aw: !!b.aw, hist: b.hist.map(w => w.id) }));
+  check('live finish claim fails: no console errors', A.errors.length === 0, A.errors.join(' | '));
+  await A.ctx.close();
+}
+
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails];

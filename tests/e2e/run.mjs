@@ -3196,22 +3196,20 @@ async function routineSwapPrompt() {
   const reset = () => page.evaluate(R1 => { S.s('routines', [R1]); S.s('hist', []); _cf.length = 0; cm('fsModal'); }, R1);
   const sw = (ei, id) => page.evaluate(([ei, id]) => { switchEx(ei); toggleAEItem(id); }, [ei, id]);
   const logSet = () => page.evaluate(() => { const s = aw.exercises[0].sets[0]; s.weight = 50; s.reps = 5; s.done = true; saveAW(); });
-  // Manual finish: OK the "Finish and save" confirm, then answer each routine prompt that shows, in order
-  // ('yes'/'no' answers every prompt; an array answers them one by one). Returns every confirm text.
+  // Manual finish: OK the "Finish and save" confirm, then answer the one routine-update prompt if it shows.
   const finish = async answer => {
     await page.evaluate(() => { finishW(); });
     await page.waitForTimeout(100); await page.click('#cfOk'); await page.waitForTimeout(250);
-    for (let i = 0; answer && i < 3 && await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open')); i++) {
-      const a = Array.isArray(answer) ? answer[i] : answer;
-      await page.click(a === 'yes' ? '#cfOk' : '#cfCancel'); await page.waitForTimeout(250);
+    if (answer && await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open'))) {
+      await page.click(answer === 'yes' ? '#cfOk' : '#cfCancel'); await page.waitForTimeout(250);
     }
     return page.evaluate(() => [..._cf]);
   };
   const summaryBtn = () => page.evaluate(() => /Update "/.test(document.getElementById('fsContent').textContent));
-  const isSwap = m => / → /.test(m || ''), isAny = m => /^You (added|removed|changed the order)/.test(m || '');
+  const isSwap = m => / → /.test(m || ''), isAny = m => /^You (added|removed|switched|changed the order)/.test(m || '');
 
-  // 1) A switch B -> D plus an add, a reorder and a remove in one session: BOTH prompts show, switch first.
-  //    Yes to the switch, keep to the rest: only the switch is written back.
+  // 1) A switch B -> D plus an add, a reorder and a remove in one session: exactly ONE combined
+  //    prompt covers every change (not one prompt per kind of change -- 2026-10-12 bug).
   await reset();
   await page.evaluate(() => startRW('r1')); await logSet();
   await sw(1, 'cD');
@@ -3219,39 +3217,48 @@ async function routineSwapPrompt() {
   check('swap prompt: switch is remembered on the saved live workout (survives reload)', JSON.stringify(saved) === '{"cB":"cD"}', JSON.stringify(saved));
   await page.evaluate(() => { addExToWorkout('cF'); moveEx(0, 1); });
   await page.evaluate(() => { rmEx(aw.exercises.findIndex(e => e.exId === 'cC')); });
-  let msgs = await finish(['yes', 'no']);
-  check('both prompts: switch + add/remove shows the switch prompt, then the any-change prompt', msgs.length === 3 && isSwap(msgs[1]) && /Bravo Row → Delta Press/.test(msgs[1]) && /"Push"/.test(msgs[1]) && isAny(msgs[2]), JSON.stringify(msgs));
-  check('both prompts: the any-change prompt names the add and the remove, not the switch again', /added Foxtrot Curl/.test(msgs[2]) && /removed Charlie Squat/.test(msgs[2]) && !/Bravo|Delta/.test(msgs[2]), msgs[2]);
-  let after = JSON.parse(await routine());
-  check('swap prompt: accept replaces the switched slot in place (A, D, C)', after.exercises.join() === 'cA,cD,cC', after.exercises.join());
-  check('swap prompt: accept leaves every other routine field alone (name, desc, section)', JSON.stringify({ ...after, exercises: R1.exercises }) === JSON.stringify(R1), JSON.stringify(after));
-  check('both prompts: keep on the any-change prompt -> the add/reorder/remove are not written back', !after.exercises.includes('cF') && after.exercises.includes('cC') && after.exercises[0] === 'cA');
+  let msgs = await finish('no');
+  check('combined prompt: a switch + add + reorder + remove together produce exactly ONE routine prompt', msgs.length === 2 && isSwap(msgs[1]) && /Bravo Row → Delta Press/.test(msgs[1]) && /added Foxtrot Curl/.test(msgs[1]) && /removed Charlie Squat/.test(msgs[1]) && /"Push"/.test(msgs[1]), JSON.stringify(msgs));
+  check('combined prompt: declining leaves the routine completely untouched (no partial swap applied)', (await routine()) === JSON.stringify(R1));
   const h = await page.evaluate(() => gH());
-  check('swap prompt: workout still saved; switch bookkeeping not stored in history', h.length === 1 && !('swaps' in h[0]) && h[0].exercises.some(e => e.exId === 'cD'), JSON.stringify(Object.keys(h[0] || {})));
-  check('both prompts: finish summary "Update routine" button is back when the routine still differs', await summaryBtn());
+  check('combined prompt: workout still saved even when the routine prompt is declined', h.length === 1 && !('swaps' in h[0]) && h[0].exercises.some(e => e.exId === 'cD'), JSON.stringify(Object.keys(h[0] || {})));
+  check('combined prompt: finish summary "Update routine" button is back when the routine still differs', await summaryBtn());
   await page.screenshot({ path: SHOTS + '/routine-swap-summary.png' });
 
-  // 1b) Same session, yes to both: the routine becomes the session's list (D, A, F).
+  // 1b) Same session, accept the one prompt: switch, add, reorder and remove all land together.
   await reset();
   await page.evaluate(() => startRW('r1')); await logSet(); await sw(1, 'cD');
   await page.evaluate(() => { addExToWorkout('cF'); moveEx(0, 1); rmEx(aw.exercises.findIndex(e => e.exId === 'cC')); });
   msgs = await finish('yes');
-  check('both prompts: yes to both writes the switch, add, reorder and remove (D, A, F)', msgs.length === 3 && JSON.parse(await routine()).exercises.join() === 'cD,cA,cF', await routine());
-  check('both prompts: nothing left to offer on the summary after yes to both', !(await summaryBtn()));
+  check('combined prompt: accepting the one prompt writes the switch, add, reorder and remove together (D, A, F)', msgs.length === 2 && JSON.parse(await routine()).exercises.join() === 'cD,cA,cF', await routine());
+  check('combined prompt: nothing left to offer on the summary after accepting', !(await summaryBtn()));
 
-  // 1c) Keep the switch, yes to the rest: the add is written back, the declined switch is not.
+  // 1c) An "ineffective" second switch (its target already sits elsewhere in the routine,
+  //     unswapped) reads as a plain removal, but still inside the SAME one prompt as the
+  //     effective switch -- this exact mix used to produce two separate prompts (2026-10-12 bug).
   await reset();
-  await page.evaluate(() => startRW('r1')); await logSet(); await sw(1, 'cD'); await page.evaluate(() => addExToWorkout('cF'));
-  msgs = await finish(['no', 'yes']);
-  check('both prompts: keep the switch, accept the add -> routine A, B, C, F (switch not written)', msgs.length === 3 && /added Foxtrot Curl/.test(msgs[2]) && !/Delta/.test(msgs[2]) && JSON.parse(await routine()).exercises.join() === 'cA,cB,cC,cF', JSON.stringify(msgs) + ' ' + await routine());
+  await page.evaluate(() => startRW('r1')); await logSet();
+  await sw(1, 'cD');                   // effective: B -> D
+  await page.evaluate(() => rmEx(0));  // plain removal of A (not a swap)
+  await sw(1, 'cA');                   // C's slot (now index 1) -> A: A is already in the routine
+                                        // and unswapped, so this one is NOT effective -- reads as "removed C"
+  msgs = await finish('no');
+  check('combined prompt: an effective switch + an "ineffective" one give exactly ONE prompt, not two', msgs.length === 2, JSON.stringify(msgs));
+  check('combined prompt: that one prompt names the real switch and the fallback removal together', /Bravo Row → Delta Press/.test(msgs[1]) && /removed Charlie Squat/.test(msgs[1]), msgs[1]);
+  check('combined prompt: decline leaves the routine untouched even though one swap had already matched', (await routine()) === JSON.stringify(R1));
+  await reset();
+  await page.evaluate(() => startRW('r1')); await logSet();
+  await sw(1, 'cD'); await page.evaluate(() => rmEx(0)); await sw(1, 'cA');
+  msgs = await finish('yes');
+  check('combined prompt: accepting writes exactly the session\'s final list (D, A)', JSON.parse(await routine()).exercises.join() === 'cD,cA', await routine());
 
-  // 2) Decline a switch-only session: routine byte-identical, no any-change prompt about the switch.
+  // 2) Decline a switch-only session: routine byte-identical, no further prompt.
   await reset();
   const before2 = await routine();
   await page.evaluate(() => startRW('r1')); await logSet(); await sw(0, 'cD');
   await page.evaluate(() => { finishW(); }); await page.waitForTimeout(100); await page.click('#cfOk'); await page.waitForTimeout(250);
   const pop = await page.evaluate(() => ({ t: document.getElementById('cfMsg').textContent, ok: document.getElementById('cfOk').textContent, no: document.getElementById('cfCancel').textContent }));
-  check('swap prompt: buttons read "Update routine" / "Keep routine"', pop.ok === 'Update routine' && pop.no === 'Keep routine', JSON.stringify(pop));
+  check('swap prompt: buttons read "Update routine" / "Keep original"', pop.ok === 'Update routine' && pop.no === 'Keep original', JSON.stringify(pop));
   await page.screenshot({ path: SHOTS + '/routine-swap-prompt.png' });
   await page.click('#cfCancel'); await page.waitForTimeout(250);
   check('swap prompt: declining a switch-only session asks nothing more', (await page.evaluate(() => _cf.length)) === 2 && !(await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open'))), JSON.stringify(await page.evaluate(() => _cf)));
