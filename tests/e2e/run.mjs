@@ -3806,12 +3806,198 @@ async function adv2TabSpam() {
   check('adv2 tab spam: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+// ---- Adversarial pass 3 (2026-10-13): multi-tab, platform update, friends, units, dates ----
+const ADV3_CEX = [{ id: 'cex1', name: 'Bench', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }];
+const ADV3_R = [{ id: 'r1', name: 'Push', desc: '', exercises: ['cex1'] }];
+async function adv3Tab(ctx) {
+  const p = await ctx.newPage(), errors = [];
+  p.on('pageerror', e => errors.push(String(e))); p.on('dialog', d => d.dismiss());
+  await p.goto(URL);
+  await p.waitForFunction(() => document.querySelector('nav') && document.querySelector('nav').style.display === 'flex');
+  return { p, errors };
+}
+async function adv3TwoTabs() {
+  // 1. Two tabs of the app on one device each kept their own copy of the open workout: every set logged
+  // overwrote the other's saved copy, and when one finished, the other's extra sets were dropped as a duplicate.
+  const { page: A, ctx, errors } = await phone({ seed: { cex: ADV3_CEX, routines: ADV3_R } });
+  const tick = () => A.waitForTimeout(400);
+  const prompt = pg => pg.waitForFunction(() => document.getElementById('confirmModal').classList.contains('open'));
+  const log = (pg, reps) => pg.evaluate(reps => { aw.exercises[0].sets.push({ weight: 100 / 2.20462, reps, done: true }); saveAW(); }, reps);
+  const reps = pg => pg.evaluate(() => aw ? aw.exercises[0].sets.filter(s => s.done).map(s => s.reps).join(',') : null);
+  await A.evaluate(() => { startRW('r1'); aw.exercises[0].sets[0] = { ...aw.exercises[0].sets[0], weight: 100 / 2.20462, reps: 5, done: true }; saveAW(); });
+  const { p: B, errors: errB } = await adv3Tab(ctx);
+  await prompt(B); await B.evaluate(() => _cfDone(true)); await tick();   // "Resume your unfinished workout?" -> yes
+  await log(B, 6); await tick();
+  check('adv3 two tabs: a set logged in one tab shows up in the other', (await reps(A)) === '5,6', await reps(A));
+  const spyW = pg => pg.evaluate(() => { window._aww = 0; const o = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === 'jk_activeWorkout') _aww++; return o.call(this, k, v); }; });
+  await spyW(A); await spyW(B); await A.evaluate(() => sap()); await B.evaluate(() => { aw.notes = 'n'; saveAW(); }); await A.waitForTimeout(600);
+  const pp = [await A.evaluate(() => _aww), await B.evaluate(() => _aww)];
+  check('adv3 two tabs: taking in the other tab\'s write never writes it back (no ping-pong between tabs)', pp[0] === 0 && pp[1] === 1, JSON.stringify(pp));
+  await log(A, 7); await tick();
+  const s1 = await B.evaluate(() => [aw.exercises[0].sets.filter(s => s.done).map(s => s.reps).join(','), S.g('activeWorkout').aw.exercises[0].sets.filter(s => s.done).map(s => s.reps).join(',')]);
+  check("adv3 two tabs: logging in the other tab keeps both tabs' sets, in memory and saved", s1[0] === '5,6,7' && s1[1] === '5,6,7', JSON.stringify(s1));
+  // A unit switched in one tab: the other still showed lb boxes but read what was typed in them as kg.
+  check('adv3 two tabs: set box shows lb before the unit switch', (await A.locator('#wSession input.si').first().inputValue()) === '100');
+  await B.evaluate(() => S.s('settings', { ...gSet(), wUnit: 'kg' })); await tick();
+  check('adv3 two tabs: a unit switch in the other tab re-renders the open workout in kg', (await A.locator('#wSession input.si').first().inputValue()) === '45.4', await A.locator('#wSession input.si').first().inputValue());
+  await B.evaluate(() => S.s('settings', { ...gSet(), wUnit: 'lb' })); await tick();
+  await A.evaluate(() => finishW(true)); await tick();
+  const b2 = await B.evaluate(() => ({ aw: !!aw, page: document.querySelector('.page.active').id, h: gH().map(w => w.exercises[0].sets.filter(s => s.done).map(s => s.reps).join(',')) }));
+  check('adv3 two tabs: Finish in one tab saves every set from both tabs, once', b2.h.length === 1 && b2.h[0] === '5,6,7', JSON.stringify(b2));
+  check('adv3 two tabs: ...and closes the workout in the other tab, saying so', !b2.aw && b2.page === 'page-home' && /finished in another window/.test(await toasts(B)), JSON.stringify(b2));
+  await B.evaluate(() => { saveAW(); skipRest(); }); await tick();
+  check('adv3 two tabs: the closed tab cannot bring the finished workout back', await A.evaluate(() => !S.g('activeWorkout') && gH().length === 1));
+  // A workout started in one tab appears in the other (Return-to-workout bar), and Cancel in either ends it in both.
+  await A.evaluate(() => { startRW('r1'); aw.exercises[0].sets[0] = { ...aw.exercises[0].sets[0], weight: 50, reps: 3, done: true }; saveAW(); }); await tick();
+  const b3 = await B.evaluate(() => ({ same: !!aw && aw.id === S.g('activeWorkout').aw.id, bar: document.getElementById('resumeBar').classList.contains('show') }));
+  check('adv3 two tabs: a workout started in one tab is open in the other, with the Return-to-workout bar', b3.same && b3.bar, JSON.stringify(b3));
+  await B.evaluate(() => { cancelW(); }); await B.waitForTimeout(100); await B.evaluate(() => _cfDone(true)); await tick();
+  const a3 = await A.evaluate(() => ({ aw: !!aw, page: document.querySelector('.page.active').id, saved: !!S.g('activeWorkout'), h: gH().length }));
+  check('adv3 two tabs: Cancel in one tab ends the workout in the other too, nothing saved', !a3.aw && a3.page === 'page-home' && !a3.saved && a3.h === 1 && /cancelled in another window/.test(await toasts(A)), JSON.stringify(a3));
+  // Declining "Resume?" in a newly opened tab must not kill the workout still open in the first one.
+  await A.evaluate(() => { startRW('r1'); aw.exercises[0].sets[0] = { ...aw.exercises[0].sets[0], weight: 50, reps: 4, done: true }; saveAW(); }); await tick();
+  const { p: C, errors: errC } = await adv3Tab(ctx);
+  await prompt(C); await C.evaluate(() => _cfDone(false)); await tick();
+  await log(A, 8); await tick();
+  const a4 = await A.evaluate(() => ({ aw: !!aw && aw.exercises[0].sets.filter(s => s.done).map(s => s.reps).join(','), saved: !!S.g('activeWorkout') }));
+  check('adv3 two tabs: declining Resume in a new tab leaves the workout open where it is being used', a4.aw === '4,8' && a4.saved, JSON.stringify(a4));
+  const all = [...errors, ...errB, ...errC];
+  check('adv3 two tabs: no page errors in any tab', all.length === 0, all.join(' | '));
+  await ctx.close();
+}
+async function adv3SwUpdate() {
+  // 2. A deployed update reloaded the app as soon as it arrived unless a workout was open -- over Edit Workout too.
+  const h = [wk('2026-10-10', [ex('Barbell Bench Press', [[185, 5]])])];
+  const { page, ctx, errors } = await phone({ seed: { hist: h } });
+  const upd = () => page.evaluate(() => navigator.serviceWorker.dispatchEvent(new Event('controllerchange')));
+  await page.evaluate(id => { window._mark = 1; openWE(id); document.getElementById('weName').value = 'Typed, not saved'; }, h[0].id);
+  await upd(); await page.waitForTimeout(800);
+  check('adv3 app update: never reloads over an open editor (Edit Workout keeps what was typed)', await page.evaluate(() => window._mark === 1 && document.getElementById('weName').value === 'Typed, not saved'));
+  await page.evaluate(() => { cm('weModal'); sp('exercises'); document.getElementById('exSearch').focus(); });
+  await upd(); await page.waitForTimeout(800);
+  check('adv3 app update: nor while typing in a box', await page.evaluate(() => window._mark === 1));
+  await page.evaluate(() => document.getElementById('exSearch').blur());
+  await Promise.all([page.waitForEvent('load'), upd()]);
+  check('adv3 app update: applies once nothing is open', await page.evaluate(() => window._mark === undefined));
+  check('adv3 app update: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv3FakeFriends(page) {
+  await page.evaluate(() => {
+    window.__fk = { rows: [{ id: 1, from_code: '@pal', to_code: '@tester', status: 'accepted' }], delFail: false, selDelays: [], sel: 0 };
+    const q = table => { const b = { _op: 'select',
+      select() { return b; }, or() { return b; }, eq() { return b; }, in() { return b; },
+      delete() { b._op = 'delete'; return b; }, update() { b._op = 'update'; return b; },
+      then(res) {
+        const fk = window.__fk;
+        if (b._op === 'delete') { if (fk.delFail) return res({ data: null, error: { message: 'Failed to fetch' } }); fk.rows = []; return res({ data: null, error: null }); }
+        if (table === 'friend_requests') { const snap = JSON.parse(JSON.stringify(fk.rows)); return setTimeout(() => res({ data: snap, error: null }), fk.selDelays[fk.sel++] || 0); }
+        res({ data: [], error: null });
+      } }; return b; };
+    SUPA = { from: q, rpc: async (fn, a) => ({ data: (a.p_codes || []).map(c => ({ code: c, name: c.slice(1), username: c })), error: null }),
+      channel() { const c = { on() { return c; }, subscribe() { return c; }, unsubscribe() {} }; return c; }, removeChannel() {} };
+    _authUid = 'uid-test'; syncMe = async () => {};
+  });
+}
+async function adv3FriendRemove() {
+  // 3. Remove Friend with no connection said "Removed" (supabase-js returns the error, it doesn't throw);
+  // and a friends refresh that started before a Remove and answered after it put the friend back.
+  const { page, ctx, errors } = await phone({ seed: { closeBuddies: ['@pal'] } });
+  await adv3FakeFriends(page);
+  await page.evaluate(() => refreshFriends());
+  const codes = () => page.evaluate(() => friendSrc().map(f => f.code).join(','));
+  check('adv3 friends: fake friend list loads', (await codes()) === '@pal', await codes());
+  await page.evaluate(() => { __fk.delFail = true; return rmFr('@pal'); });
+  const t = await toasts(page);
+  check('adv3 friends: a Remove that never reached the server says so, not "Removed"', /Could not remove/.test(t) && !/Removed/.test(t), t);
+  check('adv3 friends: ...and keeps the friend and their close-buddy star', (await codes()) === '@pal' && await page.evaluate(() => gCB().includes('@pal')));
+  await page.evaluate(() => { __fk.delFail = false; __fk.sel = 0; __fk.selDelays = [400, 0]; refreshFriends(); });   // slow refresh in flight
+  await page.evaluate(() => rmFr('@pal'));
+  await page.waitForTimeout(700);
+  check('adv3 friends: a refresh that started before the Remove cannot put the friend back', (await codes()) === '' && await page.evaluate(() => !JSON.parse(localStorage.getItem('jk_friendsCache') || '[]').length), await codes());
+  check('adv3 friends: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv3CopyFriendWorkout() {
+  // 4. "Copy to my workout" from a friend's profile replaced an open workout without ending it: no discard on
+  // the live row (the watch kept the old one), and the new one was stamped against the old one's shadow.
+  const friends = [{ id: '@pal', code: '@pal', name: 'Pal', username: '@pal', pending: false, wd: [{ name: 'Pal Push', date: new Date().toISOString(), vol: 100, sets: 1, ex: [{ id: 'cex1', n: 'Bench', sets: [{ w: 50, r: 5 }] }] }] }];
+  const { page, ctx, errors } = await phone({ seed: { cex: ADV3_CEX, friends, routines: ADV3_R } });
+  await page.evaluate(() => { startRW('r1'); aw.exercises[0].sets[0] = { ...aw.exercises[0].sets[0], weight: 100, reps: 5, done: true }; saveAW();
+    window._disc = []; const o = liveDiscard; liveDiscard = id => { _disc.push(id); return o(id); }; });
+  const old = await page.evaluate(() => ({ id: aw.id, lids: aw.exercises.map(e => e.lid) }));
+  await page.evaluate(() => copyFriendWorkout('@pal', 0)); await page.waitForTimeout(100);
+  const msg = await page.evaluate(() => document.getElementById('cfMsg').textContent);
+  check('adv3 copy friend workout: asks like every other Start, naming the logged sets', /in progress \(1 set logged\)/.test(msg), msg);
+  await page.evaluate(() => _cfDone(true)); await page.waitForTimeout(200);
+  const r = await page.evaluate(() => ({ id: aw && aw.id, name: aw && aw.name, tomb: Object.keys(aw.tomb || {}), disc: _disc }));
+  check('adv3 copy friend workout: replacing ends the old workout everywhere (live discard)', r.name === 'Pal Push' && r.id !== old.id && r.disc.includes(old.id), JSON.stringify(r));
+  check("adv3 copy friend workout: the copy carries no tombstones of the old workout's exercises", !old.lids.some(l => r.tomb.includes(l)), JSON.stringify(r.tomb));
+  check('adv3 copy friend workout: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv3UnitSwitchBW() {
+  // 5. Switching lb -> kg in Profile and saving read the body-weight box (still in lb) as kg: 180 lb became
+  // 180 kg. Any Save also logged a weigh-in for today even when the box wasn't touched.
+  const kg = 180 / LB;
+  const { page, ctx, errors } = await phone({ seed: { bw: kg, bwlog: [{ d: '2026-10-01', kg }] } });
+  await page.evaluate(() => { openProf(); segPick(document.querySelector('#setUnitTog [data-v="kg"]')); });
+  await page.evaluate(() => saveProf()); await page.waitForTimeout(300);
+  const r = await page.evaluate(() => ({ bw: gBW(), u: wUnit(), log: gBWlog().length }));
+  check('adv3 unit switch: lb -> kg keeps the same body weight (180 lb stays 81.6 kg)', Math.abs(r.bw - kg) < 0.01 && r.u === 'kg', JSON.stringify(r));
+  check('adv3 unit switch: a Save that did not touch the box logs no weigh-in', r.log === 1, JSON.stringify(r));
+  await page.evaluate(() => { openProf(); document.getElementById('bwInput').value = '80'; }); await page.evaluate(() => saveProf()); await page.waitForTimeout(300);
+  const r2 = await page.evaluate(() => ({ bw: gBW(), log: gBWlog().length }));
+  check('adv3 unit switch: a changed box is still saved, in the unit shown', r2.bw === 80 && r2.log === 2, JSON.stringify(r2));
+  check('adv3 unit switch: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv3BackdatedOrder() {
+  // 6. A workout logged for a past calendar day was appended after newer ones, so Home listed it as the
+  // latest and the next session pre-filled its old numbers. Editing a workout's date had the same effect.
+  const hist = [wk('2026-10-10', [ex('Barbell Bench Press', [[185, 5]])])];
+  const { page, ctx, errors } = await phone({ seed: { hist }, now: new Date('2026-10-13T12:00:00-06:00') });
+  await page.evaluate(() => { startEmptyOn('2026-09-01'); const e = byId('Barbell_Bench_Press_-_Medium_Grip');
+    aw.exercises.push({ exId: e.id, name: e.name, muscle: e.muscle, tracking: 'weight_reps', sets: [{ weight: 95 / 2.20462, reps: 5, done: true }] }); saveAW(); finishW(true); });
+  await page.waitForTimeout(300);
+  const r = await page.evaluate(() => ({ order: gH().map(w => dayKey(w.date)).join(','), seed: seedSets('Barbell_Bench_Press_-_Medium_Grip').map(s => Math.round(s.pw * 2.20462)).join(','), top: document.querySelector('#recentW .wli, #recentW > div') && document.querySelector('#recentW').textContent.replace(/\s+/g, ' ').slice(0, 40) }));
+  check('adv3 backdated: a past-day workout goes into history in date order', r.order === '2026-09-01,2026-10-10', JSON.stringify(r));
+  check('adv3 backdated: the next session still pre-fills the latest numbers (185, not 95)', r.seed === '185', JSON.stringify(r));
+  check('adv3 backdated: Home lists the real latest workout first', /Oct 10/.test(r.top), JSON.stringify(r));
+  const id = await page.evaluate(() => gH()[1].id);
+  await page.evaluate(id => { openWE(id); document.getElementById('weDate').value = '2026-08-01'; saveWE(); }, id);
+  const r2 = await page.evaluate(() => ({ order: gH().map(w => dayKey(w.date)).join(','), seed: seedSets('Barbell_Bench_Press_-_Medium_Grip').map(s => Math.round(s.pw * 2.20462)).join(',') }));
+  check('adv3 backdated: moving a workout to an earlier date moves it in history too', r2.order === '2026-08-01,2026-09-01' && r2.seed === '95', JSON.stringify(r2));
+  check('adv3 backdated: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv3ImportDates() {
+  // 7. CSV import: a date it could not read became NOW (29/09/2024 or 29.09.2024 imported as today), a
+  // day-first file read 01/10 as January 10, and a bare 2024-09-29 landed on the day before (UTC midnight).
+  const { page, ctx, errors } = await phone({ now: SEP15 });
+  await dbReady(page);
+  const run = csv => page.evaluate(async csv => { S.s('hist', []); S.s('prs', {}); await importWorkoutCsv(csv); return gH().map(w => w.name + '@' + dayKey(w.date)).join(','); }, csv);
+  const H = 'title,start_time,exercise_title,weight_lbs,reps\n';
+  let r = await run(H + 'A,29/09/2024 18:04,Barbell Bench Press,135,5\nB,01/10/2024 07:00,Barbell Bench Press,135,5\n');
+  check('adv3 import dates: a day-first file reads 29/09 and 01/10 as Sep 29 and Oct 1', r === 'A@2024-09-29,B@2024-10-01', r);
+  r = await run(H + 'A,29.09.2024 18:04,Barbell Bench Press,135,5\n');
+  check('adv3 import dates: dotted day-first dates are read', r === 'A@2024-09-29', r);
+  r = await run(H + 'A,2024-09-29,Barbell Bench Press,135,5\n');
+  check('adv3 import dates: a bare YYYY-MM-DD is that local day', r === 'A@2024-09-29', r);
+  r = await run(H + 'A,someday,Barbell Bench Press,135,5\nB,2024-09-29 10:00:00,Barbell Bench Press,135,5\n');
+  const t = await toasts(page);
+  check('adv3 import dates: an unreadable date is skipped and reported, never imported as today', r === 'B@2024-09-29' && /1 skipped \(date not readable\)/.test(t), r + ' / ' + t);
+  r = await run(H + 'A,9/29/2024 6:04 PM,Barbell Bench Press,135,5\nB,1 Oct 2024, 07:00,Barbell Bench Press,135,5\n');
+  check('adv3 import dates: US and Hevy-style dates still read as before', r === 'A@2024-09-29,B@2024-10-01', r);
+  check('adv3 import dates: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

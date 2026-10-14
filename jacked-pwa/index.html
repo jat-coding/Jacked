@@ -1495,6 +1495,15 @@ function histClean(h){
   if(h.every(clean)) return h;
   return h.filter(ok).map(w=>!Array.isArray(w.exercises)?w:{...w,exercises:w.exercises.filter(ok).map(e=>!Array.isArray(e.sets)?e:{...e,sets:e.sets.filter(ok)})});
 }
+// History is read newest-last everywhere (Home's recent list, the next session's pre-filled sets, the
+// progress streaks, what friends see). A workout logged for a past calendar day was appended after newer
+// ones, so it showed as the latest and seeded the next session with old numbers (adversarial pass 3,
+// 2026-10-13). Insert by date; today's finish still lands at the end in one step.
+function histInsert(h,rec){
+  const t=Date.parse(rec&&rec.date); let i=h.length;
+  if(!isNaN(t)) while(i>0&&(Date.parse(h[i-1]&&h[i-1].date)||0)>t) i--;
+  h.splice(i,0,rec); return h;
+}
 const gPR     = () => S.g('prs')      || {};
 const gProf   = () => S.g('prof')     || null;
 const gFr     = () => S.g('friends')  || [];
@@ -3061,7 +3070,8 @@ const STALE_IDLE_MS = 30*60*1000, STALE_TOTAL_MS = 90*60*1000;
 function awIsStale() { return aw && awStart && ((awTouch && Date.now()-awTouch>STALE_IDLE_MS) || Date.now()-awStart>STALE_TOTAL_MS); }
 
 // Persist the in-progress workout so a reload/crash/screen-lock doesn't lose it.
-function saveAW() { if(aw){ awTouch=Date.now(); if(liveStamp()) liveSchedule(); S.s('activeWorkout',{aw,awStart,awTouch}); } }
+let _awFromTab=false;   // true while showing another tab's write: rendering it must not write it back (they'd ping-pong)
+function saveAW() { if(aw&&!_awFromTab){ awTouch=Date.now(); if(liveStamp()) liveSchedule(); S.s('activeWorkout',{aw,awStart,awTouch}); } }
 function clearAW() { try{ localStorage.removeItem('jk_activeWorkout'); }catch(e){} closeWorkoutModals(); }
 // Every way a workout ends goes through clearAW(). Its own pickers must go with it: ended on the
 // watch / auto-finished / discarded while Reorder Exercises was open left that list over Home, and
@@ -3522,7 +3532,7 @@ function liveRecompute(doc, rev, create){
   if(i<0){
     const end=liveTouch(doc)||Date.now();
     const f=buildFinishRec(a, a.startedAt||end, end);
-    f.rec.lrev=rev; h.push(f.rec);
+    f.rec.lrev=rev; histInsert(h,f.rec);
   } else {
     const old=h[i], notes=new Map((old.exercises||[]).filter(e=>e.note).map(e=>[e.exId,e.note]));
     const exs=liveHistExercises(a.exercises).map(e=>notes.has(e.exId)?{...e,note:notes.get(e.exId)}:e);
@@ -3591,6 +3601,7 @@ async function liveFlushFinishQ(){
   }
 }
 async function liveDiscard(id){
+  try{ localStorage.setItem(AW_END_KEY, JSON.stringify({id,t:Date.now()})); }catch(_){}   // tells another tab it was discarded on purpose
   if(!liveOn()) return;
   try{
     const code=liveCode();
@@ -3644,9 +3655,44 @@ function maybeResumeAW() {
   _liveHold=true;   // don't publish it to the live row before he says yes
   showConfirm('Resume your unfinished workout?').then(ok=>{
     _liveHold=false;
+    if(!aw) return;   // finished or discarded in another tab while this asked
     if(ok) { liveRebase(); beginW(); } else { liveDecline(aw.id); aw=null; clearAW(); }
   });
 }
+
+// Two tabs or windows of the app on one device (an Android Chrome tab next to the installed app, two
+// desktop tabs) share localStorage, but each kept its own in-memory copy of the open workout. Each
+// set logged overwrote the other tab's saved copy, and when one tab finished, the other's extra sets
+// were dropped as a "duplicate finish" (adversarial pass 3, 2026-10-13). The saved copy is now the one
+// truth: another tab's write is taken over here, and its Finish or Cancel closes the workout here too.
+const AW_END_KEY='jacked_awEnded';   // {id,t}: the last workout discarded on purpose (not in the blob)
+window.addEventListener('storage', e=>{
+  if(e.storageArea!==localStorage) return;
+  // A unit switched in the other tab: this one still showed lb boxes, but read what he typed in them as kg.
+  if(e.key==='jk_settings'){
+    _awFromTab=true; try{ if(aw&&document.getElementById('page-active').classList.contains('active')) renderWS(); else reRenderActivePage(); } finally{ _awFromTab=false; }
+    return;
+  }
+  if(e.key!=='jk_activeWorkout' || _finLock) return;
+  const saved=S.g('activeWorkout');   // what is stored NOW, not this event's value: a queued event can be stale
+  if(saved&&saved.aw&&Array.isArray(saved.aw.exercises)){
+    const had=!!aw;
+    aw=saved.aw; awStart=saved.awStart||awStart||Date.now(); awTouch=saved.awTouch||awStart;
+    liveRebase();   // the other tab already stamped and sends these changes
+    if(!had){ clearInterval(wt); wt=setInterval(updWT,1000); }
+    document.getElementById('awName').textContent=aw.name;
+    _awFromTab=true; try{ if(document.getElementById('page-active').classList.contains('active')) renderWS(); } finally{ _awFromTab=false; }
+    updWT(); updateResumeBar();
+    return;
+  }
+  if(saved||!aw) return;
+  const id=aw.id, done=gH().some(w=>w&&w.id===id);
+  let ended=null; try{ ended=JSON.parse(localStorage.getItem(AW_END_KEY)); }catch(_){}
+  if(!done&&!(ended&&ended.id===id)) return;   // only declined over there: still open here, the next save restores it
+  aw=null; _liveShadow=null; clearInterval(wt); skipRest(); closeWorkoutModals();   // aw first: skipRest would save it back
+  if(document.getElementById('page-active').classList.contains('active')) sp('home'); else updateResumeBar();
+  toast(done?'Workout finished in another window':'Workout cancelled in another window','ok');
+});
 
 function openQS() {
   const rs=gR().slice().reverse();   // newest-created routine first
@@ -5496,7 +5542,7 @@ function _commitFinish(endTs,rev) {
   // Detect if the workout's exercises differ from its source routine.
   let rid=null,rname='',ids=aw.exercises.map(e=>e.exId);
   if(aw.routineId){ const r=gR().find(x=>x.id===aw.routineId); if(r){ const o=r.exercises||[]; if(o.length!==ids.length||o.some((id,i)=>id!==ids[i])){ rid=aw.routineId; rname=r.name; } } }
-  const h=gH(); h.push(rec);
+  const h=histInsert(gH(),rec);
   if(!S.s('hist',h)){ prUndo(); finishUnsaved(); return; }   // storage full: nothing saved, say so
   clearAW();
   if (typeof syncMe==='function') syncMe();  // push updated stats to Supabase if configured
@@ -5753,7 +5799,8 @@ function saveWE(){
   const ts=weDraft.exercises.reduce((a,e)=>a+(e.sets||[]).filter(s=>s.done).length,0);
   const vol=weDraft.exercises.reduce((a,e)=>a+(isWT(e)?(e.sets||[]).filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*Math.max(0,s.reps||0)),0):0),0);
   weDraft.sets=ts; weDraft.totalVolume=Math.round(vol);
-  const h=gH(); const idx=h.findIndex(x=>x.id===weId), old=idx>=0?h[idx]:null; if(idx>=0) h[idx]=weDraft;
+  const h=gH(); const idx=h.findIndex(x=>x.id===weId), old=idx>=0?h[idx]:null;
+  if(idx>=0){ if(old.date===weDraft.date) h[idx]=weDraft; else { h.splice(idx,1); histInsert(h,weDraft); } }   // a new date moves it to its place in time
   // Cardio/holds whose sets changed get their PR badge + record rebuilt from history (2026-10-08); weight lifts as before.
   const ch=old?chTouched(old,weDraft):new Set();
   if(ch.size) commitHistRepair(h,ch,new Date().toISOString()); else S.s('hist',h);
@@ -7353,7 +7400,10 @@ function resolveSharedEx(e){
 function copyFriendWorkout(code,idx){
   const p=personByCode(code); if(!p) return;
   const w=(p.wd||[])[idx]; if(!w) return;
-  if(aw){ showConfirm('You have a workout in progress. Replace it with a copy of this one?').then(ok=>{ if(ok) _copyFriendWorkoutNow(w); }); return; }
+  // Same guard as every other Start (awBusy): this one replaced the open workout without ending it, so
+  // the watch kept the old one live, and the new one was stamped against the old one's shadow
+  // (adversarial pass 3, 2026-10-13).
+  if(awBusy(()=>_copyFriendWorkoutNow(w))) return;
   _copyFriendWorkoutNow(w);
 }
 function _copyFriendWorkoutNow(w){
@@ -7477,9 +7527,13 @@ function renderLB() {
 async function rmFr(id) {
   if (supaEnabled()) {
     const my=(gProf()||{}).code; if(!my) return;
-    try{ await SUPA.from('friend_requests').delete()
-      .or(`and(from_code.eq.${my},to_code.eq.${id}),and(from_code.eq.${id},to_code.eq.${my})`);
-    }catch(e){ console.warn('rmFr',e); }
+    // supabase-js reports a failed delete in {error}, it doesn't throw: a remove with no connection
+    // said "Removed" and left the friend there (adversarial pass 3, 2026-10-13).
+    let err=null;
+    try{ ({error:err}=await SUPA.from('friend_requests').delete()
+      .or(`and(from_code.eq.${my},to_code.eq.${id}),and(from_code.eq.${id},to_code.eq.${my})`));
+    }catch(e){ err=e; }
+    if(err){ console.warn('rmFr',err); toast('Could not remove — check your connection and try again','err'); return; }
     const cb=new Set(gCB()); cb.delete(id); S.s('closeBuddies',[...cb]);
     await refreshFriends(); toast('Removed','ok'); return;
   }
@@ -8107,10 +8161,15 @@ async function fetchFriendProfiles(codes){
 }
 
 // Pull friends + pending requests, then re-render the leaderboard.
+// Refreshes overlap (the 25 s poll, re-focus, Realtime, Accept/Remove each start one). One that started
+// before a Remove and answered after it put the removed friend back (adversarial pass 3, 2026-10-13):
+// only the newest refresh may write the list.
+let _frGen=0;
 async function refreshFriends() {
   if (!supaEnabled()) { liveFriends=null; renderLB(); return; }
   const p=gProf(); if(!p||!p.code){ renderLB(); return; }
   syncMe().catch(e=>console.warn('syncMe',e));   // own-profile upload doesn't gate the friends fetch
+  const gen=++_frGen;
   try {
     const my=p.code;
     const { data: reqs } = await SUPA.from('friend_requests').select('*')
@@ -8127,6 +8186,7 @@ async function refreshFriends() {
     if (codes.length) {
       profs=await fetchFriendProfiles(codes);
     }
+    if (gen!==_frGen) return;   // a newer refresh is under way; it renders
     const byCode={}; profs.forEach(pr=>byCode[pr.code]=pr);
     const mk=(c)=>{ const pr=byCode[c]||{code:c}; const data=pr.data||{}; const m=data.m||{}; return {
       id:c, code:c, name:pr.name||pr.username||'Lifter', username:pr.username||'', avatarUrl:pr.avatar_url||'',
@@ -8519,10 +8579,14 @@ async function saveProf() {
   const repMin=parseInt(document.getElementById('setRepMin').value,10)||REP_MIN_DEFAULT;
   const repMax=parseInt(document.getElementById('setRepMax').value,10)||REP_MAX_DEFAULT;
   if(repMin<1||repMin>30||repMax>50||repMax<=repMin){ toast('Rep range: Min must be lower than Max (Min 1-30, Max up to 50)','err'); return; }
+  // The body-weight box is in the unit it was shown in, not the one just picked: switching lb -> kg
+  // and saving turned 180 lb into 180 kg. And a Save that didn't touch the box logged a weigh-in for
+  // today anyway (adversarial pass 3, 2026-10-13). Only a changed box is a new weigh-in.
+  const shownU=wUnit(), bwShown=gBW()?dW(gBW()):0;
   S.s('settings',{...gSet(),wUnit:unit,restDefault:rest,autoRest,repMin,repMax});
   metricUnit = unit==='kg' ? 'metric' : 'imperial';
   const bwv=parseFloat(document.getElementById('bwInput').value);
-  if(bwv>0) logWeight(unit==='lb' ? bwv/2.20462 : bwv);   // body weight → current + log
+  if(bwv>0 && bwv!==bwShown) logWeight(shownU==='lb' ? bwv/2.20462 : bwv);   // body weight → current + log
   const birthday=document.getElementById('profBirthday').value||'';
 
   if (newU!==oldU) {
@@ -8672,11 +8736,23 @@ function parseCSV(text) {
   return rows.filter(r=>!(r.length===1&&r[0].trim()===''));
 }
 
-function parseImportDate(s) {
-  if (!s) return new Date();
+// null = not a date we can read. It used to fall back to NOW, so a file dated 29/09/2024 or
+// 29.09.2024 imported every workout as today, and 01/10/2024 always read as January 10
+// (adversarial pass 3, 2026-10-13). Day-first is assumed for dotted dates, and for slashed dates
+// when the file has any first number over 12 (dayFirst, worked out once per file).
+function parseImportDate(s, dayFirst) {
+  s=String(s||'').trim(); if (!s) return null;
+  const m=s.match(/^(\d{1,2})([\/.])(\d{1,2})\2(\d{2}|\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?)?$/);
+  if (m){
+    const df=m[2]==='.'||dayFirst||+m[1]>12, day=+(df?m[1]:m[3]), mon=+(df?m[3]:m[1]), y=+m[4]<100?2000+(+m[4]):+m[4];
+    let H=m[5]!=null?+m[5]:12; if(m[8]) H=H%12+(/p/i.test(m[8])?12:0);
+    const d=new Date(y,mon-1,day,H,+(m[6]||0),+(m[7]||0));
+    return d.getMonth()===mon-1&&d.getDate()===day?d:null;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s+='T12:00:00';   // a bare date is that LOCAL day, not UTC midnight (the day before, here)
   let d=new Date(s); if(!isNaN(d)) return d;
-  d=new Date(String(s).replace(',','')); if(!isNaN(d)) return d;
-  return new Date();
+  d=new Date(s.replace(',','')); if(!isNaN(d)) return d;
+  return null;
 }
 
 // Import a workout-log CSV (Hevy and similar) into history; recompute PRs so the
@@ -8735,8 +8811,11 @@ async function importWorkoutCsv(text) {
   const hist=gH();
   const existing=new Set(hist.map(w=>(w.date?w.date.split('T')[0]:'')+'|'+w.name));
   const built=[];
+  const dayFirst=[...groups.values()].some(g=>{ const m=String(g.start||'').trim().match(/^(\d{1,2})\/\d{1,2}\//); return m&&+m[1]>12; });
+  let badDate=0;
   for (const g of groups.values()){
-    const d=parseImportDate(g.start), iso=d.toISOString();
+    const d=parseImportDate(g.start,dayFirst); if(!d){ badDate++; continue; }
+    const iso=d.toISOString();
     if (existing.has(iso.split('T')[0]+'|'+g.title)) continue;  // already imported
     const exMap=new Map();
     g.rows.forEach(row=>{
@@ -8767,7 +8846,8 @@ async function importWorkoutCsv(text) {
     const ts=exercises.reduce((a,e)=>a+e.sets.length,0);
     const vol=exercises.reduce((a,e)=>a+(e.tracking==='distance'||e.tracking==='duration'?0:e.sets.reduce((b,s)=>b+s.weight*s.reps,0)),0);
     let dur='—';
-    if (g.end){ const sec=Math.max(0,Math.round((parseImportDate(g.end)-d)/1000)); if(sec) dur=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0'); }
+    const de=g.end?parseImportDate(g.end,dayFirst):null;
+    if (de){ const sec=Math.max(0,Math.round((de-d)/1000)); if(sec) dur=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0'); }
     built.push({id:'w'+(+d)+'_'+built.length, name:g.title, date:iso, exercises, duration:dur, sets:ts, totalVolume:Math.round(vol)});
   }
   if(!built.length){ toast('No new workouts found in file','err'); return; }
@@ -8794,7 +8874,7 @@ async function importWorkoutCsv(text) {
   S.s('prs',prs); S.s('holdPR',hold);
   if(typeof syncMe==='function') syncMe();
   cm('profModal');
-  toast(`Imported ${built.length} workout${built.length!==1?'s':''} ✓`,'ok');
+  toast(`Imported ${built.length} workout${built.length!==1?'s':''} ✓`+(badDate?` · ${badDate} skipped (date not readable)`:''),badDate?'err':'ok');
   renderHome();
 }
 
@@ -9013,6 +9093,10 @@ if ('serviceWorker' in navigator) {
   const maybeApplyUpdate=()=>{
     if(!_updateReady||_refreshing) return;
     if(typeof aw!=='undefined'&&aw) return;          // workout in progress → defer
+    // Nor out from under an open editor or dialog: the reload used to fire over Edit Workout, a new
+    // routine or the finish summary and threw away what he had typed (adversarial pass 3, 2026-10-13).
+    if(document.querySelector('.mo.open:not(#authGate)')) return;
+    const f=document.activeElement; if(f&&(/^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)||f.isContentEditable)) return;
     _refreshing=true; window.location.reload();
   };
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
