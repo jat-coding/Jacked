@@ -43,7 +43,7 @@ surface, since that pass was scoped to the active-workout/finish/live-sync pipel
    that is the "halt the user" bar he named.
 
 ## Done when
-- [x] Full e2e suite green, pass count stated (`node tests/e2e/run.mjs`). **1205/1205.**
+- [x] Full e2e suite green, pass count stated (`node tests/e2e/run.mjs`). **1208/1208.**
 - [x] `live*` suite (VERIFY.md #7) green, pass count stated. **51/51.**
 - [x] List every adversarial scenario actually tried, one line each, across ALL 7 areas
       above (not just the pipeline from 10-12) — a scenario only "covered" by citing the
@@ -188,5 +188,5 @@ staging-retirement merge) — see `tasks/2026-10-12-adversarial-stress-test.md`.
 
 Areas 2, 3, 4, 5 genuinely had 0 new bugs after real adversarial attempts (not just
 citing old passes) — see the scenario lists above for what was actually tried in each.
-Full suite: **1205/1205**. Live suite: **51/51**. Report:
+Full suite: **1208/1208**. Live suite: **51/51**. Report:
 `~/agent/research/jacked-full-qa-sweep-result-2026-10-13.md`.
