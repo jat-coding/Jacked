@@ -1516,6 +1516,10 @@ function fromDisp(v)  { return wUnit()==='lb' ? (parseFloat(v)||0)/2.20462 : (pa
 function fmtW(kg)     { return fmtV(toDisp(kg)); }            // rounded, k-suffixed (volumes)
 function dW(kg)       { return Math.round(toDisp(kg)*10)/10; } // 1-decimal (single weights)
 function uL()         { return wUnit()==='lb'?'lb':'kg'; }
+// Badge ladders and bests are worked out in lb (the sourced standards are lb). They were also SHOWN in lb to a kg
+// user, the only weights in the app that ignored his unit (adversarial pass 4, 2026-10-14). Show them like every other weight.
+function lbN(lb)      { return wUnit()==='lb'?Math.round(lb):Math.round(lb/2.20462); }
+function lbTxt(lb)    { return lbN(lb)+' '+uL(); }
 // Title-case a label for DISPLAY only (muscle/equipment/category come from the DB
 // lowercase). Underscores → spaces so "resistance_band" reads "Resistance Band".
 // Never use this on values compared in logic — those stay lowercase.
@@ -1783,10 +1787,19 @@ function prettyDB(name, equip){
   return paren?`${base} (${paren})`:base;
 }
 
+// byId() runs for every exercise of every workout on most screens, and parsed the whole custom-exercise list out of
+// storage each time: 1500 workouts with 20 custom exercises took Home 0.7 s and Metrics 0.9 s on a desktop CPU, 500
+// of them ~6 s (adversarial pass 4). Index it once per stored version; byId still returns a copy.
+let _cexMemo={raw:undefined,map:null};
+function cexById(id){
+  const raw=localStorage.getItem('jk_cex');
+  if(raw!==_cexMemo.raw||!_cexMemo.map) _cexMemo={raw,map:new Map(gCEx().map(e=>[e&&e.id,e]))};
+  return _cexMemo.map.get(id);
+}
 function byId(id) {
   if (!id) return { id:'?', name:'Unknown', muscle:'', equip:'', images:[], tracking:'weight_reps', _c:true };
   // check custom first
-  const c = gCEx().find(e=>e.id===id);
+  const c = cexById(id);
   if (c) return { ...c, name:exName(id,c.name), _c:true };
   // built-in warm-ups
   const w = WARMUPS.find(e=>e.id===id)||MACHINES.find(e=>e.id===id)||RUNS.find(e=>e.id===id);
@@ -1962,6 +1975,9 @@ function sp(id) {
   // every earlier tab's entry behind, so after tab-tab-tab, back went Home and the next presses did
   // nothing at all (adversarial pass 2, 2026-10-13).
   if (switching && id!=='home') { try{ const st={jkTab:id}; if(history.state&&history.state.jkTab) history.replaceState(st,'',location.pathname); else history.pushState(st,'',location.pathname); }catch(_){} }
+  // Home reached by tapping it (or by Finish, Cancel...) left the tab's entry behind: the next back press did nothing
+  // and the one after closed the app (adversarial pass 4). Consume it, the way back itself would have.
+  else if (switching && id==='home') { const st=history.state; if (st&&st.jkTab&&!st.jkPop&&!_backSkip) { _backSkip=true; try{ history.back(); }catch(_){ _backSkip=false; } } }
 }
 // Fires when the back button pops the entry sp() pushed above. Only Home-vs-other-tab
 // back is in scope (Feedback #9) -- modal-close-on-back and the active-workout page are
@@ -1973,11 +1989,61 @@ function sp(id) {
 // moved, renderHome() ran, but the screen never changed, so a second back (now with no history
 // entry left) could leave the app entirely instead of ever closing the overlay the user was
 // actually looking at.
+// Adversarial pass 4 (2026-10-14): back now does what tapping outside a popup (or Escape) does, everywhere. Before,
+// back with a popup open (Exercise info, Edit Workout, Profile, a friend...) switched the tab UNDER the still-open
+// popup, or on Home closed the app with it open; with a full-screen overlay it was swallowed, and the next press closed
+// the app; on the workout page it did nothing or closed the app. Now: back closes the popup on top, then leaves the
+// workout page or a tab for Home, then (on Home, nothing open) leaves the app. An open popup gets its own history
+// entry (syncPopupHistory, run from the same observer as the scroll lock), consumed again when it closes some other way.
+let _backSkip=false;   // a history.back() of our own (consuming a stale entry): its popstate is not a back press
+const POPUP_SEL='.mo.open,#achFull.open,#badgeFull.open,#recapFull.open';
+function topPopup(){
+  const els=[...document.querySelectorAll(POPUP_SEL)]; if(!els.length) return null;
+  const z=el=>parseInt(getComputedStyle(el).zIndex,10)||0;
+  return els.reduce((a,b)=>z(b)>=z(a)?b:a);   // highest layer; on a tie the later one in the page is on top
+}
+// Close the popup on top the way its own backdrop/close does. false = nothing was open.
+function closeTopPopup(){
+  const el=topPopup(); if(!el) return false;
+  if(el.id==='confirmModal') _cfDone(null);
+  else if(el.id==='badgeFull') closeBadgeFull();
+  else if(el.id==='recapFull') closeRecap();
+  else if(el.id==='achFull') closeAch();
+  else el.classList.remove('open');
+  return true;
+}
+function syncPopupHistory(){
+  const open=!!topPopup(), st=history.state;
+  try{
+    if(open && !(st&&st.jkPop)) history.pushState({...(st||{}),jkPop:1},'',location.pathname);
+    else if(!open && st&&st.jkPop && !_backSkip){ _backSkip=true; history.back(); }
+  }catch(_){ _backSkip=false; }
+}
 window.addEventListener('popstate', function(){
-  if (document.querySelector('#achFull.open,#badgeFull.open,#recapFull.open')) return;
+  if (_backSkip) {   // our own step back landed. A popup may have opened while it was in flight (give it an entry),
+    _backSkip=false;  // or another stale entry may be left under it (Home under a closed popup's tab entry): consume that too
+    if (topPopup()) { syncPopupHistory(); return; }
+    const st=history.state; if (st&&(st.jkPop||(st.jkTab&&document.getElementById('page-home').classList.contains('active')))) { _backSkip=true; history.back(); }
+    return;
+  }
+  if (closeTopPopup()) return;   // a tab's entry is still there under the popup's, so the next back goes Home
+  if (document.getElementById('page-active').classList.contains('active')) { sp('home'); return; }   // the workout keeps running: Return-to-workout bar
   const activeTab = JK_TABS.find(id=>{ const el=document.getElementById('page-'+id); return el && el.classList.contains('active'); });
   if (activeTab && activeTab!=='home') sp('home');
 });
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && closeTopPopup()) { e.preventDefault(); return; }
+  // Tab stays inside the popup on top, like the four full-screen ones already declare (aria-modal): it walked out into
+  // the page behind, 18 of 40 presses with Profile open (adversarial pass 4).
+  if(e.key!=='Tab') return;
+  const top=topPopup(); if(!top) return;
+  const f=[...top.querySelectorAll('button,input,select,textarea,a[href],[tabindex]:not([tabindex="-1"])')].filter(el=>!el.disabled&&el.tabIndex>=0&&el.getClientRects().length);
+  if(!f.length) return;
+  const i=f.indexOf(document.activeElement);
+  if(i<0||(e.shiftKey&&i===0)||(!e.shiftKey&&i===f.length-1)){ e.preventDefault(); f[i<0?0:e.shiftKey?f.length-1:0].focus(); }
+});
+// Every sheet is a dialog to a screen reader too, not only the four full-screen pages that said so.
+document.querySelectorAll('.mo').forEach(m=>{ if(!m.hasAttribute('role')){ m.setAttribute('role','dialog'); m.setAttribute('aria-modal','true'); } });
 function sap() {
   if(!document.getElementById('page-active').classList.contains('active')) haptic();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1985,6 +2051,8 @@ function sap() {
   document.getElementById('page-active').classList.add('active');
   moveNavInd();
   updateResumeBar();
+  // An entry for the workout page too, like a tab's: back goes Home instead of doing nothing or closing the app.
+  try{ const st=history.state; if(!(st&&st.jkTab==='active')){ const n={jkTab:'active'}; if(st&&st.jkTab&&!st.jkPop) history.replaceState(n,'',location.pathname); else history.pushState(n,'',location.pathname); } }catch(_){}
 }
 function moveNavInd(){
   const ind=document.getElementById('navInd'); if(!ind) return;
@@ -2279,7 +2347,7 @@ function renderEx() {
     exSearchMatch(q,e)&&
     chipMatch(mFlt,e)
   ).sort(exRankCmp).slice(0,80);   // favourites → used-before → rest
-  const prs=gPR(), hp=gHoldPR();
+  const prs=gPR(), hp=gHoldPR(), cp=gCardioPR();
   const el=document.getElementById('exList');
   if (!filt.length) { el.innerHTML='<div class="es"><h3>No results</h3></div>'; return; }
   el.innerHTML=filt.map(e=>{
@@ -2292,7 +2360,8 @@ function renderEx() {
         <div style="font-weight:600;font-size:13px">${isFav(e.id)?'<span style="color:#ffd700">★</span> ':''}${esc(e.name)}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">${capW(e.muscle)} ${e.equip?'· '+capW(e.equip):''} ${e.category?'· '+capW(e.category):''} ${trackLabel?'· '+trackLabel:''}</div>
       </div>
-      ${e.tracking==='duration'?(hp[e.id]?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${fmtHold(hp[e.id].sec)}<div style="font-size:9px;color:var(--muted);font-weight:400">hold PR</div></div>`:'')
+      ${e.tracking==='distance'?(cp[e.id]&&cp[e.id].dist>0&&cp[e.id].time>0?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${fmtPace(pacePerMile(cp[e.id].dist,cp[e.id].time))}<div style="font-size:9px;color:var(--muted);font-weight:400">pace PR</div></div>`:'')
+        :e.tracking==='duration'?(hp[e.id]?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${fmtHold(hp[e.id].sec)}<div style="font-size:9px;color:var(--muted);font-weight:400">hold PR</div></div>`:'')
         :pr?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${dW(pr.weight)}${uL()}<div style="font-size:9px;color:var(--muted);font-weight:400">${pr.reps}r PR</div></div>`:''}
     </div>`;
   }).join('');
@@ -3668,6 +3737,10 @@ function maybeResumeAW() {
 const AW_END_KEY='jacked_awEnded';   // {id,t}: the last workout discarded on purpose (not in the blob)
 window.addEventListener('storage', e=>{
   if(e.storageArea!==localStorage) return;
+  // Signed out in another tab: that tab wiped the account and reloaded, this one kept running on it, and anything
+  // done here was written back under no account, then joined whoever signed in next (adversarial pass 4).
+  // Sign out refuses while a workout is open, and that workout is shared between tabs, so nothing open is lost.
+  if(e.key==='jk_prof' && e.newValue===null && e.oldValue){ location.reload(); return; }
   // A unit switched in the other tab: this one still showed lb boxes, but read what he typed in them as kg.
   if(e.key==='jk_settings'){
     _awFromTab=true; try{ if(aw&&document.getElementById('page-active').classList.contains('active')) renderWS(); else reRenderActivePage(); } finally{ _awFromTab=false; }
@@ -3862,7 +3935,7 @@ function renderWS() {
             <button class="btn bg ic xs" onclick="openReorder()" aria-label="Reorder">${uic('sort',undefined,14)}</button>
             <button class="btn bg ic xs" style="color:${linkBtnColor}" onclick="tapSuperset(${ei})" aria-label="Superset">${uic('link',linkBtnColor,14)}</button>
             <button class="btn bg ic xs" onclick="switchEx(${ei})" aria-label="Switch exercise">${uic('replace',undefined,14)}</button>
-            <button class="btn bd ic xs" onclick="rmEx(${ei})" aria-label="Remove">${uic('trash',undefined,14)}</button>
+            <button class="btn bd ic xs" onclick="rmExAsk(${ei})" aria-label="Remove">${uic('trash',undefined,14)}</button>
           </div>
           <div class="badge-row">
             ${mTierBadge?`<span class="progress-chip" style="color:${TIERC[mTierBadge.tier]};background:${TIERC[mTierBadge.tier]}22;border-color:${TIERC[mTierBadge.tier]}66" onclick="metricBadgeInfo('${mTierBadge.key}','${mTierBadge.tier}',${mTierBadge.value},'${(ex.name||'').replace(/'/g,"\\'")}')">${uic('trophy',TIERC[mTierBadge.tier],11)} ${capW(mTierBadge.tier)}</span>`:''}
@@ -4023,11 +4096,15 @@ function moveEx(ei,dir) {
   const a=aw.exercises; [a[ei],a[j]]=[a[j],a[ei]]; renderWS();
 }
 
+// One reading of a typed set value for the workout screen and Edit Workout. Never below 0: a "-135" typo (Android's
+// number pad has a minus key) was stored as is, shown in history as "-135 lb x 5" and offered as next time's number,
+// while the CSV import already clamps the same value to 0 (totals were safe: effWeight clamps) (adversarial pass 4).
+function setVal(ex,v,conv){ return Math.max(0, conv==='dur' ? fromDispDur(v,durUnit(ex)) : conv==='clock' ? clockToMin(v) : conv ? fromDisp(v) : (parseFloat(v)||0)) || 0; }
 function uSet(ei,si,f,v,conv) {
   if(!aw) return;
   [ei,si]=wsAt(ei,si); if(ei<0||si<0) return;
   const ex=aw.exercises[ei];
-  ex.sets[si][f] = conv==='dur' ? fromDispDur(v,durUnit(ex)) : conv==='clock' ? clockToMin(v) : conv ? fromDisp(v) : (parseFloat(v)||0);
+  ex.sets[si][f] = setVal(ex,v,conv);
   saveAW();
   if(isCardio(ex)) updPaceLine(ei,si);
 }
@@ -4498,7 +4575,7 @@ function stdLadder(table,sex,bwLb,age){
 // The one line the bench popup uses to say where its numbers came from. No GOODLIFT points shown (Mr. Roni, 2026-09-30).
 function benchHowNote(){
   const b=benchBasis(), ag=mccullochFactor(b.age)!==1?`, eased for age ${b.age}`:'';
-  return b.ok?`Set for your sex and ${Math.round(b.bwLb)} lb body weight${ag}.`
+  return b.ok?`Set for your sex and ${lbTxt(b.bwLb)} body weight${ag}.`
     :`Standard numbers${ag}: set your sex and body weight in Profile to get your own.`;
 }
 // Where the Pull-up / Push-up / Cardio-Maxing numbers come from, worded for this profile (replaces badgeAdjNote for
@@ -4511,7 +4588,7 @@ function stdHowNote(key){
     (age==null?' Set your birthday in Profile to adjust for age.':'');
   const name=key==='pullup'?'pull-up':'push-up';
   return ` Tiers are Strength Level's Intermediate, Advanced and Elite ${name} standards for ${who}`+
-    (bwLb>0?` at ${Math.round(bwLb)} lb body weight.`:' at any body weight. Set your body weight in Profile to get your own.')+
+    (bwLb>0?` at ${lbTxt(bwLb)} body weight.`:' at any body weight. Set your body weight in Profile to get your own.')+
     (age==null?' Set your birthday to adjust for age.':'');
 }
 // No badge is taken away by the switch: a lift logged before GOODLIFT tiers shipped keeps the tier it earned under
@@ -4553,7 +4630,7 @@ function liftVariantsOf(badge,h,minReps,T,each){
       if(v>lifts[i].v){ lifts[i].v=v; lifts[i].rawLb=lb; }
       if(each) each(w,i,lb); } });
   }));
-  lifts.forEach(l=>{ l.tier=T?tierOfLive(l.v,T):null; l.disp=l.v>0?Math.round(l.v)+' lb':''; });
+  lifts.forEach(l=>{ l.tier=T?tierOfLive(l.v,T):null; l.disp=l.v>0?lbTxt(l.v):''; });
   const got=lifts.filter(l=>l.v>0);
   const top=got.slice().sort((a,b)=>((TIER_RANK[b.tier]||0)-(TIER_RANK[a.tier]||0))||(b.v-a.v))[0]||null;
   return {tier:top?top.tier:null, value:top?top.v:0, by:top, lifts:got, all:lifts};
@@ -4658,14 +4735,14 @@ function metricBadgeInfo(key,tier,value,exName){
   const sub = (key==='bench'||key==='ohp')&&/dumbbell|smith/i.test(exName||'');   // dumbbell +15% / Smith -15%: a credited number
   const achieved = key==='pullup'||key==='pushup' ? `${Math.round(value)} reps`
     : key==='cardio' ? `${fmtClock(value)}/mi`
-    : sub ? `${Math.round(value)} lb credited`
-    : `${Math.round(value)} lb`;
+    : sub ? `${lbTxt(value)} credited`
+    : lbTxt(value);
   const subNote=key==='ohp'&&!BADGE_STD.ohpSmith.length?` Dumbbells: both together +15%.`:` Dumbbells: both together +15%. Smith machine: -15%.`;
   const T=badgeT();
   const rules={
-    bench:`Bronze / Silver / Gold — 1-rep barbell bench: ${T.bench.join(' / ')} lb.`+(sub?subNote:''),
-    ohp:`Bronze / Silver / Gold — 1-rep standing barbell overhead press: ${T.ohpFrac.join(' / ')} lb.`+(sub?subNote:''),
-    squat:`Bronze / Silver / Gold — 1-rep barbell back squat: ${T.squatFrac.join(' / ')} lb.`,
+    bench:`Bronze / Silver / Gold — 1-rep barbell bench: ${T.bench.map(lbN).join(' / ')} ${uL()}.`+(sub?subNote:''),
+    ohp:`Bronze / Silver / Gold — 1-rep standing barbell overhead press: ${T.ohpFrac.map(lbN).join(' / ')} ${uL()}.`+(sub?subNote:''),
+    squat:`Bronze / Silver / Gold — 1-rep barbell back squat: ${T.squatFrac.map(lbN).join(' / ')} ${uL()}.`,
     pullup:`Bronze / Silver / Gold — best set of strict pull-ups: ${T.pullup.join(' / ')} reps.`,
     pushup:`Bronze / Silver / Gold — best set of standard push-ups: ${T.pushup.join(' / ')} reps.`,
     cardio:`Bronze / Silver / Gold — best running mile pace: ${T.cardio.map(fmtClock).join(' / ')} /mi.`,
@@ -4720,6 +4797,19 @@ function exNote(exId){ return gExNotes()[exId]||''; }
 function setExNote(exId,v){ const n=gExNotes(); v=(v||'').trim(); if(v) n[exId]=v; else delete n[exId]; markExNotePending(exId); S.s('exNotes',n); }
 
 function rmEx(ei) { if(!aw)return; [ei]=wsAt(ei); if(ei<0) return; aw.exercises.splice(ei,1); renderWS(); }
+// The trash button. It removed an exercise and every set logged on it at one tap, no question and no undo, while
+// Edit Workout asks before removing one from a finished workout (adversarial pass 4). Asks when sets are logged.
+function rmExAsk(ei){
+  if(!aw) return; const [i]=wsAt(ei); const ex=aw.exercises[i]; if(!ex) return;
+  const n=(ex.sets||[]).filter(s=>s.done).length;
+  if(!n) return rmEx(ei);
+  const id=aw.id;
+  showConfirm(`Remove ${ex.name} and its ${n} logged set${n!==1?'s':''} from this workout?`,{okText:'Remove'}).then(ok=>{
+    if(!ok||!aw||aw.id!==id) return;
+    const j=aw.exercises.findIndex(e=>e===ex||(ex.lid&&e.lid===ex.lid)); if(j<0) return;   // a sync may have swapped the objects
+    aw.exercises.splice(j,1); renderWS();
+  });
+}
 
 const gCardioPR=()=>S.g('cardioPR')||{};   // {exId:{dist,time,date, maxDist,maxDate}} — best effort + longest
 function isCardio(ex){ return ((ex&&ex.tracking)||'')==='distance'; }
@@ -5622,8 +5712,10 @@ function openPlate() {
   const lb=wUnit()==='lb';
   document.getElementById('pcTargetLbl').textContent='Target ('+uL()+')';
   document.getElementById('pcBarLbl').textContent='Bar ('+uL()+')';
-  const bar=document.getElementById('pcBar');
-  if(!bar.value) bar.value = lb?45:20;
+  const bar=document.getElementById('pcBar'), tgt=document.getElementById('pcTarget');
+  // The boxes keep their numbers between opens. After a unit switch the 45 lb bar stayed "45" and was read as
+  // 45 kg (adversarial pass 4): start both over in the new unit.
+  if(!bar.value||bar.dataset.u!==uL()){ if(bar.dataset.u&&bar.dataset.u!==uL()) tgt.value=''; bar.value = lb?45:20; bar.dataset.u=uL(); }
   calcPlates();
   om('pcModal');
 }
@@ -5700,7 +5792,10 @@ function openWD(id) {
   document.getElementById('wdContent').innerHTML=h;
   document.getElementById('wdDel').onclick=()=>{
     showConfirm('Delete this workout?').then(ok=>{ if(!ok) return;
-      S.s('hist',gH().filter(h=>h.id!==id));
+      // Same rebuild as removing the run/hold in Edit Workout (saveWE): deleting the workout that held a pace or hold
+      // record left that record, and its badge, on a workout that no longer exists (adversarial pass 4).
+      const all=gH(), gone=all.find(h=>h.id===id), rest=all.filter(h=>h.id!==id), ch=gone?chTouched(gone,null):new Set();
+      if(ch.size) commitHistRepair(rest,ch,new Date().toISOString()); else S.s('hist',rest);
       // Tombstone the id so a later cloud merge (union by id) can't resurrect this
       // deletion from a stale island's copy. Kept forever (tiny id strings).
       S.s('deleted',[...new Set([...(S.g('deleted')||[]), id])]);
@@ -5770,7 +5865,7 @@ function renderWE(){
 }
 function weUpd(ei,si,f,v,conv){
   const ex=weDraft.exercises[ei], s=ex.sets[si]; if(!s) return;
-  s[f] = conv==='dur' ? fromDispDur(v,durUnit(ex)) : conv==='clock' ? clockToMin(v) : conv ? fromDisp(v) : (parseFloat(v)||0);
+  s[f] = setVal(ex,v,conv);
 }
 function weTogDone(ei,si){ const s=weDraft.exercises[ei].sets[si]; if(s){ s.done=!s.done; renderWE(); } }
 function weAddSet(ei){ const e=weDraft.exercises[ei]; (e.sets=e.sets||[]).push({weight:0,reps:0,done:true}); renderWE(); }
@@ -5893,14 +5988,15 @@ function computeBadges() {
   const TH=badgeT();
   const benchR=benchTierOf(h3), benchT=benchR.tier, benchStd=!benchBasis().ok, bench=benchR.value;
   // "245 lb (Dumbbell bench)" -- the value and the lift that reached the highest tier (Mr. Roni, 2026-09-30).
-  const benchBy=r=>r.value>0?`${Math.round(r.value)} lb`+(r.by&&r.by.key!=='bench'?` (${r.by.label})`:''):'';
-  const ohpBy=r=>`${Math.round(r.value)} lb`+(r.by&&r.by.key!=='ohp'?` (${r.by.label})`:'');
+  const benchBy=r=>r.value>0?`${lbTxt(r.value)}`+(r.by&&r.by.key!=='bench'?` (${r.by.label})`:''):'';
+  const ohpBy=r=>`${lbTxt(r.value)}`+(r.by&&r.by.key!=='ohp'?` (${r.by.label})`:'');
   const ohpR=ohpTierOf(h3), ohp=ohpR.value, ohpT=haveBW?ohpR.tier:null;
   const sq=bestLb(sqPred,1);
   const sqT=haveBW?tierOf(sq,TH.squatFrac):null;
   const r0=x=>Math.round(x);
   // Render the three tier thresholds, bolding (in accent) the ones unlocked.
   const tline=(best,thr)=>thr.map(x=>best>=x?`<b style="color:var(--accent)">${r0(x)}</b>`:`${r0(x)}`).join(' / ');
+  const tlineW=(best,thr)=>thr.map(x=>best>=x?`<b style="color:var(--accent)">${lbN(x)}</b>`:`${lbN(x)}`).join(' / ');   // lb ladder, his unit
   // "Lower is better" tier line (cardio paces, shown as M:SS).
   const tlineLow=(best,thr)=>thr.map(x=>isFinite(best)&&best<=x?`<b style="color:var(--accent)">${fmtClock(x)}</b>`:fmtClock(x)).join(' / ');
 
@@ -5935,7 +6031,7 @@ function computeBadges() {
   const ALL={
     'Bench-Maxing':(()=>{ const r=benchTierOf(h); return r.value>0&&{v:benchBy(r),tier:r.tier}; })(),
     'Shoulder-Maxing':haveBW&&oA>0&&{v:ohpBy(ohpAll),tier:ohpAll.tier},
-    'Leg-Maxing':haveBW&&qA>0&&{v:`${r0(qA)} lb`,tier:tierOf(qA,TH.squatFrac)},
+    'Leg-Maxing':haveBW&&qA>0&&{v:lbTxt(qA),tier:tierOf(qA,TH.squatFrac)},
     'Pull-up-Maxing':puA>0&&{v:`${puA} reps`,tier:puR.tier},
     'Push-up-Maxing':psA>0&&{v:`${psA} reps`,tier:psR.tier},
     'Cardio-Maxing':isFinite(cardioAll)&&{v:`${fmtClock(cardioAll)} per mile`,tier:cardioAllR.tier},
@@ -5983,19 +6079,19 @@ function computeBadges() {
   // Jacked is the exception by request. tiered:true marks the Bronze/Silver/Gold badges.
   const list=[
     {icon:'dumbbell',color:MCOL.chest,name:'Bench-Maxing',tiered:true,tier:benchT,earned:!!benchT,
-      desc: `${benchStd?'Standard 1-rep bench':'1-rep bench'} (lb): ${tline(bench,TH.bench)}`+(benchR.by&&benchR.by.key!=='bench'?` · ${benchR.by.label} ${Math.round(bench)}`:'')+(benchR.kept?' · kept from the old numbers':''),
+      desc: `${benchStd?'Standard 1-rep bench':'1-rep bench'} (${uL()}): ${tlineW(bench,TH.bench)}`+(benchR.by&&benchR.by.key!=='bench'?` · ${benchR.by.label} ${lbN(bench)}`:'')+(benchR.kept?' · kept from the old numbers':''),
       lifts:benchR.lifts},
     {icon:'dumbbell',color:MCOL.shoulders,name:'Shoulder-Maxing',tiered:true,tier:ohpT,earned:!!ohpT,needsWeight:!haveBW,
-      desc: !haveBW?'Enter body weight in Profile to unlock':`1-rep OHP (lb): ${tline(ohp,TH.ohpFrac)}`+(ohpR.by&&ohpR.by.key!=='ohp'?` · ${ohpR.by.label} ${Math.round(ohp)}`:''),
+      desc: !haveBW?'Enter body weight in Profile to unlock':`1-rep OHP (${uL()}): ${tlineW(ohp,TH.ohpFrac)}`+(ohpR.by&&ohpR.by.key!=='ohp'?` · ${ohpR.by.label} ${lbN(ohp)}`:''),
       lifts:haveBW?ohpR.lifts:undefined},
     {icon:'dumbbell',color:MCOL.legs,name:'Leg-Maxing',tiered:true,tier:sqT,earned:!!sqT,needsWeight:!haveBW,
-      desc: !haveBW?'Enter body weight in Profile to unlock':`1-rep squat (lb): ${tline(sq,TH.squatFrac)}`},
-    {icon:'trophy',color:'#ffd700',name:'1000lb Club',desc: bestSingle>0?`Best single-session Big-3: ${r0(bestSingle)} lb / 1000`:'Barbell bench + back squat + deadlift ≥ 1000 lb in one workout',earned:club,
+      desc: !haveBW?'Enter body weight in Profile to unlock':`1-rep squat (${uL()}): ${tlineW(sq,TH.squatFrac)}`},
+    {icon:'trophy',color:'#ffd700',name:'1000lb Club',desc: bestSingle>0?`Best single-session Big-3: ${lbTxt(bestSingle)} / ${lbTxt(1000)}`:'Barbell bench + back squat + deadlift ≥ 1000 lb in one workout',earned:club,
       sections: bestParts?[
-        {t:'Bench',rows:[['Your best in that workout',r0(bestParts.bench)+' lb'+(bestParts.benchBy&&bestParts.benchBy.key!=='bench'?` (${bestParts.benchBy.label}, credited)`:'')]]},
-        {t:'Squat',rows:[['Your best in that workout',r0(bestParts.squat)+' lb']]},
-        {t:'Deadlift',rows:[['Your best in that workout',r0(bestParts.dead)+' lb']]},
-        {t:'Total',met:club,rows:[['Combined',r0(bestSingle)+' lb / 1000']]}
+        {t:'Bench',rows:[['Your best in that workout',lbTxt(bestParts.bench)+(bestParts.benchBy&&bestParts.benchBy.key!=='bench'?` (${bestParts.benchBy.label}, credited)`:'')]]},
+        {t:'Squat',rows:[['Your best in that workout',lbTxt(bestParts.squat)]]},
+        {t:'Deadlift',rows:[['Your best in that workout',lbTxt(bestParts.dead)]]},
+        {t:'Total',met:club,rows:[['Combined',lbTxt(bestSingle)+' / '+lbTxt(1000)]]}
       ]:undefined},
     {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tiered:true,tier:pullT,earned:!!pullT,
       desc:`Best set: ${pullBest} reps — ${tline(pullBest,TH.pullup)}`+(pullR.kept?' · kept from the old numbers':'')},
@@ -6021,7 +6117,7 @@ function computeBadges() {
       ]},
   ];
   list.forEach(b=>{ if(ALL[b.name]) b.all=ALL[b.name]; });
-  const CUR={'Bench-Maxing':benchBy(benchR),'Shoulder-Maxing':haveBW&&ohp>0?ohpBy(ohpR):'','Leg-Maxing':haveBW&&sq>0?`${r0(sq)} lb`:'',
+  const CUR={'Bench-Maxing':benchBy(benchR),'Shoulder-Maxing':haveBW&&ohp>0?ohpBy(ohpR):'','Leg-Maxing':haveBW&&sq>0?lbTxt(sq):'',
     'Pull-up-Maxing':pullBest>0?`${pullBest} reps`:'','Push-up-Maxing':pushBest>0?`${pushBest} reps`:'','Cardio-Maxing':isFinite(cardioBest)?`${fmtClock(cardioBest)}/mi`:''};
   list.forEach(b=>{ if(CUR[b.name]!==undefined) b.curV=CUR[b.name]; });
   // Jacked (Mr. Roni, 2026-09-24): every Monthly-reset and 3-month-reset badge earned, the tiered ones all at Gold.
@@ -6045,9 +6141,9 @@ function computeBadges() {
 const TIERC={bronze:'#cd7f32',silver:'#b8b8c8',gold:'#ffd700'};
 // Tap-to-explain text for each badge.
 const BADGE_HOW={
-  get 'Bench-Maxing'(){ const T=badgeT(); return `Barbell flat bench, 1 rep. Flat dumbbell bench counts at +15% (both dumbbells together), Smith machine flat bench at -15%. Bronze ${T.bench[0]}, Silver ${T.bench[1]}, Gold ${T.bench[2]} lb. `+benchHowNote(); },
-  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac; return `Standing barbell overhead press, 1 rep, vs sourced strength standards for your sex and body weight (set it in Profile). Standing dumbbell press counts at +15% (both dumbbells together). Seated presses, including the Smith machine one, don't count. Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]} lb.`+badgeAdjNote(mccullochFactor); },
-  get 'Leg-Maxing'(){ const T=badgeT().squatFrac; return `Barbell back squat, 1 rep, vs sourced strength standards for your sex and body weight (set it in Profile). Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]} lb.`+badgeAdjNote(mccullochFactor); },
+  get 'Bench-Maxing'(){ const T=badgeT(); return `Barbell flat bench, 1 rep. Flat dumbbell bench counts at +15% (both dumbbells together), Smith machine flat bench at -15%. Bronze ${lbN(T.bench[0])}, Silver ${lbN(T.bench[1])}, Gold ${lbTxt(T.bench[2])}. `+benchHowNote(); },
+  get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac; return `Standing barbell overhead press, 1 rep, vs sourced strength standards for your sex and body weight (set it in Profile). Standing dumbbell press counts at +15% (both dumbbells together). Seated presses, including the Smith machine one, don't count. Bronze ${lbN(T[0])}, Silver ${lbN(T[1])}, Gold ${lbTxt(T[2])}.`+badgeAdjNote(mccullochFactor); },
+  get 'Leg-Maxing'(){ const T=badgeT().squatFrac; return `Barbell back squat, 1 rep, vs sourced strength standards for your sex and body weight (set it in Profile). Bronze ${lbN(T[0])}, Silver ${lbN(T[1])}, Gold ${lbTxt(T[2])}.`+badgeAdjNote(mccullochFactor); },
   '1000lb Club':'Barbell flat bench press + barbell back squat + conventional barbell deadlift from one workout, summed to 1000 lb or more. Flat dumbbell bench counts at +15%, Smith machine bench at -15%; no other variations.',
   'PR-Maxing':'Hit 7 personal records within any rolling 7-day window. Only the last 3 months count.',
   'Consistency-Maxing':'Finish a workout 7 days in a row. Only the last 3 months count.',
@@ -6067,10 +6163,10 @@ const BADGE_DETAIL={
   get 'Bench-Maxing'(){ const T=badgeT().bench; return {how:'Barbell flat bench press (Barbell Bench Press, medium grip), 1 rep. Incline, decline, close-grip, other bench variations and custom exercises don\'t count. '+benchHowNote(),
     exHow:[{t:'No barbell bench? Dumbbell counts too',body:'Flat Dumbbell Bench Press, both hands. Log both dumbbells added together; it gets +15% (two 50 lb dumbbells = 100 lb logged, credited 115 lb).'},
       {t:'Smith machine counts too',body:'Flat Smith Machine Bench Press, credited at -15% (100 lb logged = 85 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],
-    tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'}; },
+    tiers:[['Bronze',lbTxt(T[0])],['Silver',lbTxt(T[1])],['Gold',lbTxt(T[2])]],note:'Your tier follows your best in the last 3 months.'}; },
   get 'Shoulder-Maxing'(){ const T=badgeT().ohpFrac; return {how:'Standing barbell overhead press (Standing Military Press), 1 rep, measured against sourced strength standards for your sex and body weight — set it in Profile. Seated presses (Barbell Shoulder Press and Smith Machine Overhead Shoulder Press are seated too, whatever the name), push press, behind-the-neck, other variations and custom exercises don\'t count.',
-    exHow:[{t:'Dumbbells count too',body:'Standing Dumbbell Press, both hands. Log both dumbbells added together; it gets +15% (two 50 lb dumbbells = 100 lb logged, credited 115 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote(mccullochFactor)}; },
-  get 'Leg-Maxing'(){ const T=badgeT().squatFrac; return {how:'Barbell back squat (Barbell Squat), 1 rep, measured against sourced strength standards for your sex and body weight — set it in Profile. Front squats, Smith machine and custom exercises don\'t count.',tiers:[['Bronze',T[0]+' lb'],['Silver',T[1]+' lb'],['Gold',T[2]+' lb']],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote(mccullochFactor)}; },
+    exHow:[{t:'Dumbbells count too',body:'Standing Dumbbell Press, both hands. Log both dumbbells added together; it gets +15% (two 50 lb dumbbells = 100 lb logged, credited 115 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.'}],tiers:[['Bronze',lbTxt(T[0])],['Silver',lbTxt(T[1])],['Gold',lbTxt(T[2])]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote(mccullochFactor)}; },
+  get 'Leg-Maxing'(){ const T=badgeT().squatFrac; return {how:'Barbell back squat (Barbell Squat), 1 rep, measured against sourced strength standards for your sex and body weight — set it in Profile. Front squats, Smith machine and custom exercises don\'t count.',tiers:[['Bronze',lbTxt(T[0])],['Silver',lbTxt(T[1])],['Gold',lbTxt(T[2])]],note:'Your tier follows your best in the last 3 months.'+badgeAdjNote(mccullochFactor)}; },
   '1000lb Club':{how:'Your best barbell flat bench press + barbell back squat + conventional barbell deadlift, all from the same workout, added together to 1000 lb or more. The bench can also be a flat dumbbell bench (both dumbbells together +15%) or a flat Smith machine bench (-15%). No front squat, Smith squat, sumo or custom exercises.'},
   get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return {how:'Most reps in one set of strict pull-ups (Pullups, palms facing away). Chin-ups, assisted, band, scapular and custom exercises don\'t count.'+stdHowNote('pullup'),tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'}; },
   get 'Push-up-Maxing'(){ const T=badgeT().pushup; return {how:'Most reps in one set of standard push-ups (Pushups), not summed across sets. Incline, knee, other variations and custom exercises don\'t count.'+stdHowNote('pushup'),tiers:[['Bronze',T[0]+' reps'],['Silver',T[1]+' reps'],['Gold',T[2]+' reps']],note:'Your tier follows your best in the last 3 months.'}; },
@@ -6159,8 +6255,7 @@ async function badgeStart(){
   beginW();
 }
 let _badgeOpen=null;
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeBadgeFull(); });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') cm('avLightbox'); });
+
 
 // Count how many badges are currently earned (used by the leaderboard too).
 function earnedBadgeCount(){ return computeBadges().filter(b=>b.earned).length; }
@@ -6866,7 +6961,7 @@ async function shareRecap(){
   }catch(e){ if(!(e&&e.name==='AbortError')) toast('Could not share','err'); }
   if(btn) btn.disabled=false;
 }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeRecap(); });
+
 
 // Achievements: the Metrics card is a short summary; the full list lives on its own full-screen page (openAch).
 const ACH_GROUPS=[['Monthly reset',b=>!b.tiered&&!b.threeMonth&&(b.monthly||b.name==='Coward-Maxing'||b.name==='Jacked')],['3-month reset',b=>!!b.tiered||!!b.threeMonth],['Permanent',()=>true]];
@@ -7090,11 +7185,12 @@ function bestWeekTotal(h){
 function calcStreak(h) {
   let streak=0;
   const sdates=new Set(h.map(w=>dayKey(w.date)));
-  let chk=new Date(); const tod=dayKey(new Date());
+  // Step back one CALENDAR day at a time, from noon. Stepping 24 h from "now" skipped a day in the hour after the
+  // spring DST change and counted one day twice in the hour before the fall one (adversarial pass 4).
+  let chk=new Date(); chk.setHours(12,0,0,0); const tod=dayKey(new Date());
   for(let i=0;i<365;i++){
     const ds=dayKey(chk);
-    if(sdates.has(ds)){streak++;chk=new Date(+chk-864e5);}
-    else if(ds===tod){chk=new Date(+chk-864e5);}
+    if(sdates.has(ds)||ds===tod){ if(sdates.has(ds)) streak++; chk.setDate(chk.getDate()-1); }
     else break;
   }
   return streak;
@@ -7155,7 +7251,10 @@ function yourStats() {
   const h=gH(), prs=gPR(), prof=gProf()||{name:'You',username:'@you'};
   const tv=h.reduce((a,w)=>a+(w.totalVolume||0),0);
   const streak=calcStreak(h);
-  const cons=Math.round((h.filter(w=>new Date(w.date)>=new Date(+new Date()-30*864e5)).length/30)*100);
+  // Training DAYS in the last 30, like the month's Consistency (monthDayStats). This counted workouts, so two
+  // sessions a day read as 200% on the All Time board (adversarial pass 4).
+  const d30=new Date(); d30.setHours(12,0,0,0); d30.setDate(d30.getDate()-29); const from=dayKey(d30), tod=dayKey(new Date());
+  const cons=Math.min(100,Math.round(new Set(h.map(w=>dayKey(w.date)).filter(k=>k&&k>=from&&k<=tod)).size/30*100));
   const m=monthStats();
   return {id:'me',name:prof.name||'You',username:prof.username||'@you',code:prof.code,isYou:true,avatarUrl:prof.avatarUrl||'',totalVolume:tv,workouts:h.length,prs:Object.keys(prs).length,streak,consistency:cons,badges:earnedBadgeCount(),mVol:m.v,mWorkouts:m.w,mPRs:m.p,pmVol:m.pv,mYm:m.ym,mStreak:m.st,mCons:m.c,mBadges:m.b};
 }
@@ -7688,6 +7787,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_vmf9BELfVFZpKrdMN3Z34g_R9l056gJ';
 let SUPA = null, liveFriends = null, liveSent = [], _authUid = null;
 // Warm start: last fetched friends list, so the Friends tab paints instantly and refreshes behind it.
 try{ const c=JSON.parse(localStorage.getItem('jk_friendsCache')||'null'); if(Array.isArray(c)&&c.length) liveFriends=c; }catch(_){}
+let _signingOut = false;   // our own Sign out: its SIGNED_OUT event is expected, not a lost session
 function supaInit() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase) {
@@ -7695,7 +7795,13 @@ function supaInit() {
       // so a copied link can't carry someone's login.
       SUPA = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY,
         {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:false}});
-      SUPA.auth.onAuthStateChange((ev, session)=>{ _authUid = session ? session.user.id : null; });
+      SUPA.auth.onAuthStateChange((ev, session)=>{
+        const had=_authUid; _authUid = session ? session.user.id : null;
+        // The session ended without Sign out (refresh token expired or revoked, signed out in another tab): every
+        // sync just stopped, silently, until the next app launch showed the password screen (adversarial pass 4).
+        // Same check as launch, now.
+        if (ev==='SIGNED_OUT' && had && !_signingOut) setTimeout(()=>{ if (!_authUid && !_gate) authBoot(); }, 0);
+      });
     }
   } catch(e){ console.warn('Supabase init failed',e); }
 }
@@ -7988,7 +8094,14 @@ function mergeBackup(cloud, local, pendingNotes){
     const byId=new Map();
     lh.forEach(w=>{ if(w&&w.id!=null) byId.set(w.id,w); });
     ch.forEach(w=>{ if(w&&w.id!=null){ const l=byId.get(w.id); if(!l || (Number(w.lrev)||0)>(Number(l.lrev)||0)) byId.set(w.id,w); } });
-    out.jk_hist=[...byId.values()].filter(w=>!delSet.has(w.id));
+    // A workout only the cloud has (logged on the other phone, or the watch) was appended after this device's, so an
+    // older one landed as the "latest": Home's recent list, the next session's pre-filled numbers and the progress
+    // streaks read it as newest (pass 3 fixed this for Finish and Edit only; adversarial pass 4). This device's order
+    // is kept; the other device's workouts go in by date.
+    const merged=[], seen=new Set();
+    lh.forEach(w=>{ if(w&&w.id!=null&&!seen.has(w.id)){ seen.add(w.id); merged.push(byId.get(w.id)); } });
+    ch.forEach(w=>{ if(w&&w.id!=null&&!seen.has(w.id)){ seen.add(w.id); histInsert(merged,byId.get(w.id)); } });
+    out.jk_hist=merged.filter(w=>!delSet.has(w.id));
   }
 
   const repairs=mergePRRepair(cloud.jk_prRepair, local.jk_prRepair);
@@ -8475,6 +8588,7 @@ async function signOut() {
       : "Sign out on this device?\n\nYour workouts, PRs and routines are saved ONLY on this device — signing out removes them here. Export a backup first if you want to keep them or move them to another account.";
   const ok=await showConfirm(msg,{okText:'Sign out'});
   if(!ok) return;
+  _signingOut = true;
   if (SUPA) SUPA.auth.signOut({scope:'local'}).catch(()=>{});
   clearLocalSession();
   Object.keys(localStorage).filter(k=>k.startsWith('jk_')).forEach(k=>localStorage.removeItem(k));
@@ -8854,10 +8968,21 @@ async function importWorkoutCsv(text) {
 
   built.sort((a,b)=>new Date(a.date)-new Date(b.date));
   // Recompute PRs chronologically so 1000lb-club / PR-Maxing badges can unlock.
-  const prs=gPR(), hold=gHoldPR();
+  const prs=gPR(), hold=gHoldPR(), cardio=gCardioPR();
   built.forEach(w=>{
     let n=0;
     w.exercises.forEach(ex=>{
+      // A run went through the weight rule below: it stored a "3.1 lb x 25" weight record for Running (shown in the
+      // Exercise Library) and never touched the pace record, so the next run logged in the app was a "PR" even when
+      // slower than every imported one (adversarial pass 4). Same rule as commitPRs / prReplay: fastest mile-equivalent.
+      if(ex.tracking==='distance'){
+        const b=prBest(ex); if(!b) return;
+        const prev=cardio[ex.exId]||{}, nrec={...prev}, far=ex.sets.reduce((m,s)=>Math.max(m,s.weight||0),0);
+        if(mileEquiv(b.weight,b.reps)<mileEquiv(prev.dist||0,prev.time||0)){ nrec.dist=b.weight; nrec.time=b.reps; nrec.date=w.date; n++; }
+        if(far>(prev.maxDist||0)){ nrec.maxDist=far; nrec.maxDate=w.date; }
+        cardio[ex.exId]=nrec;
+        return;
+      }
       if(ex.tracking==='duration'){   // longest hold, same rule as prReplay
         const b=prBest(ex); if(b&&b.weight>((hold[ex.exId]||{}).sec||0)){ hold[ex.exId]={sec:b.weight,date:w.date}; n++; }
         return;
@@ -8871,7 +8996,7 @@ async function importWorkoutCsv(text) {
   });
   const merged=[...hist,...built].sort((a,b)=>new Date(a.date)-new Date(b.date));
   if(!S.s('hist',merged)){ toast('Import failed — not enough storage. Nothing was changed.','err'); return; }
-  S.s('prs',prs); S.s('holdPR',hold);
+  S.s('prs',prs); S.s('holdPR',hold); S.s('cardioPR',cardio);
   if(typeof syncMe==='function') syncMe();
   cm('profModal');
   toast(`Imported ${built.length} workout${built.length!==1?'s':''} ✓`+(badDate?` · ${badDate} skipped (date not readable)`:''),badDate?'err':'ok');
@@ -8928,7 +9053,7 @@ function syncScrollLock(){
     if(s.page!==pg&&root) root.scrollTop=0;   // a popup switched tabs: new tab from its top
   }
 }
-new MutationObserver(syncScrollLock).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
+new MutationObserver(()=>{ syncScrollLock(); syncPopupHistory(); }).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
 // Can something inside an open popup scroll by dx/dy (content delta, +dy = down, +dx = right)? Walks up from the
 // touched element; an inner scroller at its edge hands over to an outer one, never to the page. Checks both axes
 // independently -- a horizontal-only scroller (e.g. a .chips row) has scrollHeight<=clientHeight and was never

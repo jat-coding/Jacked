@@ -3510,8 +3510,10 @@ async function androidBack() {
   await page.waitForTimeout(80);
   await page.evaluate(() => history.back());
   await page.waitForTimeout(150);
-  check('android back: with a full-screen overlay open, back does not switch tabs invisibly underneath it',
-    await activeTab() === 'metrics' && await page.evaluate(() => document.getElementById('achFull').classList.contains('open')));
+  // Adversarial pass 4 (2026-10-14): back no longer leaves the overlay open (that swallowed the press, and the next one
+  // closed the app). It closes the overlay, the way its backdrop/X does, and still never switches the tab under it.
+  check('android back: with a full-screen overlay open, back closes it and does not switch tabs underneath it',
+    await activeTab() === 'metrics' && await page.evaluate(() => !document.getElementById('achFull').classList.contains('open')));
   await page.evaluate(() => closeAch());
   check('android back: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
@@ -3992,12 +3994,249 @@ async function adv3ImportDates() {
   check('adv3 import dates: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+// ---- Adversarial pass 4 (2026-10-14): cross-feature consistency + what passes 1-3 didn't reach ----
+const state = page => page.evaluate(() => history.state);
+const isOpen = (page, id) => page.evaluate(id => document.getElementById(id).classList.contains('open'), id);
+const tabNow = page => page.evaluate(() => (document.querySelector('.page.active') || {}).id);
+async function adv4BadgeUnits() {
+  // 1. Badge ladders and bests were the only weights shown in lb to a kg user (Bench-Maxing "(lb): 135 / 225 / 315").
+  const hist = [wk('2026-09-10', [ex('Barbell Bench Press', [[225, 1]]), ex('Barbell Squat', [[315, 1]]), ex('Barbell Deadlift', [[405, 1]])])];
+  const { page, ctx, errors } = await phone({ seed: { hist, bw: 80, settings: { wUnit: 'kg' }, prof: { name: 'T', username: '@t', code: '@t', sex: 'male' } }, now: SEP15 });
+  const r2 = await page.evaluate(() => { const b = computeBadges(), f = n => b.find(x => x.name === n);
+    return { bench: f('Bench-Maxing').desc, leg: f('Leg-Maxing').desc, club: f('1000lb Club').desc, tiers: BADGE_DETAIL['Bench-Maxing'].tiers.map(t => t[1]).join(','), lifts: (f('Bench-Maxing').lifts || []).map(l => l.disp).join(',') }; });
+  const noLb = s => !/\blb\b/.test(s.replace(/1000lb/g, ''));
+  check('adv4 badge units: a kg user sees the bench ladder in kg', /\(kg\)/.test(r2.bench) && noLb(r2.bench), r2.bench);
+  check('adv4 badge units: ...and the squat ladder', /\(kg\)/.test(r2.leg) && noLb(r2.leg), r2.leg);
+  check('adv4 badge units: ...and his best lift (225 lb shows as 102 kg)', r2.lifts === '102 kg', r2.lifts);
+  check('adv4 badge units: ...and the badge page tiers', /kg/.test(r2.tiers) && noLb(r2.tiers), r2.tiers);
+  check('adv4 badge units: 1000lb Club progress in kg against 454 kg', /\d+ kg \/ 454 kg/.test(r2.club), r2.club);
+  await page.evaluate(() => S.s('settings', { ...gSet(), wUnit: 'lb' }));
+  const r3 = await page.evaluate(() => { const b = computeBadges(), f = n => b.find(x => x.name === n); return { bench: f('Bench-Maxing').desc, lifts: (f('Bench-Maxing').lifts || []).map(l => l.disp).join(','), club: f('1000lb Club').desc }; });
+  check('adv4 badge units: an lb user still sees lb, same numbers as before', /\(lb\)/.test(r3.bench) && r3.lifts === '225 lb' && /945 lb \/ 1000 lb/.test(r3.club), JSON.stringify(r3));
+  check('adv4 badge units: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv4PlateUnit() {
+  // 2. The plate calculator kept a 45 lb bar as "45" after a switch to kg, so 60 kg read "45 kg bar + 7.5 a side".
+  const { page, ctx, errors } = await phone({});
+  await page.evaluate(() => { openPlate(); document.getElementById('pcTarget').value = '135'; calcPlates(); cm('pcModal'); S.s('settings', { ...gSet(), wUnit: 'kg' }); openPlate(); });
+  const r = await page.evaluate(() => ({ bar: document.getElementById('pcBar').value, tgt: document.getElementById('pcTarget').value, lbl: document.getElementById('pcBarLbl').textContent }));
+  check('adv4 plate calc: after lb -> kg the bar is 20 kg, not "45"', r.bar === '20' && /kg/.test(r.lbl), JSON.stringify(r));
+  check('adv4 plate calc: ...and the old lb target is cleared', r.tgt === '', JSON.stringify(r));
+  await page.evaluate(() => { cm('pcModal'); document.getElementById('pcBar').value = '15'; openPlate(); });
+  check('adv4 plate calc: a bar he set himself in the same unit is kept', (await page.evaluate(() => document.getElementById('pcBar').value)) === '15');
+  check('adv4 plate calc: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv4StreakDST() {
+  // 3. The day streak stepped back 24 h from "now": the hour after the spring DST change skipped a day, the hour
+  // before the fall one counted a day twice.
+  let { page, ctx, errors } = await phone({ seed: { hist: [wk('2027-03-13', []), wk('2027-03-14', [])] }, now: new Date('2027-03-15T00:30:00-06:00') });
+  let s = await page.evaluate(() => calcStreak(gH()));
+  check('adv4 streak: 00:30 the day after spring-forward, trained the 2 days before -> 2', s === 2, String(s));
+  check('adv4 streak (spring): no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+  ({ page, ctx, errors } = await phone({ seed: { hist: [wk('2027-11-06', []), wk('2027-11-07', [])] }, now: new Date('2027-11-07T23:30:00-07:00') }));
+  s = await page.evaluate(() => calcStreak(gH()));
+  check('adv4 streak: 23:30 on fall-back day, trained that day and the day before -> 2, not 3', s === 2, String(s));
+  check('adv4 streak (fall): no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv4Consistency() {
+  // 4. All Time "Consistency" counted workouts in the last 30 days: two a day for 20 days read 133%. This month's
+  // Consistency counts training days. Both count days now.
+  const hist = days('2026-08-27', 20).flatMap(d => [wk(d, [], { hour: 8 }), wk(d, [], { hour: 18 })]);
+  const { page, ctx, errors } = await phone({ seed: { hist }, now: SEP15 });
+  const c = await page.evaluate(() => yourStats().consistency);
+  check('adv4 consistency: 20 training days (2 workouts each) in the last 30 = 67%, not 133%', c === 67, String(c));
+  check('adv4 consistency: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv4ImportRuns() {
+  // 5. CSV import put runs through the weight PR rule: a "lb x reps" record for Running, no pace record, so the next
+  // run logged in the app was a PR even when slower than every imported run.
+  const { page, ctx, errors } = await phone({ now: SEP15 });
+  await dbReady(page);
+  const r = await page.evaluate(async () => {
+    S.s('hist', []); S.s('prs', {}); S.s('cardioPR', {});
+    await importWorkoutCsv('title,start_time,exercise_title,distance_km,duration_seconds\nA,2026-09-01 07:00:00,Running,5,1500\nB,2026-09-05 07:00:00,Running,5,1350\n');
+    const h = gH(), id = h[0].exercises[0].exId, tr = h[0].exercises[0].tracking;
+    sp('exercises'); document.getElementById('exSearch').value = byId(id).name; renderEx();
+    const row = [...document.querySelectorAll('#exList .eli')].find(e => e.getAttribute('onclick').includes(`'${id}'`));
+    return { id, tr, prs: gPR()[id] || null, c: gCardioPR()[id] || null, counts: h.map(w => w.prCount).join(','), row: row ? row.textContent.replace(/\s+/g, ' ') : '' };
+  });
+  check('adv4 import runs: the runs come in as distance', r.tr === 'distance', JSON.stringify(r));
+  check('adv4 import runs: no weight record for a run', r.prs === null, JSON.stringify(r.prs));
+  check('adv4 import runs: the pace record is the faster run (5 km in 22:30)', r.c && Math.abs(r.c.time - 22.5) < 1e-6, JSON.stringify(r.c));
+  check('adv4 import runs: each import counted as a PR by the pace rule (1,1), same as the replay', r.counts === '1,1', r.counts);
+  check('adv4 import runs: Exercise Library shows the pace PR, no "lb"', /pace PR/.test(r.row) && !/\blb\b/.test(r.row), r.row);
+  const live = await page.evaluate(id => { const ex = { exId: id, name: 'Running', tracking: 'distance', sets: [{ weight: 5 / 1.609344, reps: 25, done: true }] }; return commitPRs({ exercises: [ex] }).length; }, r.id);
+  check('adv4 import runs: a slower run logged afterwards is not a PR', live === 0, String(live));
+  check('adv4 import runs: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv4DeleteRun() {
+  // 6. Delete Workout kept the pace/hold record of the workout it deleted; removing the same run in Edit Workout rebuilds it.
+  const W0 = { ...wk('2026-09-05', [ex('Run', [[1, 7.5]], 'distance')]), id: 'wr0', prCount: 1, prSets: [{ exId: 'bi_run_outdoor', ei: 0, si: 0, weight: 1, reps: 7.5 }] };
+  const W1 = { ...wk('2026-09-10', [ex('Run', [[1, 7]], 'distance')]), id: 'wr1', prCount: 1, prSets: [{ exId: 'bi_run_outdoor', ei: 0, si: 0, weight: 1, reps: 7 }] };
+  const P0 = { ...wk('2026-09-06', [{ exId: 'Plank', name: 'Plank', muscle: 'abdominals', tracking: 'duration', sets: [{ weight: 50, reps: 0, done: true }] }]), id: 'wp0', prCount: 1, prSets: [{ exId: 'Plank', ei: 0, si: 0, weight: 50, reps: 0 }] };
+  const P1 = { ...wk('2026-09-11', [{ exId: 'Plank', name: 'Plank', muscle: 'abdominals', tracking: 'duration', sets: [{ weight: 90, reps: 0, done: true }] }]), id: 'wp1', prCount: 1, prSets: [{ exId: 'Plank', ei: 0, si: 0, weight: 90, reps: 0 }] };
+  const seed = { hist: [W0, P0, W1, P1], cardioPR: { bi_run_outdoor: { dist: 1, time: 7, date: W1.date, maxDist: 1, maxDate: W0.date } }, holdPR: { Plank: { sec: 90, date: P1.date } } };
+  const { page, ctx, errors } = await phone({ seed, now: SEP15 });
+  const del = async id => { await page.evaluate(id => { openWD(id); document.getElementById('wdDel').click(); }, id); await page.waitForTimeout(100); await page.evaluate(() => _cfDone(true)); await page.waitForTimeout(200); };
+  await del('wr1'); await del('wp1');
+  const r = await page.evaluate(() => ({ c: gCardioPR().bi_run_outdoor, h: gHoldPR().Plank, ids: gH().map(w => w.id).join(','), del: S.g('deleted') }));
+  check('adv4 delete workout: the run record falls back to the run that is left (7:30)', r.c && r.c.time === 7.5, JSON.stringify(r.c));
+  check('adv4 delete workout: the hold record falls back to the 50 s hold', r.h && r.h.sec === 50, JSON.stringify(r.h));
+  check('adv4 delete workout: both are gone from history and tombstoned', r.ids === 'wr0,wp0' && r.del.includes('wr1') && r.del.includes('wp1'), JSON.stringify(r));
+  check('adv4 delete workout: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv4MergeOrder() {
+  // 7. A workout only the cloud had (other phone, watch) was appended after this device's newer ones by mergeBackup,
+  // so it became the "latest" (pre-filled numbers, Home, streak arrows) -- the pass-3 ordering bug, through sync.
+  const mon = { ...wk('2026-10-05', [ex('Barbell Bench Press', [[95, 5]])]), id: 'wmon' }, tue = { ...wk('2026-10-06', [ex('Barbell Bench Press', [[185, 5]])]), id: 'wtue' };
+  const old = { ...wk('2026-10-01', []), id: 'wold' };
+  const { page, ctx, errors } = await phone({ seed: { hist: [old, tue] }, now: new Date('2026-10-07T12:00:00-06:00') });
+  const r = await page.evaluate(([mon, old, tue]) => { const out = mergeBackup({ jk_hist: [mon, tue] }, { jk_hist: [old, tue] });
+    S.s('hist', out.jk_hist); return { order: out.jk_hist.map(w => w.id).join(','), seed: seedSets('Barbell_Bench_Press_-_Medium_Grip').map(s => Math.round(s.pw * 2.20462)).join(',') }; }, [mon, old, tue]);
+  check("adv4 merge order: the other phone's Monday goes before this phone's Tuesday", r.order === 'wold,wmon,wtue', r.order);
+  check('adv4 merge order: the next session pre-fills Tuesday\'s 185, not Monday\'s 95', r.seed === '185', r.seed);
+  check('adv4 merge order: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv4SignOutOtherTab() {
+  // 8. Sign out in one tab wiped the account and reloaded that tab; another open tab kept running on it, and what it
+  // saved went back under no account (and joined whoever signed in next).
+  const { page: A, ctx, errors } = await phone({ seed: { hist: [wk('2026-10-01', [])] } });
+  const { p: B, errors: errB } = await adv3Tab(ctx);
+  await B.evaluate(() => { window._stillHere = 1; });
+  await A.evaluate(() => { signOut(); }); await A.waitForTimeout(150); await A.evaluate(() => _cfDone(true));
+  await A.waitForTimeout(1500);
+  const r = await B.evaluate(() => ({ here: window._stillHere === 1, prof: localStorage.getItem('jk_prof') })).catch(e => ({ err: String(e) }));
+  check('adv4 sign out in another tab: this tab reloads too (not left running on the removed account)', r.here === false && r.prof === null, JSON.stringify(r));
+  check('adv4 sign out in another tab: no page errors', errors.length === 0 && errB.length === 0, [...errors, ...errB].join(' | '));
+  await ctx.close();
+}
+async function adv4SessionLost() {
+  // 9. A session that ended without Sign out (token expired/revoked) only cleared _authUid: syncing stopped silently
+  // until the next launch showed the password screen. It is shown now, like at launch. Our own Sign out isn't.
+  const { page, ctx, errors } = await phone({});
+  await page.evaluate(() => {
+    const q = { then: (ok) => ok({ data: { status: 'claimed', email: 'x@y.z' }, error: null }) };
+    window.supabase = { createClient: () => ({ auth: { onAuthStateChange: cb => { window._authCb = cb; }, getSession: () => Promise.resolve({ data: { session: null } }), signOut: () => Promise.resolve({}) },
+      rpc: () => q, from: () => ({ select: () => q }), channel() { const c = { on() { return c; }, subscribe() { return c; }, unsubscribe() {} }; return c; }, removeChannel() {}, functions: { invoke: () => q } }) };
+    supaInit(); _authCb('SIGNED_IN', { user: { id: 'u1' } });
+  });
+  await page.evaluate(() => _authCb('SIGNED_OUT', null)); await page.waitForTimeout(300);
+  const r = await page.evaluate(() => ({ open: document.getElementById('authGate').classList.contains('open'), t: document.getElementById('agTitle').textContent, uid: _authUid }));
+  check('adv4 session lost: the password screen comes up at once, like at launch', r.open && /Enter your password/.test(r.t) && r.uid === null, JSON.stringify(r));
+  await page.evaluate(() => { cm('authGate'); _gate = null; _authCb('SIGNED_IN', { user: { id: 'u1' } }); _signingOut = true; _authCb('SIGNED_OUT', null); }); await page.waitForTimeout(300);
+  check('adv4 session lost: our own Sign out does not raise it', !(await isOpen(page, 'authGate')));
+  check('adv4 session lost: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv4Back() {
+  // 10. Android back was consistent only between tabs. With a popup open it switched the tab under the popup (or closed
+  // the app on Home); with a full-screen overlay it was swallowed and the next press closed the app; on the workout page
+  // it did nothing or closed the app; after tapping Home it did nothing once. Escape closed 3 of the ~25 popups.
+  const { page, ctx, errors } = await phone({ seed: { cex: ADV3_CEX, routines: ADV3_R, hist: [wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]])])] }, now: SEP15 });
+  await dbReady(page);
+  const back = async () => { await page.evaluate(() => history.back()); await page.waitForTimeout(200); };
+  await page.locator('#nav-exercises').tap(); await page.waitForTimeout(100);
+  await page.evaluate(() => openExInfo('Barbell_Bench_Press_-_Medium_Grip')); await page.waitForTimeout(100);
+  await back();
+  check('adv4 back: with Exercise info open on a tab, back closes it and stays on the tab', !(await isOpen(page, 'exInfoModal')) && (await tabNow(page)) === 'page-exercises', await tabNow(page));
+  await back();
+  check('adv4 back: ...and the next back goes Home', (await tabNow(page)) === 'page-home');
+  const len0 = await page.evaluate(() => history.length);
+  await page.evaluate(() => openProf()); await page.waitForTimeout(100);
+  check('adv4 back: a popup on Home gets a history entry (back would otherwise close the app)', (await state(page) || {}).jkPop === 1, JSON.stringify(await state(page)));
+  await back();
+  check('adv4 back: back on Home closes Profile, app still here', !(await isOpen(page, 'profModal')) && (await tabNow(page)) === 'page-home' && (await state(page)) === null, JSON.stringify(await state(page)));
+  await page.evaluate(() => openProf()); await page.waitForTimeout(100); await page.evaluate(() => cm('profModal')); await page.waitForTimeout(250);
+  check('adv4 back: a popup closed by its own button leaves no dead back press behind', (await state(page)) === null, JSON.stringify(await state(page)));
+  await page.locator('#nav-routines').tap(); await page.waitForTimeout(100); await page.locator('#nav-home').tap(); await page.waitForTimeout(250);
+  check('adv4 back: tapping Home consumes the tab entry (no dead back press after it)', (await state(page)) === null, JSON.stringify(await state(page)));
+  await page.locator('#nav-metrics').tap(); await page.waitForTimeout(100); await page.evaluate(() => openAch()); await page.waitForTimeout(100);
+  await back();
+  check('adv4 back: Achievements over Metrics: back closes it, Metrics stays', !(await isOpen(page, 'achFull')) && (await tabNow(page)) === 'page-metrics');
+  await back();
+  check('adv4 back: ...then Home', (await tabNow(page)) === 'page-home');
+  await page.evaluate(() => startRW('r1')); await page.waitForTimeout(150);
+  await back();
+  check('adv4 back: on the workout page, back goes Home and the workout keeps running', (await tabNow(page)) === 'page-home' && await page.evaluate(() => !!aw && document.getElementById('resumeBar').classList.contains('show')));
+  await page.evaluate(() => { openProf(); showConfirm('x?'); }); await page.waitForTimeout(100);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(100);
+  check('adv4 escape: closes only the popup on top (the confirm, as Cancel)', !(await isOpen(page, 'confirmModal')) && await isOpen(page, 'profModal'));
+  await page.keyboard.press('Escape'); await page.waitForTimeout(250);
+  check('adv4 escape: ...then the one under it, leaving no history entry', !(await isOpen(page, 'profModal')) && (await state(page)) === null, JSON.stringify(await state(page)));
+  check('adv4 back: history does not grow over all that', (await page.evaluate(() => history.length)) - len0 <= 3, `${len0} -> ${await page.evaluate(() => history.length)}`);
+  check('adv4 back: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv4RemoveExercise() {
+  // 11. The workout screen's trash button dropped an exercise and its logged sets at one tap; Edit Workout asks first.
+  // And a negative number typed in a set box was stored as is (the CSV import clamps it to 0).
+  const cex = [...ADV3_CEX, { id: 'cex2', name: 'Fly', muscle: 'chest', equip: 'cable', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }];
+  const { page, ctx, errors } = await phone({ seed: { cex, routines: [{ id: 'r1', name: 'Push', desc: '', exercises: ['cex1', 'cex2'] }] } });
+  await page.evaluate(() => { startRW('r1'); aw.exercises[0].sets[0] = { ...aw.exercises[0].sets[0], weight: 100 / 2.20462, reps: 5, done: true }; renderWS(); });
+  const trash = i => page.locator('#wSession button[aria-label="Remove"]').nth(i);
+  await trash(0).tap(); await page.waitForTimeout(100);
+  const msg = await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open') && document.getElementById('cfMsg').textContent);
+  check('adv4 remove exercise: removing one with logged sets asks first, naming them', /Remove Bench and its 1 logged set/.test(msg || ''), String(msg));
+  await page.evaluate(() => _cfDone(false)); await page.waitForTimeout(100);
+  check('adv4 remove exercise: Cancel keeps it and its set', await page.evaluate(() => aw.exercises.map(e => e.name).join() === 'Bench,Fly' && aw.exercises[0].sets[0].done));
+  await trash(0).tap(); await page.waitForTimeout(100); await page.evaluate(() => _cfDone(true)); await page.waitForTimeout(100);
+  check('adv4 remove exercise: Remove takes it out', await page.evaluate(() => aw.exercises.map(e => e.name).join() === 'Fly'));
+  await trash(0).tap(); await page.waitForTimeout(100);
+  check('adv4 remove exercise: one with nothing logged goes at once, no question', await page.evaluate(() => !document.getElementById('confirmModal').classList.contains('open') && aw.exercises.length === 0));
+  await page.evaluate(() => { addExToWorkout('cex1'); uSet(0, 0, 'weight', '-135', true); uSet(0, 0, 'reps', '-5'); });
+  const st = await page.evaluate(() => aw.exercises[0].sets[0]);
+  check('adv4 negative input: a "-135" typed on the workout screen is stored as 0, like the CSV import', st.weight === 0 && st.reps === 0, JSON.stringify(st));
+  check('adv4 remove exercise: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+  const h = [{ ...wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]])]), id: 'wneg' }];
+  const p2 = await phone({ seed: { hist: h }, now: SEP15 });
+  await p2.page.evaluate(() => { openWE('wneg'); weUpd(0, 0, 'weight', '-185', true); saveWE(); });
+  const w = await p2.page.evaluate(() => gH()[0]);
+  check('adv4 negative input: ...and in Edit Workout', w.exercises[0].sets[0].weight === 0 && w.totalVolume === 0, JSON.stringify(w.exercises[0].sets[0]) + ' vol ' + w.totalVolume);
+  check('adv4 negative input (edit): no page errors', p2.errors.length === 0, p2.errors.join(' | '));
+  await p2.ctx.close();
+}
+async function adv4BigHistory() {
+  // 12. byId() parsed the whole custom-exercise list from storage for every exercise of every workout: 1500 workouts
+  // with 500 custom exercises took Home ~6 s on a desktop CPU (20 custom: 0.7 s). Parsed once per stored version now.
+  const names = ['Barbell Bench Press', 'Barbell Squat', 'Barbell Deadlift', 'Barbell Overhead Press', 'Pull-up', 'Push-up'];
+  const hist = Array.from({ length: 1200 }, (_, i) => ({ ...wk(new Date(+new Date('2023-01-01T12:00:00') + i * 864e5).toISOString().slice(0, 10), names.map(n => ex(n, [[100 + (i % 50), 5], [110, 5]]))), id: 'wb' + i }));
+  const cex = Array.from({ length: 200 }, (_, i) => ({ id: 'cx' + i, name: 'Custom ' + i, muscle: 'chest', equip: 'machine', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }));
+  const { page, ctx, errors } = await phone({ seed: { hist, cex, bw: 80 }, now: new Date('2026-10-14T12:00:00-06:00') });
+  const r = await page.evaluate(() => { const raw = localStorage.getItem('jk_cex'), P = JSON.parse; let n = 0;
+    JSON.parse = function (x, ...a) { if (x === raw) n++; return P.call(this, x, ...a); };
+    const a = performance.now(); renderHome(); renderMetricsPage(); const ms = Math.round(performance.now() - a); JSON.parse = P; return { n, ms }; });
+  check('adv4 big history: Home + Metrics parse the custom-exercise list at most a couple of times, not per exercise', r.n <= 3, JSON.stringify(r));
+  check('adv4 big history: Home + Metrics over 1200 workouts / 200 custom exercises render in under 2 s (desktop CPU)', r.ms < 2000, JSON.stringify(r));
+  await page.evaluate(() => { const c = gCEx(); c[0].name = 'Renamed Custom'; S.s('cex', c); });
+  check('adv4 big history: an edited custom exercise is seen at once (no stale copy)', await page.evaluate(() => byId('cx0').name === 'Renamed Custom'));
+  check('adv4 big history: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv4ModalFocus() {
+  // 13. Tab walked out of an open sheet into the page behind it, and only the four full-screen pages said they were dialogs.
+  const { page, ctx, errors } = await phone({});
+  await page.evaluate(() => openProf()); await page.waitForTimeout(150);
+  let out = 0; for (let i = 0; i < 40; i++) { await page.keyboard.press(i % 7 === 6 ? 'Shift+Tab' : 'Tab'); if (await page.evaluate(() => !document.getElementById('profModal').contains(document.activeElement))) out++; }
+  check('adv4 modal focus: 40 Tab/Shift+Tab presses with Profile open never leave it', out === 0, `${out} outside`);
+  check('adv4 modal focus: every sheet is announced as a modal dialog', await page.evaluate(() => [...document.querySelectorAll('.mo')].every(m => m.getAttribute('role') === 'dialog' && m.getAttribute('aria-modal') === 'true')));
+  check('adv4 modal focus: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
