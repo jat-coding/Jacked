@@ -1877,6 +1877,30 @@ async function multiMuscleCredit() {
   check('multi-credit: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function signOutCancel() {
+  // Full-app QA sweep 2026-10-13 (area 7, settings): signOut() used to clear jk_friendsCache
+  // as its very first line, before the confirm dialog even showed. Tapping Sign Out then
+  // Cancel silently dropped the offline friends-list fallback (the only other place it's
+  // written is after a real sync, so the next offline launch had an empty Leaderboard until
+  // the next successful sync) -- a real data loss with no warning, from a cancelled action.
+  const { page, ctx, errors } = await phone({ seed: { friendsCache: [{ code: '@friend1', name: 'Friend' }] } });
+  const before = await page.evaluate(() => localStorage.getItem('jk_friendsCache'));
+  const p = page.evaluate(() => signOut());
+  await page.waitForFunction(() => document.getElementById('confirmModal').classList.contains('open'));
+  await page.locator('#cfCancel').click();
+  await p;
+  const afterCancel = await page.evaluate(() => localStorage.getItem('jk_friendsCache'));
+  check('sign out: cancelling the confirm keeps the friends cache intact', afterCancel === before, JSON.stringify({ before, afterCancel }));
+  const p2 = page.evaluate(() => signOut());
+  await page.waitForFunction(() => document.getElementById('confirmModal').classList.contains('open'));
+  await page.locator('#cfOk').click();
+  await p2;
+  await page.waitForTimeout(100);
+  const afterConfirm = await page.evaluate(() => localStorage.getItem('jk_friendsCache'));
+  check('sign out: confirming still clears the friends cache (via the jk_* bulk wipe)', afterConfirm === null, String(afterConfirm));
+  check('sign out: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 async function profileTabs() {
   // 2026-09-29 his pick "folder A": the active tab and its fields are one card; Save inside, Data & Backup outside.
   const { page, ctx, errors } = await phone();
@@ -3633,7 +3657,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

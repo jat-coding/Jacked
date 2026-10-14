@@ -8337,7 +8337,6 @@ function renderProfAge(){
 // reload the onboarding screen offers "Restore from backup" to load another account.
 async function signOut() {
   const p=gProf()||{};
-  try{ localStorage.removeItem('jk_friendsCache'); }catch(_){}
   // Pre-v1.8 this warned that data was saved ONLY on this device — true when the
   // blob backup ran once a day, false since sync-on-change. Say what is actually
   // the case: consult the enrolment + dirty flag, flush first if something is
