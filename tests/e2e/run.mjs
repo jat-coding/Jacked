@@ -3475,6 +3475,20 @@ async function androidBack() {
   await page.evaluate(() => sp('home'));
   await page.waitForTimeout(80);
   check('android back: Home does not push its own history entry', await page.evaluate(() => history.length) === len2);
+  // Full-app QA sweep 2026-10-13: a full-screen overlay (achFull etc.) sits above nav and has its
+  // own close button. Before the guard, back on a non-home tab with the overlay open silently
+  // activated Home behind it (nav indicator moved, renderHome() ran) while the still-visible
+  // overlay never changed -- the tab you were looking at was gone from under you with no visible
+  // sign, and a second back (history entry already consumed) had nothing left to undo.
+  await page.evaluate(() => sp('metrics'));
+  await page.waitForTimeout(80);
+  await page.evaluate(() => openAch());
+  await page.waitForTimeout(80);
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(150);
+  check('android back: with a full-screen overlay open, back does not switch tabs invisibly underneath it',
+    await activeTab() === 'metrics' && await page.evaluate(() => document.getElementById('achFull').classList.contains('open')));
+  await page.evaluate(() => closeAch());
   check('android back: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }

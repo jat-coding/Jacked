@@ -1940,7 +1940,15 @@ function sp(id) {
 // Fires when the back button pops the entry sp() pushed above. Only Home-vs-other-tab
 // back is in scope (Feedback #9) -- modal-close-on-back and the active-workout page are
 // deliberately untouched.
+// Full-app QA sweep 2026-10-13: a full-screen overlay (achFull/badgeFull/recapFull) sits above
+// nav (z-index 700 vs 100) and has its own close button -- back must not touch it, but it ALSO
+// must not switch tabs invisibly underneath it. Before this guard, back on e.g. Metrics with
+// Achievements open silently activated Home behind the still-visible overlay: the nav indicator
+// moved, renderHome() ran, but the screen never changed, so a second back (now with no history
+// entry left) could leave the app entirely instead of ever closing the overlay the user was
+// actually looking at.
 window.addEventListener('popstate', function(){
+  if (document.querySelector('#achFull.open,#badgeFull.open,#recapFull.open')) return;
   const activeTab = JK_TABS.find(id=>{ const el=document.getElementById('page-'+id); return el && el.classList.contains('active'); });
   if (activeTab && activeTab!=='home') sp('home');
 });
