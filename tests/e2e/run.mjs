@@ -3652,12 +3652,166 @@ async function cardioHoldBackfill() {
   check('backfill: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+// Adversarial pass 2 (2026-10-13): each suite is one real bug found by attacking local main, fixed, guarded here.
+const cex = [1, 2, 3].map(i => ({ id: 'cex' + i, name: 'Ex ' + i, muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }));
+const routines = [{ id: 'r1', name: 'Push', desc: '', exercises: ['cex1', 'cex2', 'cex3'] }, { id: 'r2', name: 'Pull', desc: '', exercises: ['cex2'] }];
+const fill = page => page.evaluate(() => { let c = 'x'.repeat(1 << 20), i = 0; while (c.length > 16) { try { localStorage.setItem('fill' + i, c); i++; } catch (e) { c = c.slice(c.length / 2); } } });
+const unfill = page => page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('fill')).forEach(k => localStorage.removeItem(k)));
+const toasts = page => page.evaluate(() => [...document.querySelectorAll('.toast')].map(t => t.textContent).join(' | '));
+async function adv2StartOverOpen() {
+  // 1. Start Workout -> a routine from Home while a workout is open overwrote it silently (logged sets gone).
+  const { page, ctx, errors } = await phone({ seed: { cex, routines } });
+  await page.evaluate(() => { startRW('r1'); aw.exercises[0].sets[0] = { weight: 100, reps: 5, done: true }; saveAW(); sp('home'); });
+  const id0 = await page.evaluate(() => aw.id);
+  await page.locator('#page-home button:has-text("Start Workout")').first().tap();
+  await page.locator('#qsRoutines .rc').first().tap();
+  await page.waitForTimeout(200);
+  const q = await page.evaluate(() => ({ open: document.getElementById('confirmModal').classList.contains('open'), msg: document.getElementById('cfMsg').textContent, id: aw.id, set: aw.exercises[0].sets[0] }));
+  check('adv2 start-over-open: starting another workout asks first, naming the logged sets', q.open && /in progress \(1 set logged\)/.test(q.msg), q.msg);
+  check('adv2 start-over-open: nothing replaced while asking', q.id === id0 && q.set.done && q.set.reps === 5, JSON.stringify(q));
+  await page.locator('#cfCancel').tap(); await page.waitForTimeout(150);
+  const k = await page.evaluate(() => ({ id: aw.id, sets: aw.exercises[0].sets[0].reps, saved: JSON.parse(localStorage.getItem('jk_activeWorkout')).aw.id }));
+  check('adv2 start-over-open: "Keep it" keeps the open workout, in memory and on disk', k.id === id0 && k.sets === 5 && k.saved === id0, JSON.stringify(k));
+  // Same guard on every other Start: empty, calendar day, suggestion group.
+  for (const [nm, fn] of [['empty', 'startEmpty()'], ['calendar day', "startEmptyOn('2026-10-01')"], ['suggestion', "startGroupWorkout('chest')"]]) {
+    await page.evaluate(fn => eval(fn), fn); await page.waitForTimeout(80);
+    const o = await page.evaluate(() => ({ open: document.getElementById('confirmModal').classList.contains('open'), id: aw.id }));
+    check(`adv2 start-over-open: ${nm} start asks too and replaces nothing`, o.open && o.id === id0, JSON.stringify(o));
+    await page.evaluate(() => _cfDone(false)); await page.waitForTimeout(50);
+  }
+  // "Discard & start" does what it says: the old one is gone, the new one runs.
+  await page.evaluate(() => startRW('r2')); await page.waitForTimeout(80);
+  await page.locator('#cfOk').tap(); await page.waitForTimeout(200);
+  const d = await page.evaluate(() => ({ name: aw.name, id: aw.id, page: document.querySelector('.page.active').id, hist: gH().length }));
+  check('adv2 start-over-open: "Discard & start" starts the new workout, nothing saved to history', d.name === 'Pull' && d.id !== id0 && d.page === 'page-active' && d.hist === 0, JSON.stringify(d));
+  // No workout open: Start runs at once, no question.
+  await page.evaluate(() => { clearAW(); aw = null; startRW('r1'); });
+  check('adv2 start-over-open: with no workout open, Start starts at once', await page.evaluate(() => aw && aw.name === 'Push' && !document.getElementById('confirmModal').classList.contains('open')));
+  check('adv2 start-over-open: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv2StorageFull() {
+  // 2. Finish on a full phone: "Workout complete" was shown while the workout was in neither history nor the saved session.
+  const { page, ctx, errors } = await phone({ seed: { cex, routines, hist: [wk('2026-09-10', [ex('Ex 1', [[100, 5]], 'weight_reps', 'cex1')])], prs: { cex1: { weight: 100 / LB, reps: 5, date: '2026-09-10T18:00:00.000Z' } } } });
+  await page.evaluate(() => { startRW('r1'); aw.exercises[0].sets[0] = { weight: 200 / 2.20462, reps: 5, done: true }; saveAW(); });
+  const prs0 = await page.evaluate(() => localStorage.getItem('jk_prs'));
+  await fill(page);
+  await page.evaluate(() => finishW(true)); await page.waitForTimeout(200);
+  const f = await page.evaluate(() => ({ aw: !!aw, hist: gH().length, saved: !!localStorage.getItem('jk_activeWorkout'), summary: document.getElementById('fsModal').classList.contains('open'), page: document.querySelector('.page.active').id, prs: localStorage.getItem('jk_prs') }));
+  check('adv2 storage full: Finish that cannot store the workout keeps it open (memory + saved session), no summary', f.aw && f.hist === 1 && f.saved && !f.summary, JSON.stringify(f));
+  check('adv2 storage full: says plainly it was NOT saved', /NOT saved/.test(await toasts(page)), await toasts(page));
+  check('adv2 storage full: PR records left as they were before the failed Finish', f.prs === prs0, f.prs);
+  await unfill(page);
+  await page.evaluate(() => finishW(true)); await page.waitForTimeout(200);
+  const g = await page.evaluate(() => ({ aw: !!aw, hist: gH().length, top: gH()[1] && gH()[1].sets, pr: Math.round(gPR().cex1.weight * 2.20462), prc: gH()[1] && gH()[1].prCount }));
+  check('adv2 storage full: once space is freed, Finish again saves it once, with its PR', !g.aw && g.hist === 2 && g.top === 1 && g.pr === 200 && g.prc === 1, JSON.stringify(g));
+  // Auto-finish hitting a full phone doesn't also claim "auto-finished".
+  await page.evaluate(() => { startRW('r2'); aw.exercises[0].sets[0] = { weight: 50, reps: 5, done: true }; saveAW(); });
+  await page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+  await fill(page);
+  await page.evaluate(() => { awTouch = Date.now() - 31 * 60000; autoFinishStale(true); }); await page.waitForTimeout(200);
+  const t = await toasts(page);
+  check('adv2 storage full: auto-finish that cannot save keeps the workout and does not toast "auto-finished"', await page.evaluate(() => !!aw) && !/auto-finished/.test(t) && /NOT saved/.test(t), t);
+  await unfill(page);
+  // CSV import on a full phone said "Imported" and moved the PR records without the workouts.
+  await page.evaluate(() => { clearAW(); aw = null; });
+  const before = await page.evaluate(() => ({ h: localStorage.getItem('jk_hist'), p: localStorage.getItem('jk_prs') }));
+  await fill(page);
+  await page.evaluate(() => importWorkoutCsv('title,start_time,exercise_title,weight_lbs,reps\nBig,2026-08-01 10:00,Ex 1,400,5\n'));
+  await page.waitForTimeout(300);
+  const c = await page.evaluate(() => ({ h: localStorage.getItem('jk_hist'), p: localStorage.getItem('jk_prs') }));
+  check('adv2 storage full: CSV import that cannot store history changes nothing and says so', c.h === before.h && c.p === before.p && /Import failed/.test(await toasts(page)), await toasts(page));
+  await unfill(page);
+  check('adv2 storage full: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv2ReorderAtEnd() {
+  // 3. Workout ended (watch / auto-finish / discard) with Reorder Exercises open: the list stayed over Home and a drag threw.
+  for (const how of ['ended on the watch', 'auto-finished']) {
+    const { page, ctx, errors } = await phone({ seed: { cex, routines } });
+    await page.evaluate(() => { startRW('r1'); aw.exercises[0].sets[0] = { weight: 100, reps: 5, done: true }; saveAW(); openReorder(); });
+    await page.waitForTimeout(150);
+    const g = await page.locator('#reorderList .cdrag').nth(0).boundingBox();
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2); await page.mouse.down(); await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2 + 40, { steps: 4 });
+    if (how === 'ended on the watch') await page.evaluate(() => liveCloseRemote(null, 'discarded', 'wear-1'));
+    else await page.evaluate(() => { awTouch = Date.now() - 31 * 60000; autoFinishStale(true); });
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2 + 90, { steps: 4 }); await page.mouse.up();
+    await page.waitForTimeout(200);
+    check(`adv2 reorder open at workout end (${how}): list closes, finishing the drag throws nothing`, !(await page.evaluate(() => document.getElementById('reorderModal').classList.contains('open'))) && errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  const { page, ctx, errors } = await phone({ seed: { cex, routines } });
+  await page.evaluate(() => { startRW('r1'); openAEModal('workout'); });
+  await page.waitForTimeout(150);
+  await page.evaluate(() => liveCloseRemote(null, 'discarded', 'wear-1'));
+  check('adv2 add-exercise picker open at workout end: closes with it', !(await page.evaluate(() => document.getElementById('aeModal').classList.contains('open'))) && errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv2CorruptHist() {
+  // 4. A null workout / exercise / set in jk_hist (an imported file or cloud copy is written verbatim) threw on every boot.
+  const good = wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]])]);
+  const hist = [good, null, { ...wk('2026-09-11'), exercises: [null, { exId: 'Barbell_Squat', name: 'Barbell Squat', tracking: 'weight_reps', sets: [null, { weight: 100, reps: 5, done: true }] }] }];
+  const { page, ctx, errors } = await phone({ seed: { hist }, now: SEP15 });
+  for (const t of ['home', 'routines', 'exercises', 'metrics', 'leaderboard']) { await page.evaluate(t => sp(t), t); await page.waitForTimeout(100); }
+  await page.evaluate(() => { openAch(); closeAch(); });
+  const h = await page.evaluate(() => gH());
+  check('adv2 corrupt history: every tab renders with null entries at all three levels, no errors', errors.length === 0, errors.join(' | ').slice(0, 300));
+  check('adv2 corrupt history: real data around the nulls is kept', h.length === 2 && h[1].exercises.length === 1 && h[1].exercises[0].sets.length === 1 && h[1].exercises[0].sets[0].reps === 5, JSON.stringify(h).slice(0, 200));
+  check('adv2 corrupt history: a healthy history is returned untouched (same object path, no copy)', await page.evaluate(() => { const a = [{ id: 'x', exercises: [{ sets: [{}] }] }]; return histClean(a) === a; }));
+  // The import path that let it in: a backup file with a null workout.
+  await page.evaluate(() => { applyBundle({ jk_hist: [null, { id: 'wi', name: 'I', date: '2026-09-12T18:00:00Z', exercises: [] }] }); });
+  await page.reload(); await page.waitForTimeout(300);
+  check('adv2 corrupt history: after importing a file with a null workout the app still boots clean', errors.length === 0 && await page.evaluate(() => gH().length === 1), errors.join(' | ').slice(0, 300));
+  await ctx.close();
+}
+async function adv2SignOutMidWorkout() {
+  // 5. Sign out mid-workout wiped the open workout (in no backup) under a "your workouts are backed up" message.
+  const { page, ctx, errors } = await phone({ seed: { cex, routines } });
+  await page.evaluate(() => { startRW('r1'); aw.exercises[0].sets[0] = { weight: 100, reps: 5, done: true }; saveAW(); sp('home'); signOut(); });
+  await page.waitForTimeout(600);
+  const s = await page.evaluate(() => ({ aw: !!aw, saved: !!localStorage.getItem('jk_activeWorkout'), prof: !!localStorage.getItem('jk_prof'), confirm: document.getElementById('confirmModal').classList.contains('open') }));
+  check('adv2 sign out mid-workout: refused with a reason, workout and data untouched', s.aw && s.saved && s.prof && !s.confirm && /Finish or cancel your workout first/.test(await toasts(page)), JSON.stringify(s));
+  check('adv2 sign out mid-workout: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv2SignOutHung() {
+  // 6. Sign out with a pending change on a hung connection: the pre-sign-out sync never answered and Sign out did nothing, ever.
+  const { page, ctx, errors } = await phone({ seed: { lastCloudBackup: '2026-10-13' } });
+  await page.evaluate(() => {
+    const q = new Proxy({}, { get: (t, k) => k === 'then' ? (() => new Promise(() => {})) : (() => q) });
+    SUPA = { from: () => q, rpc: () => q, auth: { signOut: () => Promise.resolve({}), getSession: () => Promise.resolve({ data: { session: null } }) }, channel() { const c = { on() { return c; }, subscribe() { return c; }, unsubscribe() {} }; return c; }, removeChannel() {} };
+    _authUid = 'uid-test'; markDirty();
+  });
+  await page.clock.install();
+  await page.evaluate(() => { signOut(); });
+  await page.clock.runFor(10500); await page.waitForTimeout(100);
+  const m = await page.evaluate(() => document.getElementById('confirmModal').classList.contains('open') && document.getElementById('cfMsg').textContent);
+  check('adv2 sign out, hung network: the confirm still comes, warning the change has not reached the cloud', !!m && /NOT reached the cloud/.test(m), String(m));
+  await page.evaluate(() => _cfDone(false));
+  check('adv2 sign out, hung network: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv2TabSpam() {
+  // 7. Tab-tab-tab then back: one back went Home, and the next ones did nothing (one stale entry per tab visited).
+  const { page, ctx, errors } = await phone({});
+  const len0 = await page.evaluate(() => history.length);
+  for (const t of ['routines', 'exercises', 'metrics', 'leaderboard']) { await page.locator('#nav-' + t).tap(); await page.waitForTimeout(60); }
+  check('adv2 tab spam: four tab taps leave ONE history entry, not four', (await page.evaluate(() => history.length)) - len0 === 1, `${len0} -> ${await page.evaluate(() => history.length)}`);
+  await page.evaluate(() => history.back()); await page.waitForTimeout(150);
+  const st = await page.evaluate(() => ({ tab: document.querySelector('.page.active').id, state: history.state }));
+  check('adv2 tab spam: back lands on Home with no tab entry left above it', st.tab === 'page-home' && st.state === null, JSON.stringify(st));
+  await page.locator('#nav-metrics').tap(); await page.waitForTimeout(60);
+  await page.evaluate(() => history.back()); await page.waitForTimeout(150);
+  check('adv2 tab spam: a tab after that still gets back-to-Home', await page.evaluate(() => document.querySelector('.page.active').id === 'page-home'));
+  check('adv2 tab spam: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

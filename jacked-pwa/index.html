@@ -1473,14 +1473,28 @@ function shapeOk(k,v){
 }
 const S = {
   g: k => { try{ const v=JSON.parse(localStorage.getItem('jk_'+k)); return shapeOk(k,v)?v:null; }catch(e){ return null; }},
-  s: (k,v) => { try{ localStorage.setItem('jk_'+k, JSON.stringify(v)); }catch(e){ console.warn('Storage full?',e); }}
+  s: (k,v) => { try{ localStorage.setItem('jk_'+k, JSON.stringify(v)); return true; }catch(e){ console.warn('Storage full?',e); storageFullWarn(); return false; }}
 };
+// A refused write used to be a console line only, so the app carried on as if it had saved
+// (adversarial pass 2, 2026-10-13: a Finish on a full phone showed "Workout complete" and lost the
+// workout). Callers that must not pretend check S.s's result; everyone else at least gets told.
+let _sfWarnAt=0;
+function storageFullWarn(){ if(Date.now()-_sfWarnAt<10000) return; _sfWarnAt=Date.now(); try{ toast("Phone storage is full — changes can't be saved",'err'); }catch(_){} }
 const gCEx    = () => S.g('cex')      || [];
 const gR      = () => S.g('routines') || [];
 const gRS     = () => S.g('routineSections') || [];
 const saveRS  = arr => S.s('routineSections', arr);
 const gCollapsedSecs = () => S.g('collapsedSections') || [];
-const gH      = () => S.g('hist')     || [];
+const gH      = () => histClean(S.g('hist') || []);
+// A null where a workout, exercise or set belongs (an imported file or a cloud copy is written
+// verbatim) threw on every render, on every boot (adversarial pass 2). Drop it on read; the
+// common, healthy case is returned as-is.
+function histClean(h){
+  const ok=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+  const clean=w=>ok(w)&&(!Array.isArray(w.exercises)||w.exercises.every(e=>ok(e)&&(!Array.isArray(e.sets)||e.sets.every(ok))));
+  if(h.every(clean)) return h;
+  return h.filter(ok).map(w=>!Array.isArray(w.exercises)?w:{...w,exercises:w.exercises.filter(ok).map(e=>!Array.isArray(e.sets)?e:{...e,sets:e.sets.filter(ok)})});
+}
 const gPR     = () => S.g('prs')      || {};
 const gProf   = () => S.g('prof')     || null;
 const gFr     = () => S.g('friends')  || [];
@@ -1935,7 +1949,10 @@ function sp(id) {
   updateResumeBar();
   // Android hardware/gesture back on a non-home tab should return to Home, not exit the
   // app (in-app Feedback #9) -- give it a history entry to consume instead of the default.
-  if (switching && id!=='home') { try{ history.pushState({jkTab:id},'',location.pathname); }catch(_){} }
+  // One entry for "on a non-home tab", replaced as he moves between tabs: pushing one per tap left
+  // every earlier tab's entry behind, so after tab-tab-tab, back went Home and the next presses did
+  // nothing at all (adversarial pass 2, 2026-10-13).
+  if (switching && id!=='home') { try{ const st={jkTab:id}; if(history.state&&history.state.jkTab) history.replaceState(st,'',location.pathname); else history.pushState(st,'',location.pathname); }catch(_){} }
 }
 // Fires when the back button pops the entry sp() pushed above. Only Home-vs-other-tab
 // back is in scope (Feedback #9) -- modal-close-on-back and the active-workout page are
@@ -2026,6 +2043,7 @@ function bestRoutineFor(lbl){
 // No matching routine: start an ad-hoc workout seeded with the exercises he has actually
 // done most for this label. Nothing is saved as a routine (see startCuratedRoutine).
 function startGroupWorkout(lbl){
+  if(awBusy(()=>startGroupWorkout(lbl))) return;
   const gs=sugGroups(lbl), n={};
   gH().forEach(w=>(w.exercises||[]).forEach(ex=>{ if(ex.exId&&(ex.sets||[]).length&&[...exGroups(ex,w)].some(g=>gs.includes(g))) n[ex.exId]=(n[ex.exId]||0)+1; }));
   const ids=Object.keys(n).sort((x,y)=>n[y]-n[x]).slice(0,5);
@@ -2214,6 +2232,7 @@ function openDay(ds){
 
 // Start a workout dated to a past calendar day (logged from the calendar).
 function startEmptyOn(ds){
+  if(awBusy(()=>startEmptyOn(ds))) return;
   cm('dayModal');
   awStart=Date.now();
   const d=new Date(ds+'T12:00:00');
@@ -2443,6 +2462,7 @@ const CURATED_FLAT = CURATED.flatMap((p,pi)=>p.routines.map((r,ri)=>(
 async function startCuratedRoutine(pi,ri){
   const prog=CURATED[pi]; if(!prog) return;
   const rt=prog.routines[ri]; if(!rt) return;
+  if(awBusy(()=>startCuratedRoutine(pi,ri))) return;
   const tag=prog.name+' · '+prog.source;
   // If the user already explicitly added this program (Library → "+ Add to Routines"),
   // start their own saved copy so it behaves like any other routine (updates, reorders,
@@ -3042,7 +3062,11 @@ function awIsStale() { return aw && awStart && ((awTouch && Date.now()-awTouch>S
 
 // Persist the in-progress workout so a reload/crash/screen-lock doesn't lose it.
 function saveAW() { if(aw){ awTouch=Date.now(); if(liveStamp()) liveSchedule(); S.s('activeWorkout',{aw,awStart,awTouch}); } }
-function clearAW() { try{ localStorage.removeItem('jk_activeWorkout'); }catch(e){} }
+function clearAW() { try{ localStorage.removeItem('jk_activeWorkout'); }catch(e){} closeWorkoutModals(); }
+// Every way a workout ends goes through clearAW(). Its own pickers must go with it: ended on the
+// watch / auto-finished / discarded while Reorder Exercises was open left that list over Home, and
+// dragging a row threw (adversarial pass 2, 2026-10-13).
+function closeWorkoutModals(){ cm('reorderModal'); if(typeof _aeTarget!=='undefined'&&(_aeTarget==='workout'||_aeTarget==='workoutReplace')) cm('aeModal'); }
 
 // ============================================================
 // LIVE SHARED WORKOUT (phone <-> watch), phase 1: server + phone.
@@ -3435,7 +3459,7 @@ async function liveLate(code,row,merged){
   // will commit it -- do it now (2026-10-12 adversarial find: the workout used to vanish from
   // history, with a toast blaming "your other phone").
   if(liveMine(row)&&!gH().some(w=>w&&w.id===row.doc.id)){
-    liveRecompute(row.doc,row.rev,true);
+    if(!liveRecompute(row.doc,row.rev,true)){ finishUnsaved(); return 'unsaved'; }
     liveCloseRemote(row.doc,'mine',row.updated_by);
     return 'closed-mine';
   }
@@ -3494,7 +3518,7 @@ function liveRecompute(doc, rev, create){
   const h=gH(), i=h.findIndex(w=>w&&w.id===doc.id);
   if(i<0&&!create) return false;
   if(i>=0&&(h[i].lrev||0)>=rev) return false;
-  const a=liveFromWire(doc,null);
+  const a=liveFromWire(doc,null), prUndo=prSnap();
   if(i<0){
     const end=liveTouch(doc)||Date.now();
     const f=buildFinishRec(a, a.startedAt||end, end);
@@ -3513,7 +3537,7 @@ function liveRecompute(doc, rev, create){
     h[i]={...old, exercises:exs, sets, totalVolume:Math.round(vol), prCount:prSets.length, prSets, lrev:rev};
   }
   _liveStats.recomputes++;
-  S.s('hist',h);
+  if(!S.s('hist',h)){ prUndo(); return false; }   // storage full: the caller must not treat it as saved
   if(typeof syncMe==='function') syncMe();
   if(typeof syncBackup==='function') syncBackup();
   if(typeof reRenderActivePage==='function') try{ reRenderActivePage(); }catch(_){}
@@ -3606,7 +3630,7 @@ function autoFinishStale(synced) {
   const me=liveDevice(), shared=aw.exercises.some(e=>(e.ud&&e.ud!==me)||e.sets.some(s=>s.ud&&s.ud!==me));
   aw.exercises.forEach(e=>e.sets.forEach(s=>{ if(!s.done&&(s.weight>0||s.reps>0)&&(!shared||!s.ud||s.ud===me)) s.done=true; }));
   const ts=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
-  if(ts>0){ finishW(true); toast('Workout auto-finished after inactivity','ok'); }
+  if(ts>0){ finishW(true); if(!aw||_finLock) toast('Workout auto-finished after inactivity','ok'); }
   else { liveDiscard(aw.id); clearAW(); aw=null; sp('home'); toast('Inactive workout discarded','ok'); }
 }
 
@@ -3659,8 +3683,24 @@ function seedSets(exId){
   return [{weight:0,reps:0,done:false}];
 }
 
+// Every Start (routine, empty, calendar day, suggestion, curated) used to overwrite an open
+// workout with no question: from Home via "Return to workout", Start Workout -> a routine silently
+// threw away every logged set (adversarial pass 2, 2026-10-13). Ask first; a yes discards it the
+// way Cancel Workout does (every device), then runs the start. True = the caller must stop.
+function awBusy(restart){
+  if(!aw) return false;
+  if(_finLock){ toast('Saving your workout…'); return true; }
+  const n=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
+  showConfirm(`You have a workout in progress${n?` (${n} set${n>1?'s':''} logged)`:''}. Discard it and start a new one?`,{okText:'Discard & start',cancelText:'Keep it'}).then(ok=>{
+    if(!ok) return;
+    if(aw){ if(_finLock) return; liveDiscard(aw.id); clearInterval(wt); skipRest(); clearAW(); aw=null; _liveShadow=null; }
+    restart();
+  });
+  return true;
+}
 function startRW(rid) {
   const r=gR().find(r=>r.id===rid); if(!r) return;
+  if(awBusy(()=>startRW(rid))) return;
   cm('qsModal'); cm('crModal');
   awStart=Date.now();
   aw={
@@ -3675,6 +3715,7 @@ function startRW(rid) {
 }
 
 function startEmpty() {
+  if(awBusy(startEmpty)) return;
   cm('qsModal');
   awStart=Date.now();
   aw={id:'w'+Date.now(), name:'Quick Workout', date:new Date().toISOString(), exercises:[]};
@@ -5435,14 +5476,28 @@ function buildFinishRec(a,startTs,endTs){
   if(!rec.name || rec.name==='Quick Workout') rec.name=autoNameWorkout(rec.exercises);
   return {rec,prList,preProgress,vol,dur,ts,sec};
 }
+// Snapshot the PR records before a commit writes them; the returned function puts them back.
+function prSnap(){
+  const was=['prs','cardioPR','holdPR'].map(k=>[k,localStorage.getItem('jk_'+k)]);
+  return ()=>was.forEach(([k,v])=>{ try{ if(v==null) localStorage.removeItem('jk_'+k); else localStorage.setItem('jk_'+k,v); }catch(_){} });
+}
+// The history write failed (storage full): keep the workout open here, finishing locally next time --
+// its live row, if any, already took this Finish, and a live sync would otherwise close it as done.
+function finishUnsaved(){
+  _finLock=null; if(aw) _liveSolo=aw.id;
+  S.s('activeWorkout',{aw,awStart,awTouch});
+  toast('Phone storage is full — this workout was NOT saved. Free up space, then tap Finish again.','err');
+}
 function _commitFinish(endTs,rev) {
+  const prUndo=prSnap();   // buildFinishRec commits PRs
   const {rec,prList,preProgress,vol,dur,ts,sec}=buildFinishRec(aw,awStart,endTs);
   ws=sec;
   if(rev) rec.lrev=rev;
   // Detect if the workout's exercises differ from its source routine.
   let rid=null,rname='',ids=aw.exercises.map(e=>e.exId);
   if(aw.routineId){ const r=gR().find(x=>x.id===aw.routineId); if(r){ const o=r.exercises||[]; if(o.length!==ids.length||o.some((id,i)=>id!==ids[i])){ rid=aw.routineId; rname=r.name; } } }
-  const h=gH(); h.push(rec); S.s('hist',h);
+  const h=gH(); h.push(rec);
+  if(!S.s('hist',h)){ prUndo(); finishUnsaved(); return; }   // storage full: nothing saved, say so
   clearAW();
   if (typeof syncMe==='function') syncMe();  // push updated stats to Supabase if configured
   // Merge-safe cloud backup on EVERY finish (not just the daily cold-boot run) so a
@@ -6857,6 +6912,7 @@ function cardDragStart(e){
     window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
     const ids=[...cont.children].map(x=>x.dataset.id);
     if(cont.id==='reorderList'){
+      if(!aw){ cm('reorderModal'); return; }   // the workout ended mid-drag
       // Workout exercises: ids are roKey()s in their new order. Anything not in the list
       // (arrived from another device after it was drawn) keeps its place at the end.
       const old=aw.exercises, byKey=new Map(old.map((x,i)=>[roKey(x,i),x]));
@@ -8198,7 +8254,7 @@ async function drainSync(){
 
 // Wrap the writer rather than editing every caller.
 const _sWrite = S.s;
-S.s = (k,v)=>{ _sWrite(k,v); if(!SYNC_SKIP.has(k)){ markDirty(); scheduleSync(); } };
+S.s = (k,v)=>{ const ok=_sWrite(k,v); if(ok&&!SYNC_SKIP.has(k)){ markDirty(); scheduleSync(); } return ok; };   // ok: false = storage refused it
 
 // Leaving the app with an unflushed change: flush best-effort — the browser may
 // freeze us mid-flight, in which case the dirty flag re-arms us on return/boot.
@@ -8335,7 +8391,11 @@ function renderProfAge(){
 // Sign out = leave this profile. Workout data is local-only, so this also
 // clears it from this device — we warn hard and push Export first. After the
 // reload the onboarding screen offers "Restore from backup" to load another account.
+const SIGNOUT_SYNC_MS=10000;
 async function signOut() {
+  // The open workout is in no backup (collectBackup skips it): signing out wiped it while the
+  // message said everything was backed up (adversarial pass 2, 2026-10-13).
+  if(aw){ toast('Finish or cancel your workout first — signing out would lose it','err'); return; }
   const p=gProf()||{};
   // Pre-v1.8 this warned that data was saved ONLY on this device — true when the
   // blob backup ran once a day, false since sync-on-change. Say what is actually
@@ -8345,7 +8405,8 @@ async function signOut() {
   let safe=enrolled && !isDirty();
   if(enrolled && !safe && supaEnabled()){
     toast('Syncing before sign out…');
-    if(await cloudBackupNow(true)){ clearDirty(); safe=true; }
+    // Bounded: on a hung connection this never answered, and Sign out did nothing at all.
+    if(await liveSettle(cloudBackupNow(true),SIGNOUT_SYNC_MS)){ clearDirty(); safe=true; }
   }
   const msg = safe
     ? `Sign out on this device?\n\nYour workouts, PRs and routines are backed up to ${p.code||'your account'} in the cloud — log in again any time to get them back.`
@@ -8729,7 +8790,8 @@ async function importWorkoutCsv(text) {
     w.prCount=n;
   });
   const merged=[...hist,...built].sort((a,b)=>new Date(a.date)-new Date(b.date));
-  S.s('hist',merged); S.s('prs',prs); S.s('holdPR',hold);
+  if(!S.s('hist',merged)){ toast('Import failed — not enough storage. Nothing was changed.','err'); return; }
+  S.s('prs',prs); S.s('holdPR',hold);
   if(typeof syncMe==='function') syncMe();
   cm('profModal');
   toast(`Imported ${built.length} workout${built.length!==1?'s':''} ✓`,'ok');

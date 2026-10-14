@@ -446,7 +446,58 @@ export async function liveFinishHungSync() {
   await A.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale, liveEndedElsewhere];
+// Adversarial pass 2 (2026-10-13). Start-over-open: starting another workout while a shared one is open used to
+// overwrite it on the phone with no question and leave the old session live on the watch. "Discard & start" now
+// discards it everywhere, exactly like Cancel Workout, and the new session takes the row.
+export async function liveStartOverOpen() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const sid = await startShared(db, A, [[100, 5, true]]);
+  await ev(B, () => liveResumeRemote());
+  await ev(A, () => { window._cfLog = []; window.showConfirm = m => { _cfLog.push(m); return Promise.resolve(false); }; startRW('r2'); });
+  await wait(200);
+  const kept = await ev(A, () => ({ id: aw.id, asked: _cfLog.slice() }));
+  check('live start-over-open: asks first; "Keep it" leaves the shared session open and live', kept.id === sid && kept.asked.length === 1 && db.row.session_id === sid && db.row.status === 'active', JSON.stringify(kept));
+  await ev(A, () => { window.showConfirm = () => Promise.resolve(true); startRW('r2'); });
+  await wait(1200);
+  const a = await snap(A);
+  check('live start-over-open: "Discard & start" ends the old session on the row (discarded), nothing saved', a.aw && a.aw.id !== sid && a.aw.name === 'Full' && a.hist.length === 0 && (db.row.session_id !== sid || db.row.status === 'discarded'), JSON.stringify({ row: db.row && [db.row.session_id === sid, db.row.status] }));
+  await ev(A, () => { clearTimeout(_livePushT); return liveSync(); });
+  const r = await ev(B, () => liveSync());
+  const b = await snap(B);
+  check('live start-over-open: the watch closes the old session instead of keeping it alive', !b.aw && b.hist.length === 0, JSON.stringify({ r, aw: b.aw && b.aw.id }));
+  check('live start-over-open: the new session owns the row', db.row.session_id === a.aw.id && db.row.status === 'active', JSON.stringify([db.row.session_id, db.row.status]));
+  check('live start-over-open: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+// Adversarial pass 2: Finish on a full phone after this device already won the live finish claim. The workout stays
+// open here (nothing stored), and the retry once space is freed commits it locally exactly once, without claiming again.
+export async function liveFinishStorageFull() {
+  const db = makeDb(); const A = await device(db, 'phone-A');
+  const sid = await startShared(db, A, [[100, 5, true]]);
+  await ev(A, () => { let c = 'x'.repeat(1 << 20), i = 0; while (c.length > 16) { try { localStorage.setItem('fill' + i, c); i++; } catch (e) { c = c.slice(c.length / 2); } } });
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(1500);
+  const a = await snap(A);
+  const ops0 = db.ops.length;
+  check('live storage full: claim won on the server, but nothing stored here -> workout still open, not in history', db.row.status === 'finished' && a.aw && a.aw.id === sid && a.hist.length === 0 && a.stats.commits === 1, JSON.stringify({ st: db.row.status, aw: !!a.aw, h: a.hist.length }));
+  // A live poll in between must not take the (server-finished) row as "ended elsewhere" and close the
+  // workout here: this device won the claim, so nobody else will ever save it.
+  const r = await ev(A, () => liveSync());
+  check('live storage full: a live sync before the retry leaves the unsaved workout open', await ev(A, () => !!aw), String(r));
+  // Same after an app restart (solo flag gone, storage still full): resuming meets its own finished row and
+  // tries to save it from there -- that write fails too, and the workout must still stay open.
+  const r2 = await ev(A, () => { _liveSolo = null; return liveSync(); });
+  check('live storage full: after a restart, the resumed copy meeting its own finished row stays open when it cannot save', r2 === 'unsaved' && await ev(A, () => !!aw && gH().length === 0), String(r2));
+  await ev(A, () => Object.keys(localStorage).filter(k => k.startsWith('fill')).forEach(k => localStorage.removeItem(k)));
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(800);
+  const b = await snap(A);
+  check('live storage full: Finish again after freeing space saves it once, with no second claim on the row', !b.aw && b.hist.filter(w => w.id === sid).length === 1 && db.ops.slice(ops0).every(o => o[0] !== 'update'), JSON.stringify(db.ops.slice(ops0)));
+  check('live storage full: PR committed once, from the saved workout', b.prs.cex1 && b.hist[0].prCount === 1, JSON.stringify(b.prs));
+  check('live storage full: no console errors', A.errors.length === 0, A.errors.join(' | '));
+  await A.ctx.close();
+}
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale, liveEndedElsewhere, liveStartOverOpen, liveFinishStorageFull];
 
 // The app is killed (swiped away) right after tapping Finish: the Finish claim reached the
 // server and flipped the row to 'finished', but the local commit never ran. On reopening, the
