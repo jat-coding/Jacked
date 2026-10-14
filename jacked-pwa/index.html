@@ -8674,10 +8674,13 @@ async function importWorkoutCsv(text) {
     g.rows.forEach(row=>{
       const name=(row[ciEx]||'').trim(); if(!name) return;
       if (ciSetType>=0 && String(row[ciSetType]||'').toLowerCase()==='warmup') return;
-      let w=ciW>=0?parseFloat(row[ciW]):0; if(isNaN(w))w=0; if((rowUnit(row)||fileUnit)==='lb') w=w/2.20462;
-      let reps=ciReps>=0?parseInt(row[ciReps],10):0; if(isNaN(reps))reps=0;
-      let dist=ciDist>=0?parseFloat(row[ciDist]):0; if(isNaN(dist))dist=0;
-      let secs=ciDur>=0?parseFloat(row[ciDur]):0; if(isNaN(secs))secs=0;
+      // Math.max(0,...): a negative value (typo, corrupt export) must never go in as load/reps/distance/time --
+      // unlike a UI number input, nothing upstream of a CSV stops a negative, and an unclamped one here corrupts
+      // totalVolume (goes negative, visible on Home/Metrics/leaderboard) and can outrank a real PR.
+      let w=ciW>=0?parseFloat(row[ciW]):0; if(isNaN(w))w=0; w=Math.max(0,w); if((rowUnit(row)||fileUnit)==='lb') w=w/2.20462;
+      let reps=ciReps>=0?parseInt(row[ciReps],10):0; if(isNaN(reps))reps=0; reps=Math.max(0,reps);
+      let dist=ciDist>=0?parseFloat(row[ciDist]):0; if(isNaN(dist))dist=0; dist=Math.max(0,dist);
+      let secs=ciDur>=0?parseFloat(row[ciDur]):0; if(isNaN(secs))secs=0; secs=Math.max(0,secs);
       if(!exMap.has(name)) exMap.set(name,[]);
       exMap.get(name).push({weight:Math.round(w*100)/100, reps, done:true, _mi:dist*distMi, _sec:secs});
     });

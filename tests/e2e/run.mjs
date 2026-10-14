@@ -2962,6 +2962,30 @@ async function importUnits() {
   check('import units: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function importMalformed() {
+  // Full-app QA sweep 2026-10-13 (area 6, import/export): a CSV is untrusted input, unlike
+  // the UI's number input which can't produce a negative. A negative weight/reps/distance/
+  // duration value used to flow straight into history unclamped, corrupting totalVolume
+  // (shown on Home/Metrics/leaderboard) and the PR table.
+  const { page, ctx, errors } = await phone({ now: SEP15 });
+  await dbReady(page);
+  const run = csv => page.evaluate(async csv => {
+    S.s('hist', []); S.s('prs', {});
+    await importWorkoutCsv(csv);
+    const w = gH()[0], e = w && w.exercises[0];
+    return { n: gH().length, sets: e && e.sets, vol: w && w.totalVolume, pr: gPR()[e && e.exId] };
+  }, csv);
+  let r = await run('title,start_time,exercise_title,weight_lbs,reps\nBad Import,2026-05-01 10:00:00,Barbell Bench Press,-135,8\n');
+  check('import CSV: a negative weight row never produces a negative set weight', r.sets[0].weight === 0, JSON.stringify(r));
+  check('import CSV: a negative weight row never produces negative totalVolume', r.vol === 0, JSON.stringify(r));
+  check('import CSV: a negative weight never sets a negative PR', !r.pr || r.pr.weight === 0, JSON.stringify(r));
+  r = await run('title,start_time,exercise_title,weight_lbs,reps\nBad Import,2026-05-01 10:00:00,Barbell Bench Press,135,-8\n');
+  check('import CSV: a negative reps value never produces negative reps', r.sets[0].reps === 0, JSON.stringify(r));
+  r = await run('title,start_time,exercise_title,distance_km,duration_seconds\nBad Run,2026-05-01 10:00:00,Running,-5,-300\n');
+  check('import CSV: a negative distance/duration run never produces negative sets', r.sets[0].weight >= 0 && r.sets[0].reps >= 0, JSON.stringify(r));
+  check('import CSV: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 async function resetPR() {
   // Mr. Roni 2026-10-02 (3:26pm ask, 3:33pm answers): "Reset PR" on the exercise itself, confirm first; clears the
   // stored PR so the next logged set is the new PR whatever the weight; history untouched; syncs; merge can't bring
@@ -3595,7 +3619,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
