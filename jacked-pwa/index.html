@@ -3559,7 +3559,7 @@ function liveCloseRemote(doc,why,by){
   // Summary from the finished doc; the finishing device committed history + PRs, and they
   // arrive here through the normal backup pull.
   const a=liveFromWire(doc,null), ts=a.exercises.reduce((n,e)=>n+e.sets.filter(s=>s.done).length,0);
-  const vol=a.exercises.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+effWeight(e,s)*Math.max(0,s.reps||0),0):0),0);
+  const vol=a.exercises.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+volWeight(e,s,a)*Math.max(0,s.reps||0),0):0),0);
   const sec=Math.max(0,Math.floor((liveTouch(doc)-(a.startedAt||liveTouch(doc)))/1000));
   const dur=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');
   showFinishSummary({name:(!a.name||a.name==='Quick Workout')?autoNameWorkout(a.exercises):a.name,dur,ts,vol:Math.round(vol),prList:[],rid:null,rname:'',ids:a.exercises.map(e=>e.exId)});
@@ -3612,7 +3612,7 @@ function liveRecompute(doc, rev, create){
       return b?{exId,ei,si:b.si,weight:b.weight,reps:b.reps}:null;
     }).filter(Boolean);
     const sets=exs.reduce((n,e)=>n+e.sets.filter(s=>s.done).length,0);
-    const vol=exs.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+effWeight(e,s)*Math.max(0,s.reps||0),0):0),0);
+    const vol=exs.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+volWeight(e,s,old)*Math.max(0,s.reps||0),0):0),0);
     h[i]={...old, exercises:exs, sets, totalVolume:Math.round(vol), prCount:prSets.length, prSets, lrev:rev};
   }
   _liveStats.recomputes++;
@@ -3866,7 +3866,7 @@ function updWT() {
 function renderWS() {
   const prs=gPR();
   const doneAll=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
-  const volAll=aw.exercises.reduce((a,e)=>a+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*s.reps),0):0),0);
+  const volAll=aw.exercises.reduce((a,e)=>a+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(volWeight(e,s,aw)*s.reps),0):0),0);
   let h=`<div class="wstats"><div><div class="wstats-v">${fmtW(volAll)}</div><div class="wstats-l">${uL()} lifted</div></div><div style="width:1px;background:var(--border)"></div><div><div class="wstats-v">${doneAll}</div><div class="wstats-l">sets done</div></div></div>`;
   const wMiniEl=document.getElementById('wMini');
   if(wMiniEl) wMiniEl.innerHTML=`<b>${fmtW(volAll)} ${uL()}</b> lifted<span style="width:1px;height:12px;background:var(--border)"></span><b>${doneAll}</b> sets done`;
@@ -4291,6 +4291,25 @@ const BADGE_STD={
   cardio:['bi_run_outdoor','Running_Treadmill','Jogging_Treadmill'],  // running, outdoor, treadmill or jogging-treadmill (same lift, two treadmill ids) -- Mr. Roni, 2026-10-02
 };
 const _stdByName=new Map();
+// Alternating / single-arm dumbbell lifts: one dumbbell is worked per rep, so the logged weight counts double toward
+// workout volume (totalVolume, the leaderboard's Weight) and NOWHERE else -- PRs, e1rm, badges and strength standards
+// read effWeight as before (Mr. Roni, 2026-10-14). Exact library ids, checked against free-exercise-db; a custom never
+// matches. Native sets only: a Hevy-imported workout (IMPORTED_ID) is never doubled, not even when it is edited.
+// Going forward only: stored totals are never recomputed for this.
+const DOUBLE_VOL_IDS=new Set([
+  'Alternate_Hammer_Curl','Alternate_Incline_Dumbbell_Curl','Alternating_Deltoid_Raise','Dumbbell_Alternate_Bicep_Curl',
+  'See-Saw_Press_Alternating_Side_Press','Standing_Alternating_Dumbbell_Press',
+  'Dumbbell_Lying_One-Arm_Rear_Lateral_Raise','Dumbbell_One-Arm_Shoulder_Press','Dumbbell_One-Arm_Triceps_Extension',
+  'Dumbbell_One-Arm_Upright_Row','Lying_One-Arm_Lateral_Raise','One-Arm_Dumbbell_Row','One-Arm_Flat_Bench_Dumbbell_Flye',
+  'One-Arm_Incline_Lateral_Raise','One-Arm_Side_Laterals','One_Arm_Dumbbell_Bench_Press','One_Arm_Dumbbell_Preacher_Curl',
+  'One_Arm_Pronated_Dumbbell_Triceps_Extension','One_Arm_Supinated_Dumbbell_Triceps_Extension',
+  'Seated_Bent-Over_One-Arm_Dumbbell_Triceps_Extension','Seated_One-Arm_Dumbbell_Palms-Down_Wrist_Curl',
+  'Seated_One-Arm_Dumbbell_Palms-Up_Wrist_Curl','Standing_Bent-Over_One-Arm_Dumbbell_Triceps_Extension',
+  'Standing_One-Arm_Dumbbell_Curl_Over_Incline_Bench','Standing_One-Arm_Dumbbell_Triceps_Extension',
+  'Standing_Palm-In_One-Arm_Dumbbell_Press',
+]);
+// Load a set adds to workout volume. Use ONLY where totalVolume / "lifted" is summed; w = the workout it belongs to.
+function volWeight(ex,s,w){ return effWeight(ex,s) * (ex && DOUBLE_VOL_IDS.has(ex.exId) && !IMPORTED_ID.test((w&&w.id)||'') ? 2 : 1); }
 // Hevy's exact names for the dumbbell / Smith versions the badges credit. The general name matcher files these
 // elsewhere ("Overhead Press (Dumbbell)" on the barbell Standing Military Press, "Bench Press (Smith Machine)" on the
 // plain chest-press machine), so for a badge they are pinned here by exact name (2026-10-02).
@@ -5595,7 +5614,7 @@ function liveHistExercises(exs){
 function buildFinishRec(a,startTs,endTs){
   const ts=a.exercises.reduce((n,e)=>n+e.sets.filter(s=>s.done).length,0);
   const sec=Math.max(0, Math.floor((endTs - (startTs||endTs))/1000));
-  const vol=a.exercises.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*Math.max(0,s.reps||0)),0):0),0);
+  const vol=a.exercises.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(volWeight(e,s,a)*Math.max(0,s.reps||0)),0):0),0);
   const dur=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');
   // Capture the PRE-workout progress signal (history through last time, not
   // tonight) for every trackable exercise before tonight's numbers land in
@@ -5892,7 +5911,7 @@ function saveWE(){
   if(dv){ const old=new Date(weDraft.date); const hh=isNaN(old)?12:old.getHours(), mm=isNaN(old)?0:old.getMinutes();
     weDraft.date=new Date(dv+'T'+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+':00').toISOString(); }
   const ts=weDraft.exercises.reduce((a,e)=>a+(e.sets||[]).filter(s=>s.done).length,0);
-  const vol=weDraft.exercises.reduce((a,e)=>a+(isWT(e)?(e.sets||[]).filter(s=>s.done).reduce((b,s)=>b+(effWeight(e,s)*Math.max(0,s.reps||0)),0):0),0);
+  const vol=weDraft.exercises.reduce((a,e)=>a+(isWT(e)?(e.sets||[]).filter(s=>s.done).reduce((b,s)=>b+(volWeight(e,s,weDraft)*Math.max(0,s.reps||0)),0):0),0);
   weDraft.sets=ts; weDraft.totalVolume=Math.round(vol);
   const h=gH(); const idx=h.findIndex(x=>x.id===weId), old=idx>=0?h[idx]:null;
   if(idx>=0){ if(old.date===weDraft.date) h[idx]=weDraft; else { h.splice(idx,1); histInsert(h,weDraft); } }   // a new date moves it to its place in time

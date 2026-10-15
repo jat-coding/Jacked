@@ -4231,12 +4231,134 @@ async function adv4ModalFocus() {
   check('adv4 modal focus: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+async function doubleVolume() {
+  // Mr. Roni 2026-10-14: 26 alternating / single-arm dumbbell lifts (one dumbbell worked per rep) count their logged
+  // weight double toward workout volume (totalVolume, the leaderboard's Weight) and nowhere else. Native sets only,
+  // going forward only. PRs, e1rm, session max, strength standards and badges must read exactly as before.
+  const IDS = ['Alternate_Hammer_Curl', 'Alternate_Incline_Dumbbell_Curl', 'Alternating_Deltoid_Raise', 'Dumbbell_Alternate_Bicep_Curl',
+    'See-Saw_Press_Alternating_Side_Press', 'Standing_Alternating_Dumbbell_Press', 'Dumbbell_Lying_One-Arm_Rear_Lateral_Raise',
+    'Dumbbell_One-Arm_Shoulder_Press', 'Dumbbell_One-Arm_Triceps_Extension', 'Dumbbell_One-Arm_Upright_Row', 'Lying_One-Arm_Lateral_Raise',
+    'One-Arm_Dumbbell_Row', 'One-Arm_Flat_Bench_Dumbbell_Flye', 'One-Arm_Incline_Lateral_Raise', 'One-Arm_Side_Laterals',
+    'One_Arm_Dumbbell_Bench_Press', 'One_Arm_Dumbbell_Preacher_Curl', 'One_Arm_Pronated_Dumbbell_Triceps_Extension',
+    'One_Arm_Supinated_Dumbbell_Triceps_Extension', 'Seated_Bent-Over_One-Arm_Dumbbell_Triceps_Extension',
+    'Seated_One-Arm_Dumbbell_Palms-Down_Wrist_Curl', 'Seated_One-Arm_Dumbbell_Palms-Up_Wrist_Curl',
+    'Standing_Bent-Over_One-Arm_Dumbbell_Triceps_Extension', 'Standing_One-Arm_Dumbbell_Curl_Over_Incline_Bench',
+    'Standing_One-Arm_Dumbbell_Triceps_Extension', 'Standing_Palm-In_One-Arm_Dumbbell_Press'];
+  // Source: the doubling lives in volWeight only, volWeight is used only where a workout's volume is summed, and effWeight
+  // (what PRs, e1rm, session max, strength and badges read) is untouched.
+  const src = fs.readFileSync(new globalThis.URL('../../jacked-pwa/index.html', import.meta.url), 'utf8').split('\n');
+  const setRefs = src.filter(l => /DOUBLE_VOL_IDS\b/.test(l)), useLines = src.filter(l => /volWeight\(/.test(l) && !/^function volWeight/.test(l));
+  check('double volume: DOUBLE_VOL_IDS is read only by volWeight', setRefs.length === 2 && setRefs.some(l => /^function volWeight/.test(l)), setRefs.join(' | '));
+  check('double volume: volWeight is used at exactly the 5 workout-volume sums, nowhere else', useLines.length === 5 && useLines.every(l => /const (vol|volAll)=/.test(l)), useLines.join(' | '));
+  const eff = src.slice(src.findIndex(l => l.startsWith('function effWeight(')), src.findIndex(l => l.startsWith('function setBWMode(')));
+  check('double volume: effWeight() itself unchanged (no doubling inside it)', eff.length === 10 && !/DOUBLE|volWeight|\* ?2/.test(eff.join('\n')), eff.join('\n'));
+
+  const W = 50 / LB, now = new Date('2026-10-14T12:00:00-06:00');
+  // Saved native history: every one of the 26 twice (two sessions, so the session-max progress walk has something to read),
+  // plus a two-hand dumbbell bench. Stored totalVolume 777 on each: an old figure this change must never rewrite.
+  const day = i => new Date(+new Date('2026-09-20T12:00:00-06:00') + i * 864e5).toISOString().slice(0, 10);
+  const hist = [];
+  IDS.forEach((id, i) => { hist.push({ ...wk(day(i % 20), [ex(id, [[50, 10], [40, 8]], 'weight_reps', id)]), id: 'wn' + i + 'a', totalVolume: 777 });
+    hist.push({ ...wk(day(i % 20 + 1), [ex(id, [[55, 8], [45, 12]], 'weight_reps', id)], { hour: 18 }), id: 'wn' + i + 'b', totalVolume: 777 }); });
+  hist.push({ ...wk('2026-10-01', [ex('Dumbbell Bench Press', [[50, 10]], 'weight_reps', 'Dumbbell_Bench_Press')]), id: 'wnbench', totalVolume: 777 });
+  hist.sort((a, b) => new Date(b.date) - new Date(a.date));
+  const { page, ctx, errors } = await phone({ seed: { hist, bw: 180 / LB, prof: { name: 'T', username: '@t', code: '@t', sex: 'male', birthday: '1990-01-01' } }, now });
+  check('double volume: the real free-exercise-db loaded', await dbReady(page));
+  const inDb = await page.evaluate(ids => ({ size: DOUBLE_VOL_IDS.size, n: allDB.length, missing: ids.filter(id => !allDB.some(x => x.id === id && !x._c)), extra: [...DOUBLE_VOL_IDS].filter(id => !ids.includes(id)) }), IDS);
+  check('double volume: all 26 pinned ids exist exactly in the real free-exercise-db', inDb.size === 26 && !inDb.missing.length && !inDb.extra.length, JSON.stringify(inDb));
+
+  // Give the seeded sets their real library muscle (the strength scorer groups by it), totals left as stored.
+  await page.evaluate(() => { const h = gH(); h.forEach(w => w.exercises.forEach(e => { const m = byId(e.exId); if (m && m.muscle) { e.muscle = m.muscle; e.equip = m.equip; } })); S.s('hist', h); });
+  // Stored history is not recomputed by loading the app, rendering Home/Metrics/leaderboard, or a reload.
+  await page.evaluate(() => { renderHome(); renderMetricsPage(); computeBadges(); });
+  await page.reload(); await page.waitForFunction(() => document.querySelector('nav') && document.querySelector('nav').style.display === 'flex'); await dbReady(page);
+  await page.evaluate(() => { renderHome(); renderMetricsPage(); });
+  const tv = await page.evaluate(() => gH().map(w => w.totalVolume));
+  check('double volume: every stored totalVolume is still 777 after load + reload + Home/Metrics (no retroactive recompute)', tv.length === 53 && tv.every(v => v === 777), JSON.stringify(tv));
+
+  // volWeight: x2 for the 26 in a native workout; x1 for a two-hand dumbbell, a custom, or anything in an imported workout.
+  const vw = await page.evaluate(ids => {
+    const s = { weight: 50 / 2.20462, reps: 10, done: true }, nat = { id: 'w' + Date.now() }, imp = { id: 'w1700000000000_3' };
+    const x = id => ({ exId: id, name: id, tracking: 'weight_reps' });
+    return { nat: ids.filter(id => volWeight(x(id), s, nat) !== 2 * effWeight(x(id), s)), imp: ids.filter(id => volWeight(x(id), s, imp) !== effWeight(x(id), s)),
+      bench: volWeight(x('Dumbbell_Bench_Press'), s, nat) === effWeight(x('Dumbbell_Bench_Press'), s),
+      custom: volWeight({ exId: 'cex9', name: 'One-Arm Dumbbell Row', tracking: 'weight_reps' }, s, nat) === effWeight(x('cex9'), s),
+      eff: ids.every(id => effWeight(x(id), s) === s.weight) };
+  }, IDS);
+  check('double volume: all 26 count x2 in a native workout', vw.nat.length === 0, vw.nat.join());
+  check('double volume: Dumbbell_Bench_Press (two hands) and a custom named like one of the 26 count x1', vw.bench && vw.custom, JSON.stringify(vw));
+  check('double volume: none of the 26 is doubled inside an imported (Hevy) workout', vw.imp.length === 0, vw.imp.join());
+  check('double volume: effWeight still returns the logged weight for all 26', vw.eff, JSON.stringify(vw));
+
+  // PRs, e1rm, session max (progress walk), strength standards and badges: the real numbers, and identical with the
+  // doubling switched off (DOUBLE_VOL_IDS emptied = the build without this change).
+  const snap = () => page.evaluate(ids => {
+    const r2 = v => Math.round(v * 1000) / 1000, h = gH();
+    const best = {}; h.forEach(w => (w.exercises || []).forEach(e => { if (ids.includes(e.exId)) { const b = prBest(e); (best[e.exId] = best[e.exId] || []).push([r2(b.weight * 2.20462), b.reps, r2(e1rm(b.weight, b.reps) * 2.20462)]); } }));
+    const replay = [...prReplay().entries()].map(([k, v]) => [k, v.n, v.list.map(p => [p.exId, r2(p.weight * 2.20462), p.reps])]);
+    const badges = computeBadges().map(b => [b.name, b.tier || null, b.all && b.all.tier || null]);
+    return JSON.stringify({ best, replay, prog: ids.map(id => evaluateProgress(id)), credit: creditStrength(), ratio: muscleStrengthRatio(), tri: triStrength(),
+      badgeIds: ids.map(id => { const e = { exId: id, name: id }; return [badgeStdId(e, h[0]), Object.keys(BADGE_STD).filter(k => isStdEx(e, k, h[0]))]; }), badges });
+  }, IDS);
+  const on = await snap();
+  await page.evaluate(() => { window._dv = [...DOUBLE_VOL_IDS]; DOUBLE_VOL_IDS.clear(); });
+  const off = await snap();
+  await page.evaluate(() => { window._dv.forEach(id => DOUBLE_VOL_IDS.add(id)); });
+  check('double volume: PRs, e1rm, session max, strength standards and badges for the 26 are byte-identical with and without the doubling', on === off, on.length + ' vs ' + off.length);
+  const o = JSON.parse(on);
+  check('double volume: the PR for each of the 26 is the logged 55 x 8 / 50 x 10 best (e1rm 66.667 lb), not doubled',
+    IDS.every(id => JSON.stringify(o.best[id]) === '[[50,10,66.667],[55,8,69.667]]' || JSON.stringify(o.best[id]) === '[[55,8,69.667],[50,10,66.667]]'), JSON.stringify(o.best[IDS[0]]));
+  check('double volume: none of the 26 counts toward any badge (as before)', o.badgeIds.every(([, keys]) => keys.length === 0), JSON.stringify(o.badgeIds.filter(([, k]) => k.length)));
+  const tri = o.tri.best;
+  check('double volume: the 26 really are scored by the strength standards (so the identity above means something)', tri && IDS.includes(tri.key) && Object.values(o.ratio).some(v => v > 0), JSON.stringify({ tri, ratio: o.ratio }));
+  check('double volume: triceps strength ratio is the logged 55 x 8 (e1rm 69.667 lb / 180 lb body weight), not doubled', tri && Math.abs(tri.ratio - 69.667 / 180) < 0.01, JSON.stringify(tri));
+
+  // Finish a real native workout: one of the 26 at 50 x 10 plus a two-hand dumbbell bench at 50 x 10.
+  await page.evaluate(() => { startEmpty();
+    const st = () => [{ weight: 50 / 2.20462, reps: 10, done: true }];
+    aw.exercises.push({ exId: 'One-Arm_Dumbbell_Row', name: 'One-Arm Dumbbell Row', muscle: 'middle back', equip: 'dumbbell', tracking: 'weight_reps', sets: st() });
+    aw.exercises.push({ exId: 'Dumbbell_Bench_Press', name: 'Dumbbell Bench Press', muscle: 'chest', equip: 'dumbbell', tracking: 'weight_reps', sets: st() });
+    renderWS(); });
+  const mini = await page.evaluate(() => document.getElementById('wMini').textContent);
+  check('double volume: the live "lifted" figure counts the one-arm row double (1,500 lb)', /^1(\.5K|,?500) lb lifted/.test(mini), mini);
+  await page.evaluate(() => { cm('restModal'); finishW(true); }); await page.waitForTimeout(300);
+  const fin = await page.evaluate(() => { const w = gH().find(x => x.exercises.some(e => e.exId === 'One-Arm_Dumbbell_Row') && x.exercises.length === 2);
+    return { tv: w && w.totalVolume, want: Math.round(2 * 50 / 2.20462 * 10 + 50 / 2.20462 * 10), row: gPR()['One-Arm_Dumbbell_Row'] }; });
+  check('double volume: finished native workout stores 2 x 50 x 10 (row) + 1 x 50 x 10 (bench) = 1,500 lb', fin.tv === fin.want, JSON.stringify(fin));
+  check('double volume: ...and the row PR it commits is the logged 50 x 10, never 100', fin.row && Math.round(fin.row.weight * LB) === 50 && fin.row.reps === 10, JSON.stringify(fin.row));
+  const old = await page.evaluate(() => gH().filter(w => /^wn/.test(w.id)).every(w => w.totalVolume === 777));
+  check('double volume: finishing a new workout leaves every older stored totalVolume at 777', old);
+  check('double volume: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+
+  // Hevy import: "One Arm Dumbbell Row" lands on One-Arm_Dumbbell_Row and is counted x1, on import and after an edit.
+  const p2 = await phone({ now });
+  await dbReady(p2.page);
+  const csv = ['title,start_time,end_time,exercise_title,set_type,weight_lbs,reps',
+    '"Pull","7 Aug 2026, 13:00","7 Aug 2026, 14:00","One Arm Dumbbell Row",normal,50,10',
+    '"Pull","7 Aug 2026, 13:00","7 Aug 2026, 14:00","One Arm Dumbbell Row",normal,50,10'].join('\n');
+  const imp = await p2.page.evaluate(async csv => { await importWorkoutCsv(csv); const w = gH()[0];
+    const r = { id: w.id, exId: w.exercises[0].exId, tv: w.totalVolume, want: Math.round(2 * 10 * Math.round(50 / 2.20462 * 100) / 100) };
+    openWE(w.id); saveWE(); r.tvEdit = gH()[0].totalVolume; return r; }, csv);
+  check('double volume: Hevy import of a one-arm row resolves to the pinned id', /^w\d+_\d+$/.test(imp.id) && imp.exId === 'One-Arm_Dumbbell_Row', JSON.stringify(imp));
+  check('double volume: imported (Hevy) one-arm row is NOT doubled (2 x 50 x 10 = 1,000 lb)', imp.tv === imp.want, JSON.stringify(imp));
+  check('double volume: ...and still not doubled after Edit Workout recomputes it', imp.tvEdit === imp.want, JSON.stringify(imp));
+  check('double volume (import): no page errors', p2.errors.length === 0, p2.errors.join(' | '));
+  await p2.ctx.close();
+
+  // Edit Workout on a native workout is the app's own explicit recompute: it uses the new rule.
+  const p3 = await phone({ seed: { hist: [{ ...wk('2026-10-10', [ex('One-Arm Dumbbell Row', [[50, 10]], 'weight_reps', 'One-Arm_Dumbbell_Row')]), id: 'wedit', totalVolume: 227 }] }, now });
+  const ed = await p3.page.evaluate(() => { const before = gH()[0].totalVolume; openWE('wedit'); saveWE(); return { before, after: gH()[0].totalVolume, want: Math.round(2 * 50 / 2.20462 * 10) }; });
+  check('double volume: a stored native workout keeps its old total until he edits it; Edit Workout then counts it x2', ed.before === 227 && ed.after === ed.want, JSON.stringify(ed));
+  check('double volume (edit): no page errors', p3.errors.length === 0, p3.errors.join(' | '));
+  await p3.ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
