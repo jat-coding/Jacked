@@ -4353,12 +4353,71 @@ async function doubleVolume() {
   check('double volume (edit): no page errors', p3.errors.length === 0, p3.errors.join(' | '));
   await p3.ctx.close();
 }
+// Pass-4 finding 2 (Mr. Roni, 2026-10-14: "make badges match PRs"): a set typed but never ticked done earns no badge,
+// tier or 1000lb Club credit, exactly as it earns no PR. Each check has a ticked twin so a pass can't be vacuous.
+async function badgesDoneOnly() {
+  const un = e => { e.sets.forEach(s => { s.done = false; }); return e; };
+  const D = '2026-09-10', prof = { name: 'T', username: '@t', code: '@t', sex: 'male' };
+  const hist = [
+    wk(D, [ex('Barbell Bench Press', [[135, 1]]), un(ex('Barbell Bench Press', [[315, 1]])),
+      un(ex('Barbell Overhead Press', [[185, 1]])), un(ex('Barbell Squat', [[405, 1]])),
+      un(ex('Pull-up', [[0, 25]])), un(ex('Push-up', [[0, 90]])), un(ex('Run', [[1, 6]], 'distance')),
+      un(ex('Zercher Squat', [[100, 5]]))]),
+    // 1000lb Club: ticked 225 + 225 + 405 = 855; an unticked 600 deadlift set in the same exercise would make it 1050.
+    wk('2026-09-11', [ex('Barbell Bench Press', [[225, 1]]), ex('Barbell Squat', [[225, 1]]),
+      { ...ex('Barbell Deadlift', [[405, 1]]), sets: [...ex('Barbell Deadlift', [[405, 1]]).sets, ...un(ex('Barbell Deadlift', [[600, 1]])).sets] }]),
+  ];
+  const { page, ctx, errors } = await phone({ seed: { hist, bw: 80, prof }, now: SEP15 });
+  const r = await page.evaluate(LB => {
+    const h = gH(), w0 = h.find(w => dayKey(w.date) === '2026-09-10'), exs = w0.exercises;
+    const tick = e => ({ ...e, sets: e.sets.map(s => ({ ...s, done: true })) });
+    const lbOf = v => Math.round(v);
+    const b = computeBadges(), f = n => b.find(x => x.name === n);
+    const pseudo = e => [{ date: w0.date, exercises: [e] }];
+    return {
+      bench: lbOf(benchTierOf([w0]).value), benchTick: lbOf(benchTierOf(pseudo(tick(exs[1]))).value),
+      benchPR: prBest(exs[1]), benchPRTick: !!prBest(tick(exs[1])),
+      ohp: ohpTierOf(pseudo(exs[2])).value, ohpTick: lbOf(ohpTierOf(pseudo(tick(exs[2]))).value),
+      squat: badgeTierForKey('squat', pseudo(exs[3])).value, squatTick: lbOf(badgeTierForKey('squat', pseudo(tick(exs[3]))).value),
+      legTier: f('Leg-Maxing').tier, legWant: tierOfLive(225, badgeT().squatFrac), legWrong: tierOfLive(405, badgeT().squatFrac),
+      pull: repTierOf('pullup', pseudo(exs[4])).value, pullTick: repTierOf('pullup', pseudo(tick(exs[4]))).value,
+      push: repTierOf('pushup', pseudo(exs[5])).value, pushTick: repTierOf('pushup', pseudo(tick(exs[5]))).value,
+      pullEarned: f('Pull-up-Maxing').earned, pushEarned: f('Push-up-Maxing').earned,
+      cardio: cardioBreakdown(pseudo(exs[6])).value, cardioTick: cardioBreakdown(pseudo(tick(exs[6]))).value,
+      cardioKey: badgeTierForKey('cardio', pseudo(exs[6])).tier, cardioKeyTick: badgeTierForKey('cardio', pseudo(tick(exs[6]))).tier,
+      cardioEarned: f('Cardio-Maxing').earned, runPR: prBest(exs[6]),
+      club: f('1000lb Club').earned, clubDesc: f('1000lb Club').desc,
+      benchDesc: f('Bench-Maxing').desc, benchLifts: (f('Bench-Maxing').lifts || []).map(l => l.disp).join(','),
+      varietyDesc: f('Variety-Maxing') ? f('Variety-Maxing').desc : (b.find(x => /Variety/.test(x.name)) || {}).desc,
+      // Live workout card: the tier chip only appears once the set is ticked.
+      liveUn: badgeTierForKey('bench', [...h, { exercises: [exs[1]] }]).value, liveTick: lbOf(badgeTierForKey('bench', [...h, { exercises: [tick(exs[1])] }]).value),
+      synced: myBadgeList().map(x => x.n),
+    };
+  }, LB);
+  check('badges done-only: unticked 315 bench does not raise Bench-Maxing (best stays the ticked 135)', r.bench === 135, String(r.bench));
+  check('badges done-only: ...the same set ticked does count (315)', r.benchTick === 315, String(r.benchTick));
+  check('badges done-only: parity: that unticked set is no PR either, the ticked one is', r.benchPR === null && r.benchPRTick, JSON.stringify([r.benchPR, r.benchPRTick]));
+  check('badges done-only: Bench-Maxing card shows the best ticked bench (225), not the unticked 315', r.benchLifts === '225 lb', r.benchLifts);
+  check('badges done-only: unticked OHP earns no Shoulder-Maxing credit; ticked does', r.ohp === 0 && r.ohpTick === 185, JSON.stringify([r.ohp, r.ohpTick]));
+  check('badges done-only: unticked squat earns no Leg-Maxing credit; ticked does', r.squat === 0 && r.squatTick === 405, JSON.stringify([r.squat, r.squatTick]));
+  check('badges done-only: Leg-Maxing tier is the ticked 225 squat\'s, not the unticked 405\'s', r.legTier === r.legWant && r.legWant !== r.legWrong, JSON.stringify([r.legTier, r.legWant, r.legWrong]));
+  check('badges done-only: pull-ups / push-ups: unticked reps count 0; ticked count', r.pull === 0 && r.pullTick === 25 && r.push === 0 && r.pushTick === 90, JSON.stringify([r.pull, r.pullTick, r.push, r.pushTick]));
+  check('badges done-only: unticked run earns no Cardio-Maxing pace; ticked does', r.cardio === Infinity && r.cardioTick === 6 && r.runPR === null, JSON.stringify([r.cardio, r.cardioTick, r.runPR]));
+  check('badges done-only: live cardio tier (badgeTierForKey) the same', r.cardioKey === null && !!r.cardioKeyTick, JSON.stringify([r.cardioKey, r.cardioKeyTick]));
+  check('badges done-only: Pull-up / Push-up / Cardio-Maxing not earned from unticked sets', !r.pullEarned && !r.pushEarned && !r.cardioEarned, JSON.stringify([r.pullEarned, r.pushEarned, r.cardioEarned]));
+  check('badges done-only: 1000lb Club ignores an unticked 600 deadlift (855, not earned)', !r.club && /855 lb \/ 1000 lb/.test(r.clubDesc), r.clubDesc);
+  check('badges done-only: live workout tier chip ignores an unticked set, counts it once ticked', Math.round(r.liveUn) === 225 && r.liveTick === 315, JSON.stringify([r.liveUn, r.liveTick]));
+  check('badges done-only: Variety-Maxing counts only exercises with a ticked set (3, not 8)', /^3 \/ 100/.test(r.varietyDesc || ''), r.varietyDesc);
+  check('badges done-only: synced badge list has no badge from unticked sets', !r.synced.some(n => /Pull-up|Push-up|Cardio|1000lb/.test(n)), r.synced.join());
+  check('badges done-only: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, badgesDoneOnly, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

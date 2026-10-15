@@ -4640,12 +4640,14 @@ const LIFT_VARIANTS={
 };
 function liftVariant(ex,badge,w){ return LIFT_VARIANTS[badge].find(v=>isStdEx(ex,v.key,w))||null; }
 function creditLb(v,lb){ return lb*v.mult; }   // logged lb (already the total, for a dumbbell pair) -> the lb the badge compares
+// Every badge and tier counts ticked (done) sets only, the same rule as prBest and the volume totals (Mr. Roni,
+// 2026-10-14, pass-4 finding 2): a typed-but-never-ticked set is kept in history but earns nothing.
 // Best credited set per variant (sets with >= minReps reps), each placed on ladder T (null = no ladder, e.g. no body weight).
 function liftVariantsOf(badge,h,minReps,T,each){
   const V=LIFT_VARIANTS[badge], lifts=V.map(x=>({key:x.key,label:x.label,v:0,rawLb:0}));
   h.forEach(w=>(w.exercises||[]).forEach(ex=>{
     const i=V.findIndex(x=>isStdEx(ex,x.key,w)); if(i<0) return;
-    (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462, v=creditLb(V[i],lb);
+    (ex.sets||[]).forEach(s=>{ if(s.done&&(s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462, v=creditLb(V[i],lb);
       if(v>lifts[i].v){ lifts[i].v=v; lifts[i].rawLb=lb; }
       if(each) each(w,i,lb); } });
   }));
@@ -4679,7 +4681,7 @@ function cardioBreakdown(src){
     if(!stdRun(ex,w)) return;
     const id=badgeStdId(ex,w), i=CARDIO_LEGS.findIndex(x=>x.ids.includes(id)); if(i<0) return;
     const pre=+new Date(w.date)<STD_REPS_FROM;
-    (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<legs[i].v) legs[i].v=me; if(pre&&me<legs[i].vOld) legs[i].vOld=me; } });
+    (ex.sets||[]).forEach(s=>{ if(s.done&&s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<legs[i].v) legs[i].v=me; if(pre&&me<legs[i].vOld) legs[i].vOld=me; } });
   }));
   legs.forEach(l=>{ const r=cardioTierKept(l.v,l.vOld); l.tier=r.tier; l.kept=r.kept; l.disp=isFinite(l.v)?fmtClock(l.v)+'/mi':''; });
   const got=legs.filter(l=>isFinite(l.v));
@@ -4701,7 +4703,7 @@ function badgeT(){
 function repTierOf(key,h){
   let best=0, old=0;
   h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!repBadgeEx(ex,key,w)) return; const pre=+new Date(w.date)<STD_REPS_FROM;
-    (ex.sets||[]).forEach(s=>{ const r=s.reps||0; if(r>best) best=r; if(pre&&r>old) old=r; }); }));
+    (ex.sets||[]).forEach(s=>{ if(!s.done) return; const r=s.reps||0; if(r>best) best=r; if(pre&&r>old) old=r; }); }));
   const t=tierOfLive(best,badgeT()[key]), tOld=old>0?tierOfLive(old,badgeLegacyT(key)):null, kept=(TIER_RANK[tOld]||0)>(TIER_RANK[t]||0);
   return {tier:kept?tOld:t, value:best, kept};
 }
@@ -4731,7 +4733,7 @@ function badgeTierForKey(key,h){
     if(key==='ohp'){ const r=ohpTierOf(h); return {tier:r.tier, value:r.value, by:r.by&&r.by.label}; }
     let best=0;   // squat: 1 rep, like bench/ohp
     h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!isStdEx(ex,key,w))return;
-      (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=1){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); }));
+      (ex.sets||[]).forEach(s=>{ if(s.done&&(s.reps||0)>=1){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); }));
     const T=badgeT();
     const bwLb=gBW()*2.20462; if(!(bwLb>0)) return {tier:null,value:best};
     return {tier:tierOfLive(best,T.squatFrac), value:best};
@@ -4741,7 +4743,7 @@ function badgeTierForKey(key,h){
     // Cardio-Maxing resets every 3 months: current calendar quarter only (matches computeBadges).
     const qS=+new Date(new Date().getFullYear(), Math.floor(new Date().getMonth()/3)*3, 1);
     let best=Infinity, old=Infinity;
-    h.forEach(w=>{ if(!(+new Date(w.date)>=qS)) return; const pre=+new Date(w.date)<STD_REPS_FROM; (w.exercises||[]).forEach(ex=>{ if(!stdRun(ex,w))return; (ex.sets||[]).forEach(s=>{ if(s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<best)best=me; if(pre&&me<old)old=me; } }); }); });
+    h.forEach(w=>{ if(!(+new Date(w.date)>=qS)) return; const pre=+new Date(w.date)<STD_REPS_FROM; (w.exercises||[]).forEach(ex=>{ if(!stdRun(ex,w))return; (ex.sets||[]).forEach(s=>{ if(s.done&&s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<best)best=me; if(pre&&me<old)old=me; } }); }); });
     if(!isFinite(best)) return {tier:null,value:0};
     return {tier:cardioTierKept(best,old).tier, value:best};
   }
@@ -5989,7 +5991,7 @@ function computeBadges() {
   h.forEach(w=>{
     let bench=0,squat=0,dead=0,benchBy=null;
     (w.exercises||[]).forEach(ex=>{
-      const topKg=(ex.sets||[]).reduce((m,s)=>Math.max(m,s.weight||0),0), lb=topKg*2.20462, bv=liftVariant(ex,'bench',w);
+      const topKg=(ex.sets||[]).reduce((m,s)=>s.done?Math.max(m,s.weight||0):m,0), lb=topKg*2.20462, bv=liftVariant(ex,'bench',w);
       if(bv){ const c=creditLb(bv,lb); if(c>bench){ bench=c; benchBy=bv; } }
       else if(isStdEx(ex,'squat',w))  squat=Math.max(squat,lb);
       else if(isStdEx(ex,'deadlift',w)) dead=Math.max(dead,lb);
@@ -5998,7 +6000,7 @@ function computeBadges() {
   });
 
   // 4) Tiered lift badges. Best weight (lb) at >= minReps among matching lifts.
-  const bestLb=(key,minReps,src=h3)=>{ let best=0; src.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!isStdEx(ex,key,w))return; (ex.sets||[]).forEach(s=>{ if((s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); })); return best; };
+  const bestLb=(key,minReps,src=h3)=>{ let best=0; src.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!isStdEx(ex,key,w))return; (ex.sets||[]).forEach(s=>{ if(s.done&&(s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462; if(lb>best)best=lb; } }); })); return best; };
   const tierOf=(v,t)=> v>=t[2]?'gold':v>=t[1]?'silver':v>=t[0]?'bronze':null;
   const bwKg=gBW(), bwLb=bwKg*2.20462, haveBW=bwKg>0;
 
@@ -6030,11 +6032,11 @@ function computeBadges() {
   const cardioBest=cardioR.value, cardioAll=cardioAllR.value;
   const cardioT=cardioR.tier;
 
-  // Variety: distinct exercises actually logged. Imported history can lack exId,
+  // Variety: distinct exercises with a ticked set (done-only, like every badge). Imported history can lack exId,
   // so fall back to the flattened name to avoid double-counting the same lift.
   const varSeen=new Set();
   h.forEach(w=>(w.exercises||[]).forEach(ex=>{
-    if(!(ex.sets||[]).some(s=>s.done||s.weight>0||s.reps>0)) return;
+    if(!(ex.sets||[]).some(s=>s.done)) return;
     const k=ex.exId||flat(ex.name); if(k) varSeen.add(k);
   }));
   const variety=varSeen.size;
