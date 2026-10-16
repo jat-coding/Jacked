@@ -750,6 +750,16 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   </div>
 </div>
 
+<!-- 3-dot action sheet for popups (workout detail, exercise info, profile photo): same .mo sheet as rMenuModal,
+     z-index above the popup it opens from (200/250) and below the confirm (700) that Delete then shows. -->
+<div class="mo" id="actMenu" style="z-index:300">
+  <div class="md" style="padding-bottom:calc(24px + env(safe-area-inset-bottom))">
+    <div class="drag-handle"></div>
+    <div class="mh" style="margin-bottom:10px"><div class="mt" id="actMenuName" style="font-size:20px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div><button class="cb" onclick="cm('actMenu')" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div id="actMenuRows"></div>
+  </div>
+</div>
+
 <!-- Create Custom Exercise (EXPANDED) -->
 <!-- z-index above the Add-Exercise picker (200): "Create new exercise" is launched
      from INSIDE aeModal, which sits later in the DOM, so at equal z-index this form
@@ -882,14 +892,13 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="md">
     <div class="drag-handle"></div>
     <div class="mh">
-      <div><div class="mt" id="wdName"></div><div style="font-size:12px;color:var(--muted);margin-top:2px" id="wdDate"></div></div>
-      <button class="cb" onclick="cm('wdModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div style="min-width:0"><div class="mt" id="wdName"></div><div style="font-size:12px;color:var(--muted);margin-top:2px" id="wdDate"></div></div>
+      <div style="display:flex;align-items:center;gap:2px;flex-shrink:0"><button class="rc-more" id="wdMore" style="margin:0" aria-label="Workout options" aria-haspopup="dialog"></button><button class="cb" onclick="cm('wdModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     </div>
     <div id="wdContent"></div>
     <div class="sep"></div>
     <button class="btn ba wf sm" id="wdEdit" style="margin-bottom:8px">Edit Workout</button>
-    <button class="btn bg wf sm" id="wdSaveR" style="margin-bottom:8px">Save as Routine</button>
-    <button class="btn bd wf sm" id="wdDel">Delete Workout</button>
+    <button class="btn bg wf sm" id="wdSaveR">Save as Routine</button>
   </div>
 </div>
 
@@ -956,8 +965,8 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
       <div id="profAvPrev"></div>
       <div style="flex:1;min-width:0">
-        <button class="btn bg xs" onclick="document.getElementById('avFile').click()">Change Photo</button>
-        <button class="btn bd xs" id="avRmBtn" style="display:none;margin-left:6px" onclick="removeAvatar()">Remove</button>
+        <button class="btn bg xs" id="avAddBtn" onclick="document.getElementById('avFile').click()">Change Photo</button>
+        <button class="btn bg xs" id="avEditBtn" style="display:none" onclick="openAvMenu()" aria-haspopup="dialog">Edit Photo</button>
         <div style="font-size:11px;color:var(--muted);margin-top:6px">Friends can see this.</div>
       </div>
       <input type="file" id="avFile" accept="image/*" style="display:none" onchange="uploadAvatar(this)">
@@ -1245,7 +1254,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo" id="exInfoModal">
   <div class="md">
     <div class="drag-handle"></div>
-    <div class="mh"><div class="mt" id="exInfoName"></div><button class="cb" onclick="cm('exInfoModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="mh"><div class="mt" id="exInfoName" style="min-width:0"></div><div style="display:flex;align-items:center;gap:2px;flex-shrink:0"><button class="rc-more" id="exInfoMore" style="margin:0" aria-label="Exercise options" aria-haspopup="dialog"></button><button class="cb" onclick="cm('exInfoModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
     <div id="exInfoContent"></div>
   </div>
 </div>
@@ -2440,8 +2449,7 @@ function openExInfo(exId){
       <button class="btn bg sm" style="flex:1" onclick="toggleFav('${exId}')">${isFav(exId)?'★ Favorited':'☆ Favorite'}</button>
       <button class="btn bg sm" style="flex:1" onclick="openEditEx('${exId}')">Edit</button>
     </div>
-    ${storedPRText(exId)?`<button class="btn bg sm wf" style="margin-bottom:8px" id="resetPRBtn" onclick="resetPR('${exId}')">Reset PR (${storedPRText(exId)})</button>`:''}
-    <button class="btn bd sm wf" style="margin-bottom:4px" onclick="deleteEx('${exId}')">${isCustomEx(exId,ex)?'Delete Exercise':'Hide from Library'}</button>`;
+    ${storedPRText(exId)?`<button class="btn bg sm wf" style="margin-bottom:8px" id="resetPRBtn" onclick="resetPR('${exId}')">Reset PR (${storedPRText(exId)})</button>`:''}`;
   // Show the demonstration photo(s) at the top. DB exercises ship start/end
   // frames; a custom exercise shows its own local photo (if any) instead;
   // anything else (custom with no photo yet, warm-ups) falls back to the icon tile.
@@ -2453,6 +2461,9 @@ function openExInfo(exId){
     ? `<div style="display:flex;gap:8px;margin-bottom:14px">${imgs.slice(0,2).map(u=>`<img src="${u}" style="flex:1;min-width:0;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;background:var(--bg4)" loading="lazy" onerror="this.style.display='none'">`).join('')}</div>`
     : `<div style="margin-bottom:14px;display:flex;align-items:center;justify-content:center;height:120px;border-radius:12px;background:var(--bg3)">${exIcon(ex.muscle,120)}</div>`;
   document.getElementById('exInfoContent').innerHTML=photo+meta+actions+chart+how;
+  // Delete/Hide sits behind the header 3-dot (Mr. Roni, 2026-10-16); deleteEx keeps its confirm.
+  const del=isCustomEx(exId,ex)?'Delete Exercise':'Hide from Library';
+  setMoreBtn('exInfoMore',()=>openActMenu(ex.name,[{id:'edit',label:'Edit',icon:'pencil',fn:()=>openEditEx(exId)},{id:'del',label:del,icon:'trash',del:true,fn:()=>deleteEx(exId)}]));
   om('exInfoModal');
 }
 
@@ -2974,6 +2985,22 @@ function openRMenu(id) {
   document.getElementById('rMenuEditIc').innerHTML=uic('pencil');
   document.getElementById('rMenuDelIc').innerHTML=uic('trash');
   om('rMenuModal');
+}
+// Same sheet pattern for popups (Mr. Roni, 2026-10-16, round 2): rows [{id,label,icon,del,fn}]; picking one closes the
+// sheet first, then runs fn. Each row gets id actMenu-<id> so it can be found the same way every time.
+let _actRows=[];
+function openActMenu(title,rows){
+  _actRows=rows;
+  document.getElementById('actMenuName').textContent=title;
+  document.getElementById('actMenuRows').innerHTML=rows.map((r,i)=>`<button class="rmenu-row${r.del?' del':''}" id="actMenu-${r.id}" onclick="actMenuPick(${i})"><span style="width:18px;display:inline-flex;flex-shrink:0">${r.icon?uic(r.icon):''}</span>${esc(r.label)}</button>`).join('');
+  om('actMenu');
+}
+function actMenuPick(i){
+  const r=_actRows[i]; cm('actMenu'); if(r) r.fn();
+}
+function setMoreBtn(id,open){
+  const b=document.getElementById(id); if(!b) return;
+  b.innerHTML=uic('dots','currentColor',20); b.onclick=open;
 }
 function rMenuPick(act) {
   const id=_rMenuId; cm('rMenuModal'); if(!id) return;
@@ -5934,7 +5961,7 @@ function openWD(id) {
     </div>`;
   });
   document.getElementById('wdContent').innerHTML=h;
-  document.getElementById('wdDel').onclick=()=>{
+  const delW=()=>{
     showConfirm('Delete this workout?').then(ok=>{ if(!ok) return;
       // Same rebuild as removing the run/hold in Edit Workout (saveWE): deleting the workout that held a pace or hold
       // record left that record, and its badge, on a workout that no longer exists (adversarial pass 4).
@@ -5951,6 +5978,8 @@ function openWD(id) {
   };
   document.getElementById('wdSaveR').onclick=()=>saveWorkoutAsRoutine(id);
   document.getElementById('wdEdit').onclick=()=>openWE(id);
+  // Delete Workout sits behind the header 3-dot (Mr. Roni, 2026-10-16); its confirm above is unchanged.
+  setMoreBtn('wdMore',()=>openActMenu(w.name||'Workout',[{id:'edit',label:'Edit Workout',icon:'pencil',fn:()=>openWE(id)},{id:'saver',label:'Save as Routine',fn:()=>saveWorkoutAsRoutine(id)},{id:'del',label:'Delete Workout',icon:'trash',del:true,fn:delW}]));
   om('wdModal');
 }
 
@@ -7523,7 +7552,6 @@ function lbRow(p,opts={}){
       <div style="font-size:11px;color:var(--muted)">${esc(p.username)} · ${p.workouts||0} workouts · ${p.badges||0} ${uic('medal',undefined,12)}</div>
     </div>
     ${opts.star?`<button class="btn bg ic xs" title="Close buddy" style="font-size:16px;color:${isCB?'#ffd700':'var(--muted)'}" onclick="event.stopPropagation();toggleCB('${p.code}')">★</button>`:''}
-    ${opts.canRemove?`<button class="btn bd xs" onclick="event.stopPropagation();rmFr('${p.code}')">✕</button>`:''}
   </div>`;
 }
 
@@ -7600,7 +7628,7 @@ function openFriend(code){
   }
   // Remove-friend lives at the bottom of their popup (not on yourself).
   if(!p.isYou) h+=`<div class="sep" style="margin-top:18px"></div>
-    <button class="btn bd wf" onclick="cm('fpModal');rmFr('${p.code}')">Remove Friend</button>`;
+    <button class="btn bd wf" id="fpRemove" onclick="confirmRmFr('${p.code}')">Remove Friend</button>`;
   document.getElementById('fpContent').innerHTML=h;
   om('fpModal');
 }
@@ -7774,11 +7802,11 @@ function renderLB() {
       ${board}
     </div>`;
 
-  if(buddies.length){ document.getElementById('lbBuddiesWrap').style.display='block'; document.getElementById('lbBuddies').innerHTML=buddies.map(f=>lbRow(f,{star:true,canRemove:true})).join(''); }
+  if(buddies.length){ document.getElementById('lbBuddiesWrap').style.display='block'; document.getElementById('lbBuddies').innerHTML=buddies.map(f=>lbRow(f,{star:true})).join(''); }
   else document.getElementById('lbBuddiesWrap').style.display='none';
   document.getElementById('lbFriendsT').style.display=(buddies.length&&others.length)?'block':'none';
   document.getElementById('lbFriendsWrap').style.display=(!others.length&&buddies.length)?'none':'block';
-  document.getElementById('lbFriends').innerHTML=others.length?others.map(f=>lbRow(f,{star:true,canRemove:true})).join('')
+  document.getElementById('lbFriends').innerHTML=others.length?others.map(f=>lbRow(f,{star:true})).join('')
     :(accepted.length?`<div style="color:var(--muted);font-size:13px;padding:6px 0">All friends are close buddies ${uic('star','#ffd700')}</div>`:'<div style="color:var(--muted);font-size:13px;padding:6px 0">No friends yet. Tap + Friend to add by username.</div>');
 
   // Incoming requests: count on the + Friend button and a dot on the Friends tab.
@@ -7803,6 +7831,10 @@ function renderLB() {
   else pw.style.display='none';
 }
 
+// The profile's Remove Friend is the only way to unfriend (the friends-list X is gone, 2026-10-16), so it asks first.
+function confirmRmFr(code){
+  showConfirm('Remove this friend?',{okText:'Remove'}).then(ok=>{ if(!ok) return; cm('fpModal'); rmFr(code); });
+}
 async function rmFr(id) {
   if (supaEnabled()) {
     const my=(gProf()||{}).code; if(!my) return;
@@ -8668,7 +8700,12 @@ function renderAvPrev(){
   const p=gProf()||{};
   const el=document.getElementById('profAvPrev'); if(!el) return;
   el.innerHTML=avHTML({name:p.name||'You',avatarUrl:p.avatarUrl||'',code:p.code},64);
-  const rm=document.getElementById('avRmBtn'); if(rm) rm.style.display=p.avatarUrl?'':'none';
+  // With a photo, one "Edit Photo" button (Edit / Delete behind it); without one, the plain picker button.
+  const ed=document.getElementById('avEditBtn'), add=document.getElementById('avAddBtn');
+  if(ed) ed.style.display=p.avatarUrl?'':'none'; if(add) add.style.display=p.avatarUrl?'none':'';
+}
+function openAvMenu(){
+  openActMenu('Profile photo',[{id:'edit',label:'Edit',icon:'pencil',fn:()=>document.getElementById('avFile').click()},{id:'del',label:'Delete',icon:'trash',del:true,fn:removeAvatar}]);
 }
 
 async function uploadAvatar(input){

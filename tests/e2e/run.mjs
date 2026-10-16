@@ -4083,7 +4083,7 @@ async function adv4DeleteRun() {
   const P1 = { ...wk('2026-09-11', [{ exId: 'Plank', name: 'Plank', muscle: 'abdominals', tracking: 'duration', sets: [{ weight: 90, reps: 0, done: true }] }]), id: 'wp1', prCount: 1, prSets: [{ exId: 'Plank', ei: 0, si: 0, weight: 90, reps: 0 }] };
   const seed = { hist: [W0, P0, W1, P1], cardioPR: { bi_run_outdoor: { dist: 1, time: 7, date: W1.date, maxDist: 1, maxDate: W0.date } }, holdPR: { Plank: { sec: 90, date: P1.date } } };
   const { page, ctx, errors } = await phone({ seed, now: SEP15 });
-  const del = async id => { await page.evaluate(id => { openWD(id); document.getElementById('wdDel').click(); }, id); await page.waitForTimeout(100); await page.evaluate(() => _cfDone(true)); await page.waitForTimeout(200); };
+  const del = async id => { await page.evaluate(id => { openWD(id); document.getElementById('wdMore').click(); document.getElementById('actMenu-del').click(); }, id); await page.waitForTimeout(100); await page.evaluate(() => _cfDone(true)); await page.waitForTimeout(200); };
   await del('wr1'); await del('wp1');
   const r = await page.evaluate(() => ({ c: gCardioPR().bi_run_outdoor, h: gHoldPR().Plank, ids: gH().map(w => w.id).join(','), del: S.g('deleted') }));
   check('adv4 delete workout: the run record falls back to the run that is left (7:30)', r.c && r.c.time === 7.5, JSON.stringify(r.c));
@@ -4742,12 +4742,144 @@ async function routineMenu() {
   check('routine menu: no console errors during the menu flows', consoleErrs.length === 0, consoleErrs.join(' | '));
   await ctx.close();
 }
+// Destructive actions round 2 (2026-10-16, tasks/2026-10-16-destructive-actions-round2.md): friends rows lose their X
+// (removal only from the profile, now behind a confirm); Delete Workout, Delete/Hide Exercise and the profile photo's
+// Delete sit behind the same 3-dot .mo sheet as the Routines menu, each existing confirm kept.
+async function destructiveRound2() {
+  const cex = [{ id: 'cexD2', name: 'My Cable Fly', muscle: 'chest', equip: 'cable', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }];
+  const W = { ...wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]])]), id: 'wd2a', name: 'Push A' };
+  const W2 = { ...wk('2026-09-12', [ex('Barbell Bench Press', [[195, 3]])]), id: 'wd2b', name: 'Push B' };
+  const { page, ctx, errors } = await phone({ seed: { cex, hist: [W, W2], routines: [], prof: { name: 'Tester', username: '@tester', code: '@tester', avatarUrl: 'x?v=1' } }, now: SEP15 });
+  const consoleErrs = []; page.on('console', m => { if (m.type() === 'error') consoleErrs.push(m.text() + ' @ ' + (m.location().url || '')); });
+  const isOpen = id => page.evaluate(id => document.getElementById(id).classList.contains('open'), id);
+  const top = () => page.evaluate(() => (topPopup() || {}).id || '');
+  const rows = () => page.evaluate(() => [...document.querySelectorAll('#actMenu .rmenu-row')].map(b => ({ t: b.textContent.trim(), h: b.getBoundingClientRect().height, del: b.classList.contains('del') })));
+  const cfMsg = () => page.locator('#cfMsg').textContent();
+
+  // #1/#2 Friends: no X on any row, the row still opens the profile, Remove Friend asks first.
+  await adv3FakeFriends(page);
+  await page.evaluate(() => refreshFriends()); await page.waitForTimeout(100);
+  await page.evaluate(() => sp('leaderboard')); await page.waitForTimeout(150);
+  const fr = await page.evaluate(() => [...document.querySelectorAll('#lbFriends .fc, #lbBuddies .fc')].map(r => ({ x: [...r.querySelectorAll('button')].filter(b => b.textContent.trim() === '✕' || /rmFr/.test(b.getAttribute('onclick') || '')).length, open: r.getAttribute('onclick') })));
+  check('round2 friends: the friend row renders', fr.length === 1, JSON.stringify(fr));
+  check('round2 friends: no remove X (or any rmFr button) on the row', fr.every(r => r.x === 0), JSON.stringify(fr));
+  check('round2 friends: the row still opens that friend\'s profile', fr[0] && fr[0].open === "openFriend('@pal')", JSON.stringify(fr));
+  await page.screenshot({ path: `${SHOTS}/round2-friends-row.png` });
+  await page.locator('#lbFriends .fc').first().tap(); await page.waitForTimeout(200);
+  check('round2 friends: tapping the row opens the profile popup', await isOpen('fpModal'));
+  await page.locator('#fpRemove').tap(); await page.waitForTimeout(200);
+  check('round2 friends: Remove Friend shows "Remove this friend?" first', await isOpen('confirmModal') && await cfMsg() === 'Remove this friend?');
+  await page.locator('#cfCancel').tap(); await page.waitForTimeout(200);
+  const codes = () => page.evaluate(() => friendSrc().map(f => f.code).join(','));
+  check('round2 friends: Cancel keeps the friend (no server delete) and the profile stays open', (await codes()) === '@pal' && await page.evaluate(() => __fk.rows.length) === 1 && await isOpen('fpModal'));
+  await page.locator('#fpRemove').tap(); await page.waitForTimeout(200);
+  await page.locator('#cfOk').tap(); await page.waitForTimeout(400);
+  check('round2 friends: OK removes the friend and closes the profile', (await codes()) === '' && await page.evaluate(() => __fk.rows.length) === 0 && !(await isOpen('fpModal')));
+  check('round2 friends: no popup left open after removing', await page.evaluate(() => !document.querySelector(POPUP_SEL)));
+
+  // #3 Workout detail: no Delete button in the popup body; Edit/Save as Routine stay; 3-dot lists all three.
+  await page.evaluate(() => { sp('home'); openWD('wd2a'); }); await page.waitForTimeout(200);
+  const wdBtns = await page.evaluate(() => [...document.querySelectorAll('#wdModal button')].filter(b => b.offsetParent).map(b => b.textContent.trim()));
+  check('round2 workout: no visible Delete Workout button in the popup', !wdBtns.some(t => /Delete/.test(t)), JSON.stringify(wdBtns));
+  check('round2 workout: Edit Workout and Save as Routine still shown', wdBtns.includes('Edit Workout') && wdBtns.includes('Save as Routine'), JSON.stringify(wdBtns));
+  const wg = await page.evaluate(() => { const b = document.getElementById('wdMore').getBoundingClientRect(); return { w: b.width, h: b.height, r: b.right, vw: innerWidth, ow: document.documentElement.scrollWidth - innerWidth }; });
+  check('round2 workout: 3-dot is at least 44x44 and on screen at 390px', wg.w >= 44 && wg.h >= 44 && wg.r <= wg.vw && wg.ow <= 0, JSON.stringify(wg));
+  await page.screenshot({ path: `${SHOTS}/round2-workout-popup.png` });
+  await page.locator('#wdMore').tap(); await page.waitForTimeout(200);
+  const wr = await rows();
+  check('round2 workout: menu opens on top of the workout popup', await top() === 'actMenu' && await isOpen('wdModal'));
+  check('round2 workout: rows Edit Workout / Save as Routine / Delete Workout (only Delete red), each >=44px', wr.map(r => r.t).join('|') === 'Edit Workout|Save as Routine|Delete Workout' && wr.map(r => r.del).join() === 'false,false,true' && wr.every(r => r.h >= 44), JSON.stringify(wr));
+  await page.screenshot({ path: `${SHOTS}/round2-workout-menu.png` });
+  await page.touchscreen.tap(195, 40); await page.waitForTimeout(200);
+  check('round2 workout: tap outside closes only the menu', !(await isOpen('actMenu')) && await isOpen('wdModal'));
+  await page.locator('#wdMore').tap(); await page.waitForTimeout(150);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+  check('round2 workout: Escape closes only the menu', !(await isOpen('actMenu')) && await isOpen('wdModal'));
+  await page.locator('#wdMore').tap(); await page.waitForTimeout(150);
+  await page.evaluate(() => history.back()); await page.waitForTimeout(250);
+  check('round2 workout: back closes only the menu', !(await isOpen('actMenu')) && await isOpen('wdModal'));
+  await page.locator('#wdMore').tap(); await page.waitForTimeout(150);
+  await page.locator('#actMenu-edit').tap(); await page.waitForTimeout(250);
+  check('round2 workout: Edit Workout row opens Edit Workout for it', !(await isOpen('actMenu')) && await isOpen('weModal') && await page.evaluate(() => weId) === 'wd2a');
+  await page.evaluate(() => { cm('weModal'); if (!document.getElementById('wdModal').classList.contains('open')) openWD('wd2a'); }); await page.waitForTimeout(150);
+  await page.locator('#wdMore').tap(); await page.waitForTimeout(150);
+  await page.locator('#actMenu-del').tap(); await page.waitForTimeout(250);
+  check('round2 workout: Delete row shows the existing "Delete this workout?" confirm', !(await isOpen('actMenu')) && await isOpen('confirmModal') && await cfMsg() === 'Delete this workout?');
+  await page.locator('#cfCancel').tap(); await page.waitForTimeout(200);
+  check('round2 workout: Cancel deletes nothing and keeps the popup', await page.evaluate(() => gH().length) === 2 && await isOpen('wdModal'));
+  await page.locator('#wdMore').tap(); await page.waitForTimeout(150);
+  await page.locator('#actMenu-del').tap(); await page.waitForTimeout(250);
+  await page.locator('#cfOk').tap(); await page.waitForTimeout(300);
+  check('round2 workout: OK deletes exactly that workout (tombstoned), nothing left open', JSON.stringify(await page.evaluate(() => gH().map(w => w.id))) === '["wd2b"]' && await page.evaluate(() => S.g('deleted').includes('wd2a')) && await page.evaluate(() => !document.querySelector(POPUP_SEL)));
+  await page.evaluate(() => openWD('wd2b')); await page.waitForTimeout(150);
+  await page.locator('#wdMore').tap(); await page.waitForTimeout(150);
+  await page.locator('#actMenu-saver').tap(); await page.waitForTimeout(250);
+  check('round2 workout: Save as Routine row runs the same save', !(await isOpen('actMenu')) && (await isOpen('confirmModal') || await page.evaluate(() => gR().length) === 1));
+  await page.evaluate(() => { while (closeTopPopup()); }); await page.waitForTimeout(150);
+
+  // #4 Exercise info: Delete / Hide behind the 3-dot, confirm kept.
+  await page.evaluate(() => { sp('exercises'); openExInfo('cexD2'); }); await page.waitForTimeout(200);
+  const exBtns = await page.evaluate(() => [...document.querySelectorAll('#exInfoModal button')].map(b => b.textContent.trim()));
+  check('round2 exercise: no Delete Exercise / Hide from Library button in the popup', !exBtns.some(t => /Delete Exercise|Hide from Library/.test(t)), JSON.stringify(exBtns));
+  check('round2 exercise: Favorite and Edit still shown', exBtns.some(t => /Favorite/.test(t)) && exBtns.includes('Edit'), JSON.stringify(exBtns));
+  const eg = await page.evaluate(() => { const b = document.getElementById('exInfoMore').getBoundingClientRect(); return { w: b.width, h: b.height, r: b.right, vw: innerWidth }; });
+  check('round2 exercise: 3-dot is at least 44x44 and on screen', eg.w >= 44 && eg.h >= 44 && eg.r <= eg.vw, JSON.stringify(eg));
+  await page.locator('#exInfoMore').tap(); await page.waitForTimeout(200);
+  const er = await rows();
+  check('round2 exercise: custom exercise menu is Edit / Delete Exercise', er.map(r => r.t).join('|') === 'Edit|Delete Exercise' && er[1].del && er.every(r => r.h >= 44), JSON.stringify(er));
+  await page.screenshot({ path: `${SHOTS}/round2-exercise-menu.png` });
+  await page.locator('#actMenu-edit').tap(); await page.waitForTimeout(250);
+  check('round2 exercise: Edit row opens the edit form for it', !(await isOpen('actMenu')) && await isOpen('ceModal'));
+  await page.evaluate(() => { cm('ceModal'); openExInfo('cexD2'); }); await page.waitForTimeout(150);
+  await page.locator('#exInfoMore').tap(); await page.waitForTimeout(150);
+  await page.locator('#actMenu-del').tap(); await page.waitForTimeout(250);
+  check('round2 exercise: Delete row shows the existing delete confirm', await isOpen('confirmModal') && /^Delete this custom exercise\?/.test(await cfMsg()));
+  await page.locator('#cfCancel').tap(); await page.waitForTimeout(200);
+  check('round2 exercise: Cancel keeps it', await page.evaluate(() => gCEx().length) === 1);
+  await page.locator('#exInfoMore').tap(); await page.waitForTimeout(150);
+  await page.locator('#actMenu-del').tap(); await page.waitForTimeout(250);
+  await page.locator('#cfOk').tap(); await page.waitForTimeout(250);
+  check('round2 exercise: OK deletes it and closes the popup', await page.evaluate(() => gCEx().length) === 0 && await page.evaluate(() => !document.querySelector(POPUP_SEL)));
+  await page.evaluate(() => openExInfo('Barbell_Squat')); await page.waitForTimeout(150);
+  await page.locator('#exInfoMore').tap(); await page.waitForTimeout(150);
+  check('round2 exercise: built-in exercise menu is Edit / Hide from Library', (await rows()).map(r => r.t).join('|') === 'Edit|Hide from Library');
+  await page.locator('#actMenu-del').tap(); await page.waitForTimeout(250);
+  check('round2 exercise: Hide shows the existing hide confirm', /^Hide this exercise/.test(await cfMsg()));
+  await page.locator('#cfOk').tap(); await page.waitForTimeout(250);
+  check('round2 exercise: OK hides the built-in exercise', await page.evaluate(() => gHidden().includes('Barbell_Squat')));
+
+  // #9 Profile photo: "Edit Photo" (no bare Remove) -> Edit (picker) / Delete (no extra confirm).
+  await page.evaluate(() => { sp('home'); openProf(); }); await page.waitForTimeout(200);
+  const pv = () => page.evaluate(() => [...document.querySelectorAll('#profModal button')].filter(b => b.offsetParent).map(b => b.textContent.trim()));
+  const pb = await pv();
+  check('round2 photo: with a photo there is an Edit Photo button and no Remove / Change Photo', pb.includes('Edit Photo') && !pb.includes('Remove') && !pb.includes('Change Photo'), JSON.stringify(pb));
+  await page.screenshot({ path: `${SHOTS}/round2-photo-button.png` });
+  await page.locator('#avEditBtn').tap(); await page.waitForTimeout(200);
+  const ar = await rows();
+  check('round2 photo: Edit Photo opens Edit / Delete on top of the profile', await top() === 'actMenu' && ar.map(r => r.t).join('|') === 'Edit|Delete' && ar[1].del && ar.every(r => r.h >= 44), JSON.stringify(ar));
+  await page.screenshot({ path: `${SHOTS}/round2-photo-menu.png` });
+  const chooser = page.waitForEvent('filechooser', { timeout: 2000 }).then(() => true, () => false);
+  await page.locator('#actMenu-edit').tap();
+  check('round2 photo: Edit opens the existing photo picker (#avFile)', await chooser && !(await isOpen('actMenu')) && await isOpen('profModal'));
+  await page.locator('#avEditBtn').tap(); await page.waitForTimeout(150);
+  await page.locator('#actMenu-del').tap(); await page.waitForTimeout(300);
+  check('round2 photo: Delete removes the photo with no extra confirm', await page.evaluate(() => gProf().avatarUrl) === '' && !(await isOpen('confirmModal')) && !(await isOpen('actMenu')) && await isOpen('profModal'));
+  const pa = await pv();
+  check('round2 photo: with no photo, Change Photo is back and Edit Photo is hidden', pa.includes('Change Photo') && !pa.includes('Edit Photo'), JSON.stringify(pa));
+  await page.evaluate(() => cm('profModal'));
+
+  check('round2: no page errors', errors.length === 0, errors.join(' | '));
+  // The harness aborts every supabase request, so the seeded avatar's image load fails by design (same as before this change).
+  const realErrs = consoleErrs.filter(e => !/ERR_FAILED @ https:\/\/[^/]*supabase\.co\//.test(e));
+  check('round2: no console errors during the flows (harness-blocked supabase loads excluded)', realErrs.length === 0, realErrs.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
