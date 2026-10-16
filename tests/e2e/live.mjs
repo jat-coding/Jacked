@@ -497,7 +497,40 @@ export async function liveFinishStorageFull() {
   check('live storage full: no console errors', A.errors.length === 0, A.errors.join(' | '));
   await A.ctx.close();
 }
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale, liveEndedElsewhere, liveStartOverOpen, liveFinishStorageFull];
+// Single / Both (2026-10-16): a per-set s.single tapped on one device reaches the other through the ordinary set
+// stamping (liveSig covers every set field), and a toggle racing an edit to another set loses neither.
+export async function liveSingleBoth() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  await ev(A, () => { startRW('r1');
+    aw.exercises.push({ exId: 'Hammer_Curls', name: 'Hammer Curls', muscle: 'biceps', equip: 'dumbbell', tracking: 'weight_reps',
+      sets: [{ weight: 20, reps: 10, done: true }, { weight: 20, reps: 10, done: true }] });
+    renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  const wire = live(db.row.doc.exercises.find(e => e.exId === 'Hammer_Curls').sets).map(s => s.single);
+  check('live single/both: default Both goes on the wire as single:false on each set', JSON.stringify(wire) === '[false,false]', JSON.stringify(wire));
+  check('live single/both: other device picks up the session', (await ev(B, () => liveResumeRemote())) === 'resumed');
+  await B.page.locator('#eb1 .sr').nth(0).locator('.sbp button', { hasText: 'Single' }).tap();
+  await ev(B, () => { clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => liveSync());
+  const a = await ev(A, () => ({ f: aw.exercises[1].sets.map(s => s.single), on: [...document.querySelectorAll('#eb1 .sr')].map(r => r.querySelector('.sbp .on').textContent) }));
+  check('live single/both: a Single tapped on one device reaches the other (state and button)', JSON.stringify(a.f) === '[true,false]' && a.on.join() === 'Single,Both', JSON.stringify(a));
+  // Race: A flips set 2 to Single while B changes set 1's reps, both on the same rev.
+  await ev(A, () => { setSingleArm(1, 1, true); clearTimeout(_livePushT); });
+  await ev(B, () => { uSet(1, 0, 'reps', '12'); clearTimeout(_livePushT); });
+  const miss0 = db.casMiss; db.barrier(2);
+  await Promise.all([ev(A, () => liveSync()), ev(B, () => liveSync())]);
+  await ev(A, () => liveSync()); await ev(B, () => liveSync());
+  const both = await Promise.all([A, B].map(d => ev(d, () => aw.exercises[1].sets.map(s => [s.single, s.reps]))));
+  check('live single/both: a toggle racing another set\'s edit -- both survive on both devices', db.casMiss - miss0 >= 1 && both.every(x => JSON.stringify(x) === '[[true,12],[true,10]]'), JSON.stringify({ miss: db.casMiss - miss0, both }));
+  // Finish on A: the history total counts the two Single sets x2.
+  const sid = await ev(A, () => aw.id);
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(1500);
+  const h = await ev(A, sid => { const w = gH().find(x => x.id === sid); const e = w.exercises.find(x => x.exId === 'Hammer_Curls'); return { tv: w.totalVolume, f: e.sets.map(s => s.single) }; }, sid);
+  check('live single/both: finished entry keeps the synced choices and counts them (2x20x12 + 2x20x10 = 880)', h.tv === 880 && JSON.stringify(h.f) === '[true,true]', JSON.stringify(h));
+  check('live single/both: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale, liveEndedElsewhere, liveStartOverOpen, liveFinishStorageFull, liveSingleBoth];
 
 // The app is killed (swiped away) right after tapping Finish: the Finish claim reached the
 // server and flipped the row to 'finished', but the local commit never ran. On reopening, the

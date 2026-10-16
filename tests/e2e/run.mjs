@@ -4248,7 +4248,8 @@ async function doubleVolume() {
   // (what PRs, e1rm, session max, strength and badges read) is untouched.
   const src = fs.readFileSync(new globalThis.URL('../../jacked-pwa/index.html', import.meta.url), 'utf8').split('\n');
   const setRefs = src.filter(l => /DOUBLE_VOL_IDS\b/.test(l)), useLines = src.filter(l => /volWeight\(/.test(l) && !/^function volWeight/.test(l));
-  check('double volume: DOUBLE_VOL_IDS is read only by volWeight', setRefs.length === 2 && setRefs.some(l => /^function volWeight/.test(l)), setRefs.join(' | '));
+  // Since Single / Both (2026-10-16) the 26 are only the fallback for a set saved without its own s.single, read in setSingle.
+  check('double volume: DOUBLE_VOL_IDS is read only by setSingle (the pre-Single/Both fallback)', setRefs.length === 2 && setRefs.some(l => /^function setSingle/.test(l)), setRefs.join(' | '));
   check('double volume: volWeight is used at exactly the 5 workout-volume sums, nowhere else', useLines.length === 5 && useLines.every(l => /const (vol|volAll)=/.test(l)), useLines.join(' | '));
   const eff = src.slice(src.findIndex(l => l.startsWith('function effWeight(')), src.findIndex(l => l.startsWith('function setBWMode(')));
   check('double volume: effWeight() itself unchanged (no doubling inside it)', eff.length === 10 && !/DOUBLE|volWeight|\* ?2/.test(eff.join('\n')), eff.join('\n'));
@@ -4355,6 +4356,171 @@ async function doubleVolume() {
 }
 // Pass-4 finding 2 (Mr. Roni, 2026-10-14: "make badges match PRs"): a set typed but never ticked done earns no badge,
 // tier or 1000lb Club credit, exactly as it earns no PR. Each check has a ticked twin so a pass can't be vacuous.
+async function singleBoth() {
+  // Mr. Roni 2026-10-16 (tasks/2026-10-16-single-both-weight-button.md): a Single / Both pair on every set of the 105
+  // dumbbell lifts in jacked-single-both-list.pdf. Single doubles that set's weight toward workout volume only; Both is
+  // as entered. Single pre-selected for the 32 with no real two-dumbbell version, Both for the other 73. Replaces the
+  // automatic 10-14 doubling, which stays only as the fallback for sets saved before this (no s.single).
+  const ALWAYS = [
+    'Alternate_Hammer_Curl', 'Alternate_Incline_Dumbbell_Curl', 'Alternating_Deltoid_Raise', 'Concentration_Curls',
+    'Dumbbell_Alternate_Bicep_Curl', 'Dumbbell_Lying_One-Arm_Rear_Lateral_Raise', 'Dumbbell_Lying_Pronation',
+    'Dumbbell_Lying_Supination', 'Dumbbell_One-Arm_Shoulder_Press', 'Dumbbell_One-Arm_Triceps_Extension',
+    'Dumbbell_One-Arm_Upright_Row', 'Dumbbell_Side_Bend', 'External_Rotation', 'Lying_One-Arm_Lateral_Raise',
+    'One_Arm_Dumbbell_Bench_Press', 'One_Arm_Dumbbell_Preacher_Curl', 'One_Arm_Pronated_Dumbbell_Triceps_Extension',
+    'One_Arm_Supinated_Dumbbell_Triceps_Extension', 'One-Arm_Dumbbell_Row', 'One-Arm_Flat_Bench_Dumbbell_Flye',
+    'One-Arm_Incline_Lateral_Raise', 'One-Arm_Side_Laterals', 'Seated_Bent-Over_One-Arm_Dumbbell_Triceps_Extension',
+    'Seated_One-Arm_Dumbbell_Palms-Down_Wrist_Curl', 'Seated_One-Arm_Dumbbell_Palms-Up_Wrist_Curl',
+    'See-Saw_Press_Alternating_Side_Press', 'Standing_Alternating_Dumbbell_Press',
+    'Standing_Bent-Over_One-Arm_Dumbbell_Triceps_Extension', 'Standing_Concentration_Curl',
+    'Standing_One-Arm_Dumbbell_Curl_Over_Incline_Bench', 'Standing_One-Arm_Dumbbell_Triceps_Extension',
+    'Standing_Palm-In_One-Arm_Dumbbell_Press'];
+  const TOGGLE = [
+    'Arnold_Dumbbell_Press', 'Around_The_Worlds', 'Bent_Over_Dumbbell_Rear_Delt_Raise_With_Head_On_Bench',
+    'Bent_Over_Two-Dumbbell_Row', 'Bent_Over_Two-Dumbbell_Row_With_Palms_In', 'Bent-Arm_Dumbbell_Pullover',
+    'Close-Grip_Dumbbell_Press', 'Cross_Body_Hammer_Curl', 'Cuban_Press', 'Decline_Dumbbell_Bench_Press',
+    'Decline_Dumbbell_Flyes', 'Decline_Dumbbell_Triceps_Extension', 'Dumbbell_Bench_Press',
+    'Dumbbell_Bench_Press_with_Neutral_Grip', 'Dumbbell_Bicep_Curl', 'Dumbbell_Floor_Press', 'Dumbbell_Flyes',
+    'Dumbbell_Incline_Row', 'Dumbbell_Incline_Shoulder_Raise', 'Dumbbell_Lying_Rear_Lateral_Raise',
+    'Dumbbell_Prone_Incline_Curl', 'Dumbbell_Raise', 'Dumbbell_Scaption', 'Dumbbell_Shoulder_Press', 'Dumbbell_Shrug',
+    'Dumbbell_Tricep_Extension_-Pronated_Grip', 'Flexor_Incline_Dumbbell_Curls', 'Front_Dumbbell_Raise',
+    'Front_Incline_Dumbbell_Raise', 'Front_Two-Dumbbell_Raise', 'Hammer_Curls', 'Hammer_Grip_Incline_DB_Bench_Press',
+    'Incline_Dumbbell_Bench_With_Palms_Facing_In', 'Incline_Dumbbell_Curl', 'Incline_Dumbbell_Flyes',
+    'Incline_Dumbbell_Flyes_-_With_A_Twist', 'Incline_Dumbbell_Press', 'Incline_Hammer_Curls',
+    'Incline_Inner_Biceps_Curl', 'Lying_Dumbbell_Tricep_Extension', 'Lying_Rear_Delt_Raise',
+    'Lying_Supine_Dumbbell_Curl', 'Middle_Back_Shrug', 'Palms-Down_Dumbbell_Wrist_Curl_Over_A_Bench',
+    'Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench', 'Power_Partials', 'Preacher_Hammer_Dumbbell_Curl', 'Reverse_Flyes',
+    'Reverse_Flyes_With_External_Rotation', 'Seated_Bent-Over_Rear_Delt_Raise',
+    'Seated_Bent-Over_Two-Arm_Dumbbell_Triceps_Extension', 'Seated_Dumbbell_Curl', 'Seated_Dumbbell_Inner_Biceps_Curl',
+    'Seated_Dumbbell_Palms-Down_Wrist_Curl', 'Seated_Dumbbell_Palms-Up_Wrist_Curl', 'Seated_Dumbbell_Press',
+    'Seated_Side_Lateral_Raise', 'Seated_Triceps_Press', 'Side_Lateral_Raise', 'Side_Laterals_to_Front_Raise',
+    'Standing_Bent-Over_Two-Arm_Dumbbell_Triceps_Extension', 'Standing_Dumbbell_Press', 'Standing_Dumbbell_Reverse_Curl',
+    'Standing_Dumbbell_Straight-Arm_Front_Delt_Raise_Above_Head', 'Standing_Dumbbell_Triceps_Extension',
+    'Standing_Dumbbell_Upright_Row', 'Standing_Inner-Biceps_Curl', 'Standing_Palms-In_Dumbbell_Press',
+    'Straight-Arm_Dumbbell_Pullover', 'Tricep_Dumbbell_Kickback', 'Two-Arm_Dumbbell_Preacher_Curl', 'Zottman_Curl',
+    'Zottman_Preacher_Curl'];
+  const ALL = [...ALWAYS, ...TOGGLE];
+  const src = fs.readFileSync(new globalThis.URL('../../jacked-pwa/index.html', import.meta.url), 'utf8').split('\n');
+  const uses = re => src.filter(l => re.test(l));
+  check('single/both: setSingle is read only by volWeight', uses(/setSingle\(/).filter(l => !/^function setSingle/.test(l)).every(l => /^function volWeight/.test(l)) && uses(/setSingle\(/).length === 2, uses(/setSingle\(/).join(' | '));
+  check('single/both: stampSingle runs only in renderWS and buildFinishRec', uses(/stampSingle\(/).filter(l => !/^function stampSingle/.test(l)).length === 2, uses(/stampSingle\(/).join(' | '));
+  const eff = src.slice(src.findIndex(l => l.startsWith('function effWeight(')), src.findIndex(l => l.startsWith('function setBWMode(')));
+  check('single/both: effWeight() has no Single / Both logic in it', !/single|SINGLE|volWeight|\* ?2/.test(eff.join('\n')), eff.join('\n'));
+
+  const now = new Date('2026-10-16T12:00:00-06:00');
+  // Old native history (no s.single on any set): a one-arm row (in the 10-14 list), a concentration curl (new to the
+  // always-single group) and hammer curls (toggle group). Stored totals 777 must never be rewritten.
+  const hist = [
+    { ...wk('2026-10-01', [ex('One-Arm Dumbbell Row', [[50, 10]], 'weight_reps', 'One-Arm_Dumbbell_Row')]), id: 'wsb1', totalVolume: 777 },
+    { ...wk('2026-10-02', [ex('Concentration Curls', [[30, 10]], 'weight_reps', 'Concentration_Curls')]), id: 'wsb2', totalVolume: 777 },
+    { ...wk('2026-10-03', [ex('Hammer Curls', [[30, 10]], 'weight_reps', 'Hammer_Curls')]), id: 'wsb3', totalVolume: 777 },
+  ];
+  const { page, ctx, errors } = await phone({ seed: { hist, bw: 180 / LB, prof: { name: 'T', username: '@t', code: '@t', sex: 'male', birthday: '1990-01-01' } }, now });
+  check('single/both: the real free-exercise-db loaded', await dbReady(page));
+  const ids = await page.evaluate(({ ALWAYS, ALL }) => {
+    const db = new Map(allDB.filter(x => !x._c).map(x => [x.id, x]));
+    return { n: allDB.length, def: SINGLE_DEFAULT_IDS.size, all: SINGLE_BOTH_IDS.size,
+      defExact: ALWAYS.every(id => SINGLE_DEFAULT_IDS.has(id)) && [...SINGLE_DEFAULT_IDS].every(id => ALWAYS.includes(id)),
+      allExact: ALL.every(id => SINGLE_BOTH_IDS.has(id)) && [...SINGLE_BOTH_IDS].every(id => ALL.includes(id)),
+      missing: ALL.filter(id => !db.has(id)), notDb: ALL.filter(id => db.has(id) && !/dumbbell/i.test(db.get(id).equip || db.get(id).equipment || '')),
+      notWR: ALL.filter(id => db.has(id) && (db.get(id).tracking || 'weight_reps') !== 'weight_reps'),
+      old26: [...DOUBLE_VOL_IDS].every(id => SINGLE_DEFAULT_IDS.has(id)) && DOUBLE_VOL_IDS.size === 26 };
+  }, { ALWAYS, ALL });
+  check('single/both: exactly the 105 ids from the PDF (32 always-single + 73 toggle), no more, no less', ids.def === 32 && ids.all === 105 && ids.defExact && ids.allExact, JSON.stringify(ids));
+  check('single/both: all 105 exist in the app\'s loaded free-exercise-db library as dumbbell, weight x reps lifts', !ids.missing.length && !ids.notDb.length && !ids.notWR.length, JSON.stringify(ids));
+  check('single/both: the 10-14 list (26) is inside the always-single 32', ids.old26);
+
+  // Every one of the 105 added to a workout the real way gets a tappable pair on its set row; default per group.
+  await page.evaluate(ALL => { startEmpty(); ALL.forEach(id => addExToWorkout(id)); addExToWorkout('Barbell_Bench_Press_-_Medium_Grip'); addExToWorkout('Tate_Press'); }, ALL);
+  const ui = await page.evaluate(ALL => {
+    const out = { bad: [], wrongDefault: [], others: [] };
+    aw.exercises.forEach((e, i) => {
+      const card = document.getElementById('eb' + i), rows = [...card.querySelectorAll('.sr')];
+      const pairs = rows.map(r => [...r.querySelectorAll('.sbp button')].map(b => b.textContent.trim() + (b.classList.contains('on') ? '*' : '')).join('/'));
+      if (!ALL.includes(e.exId)) { if (card.querySelector('.sbp')) out.others.push(e.exId); return; }
+      if (!rows.length || pairs.some(p => !/^Single\*?\/Both\*?$/.test(p))) out.bad.push(e.exId + ':' + pairs.join(','));
+      const want = SINGLE_DEFAULT_IDS.has(e.exId) ? 'Single*/Both' : 'Single/Both*';
+      if (pairs.some(p => p !== want) || e.sets.some(s => s.single !== SINGLE_DEFAULT_IDS.has(e.exId))) out.wrongDefault.push(e.exId + ':' + pairs.join(','));
+    });
+    out.n = aw.exercises.length; return out;
+  }, ALL);
+  check('single/both: all 105 show a Single / Both pair on every set row (both groups, none button-less)', ui.n === 107 && !ui.bad.length, JSON.stringify(ui.bad.slice(0, 5)));
+  check('single/both: new sets default to Single for the 32 and Both for the 73 (button and stored s.single agree)', !ui.wrongDefault.length, JSON.stringify(ui.wrongDefault.slice(0, 5)));
+  check('single/both: a barbell lift and a dumbbell lift outside the list (Tate_Press) get no pair', !ui.others.length, ui.others.join());
+  await page.evaluate(() => { clearAW(); aw = null; _liveShadow = null; });
+
+  // A real workout: hammer curls (toggle) 2 sets 20 x 10, concentration curls (always-single) 15 x 10, one-arm row
+  // 50 x 10 left on its default, barbell bench 100 x 5.
+  await page.evaluate(() => { startEmpty(); ['Hammer_Curls', 'Concentration_Curls', 'One-Arm_Dumbbell_Row', 'Barbell_Bench_Press_-_Medium_Grip'].forEach(id => addExToWorkout(id)); addSet(0); });
+  const typeSet = async (ei, si, w, r) => {
+    const card = page.locator('#eb' + ei), row = card.locator('.sr').nth(si);
+    await row.locator('input.si').nth(0).fill(String(w)); await row.locator('input.si').nth(1).fill(String(r));
+    await row.locator('button.sd').tap();
+  };
+  await typeSet(0, 0, 20, 10); await typeSet(0, 1, 20, 10); await typeSet(1, 0, 15, 10); await typeSet(2, 0, 50, 10); await typeSet(3, 0, 100, 5);
+  await page.evaluate(() => cm('restModal'));
+  const before = await page.evaluate(() => document.getElementById('wMini').textContent);
+  // Tap: hammer curls set 1 -> Single; concentration curls -> Both.
+  await page.locator('#eb0 .sr').nth(0).locator('.sbp button', { hasText: 'Single' }).tap();
+  await page.locator('#eb1 .sr').nth(0).locator('.sbp button', { hasText: 'Both' }).tap();
+  const st = await page.evaluate(() => ({ flags: aw.exercises.map(e => e.sets.map(s => s.single)), saved: S.g('activeWorkout').aw.exercises.map(e => e.sets.map(s => s.single)),
+    on: [...document.querySelectorAll('#wSession .sr')].map(r => [...r.querySelectorAll('.sbp .on')].map(b => b.textContent).join('')), mini: document.getElementById('wMini').textContent }));
+  check('single/both: tapping flips only that set (hammer set 1 Single, set 2 still Both; concentration Both; row Single)',
+    JSON.stringify(st.flags) === JSON.stringify([[true, false], [false], [true], [null]]) && st.on.join() === 'Single,Both,Both,Single,', JSON.stringify(st));
+  check('single/both: the choice is saved with the open workout (saveAW)', JSON.stringify(st.saved) === JSON.stringify(st.flags), JSON.stringify(st.saved));
+  // lifted: before taps = 20*10 + 20*10 + 2*15*10 + 2*50*10 + 100*5 = 2,200; after = 2*200 + 200 + 150 + 1000 + 500 = 2,250.
+  check('single/both: the live "lifted" figure follows the taps (2,200 lb -> 2,250 lb)', /^2(\.2K|,?200) lb lifted/.test(before) && /^2(\.3K|\.25K|,?250) lb lifted/.test(st.mini), before + ' -> ' + st.mini);
+  await page.reload(); await page.waitForFunction(() => document.querySelector('nav') && document.querySelector('nav').style.display === 'flex'); await dbReady(page);
+  const kept = await page.evaluate(() => { const a = S.g('activeWorkout'); return a && a.aw.exercises.map(e => e.sets.map(s => s.single)); });
+  check('single/both: the choices survive a reload', JSON.stringify(kept) === JSON.stringify(st.flags), JSON.stringify(kept));
+  await page.evaluate(() => _cfDone(true)); await page.waitForTimeout(200);   // "Resume your unfinished workout?" -> yes
+  check('single/both: the reopened workout draws the saved choices', JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('#wSession .sr')].map(r => [...r.querySelectorAll('.sbp .on')].map(b => b.textContent).join('')))) === '["Single","Both","Both","Single",""]');
+  await page.screenshot({ path: `${SHOTS}/single-both-row.png` });
+  const fit = await page.evaluate(() => { const r = document.querySelector('#wSession .sr.sb'); return r ? { ow: r.scrollWidth - r.clientWidth, right: Math.max(...[...r.children].map(c => c.getBoundingClientRect().right)), vw: innerWidth } : null; });
+  check('single/both: the set row with the pair fits a 390px screen (no overflow)', !fit || (fit.ow <= 0 && fit.right <= fit.vw), JSON.stringify(fit));
+
+  await page.evaluate(() => { cm('restModal'); finishW(true); }); await page.waitForTimeout(300);
+  const fin = await page.evaluate(() => { const w = gH().find(x => x.exercises.some(e => e.exId === 'Hammer_Curls') && x.exercises.length === 4);
+    const k = 1 / 2.20462;
+    return { tv: w && w.totalVolume, want: Math.round(2 * 20 * k * 10 + 20 * k * 10 + 15 * k * 10 + 2 * 50 * k * 10 + 100 * k * 5),
+      flags: w && w.exercises.map(e => e.sets.map(s => s.single)), pr: ['Hammer_Curls', 'Concentration_Curls', 'One-Arm_Dumbbell_Row'].map(id => gPR()[id] && Math.round(gPR()[id].weight * 2.20462)) }; });
+  check('single/both: finished workout stores 2x20x10 + 20x10 + 15x10 (Both) + 2x50x10 + 100x5 = 2,250 lb', fin.tv === fin.want, JSON.stringify(fin));
+  check('single/both: the finished history entry keeps each set\'s choice', JSON.stringify(fin.flags) === '[[true,false],[false],[true],[null]]', JSON.stringify(fin.flags));
+  check('single/both: PRs are the logged weights (20 / 15 / 50 lb), never doubled', JSON.stringify(fin.pr) === '[20,15,50]', JSON.stringify(fin.pr));
+  const olds = await page.evaluate(() => gH().filter(w => /^wsb/.test(w.id)).map(w => w.totalVolume));
+  check('single/both: older stored totals untouched (777 x 3)', olds.length === 3 && olds.every(v => v === 777), JSON.stringify(olds));
+
+  // volWeight rules: own flag wins; no flag = the 10-14 list; imported never; customs never; PR math reads effWeight.
+  const vw = await page.evaluate(() => {
+    const k = 50 / 2.20462, nat = { id: 'w' + Date.now() }, imp = { id: 'w1700000000000_3' };
+    const x = id => ({ exId: id, name: id, tracking: 'weight_reps' }), s = o => ({ weight: k, reps: 10, done: true, ...o });
+    const r = (id, o, w = nat) => Math.round(volWeight(x(id), s(o), w) / k * 100) / 100;
+    return { rowOld: r('One-Arm_Dumbbell_Row', {}), concOld: r('Concentration_Curls', {}), hamOld: r('Hammer_Curls', {}),
+      rowBoth: r('One-Arm_Dumbbell_Row', { single: false }), hamSingle: r('Hammer_Curls', { single: true }),
+      impSingle: r('Hammer_Curls', { single: true }, imp), custom: r('cex9', { single: true }), bench: r('Barbell_Bench_Press_-_Medium_Grip', { single: true }),
+      eff: Math.round(effWeight(x('Hammer_Curls'), s({ single: true })) / k * 100) / 100 };
+  });
+  check('single/both: a set saved before this build (no flag) keeps the 10-14 rule: one-arm row x2, concentration / hammer curls x1',
+    vw.rowOld === 2 && vw.concOld === 1 && vw.hamOld === 1, JSON.stringify(vw));
+  check('single/both: its own flag wins (row on Both x1, hammer on Single x2)', vw.rowBoth === 1 && vw.hamSingle === 2, JSON.stringify(vw));
+  check('single/both: Single never doubles in an imported (Hevy) workout, a custom, or a lift outside the list', vw.impSingle === 1 && vw.custom === 1 && vw.bench === 1, JSON.stringify(vw));
+  check('single/both: effWeight (PRs, e1rm, badges, standards) ignores the flag', vw.eff === 1, JSON.stringify(vw));
+
+  // A set that arrives with no flag (the watch adds one, or an old open workout) gets its default on the next draw.
+  await page.evaluate(() => { startEmpty(); addExToWorkout('Concentration_Curls'); aw.exercises[0].sets.push({ weight: 0, reps: 0, done: false }); renderWS(); });
+  check('single/both: a set added without a flag is stamped with the default when drawn', await page.evaluate(() => aw.exercises[0].sets.every(s => s.single === true)));
+  // Adversarial: the screen still shows an old layout (another device removed the first exercise; the redraw is held back
+  // mid-typing) and he taps Both on what is drawn as exercise 1. It must land on that exercise, not the one now at index 1.
+  // (hammer curls seed 2 sets from the workout finished above)
+  const stale = await page.evaluate(() => { addExToWorkout('Hammer_Curls'); addExToWorkout('One-Arm_Dumbbell_Row');   // drawn: 0 conc, 1 hammer, 2 row
+    aw.exercises.splice(0, 1);                                                                                      // now: 0 hammer, 1 row (not redrawn)
+    setSingleArm(2, 0, false); setSingleArm(1, 0, false); setSingleArm(9, 0, true);                               // drawn row -> Both, again on the redraw, then a bogus index
+    return aw.exercises.map(e => e.exId + ':' + e.sets.map(s => s.single).join()); });
+  check('single/both: a tap on a stale layout lands on the drawn exercise; a repeat tap or an out-of-range index is harmless', stale.join('|') === 'Hammer_Curls:false,false|One-Arm_Dumbbell_Row:false', stale.join('|'));
+  const gone = await page.evaluate(() => { _wsDrawn = [{ lid: 'gone', sids: ['x'] }]; setSingleArm(0, 0, true); return aw.exercises.map(e => e.sets.map(s => s.single).join()).join('|'); });
+  check('single/both: a tap on an exercise that no longer exists changes nothing', gone === 'false,false|false', gone);
+  check('single/both: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 async function badgesDoneOnly() {
   const un = e => { e.sets.forEach(s => { s.done = false; }); return e; };
   const D = '2026-09-10', prof = { name: 'T', username: '@t', code: '@t', sex: 'male' };
@@ -4512,7 +4678,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, badgesDoneOnly, gymYears, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

@@ -295,6 +295,9 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .cable-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
 .cab-opt{font-family:var(--fb);font-size:11px;font-weight:600;padding:4px 10px;border-radius:14px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;-webkit-appearance:none}
 .cab-opt.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.shr.sb,.sr.sb{grid-template-columns:28px 1fr 1fr 46px 1fr 36px}
+.sbp{display:flex;flex-direction:column;gap:3px}
+.sbp .cab-opt{padding:2px 0;font-size:10px;border-radius:7px;width:100%}
 
 /* progressive-overload badge: small chip under the exercise card's action
    buttons, right-aligned, so it never adds a row before the set/rep table */
@@ -3888,6 +3891,7 @@ function updWT() {
 }
 
 function renderWS() {
+  stampSingle(aw);   // a set's Single / Both choice is explicit from the moment it is drawn
   const prs=gPR();
   const doneAll=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   const volAll=aw.exercises.reduce((a,e)=>a+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(volWeight(e,s,aw)*s.reps),0):0),0);
@@ -3913,6 +3917,7 @@ function renderWS() {
     const col3=isDur?DUR_UNIT_LABEL[exUnit]:tracking==='distance'?'Miles':tracking==='reps_only'?'—'
       :bwCap?(mode==='added'?'+ '+uL():mode==='assist'?'− '+uL():'Body'):uL();
     const col4=isDur?'—':tracking==='distance'?'Min':'Reps';
+    const sb=SINGLE_BOTH_IDS.has(ex.exId)&&tracking==='weight_reps';   // Single / Both pair next to the weight box
     // pr is the PRE-workout record (PRs are only committed on finish), so it's a
     // stable baseline for the "beats PR" star throughout the session.
     const prMax=prE1rm(pr);
@@ -3986,7 +3991,7 @@ function renderWS() {
         <button class="cab-opt ${exUnit==='hr'?'on':''}" onclick="setDurUnit(${ei},'hr')">Hr</button>
       </div>`:''}
       <input class="ex-note" placeholder="${(exNote(ex.exId)||'Add note (remembered next time)…').replace(/"/g,'&quot;')}" value="" onchange="if(this.value.trim()) setExNote('${ex.exId}',this.value)">
-      <div class="shr"><span>Set</span><span>Prev</span><span>${col3}</span><span>${col4}</span><span>✓</span></div>
+      <div class="shr${sb?' sb':''}"><span>Set</span><span>Prev</span><span>${col3}</span>${sb?'<span>Arm</span>':''}<span>${col4}</span><span>✓</span></div>
       ${ex.sets.map((set,si)=>{
         const seedW=set.pw||0, seedR=set.pr||0;
         const dispR=r=>tracking==='distance'?minToClock(r):r;
@@ -4008,10 +4013,12 @@ function renderWS() {
         const inp4=tracking==='duration'?`<div class="ps">—</div>`
           :tracking==='distance'?`<input class="si${sc}" type="number" inputmode="decimal" min="0" step="0.01" value="${rVal}" placeholder="${rPlace}" oninput="uSet(${ei},${si},'reps',this.value,'clock')">`
           :`<input class="si${sc}" type="number" inputmode="numeric" min="0" value="${rVal}" placeholder="${rPlace}" oninput="uSet(${ei},${si},'reps',this.value)">`;
-        return `<div class="sr">
+        const one=sb&&set.single===true;
+        const sbp=sb?`<div class="sbp"><button class="cab-opt ${one?'on':''}" aria-pressed="${one}" onclick="setSingleArm(${ei},${si},true)">Single</button><button class="cab-opt ${one?'':'on'}" aria-pressed="${!one}" onclick="setSingleArm(${ei},${si},false)">Both</button></div>`:'';
+        return `<div class="sr${sb?' sb':''}">
           <div class="sn">${si+1}${isPR?'<span style="color:#ffd700"> ★</span>':''}</div>
           <div class="ps">${prevStr}</div>
-          ${inp3}${inp4}
+          ${inp3}${sbp}${inp4}
           <button class="sd ${set.done?'done':''}" onclick="togSet(${ei},${si})">
             ${set.done?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4dff91" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`}
           </button>
@@ -4174,6 +4181,15 @@ function addSet(ei) {
   renderWS();
 }
 
+// Single / Both on one set: Single doubles that set's weight in workout volume only (see SINGLE_BOTH_IDS).
+function setSingleArm(ei,si,v) {
+  if(!aw) return;
+  [ei,si]=wsAt(ei,si); if(ei<0||si<0) return;
+  const s=aw.exercises[ei]&&aw.exercises[ei].sets[si]; if(!s||s.single===v) return;
+  s.single=v; haptic('light');
+  renderWS();
+}
+
 function setCable(ei,v) { [ei]=wsAt(ei); if(aw&&aw.exercises[ei]){ aw.exercises[ei].cable=v; saveAW(); renderWS(); } }
 // Pure bodyweight movement (pull-up, push-up, leg raise, dip…) — uses your body
 // weight as the load, with NO weight input. "Weighted ..." variants and assisted
@@ -4315,11 +4331,55 @@ const BADGE_STD={
   cardio:['bi_run_outdoor','Running_Treadmill','Jogging_Treadmill'],  // running, outdoor, treadmill or jogging-treadmill (same lift, two treadmill ids) -- Mr. Roni, 2026-10-02
 };
 const _stdByName=new Map();
-// Alternating / single-arm dumbbell lifts: one dumbbell is worked per rep, so the logged weight counts double toward
-// workout volume (totalVolume, the leaderboard's Weight) and NOWHERE else -- PRs, e1rm, badges and strength standards
-// read effWeight as before (Mr. Roni, 2026-10-14). Exact library ids, checked against free-exercise-db; a custom never
-// matches. Native sets only: a Hevy-imported workout (IMPORTED_ID) is never doubled, not even when it is edited.
-// Going forward only: stored totals are never recomputed for this.
+// Single / Both (Mr. Roni, 2026-10-16, replaces the automatic 10-14 doubling): every set of these 105 dumbbell lifts
+// gets a Single / Both pair next to its weight box. Single = one dumbbell worked per rep, so that set's logged weight
+// counts double toward workout volume (totalVolume, the leaderboard's Weight) and NOWHERE else -- PRs, e1rm, badges and
+// strength standards read effWeight as before. Both = as entered. The choice is stored per set as s.single (boolean).
+// Exact library ids, checked against free-exercise-db; a custom never matches. Native sets only: a Hevy-imported
+// workout (IMPORTED_ID) is never doubled, not even when it is edited. Going forward only: stored totals are never
+// recomputed for this.
+// No real two-dumbbell version: Single pre-selected on a new set.
+const SINGLE_DEFAULT_IDS=new Set([
+  'Alternate_Hammer_Curl','Alternate_Incline_Dumbbell_Curl','Alternating_Deltoid_Raise','Concentration_Curls',
+  'Dumbbell_Alternate_Bicep_Curl','Dumbbell_Lying_One-Arm_Rear_Lateral_Raise','Dumbbell_Lying_Pronation',
+  'Dumbbell_Lying_Supination','Dumbbell_One-Arm_Shoulder_Press','Dumbbell_One-Arm_Triceps_Extension',
+  'Dumbbell_One-Arm_Upright_Row','Dumbbell_Side_Bend','External_Rotation','Lying_One-Arm_Lateral_Raise',
+  'One_Arm_Dumbbell_Bench_Press','One_Arm_Dumbbell_Preacher_Curl','One_Arm_Pronated_Dumbbell_Triceps_Extension',
+  'One_Arm_Supinated_Dumbbell_Triceps_Extension','One-Arm_Dumbbell_Row','One-Arm_Flat_Bench_Dumbbell_Flye',
+  'One-Arm_Incline_Lateral_Raise','One-Arm_Side_Laterals','Seated_Bent-Over_One-Arm_Dumbbell_Triceps_Extension',
+  'Seated_One-Arm_Dumbbell_Palms-Down_Wrist_Curl','Seated_One-Arm_Dumbbell_Palms-Up_Wrist_Curl',
+  'See-Saw_Press_Alternating_Side_Press','Standing_Alternating_Dumbbell_Press',
+  'Standing_Bent-Over_One-Arm_Dumbbell_Triceps_Extension','Standing_Concentration_Curl',
+  'Standing_One-Arm_Dumbbell_Curl_Over_Incline_Bench','Standing_One-Arm_Dumbbell_Triceps_Extension',
+  'Standing_Palm-In_One-Arm_Dumbbell_Press',
+]);
+// Both pre-selected on a new set; Single is one tap away.
+const SINGLE_BOTH_IDS=new Set([...SINGLE_DEFAULT_IDS,
+  'Arnold_Dumbbell_Press','Around_The_Worlds','Bent_Over_Dumbbell_Rear_Delt_Raise_With_Head_On_Bench',
+  'Bent_Over_Two-Dumbbell_Row','Bent_Over_Two-Dumbbell_Row_With_Palms_In','Bent-Arm_Dumbbell_Pullover',
+  'Close-Grip_Dumbbell_Press','Cross_Body_Hammer_Curl','Cuban_Press','Decline_Dumbbell_Bench_Press',
+  'Decline_Dumbbell_Flyes','Decline_Dumbbell_Triceps_Extension','Dumbbell_Bench_Press',
+  'Dumbbell_Bench_Press_with_Neutral_Grip','Dumbbell_Bicep_Curl','Dumbbell_Floor_Press','Dumbbell_Flyes',
+  'Dumbbell_Incline_Row','Dumbbell_Incline_Shoulder_Raise','Dumbbell_Lying_Rear_Lateral_Raise',
+  'Dumbbell_Prone_Incline_Curl','Dumbbell_Raise','Dumbbell_Scaption','Dumbbell_Shoulder_Press','Dumbbell_Shrug',
+  'Dumbbell_Tricep_Extension_-Pronated_Grip','Flexor_Incline_Dumbbell_Curls','Front_Dumbbell_Raise',
+  'Front_Incline_Dumbbell_Raise','Front_Two-Dumbbell_Raise','Hammer_Curls','Hammer_Grip_Incline_DB_Bench_Press',
+  'Incline_Dumbbell_Bench_With_Palms_Facing_In','Incline_Dumbbell_Curl','Incline_Dumbbell_Flyes',
+  'Incline_Dumbbell_Flyes_-_With_A_Twist','Incline_Dumbbell_Press','Incline_Hammer_Curls','Incline_Inner_Biceps_Curl',
+  'Lying_Dumbbell_Tricep_Extension','Lying_Rear_Delt_Raise','Lying_Supine_Dumbbell_Curl','Middle_Back_Shrug',
+  'Palms-Down_Dumbbell_Wrist_Curl_Over_A_Bench','Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench','Power_Partials',
+  'Preacher_Hammer_Dumbbell_Curl','Reverse_Flyes','Reverse_Flyes_With_External_Rotation',
+  'Seated_Bent-Over_Rear_Delt_Raise','Seated_Bent-Over_Two-Arm_Dumbbell_Triceps_Extension','Seated_Dumbbell_Curl',
+  'Seated_Dumbbell_Inner_Biceps_Curl','Seated_Dumbbell_Palms-Down_Wrist_Curl','Seated_Dumbbell_Palms-Up_Wrist_Curl',
+  'Seated_Dumbbell_Press','Seated_Side_Lateral_Raise','Seated_Triceps_Press','Side_Lateral_Raise',
+  'Side_Laterals_to_Front_Raise','Standing_Bent-Over_Two-Arm_Dumbbell_Triceps_Extension','Standing_Dumbbell_Press',
+  'Standing_Dumbbell_Reverse_Curl','Standing_Dumbbell_Straight-Arm_Front_Delt_Raise_Above_Head',
+  'Standing_Dumbbell_Triceps_Extension','Standing_Dumbbell_Upright_Row','Standing_Inner-Biceps_Curl',
+  'Standing_Palms-In_Dumbbell_Press','Straight-Arm_Dumbbell_Pullover','Tricep_Dumbbell_Kickback',
+  'Two-Arm_Dumbbell_Preacher_Curl','Zottman_Curl','Zottman_Preacher_Curl',
+]);
+// The 10-14 automatic list. Only read for a set saved before Single / Both existed (no s.single), so those totals
+// stay what they were.
 const DOUBLE_VOL_IDS=new Set([
   'Alternate_Hammer_Curl','Alternate_Incline_Dumbbell_Curl','Alternating_Deltoid_Raise','Dumbbell_Alternate_Bicep_Curl',
   'See-Saw_Press_Alternating_Side_Press','Standing_Alternating_Dumbbell_Press',
@@ -4332,8 +4392,17 @@ const DOUBLE_VOL_IDS=new Set([
   'Standing_One-Arm_Dumbbell_Curl_Over_Incline_Bench','Standing_One-Arm_Dumbbell_Triceps_Extension',
   'Standing_Palm-In_One-Arm_Dumbbell_Press',
 ]);
+// Is this set logged as Single? Its own choice, else (a set from before Single / Both) the old automatic list.
+function setSingle(ex,s){ return !!ex && SINGLE_BOTH_IDS.has(ex.exId) && (typeof (s&&s.single)==='boolean' ? s.single : DOUBLE_VOL_IDS.has(ex.exId)); }
+// Give every set of a Single / Both lift in a workout being logged its explicit choice (the default when none was
+// made yet: a new set, one the watch added, or a workout open since before this build). Returns true if any changed.
+function stampSingle(a){
+  let ch=false;
+  ((a&&a.exercises)||[]).forEach(e=>{ if(SINGLE_BOTH_IDS.has(e.exId)) (e.sets||[]).forEach(s=>{ if(typeof s.single!=='boolean'){ s.single=SINGLE_DEFAULT_IDS.has(e.exId); ch=true; } }); });
+  return ch;
+}
 // Load a set adds to workout volume. Use ONLY where totalVolume / "lifted" is summed; w = the workout it belongs to.
-function volWeight(ex,s,w){ return effWeight(ex,s) * (ex && DOUBLE_VOL_IDS.has(ex.exId) && !IMPORTED_ID.test((w&&w.id)||'') ? 2 : 1); }
+function volWeight(ex,s,w){ return effWeight(ex,s) * (setSingle(ex,s) && !IMPORTED_ID.test((w&&w.id)||'') ? 2 : 1); }
 // Hevy's exact names for the dumbbell / Smith versions the badges credit. The general name matcher files these
 // elsewhere ("Overhead Press (Dumbbell)" on the barbell Standing Military Press, "Bench Press (Smith Machine)" on the
 // plain chest-press machine), so for a badge they are pinned here by exact name (2026-10-02).
@@ -5638,6 +5707,7 @@ function liveHistExercises(exs){
 }
 // Build the history record for a workout and commit its PRs (the one place PRs are committed).
 function buildFinishRec(a,startTs,endTs){
+  stampSingle(a);   // sets that arrived without being drawn (late watch sets) get their default before the total
   const ts=a.exercises.reduce((n,e)=>n+e.sets.filter(s=>s.done).length,0);
   const sec=Math.max(0, Math.floor((endTs - (startTs||endTs))/1000));
   const vol=a.exercises.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(volWeight(e,s,a)*Math.max(0,s.reps||0)),0):0),0);
