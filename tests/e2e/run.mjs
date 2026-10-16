@@ -4673,12 +4673,81 @@ async function gymYears() {
   check('gym years: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+// Routines card 3-dot menu (2026-10-16, tasks/2026-10-16-hide-destructive-actions.md): no pencil/X on the card, one
+// 3-dot button opens an Edit/Delete sheet that closes on backdrop tap, Escape, back and after either pick; Edit and
+// Delete run the same editR/delR as before, Delete still behind its confirm.
+async function routineMenu() {
+  const cex = [{ id: 'cexRM', name: 'Barbell Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }];
+  const routines = [{ id: 'rm1', name: 'Push Day With A Really Long Routine Name For Width', desc: 'Chest', exercises: ['cexRM'] },
+                    { id: 'rm2', name: 'Pull Day', desc: '', exercises: ['cexRM'] }];
+  const { page, ctx, errors } = await phone({ seed: { cex, routines } });
+  const consoleErrs = []; page.on('console', m => { if (m.type() === 'error') consoleErrs.push(m.text()); });
+  await page.evaluate(() => migrateRoutineSections());
+  await page.evaluate(() => sp('routines')); await page.waitForTimeout(150);
+  const isOpen = id => page.evaluate(id => document.getElementById(id).classList.contains('open'), id);
+  const card = id => page.locator(`#routinesList .rc[data-id="${id}"]`);
+
+  // Nothing destructive on the card itself: no pencil, no X, no button that calls editR/delR directly.
+  const bare = await page.evaluate(() => [...document.querySelectorAll('#routinesList .rc button')].filter(b => /editR|delR/.test(b.getAttribute('onclick') || '') || b.textContent.trim() === '✕').length);
+  check('routine menu: card has no direct Edit/Delete buttons', bare === 0, String(bare));
+  check('routine menu: exactly one 3-dot button per card', await page.locator('#routinesList .rc .rc-more').count() === 2);
+
+  // Tap-size at 390px, nothing overflowing.
+  const geo = await page.evaluate(() => { const b = document.querySelector('#routinesList .rc[data-id="rm1"] .rc-more').getBoundingClientRect(), sec = document.querySelector('#routinesList').closest('.sec'), c = sec.getBoundingClientRect();
+    return { w: b.width, h: b.height, br: b.right, cr: c.right, ow: document.documentElement.scrollWidth - innerWidth }; });
+  check('routine menu: 3-dot tap target is at least 44x44 at 390px', geo.w >= 44 && geo.h >= 44, JSON.stringify(geo));
+  check('routine menu: 3-dot button stays inside the My routines panel and the page has no horizontal overflow', geo.br <= geo.cr && geo.ow <= 0, JSON.stringify(geo));
+  await page.screenshot({ path: `${SHOTS}/routine-menu-card.png` });
+
+  // Opens on tap, titled with the routine; closes on backdrop, Escape, back.
+  await card('rm2').locator('.rc-more').tap(); await page.waitForTimeout(150);
+  check('routine menu: tapping 3-dot opens the menu with that routine\'s name', await isOpen('rMenuModal') && await page.locator('#rMenuName').textContent() === 'Pull Day');
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#rMenuModal .rmenu-row')].map(b => ({ t: b.textContent.trim(), h: b.getBoundingClientRect().height })));
+  check('routine menu: menu has Edit and Delete rows, each at least 44px tall', rows.length === 2 && /Edit/.test(rows[0].t) && /Delete/.test(rows[1].t) && rows.every(r => r.h >= 44), JSON.stringify(rows));
+  await page.screenshot({ path: `${SHOTS}/routine-menu-open.png` });
+  await page.touchscreen.tap(195, 60); await page.waitForTimeout(150);
+  check('routine menu: tap outside closes it', !(await isOpen('rMenuModal')));
+  await card('rm2').locator('.rc-more').tap(); await page.waitForTimeout(150);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+  check('routine menu: Escape closes it', !(await isOpen('rMenuModal')));
+  await card('rm2').locator('.rc-more').tap(); await page.waitForTimeout(150);
+  await page.evaluate(() => history.back()); await page.waitForTimeout(250);
+  check('routine menu: back closes it and stays on Routines', !(await isOpen('rMenuModal')) && await page.locator('#page-routines').isVisible());
+
+  // Edit: same editR path -> the Edit Routine sheet for that routine, menu gone.
+  await card('rm2').locator('.rc-more').tap(); await page.waitForTimeout(150);
+  await page.locator('#rMenuEdit').tap(); await page.waitForTimeout(250);
+  const ed = await page.evaluate(() => ({ cr: document.getElementById('crModal').classList.contains('open'), t: document.getElementById('crTitle').textContent, n: document.getElementById('rName').value, eRid }));
+  check('routine menu: Edit closes the menu and opens Edit Routine for that routine (editR)', !(await isOpen('rMenuModal')) && ed.cr && ed.t === 'Edit Routine' && ed.n === 'Pull Day' && ed.eRid === 'rm2', JSON.stringify(ed));
+  await page.evaluate(() => history.back()); await page.waitForTimeout(250);
+  check('routine menu: back after Edit closes the Edit Routine sheet (history entry handed over cleanly)', !(await isOpen('crModal')) && await page.locator('#page-routines').isVisible());
+
+  // Delete: same delR path, its confirm unchanged; Cancel keeps the routine, OK deletes it.
+  await card('rm2').locator('.rc-more').tap(); await page.waitForTimeout(150);
+  await page.locator('#rMenuDel').tap(); await page.waitForTimeout(250);
+  check('routine menu: Delete closes the menu and shows the existing "Delete this routine?" confirm', !(await isOpen('rMenuModal')) && await isOpen('confirmModal') && await page.locator('#cfMsg').textContent() === 'Delete this routine?');
+  await page.locator('#cfCancel').tap(); await page.waitForTimeout(200);
+  check('routine menu: cancelling the confirm deletes nothing', await page.evaluate(() => gR().length) === 2 && await card('rm2').count() === 1);
+  await card('rm2').locator('.rc-more').tap(); await page.waitForTimeout(150);
+  await page.locator('#rMenuDel').tap(); await page.waitForTimeout(250);
+  await page.locator('#cfOk').tap(); await page.waitForTimeout(250);
+  check('routine menu: confirming deletes exactly that routine', JSON.stringify(await page.evaluate(() => gR().map(r => r.id))) === '["rm1"]' && await card('rm2').count() === 0);
+  check('routine menu: no popup left open after the delete', await page.evaluate(() => !document.querySelector(POPUP_SEL)));
+
+  // Reorder (drag list) still opens from My routines.
+  await page.locator('#page-routines button', { hasText: 'Reorder' }).tap(); await page.waitForTimeout(200);
+  check('routine menu: Reorder still opens the drag-reorder sheet', await isOpen('routineOrderModal') && await page.locator('#routineOrderList [data-id]').count() > 0);
+  await page.evaluate(() => cm('routineOrderModal'));
+  check('routine menu: no page errors', errors.length === 0, errors.join(' | '));
+  check('routine menu: no console errors during the menu flows', consoleErrs.length === 0, consoleErrs.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
