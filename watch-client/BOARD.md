@@ -23,6 +23,10 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
+- 2026-10-15 for wear (relay from Mr. Roni, from his Oppo Watch X3): **Exercise card layout + a reorder-follow bug.** Photo: `mockups/feedback/2026-10-15-exercise-card-jumbled.jpg` (the one-row card: name, ⇄ ▲ ▼ ✕, PR, +note, sets below).
+  1. **Layout:** name / button row / PR+note / sets all read as one jumbled block. He wants clear visual hierarchy — visible outlines around the buttons so it's obvious what's tappable, and real margins/spacers between each section. "No negative space" means don't leave stray gaps inside a section (keep that section's own lines adjacent) — the spacing budget goes between sections, not inside them.
+  2. **Bug:** reordering an exercise with ▲/▼ should keep the screen following that exercise into its new position. Example: tap ▲ once, you should still be looking at the same exercise, now one slot up — not whatever exercise is now at the old position/index.
+  Default if no reply: it's a bug + a design ask, build and tell me the version.
 - 2026-10-12 for wear, watchos: **The `staging` branch is retired; `main` is the only branch now.** Phone-side
   commits go straight to `main` (with Mr. Roni's go, as before). They are still not live until `const BUILD`
   on the live site changes, same as before, just no separate staging stop. "On `staging`" in older entries
