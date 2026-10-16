@@ -4412,12 +4412,107 @@ async function badgesDoneOnly() {
   check('badges done-only: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+// Gym years (tasks/2026-10-16-gym-years-heatmap.md): tapping Home's month label opens a full-screen grid of every trained
+// day, one block per year with history; a friend's profile opens the same grid from their synced days.
+function gyDates(start, end, skip = () => false) {   // Mon/Wed/Fri between two dates, minus skip(ds)
+  const out = []; const d = new Date(start + 'T12:00:00Z'), e = new Date(end + 'T12:00:00Z');
+  for (; d <= e; d.setUTCDate(d.getUTCDate() + 1)) { const ds = d.toISOString().slice(0, 10); if ([1, 3, 5].includes(d.getUTCDay()) && !skip(ds)) out.push(ds); }
+  return out;
+}
+async function gymYears() {
+  const NOW = new Date('2026-10-16T12:00:00-06:00');
+  const mine = gyDates('2023-03-06', '2026-10-14', ds => ds.startsWith('2024-08'));   // a whole month off in 2024
+  const pal = gyDates('2021-01-04', '2026-10-14');   // ~900 days: past the old 400-day receive cap
+  const friends = [{ id: '@pal', code: '@pal', name: 'Pal Jones', username: '@pal', pending: false, workouts: pal.length, days: pal }];
+  const { page, ctx, errors } = await phone({ seed: { hist: mine.map(d => wk(d, [ex('Barbell Bench Press', [[135, 5]])])), friends }, now: NOW });
+  const isOpen = () => page.evaluate(() => document.getElementById('gymYears').classList.contains('open'));
+  const grid = () => page.evaluate(() => {
+    const b = document.getElementById('gymYearsBody'), f = document.getElementById('gymYears');
+    const sq = [...b.querySelectorAll('.gy-d[data-d]')];
+    const lit = sq.filter(e => e.classList.contains('on'));
+    const ys = [...b.querySelectorAll('.gy-year')].map(y => ({ y: +y.dataset.y, n: y.querySelectorAll('.gy-d[data-d]').length, m: y.querySelectorAll('.gy-m').length, months: [...y.querySelectorAll('.gy-ml')].map(e => e.textContent).join(',') }));
+    const one = lit[0], off = sq.find(e => !e.classList.contains('on') && !e.classList.contains('fut'));
+    const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    const probe = document.createElement('i'); probe.style.background = acc; document.body.appendChild(probe); const accRgb = getComputedStyle(probe).backgroundColor; probe.remove();
+    const sizes = new Set(sq.map(e => Math.round(e.getBoundingClientRect().width * 2) / 2));
+    return { ys, lit: lit.map(e => e.dataset.d), who: b.querySelector('.bf-status').textContent, stat: (b.querySelector('.bf-stat') || {}).textContent || '',
+      litBg: one && getComputedStyle(one).backgroundColor, accRgb, offBg: off && getComputedStyle(off).backgroundColor,
+      ow: f.scrollWidth - f.clientWidth, maxRight: Math.max(...sq.map(e => e.getBoundingClientRect().right)), vw: innerWidth,
+      minW: Math.min(...sq.map(e => e.getBoundingClientRect().width)), sizes: [...sizes] };
+  });
+  const home = () => page.evaluate(() => document.getElementById('page-home').classList.contains('active'));
+
+  // 1. Tap the Home month label.
+  await page.locator('#calLabel').tap();
+  await page.waitForTimeout(250);
+  check('gym years: tapping the Home month/year label opens the full-screen overlay', await isOpen());
+  check('gym years: overlay is a registered popup (top of POPUP_SEL) and locks page scroll', await page.evaluate(() => topPopup() && topPopup().id === 'gymYears' && document.documentElement.classList.contains('popup-lock')));
+  const g = await grid();
+  check('gym years: one block per year with history, oldest first (2023..2026, no fixed 2-year range)', g.ys.map(y => y.y).join() === '2023,2024,2025,2026', JSON.stringify(g.ys.map(y => y.y)));
+  check('gym years: each year has Jan-Dec month columns and one square per calendar day (365/366)', g.ys.every(y => y.m === 12 && y.months === 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec' && y.n === ((y.y % 4 === 0) ? 366 : 365)), JSON.stringify(g.ys));
+  check('gym years: exactly the trained days are lit (binary, from history)', g.lit.length === mine.length && g.lit.join() === [...mine].sort().join(), `${g.lit.length} lit vs ${mine.length}`);
+  check('gym years: the month off (Aug 2024) is all unlit', !g.lit.some(d => d.startsWith('2024-08')));
+  check('gym years: lit squares use the accent colour, unlit ones do not', g.litBg === g.accRgb && g.offBg !== g.accRgb, `${g.litBg} / ${g.accRgb} / ${g.offBg}`);
+  check('gym years: no horizontal overflow at 390px', g.ow <= 0 && g.maxRight <= g.vw, JSON.stringify({ ow: g.ow, r: g.maxRight, vw: g.vw }));
+  check('gym years: every square is the same size (within half a pixel) and at least 8px', Math.max(...g.sizes) - Math.min(...g.sizes) <= 0.5 && g.minW >= 8, JSON.stringify({ sizes: g.sizes, min: g.minW }));
+  check('gym years: header says it is yours and counts the days', g.who === 'You' && new RegExp(`^${mine.length} days trained since March 2023$`).test(g.stat.trim()), `${g.who} | ${g.stat}`);
+  await page.screenshot({ path: `${SHOTS}/gym-years-own.png` });
+  await page.evaluate(() => { document.getElementById('gymYears').scrollTop = 1e6; });
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: `${SHOTS}/gym-years-own-bottom.png` });
+
+  // 4. Close: X, browser/Android back, Escape. Home stays the tab underneath.
+  await page.locator('#gymYears .bf-x').tap();
+  await page.waitForTimeout(200);
+  check('gym years: X closes it', !(await isOpen()) && await home());
+  await page.evaluate(() => openGymYears());
+  await page.waitForTimeout(200);
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(250);
+  check('gym years: back (popstate) closes it and stays on Home', !(await isOpen()) && await home());
+  await page.evaluate(() => openGymYears());
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  check('gym years: Escape closes it', !(await isOpen()));
+  check('gym years: Home mini-calendar unchanged (still the current month, 7-col grid)', await page.evaluate(() => document.getElementById('calLabel').textContent === 'October 2026' && document.querySelectorAll('#calGrid .cd').length >= 31));
+
+  // 3. Friend's profile: entry point, their full days (not the old first-400 cut), their name.
+  await page.evaluate(() => openFriend('@pal'));
+  await page.waitForTimeout(250);
+  const btn = page.locator('#fpContent button', { hasText: 'Gym years' });
+  check('gym years (friend): profile has a Gym years button', await btn.count() === 1);
+  await btn.tap();
+  await page.waitForTimeout(250);
+  const fg = await grid();
+  check('gym years (friend): opens over the profile, labelled with their name', await isOpen() && fg.who === 'Pal Jones' && await page.evaluate(() => document.getElementById('fpModal').classList.contains('open')), fg.who);
+  check('gym years (friend): one block per year of their history, 2021..2026', fg.ys.map(y => y.y).join() === '2021,2022,2023,2024,2025,2026', JSON.stringify(fg.ys.map(y => y.y)));
+  check('gym years (friend): every one of their ~900 days is lit, recent ones included (old 400 cap kept only the oldest)', fg.lit.length === pal.length && fg.lit.includes('2026-10-14'), `${fg.lit.length} lit vs ${pal.length}`);
+  check('gym years (friend): no horizontal overflow at 390px', fg.ow <= 0 && fg.maxRight <= fg.vw);
+  await page.screenshot({ path: `${SHOTS}/gym-years-friend.png` });
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(250);
+  check('gym years (friend): back closes the grid and returns to their still-open profile', !(await isOpen()) && await page.evaluate(() => document.getElementById('fpModal').classList.contains('open')));
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(250);
+  check('gym years (friend): a second back closes the profile too', await page.evaluate(() => !document.getElementById('fpModal').classList.contains('open')));
+
+  // Empty account: still opens, says so, no crash.
+  const e = await phone({ now: NOW });
+  await e.page.locator('#calLabel').tap();
+  await e.page.waitForTimeout(200);
+  check('gym years: an account with no history gets an empty note, not a blank or a crash', await e.page.evaluate(() => document.getElementById('gymYears').classList.contains('open') && /No training days yet/.test(document.getElementById('gymYearsBody').textContent)));
+  check('gym years (empty): no page errors', e.errors.length === 0, e.errors.join(' | '));
+  await e.ctx.close();
+  check('gym years: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, badgesDoneOnly, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, badgesDoneOnly, gymYears, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
