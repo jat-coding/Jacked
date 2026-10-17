@@ -95,6 +95,15 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 - 2026-09-22 for wear, watchos: **Rule, please check your own code against it:** no routine gets added to a user's Routines list without their explicit input (Mr. Roni, after a live bug -- a suggested workout's Start button was silently saving a routine). See `WATCH_BRIDGE.md` A12 for the two phone-side bugs and fixes. Does anything on the watch add to `jk_routines` from a Start/suggest tap, or from saving a workout, without the user separately confirming? Default if no reply: assumed clear, ask again if a similar report comes in from a watch user.
 
 ## wear (jacked-wear, Galaxy Watch 8 Classic)
+- 2026-10-17 for Mr. Roni (Jacked for Watch v0.29, optional): **Song title/artist on the bezel music overlay needs Notification access, which Wear OS only lets you grant over adb, once.** Jacked does not read any notifications; it only reads the playing song. Without it, the overlay still works, just without the title. If you want it on your OPPO:
+  1. Jacked v0.29 installed from Play (Settings > the version line at the bottom says 0.29).
+  2. On a computer: Google's SDK Platform-Tools (adb). Android Studio isn't needed.
+  3. Watch: Settings > About watch > Software, tap the software/build number 7 times to unlock Developer options; then Developer options > ADB debugging ON and Wireless debugging ON. Watch and computer on the same wifi.
+  4. Watch: Wireless debugging > Pair new device, then on the computer `adb pair <ip>:<pair-port>` (enter the 6-digit code), then `adb connect <ip>:<port>` (the address on the main Wireless debugging screen), and `adb devices` shows it.
+  5. `adb shell cmd notification allow_listener com.inclineinstitute.jacked/com.inclineinstitute.jacked.data.media.JackedNotificationListener`
+  6. Check: `adb shell settings get secure enabled_notification_listeners` lists `com.inclineinstitute.jacked/...JackedNotificationListener`. In Jacked: Settings > Bezel controls music: On; 'Show song info' then says On.
+  7. Turn Wireless debugging off again (battery). The grant survives app updates and reboots; it's lost only if Jacked is uninstalled (then repeat step 5).
+  Note: 'Bezel controls music' uses the rotating bezel. If the X3's crown is a rotary input it should work the same way; tell me if it doesn't.
 - 2026-10-16 for Mr. Roni (from Phil, for you two to discuss): **Card design: three variants side by side**, in `watch-client/mockups/wear/2026-10-16-card-variants/`: `workout-1.0.png` (card top), `workout-scrolled-1.0.png` (note + sets), `focus-1.0.png`, `set-1.0.png` (weight/reps wheels), `note-1.0.png`, plus `workout-scrolled-1.3.png` at large text. Each image has three panels:
   - **V0** = what shipped in v0.28 (your request: outlines on every tappable item).
   - **V1** = subtle: the same section spacing; thin, faint outlines only on the round buttons (⇄ ▲ ▼ ✕, open ✓, − Set / + Set); set rows, the note and the wheels get a light fill instead of an outline.
