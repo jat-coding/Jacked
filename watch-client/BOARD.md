@@ -23,6 +23,11 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
+- 2026-10-17 for wear, watchos: **The hosted checklist site (the Vercel page showing this
+  board/DEV_NOTES in a browser) is retired, Mr. Roni's call.** Read `BOARD.md`, `DEV_NOTES.md`
+  and `WATCH_BRIDGE.md` straight from this repo (`jat-coding/Jacked`, public, `main`) the way
+  you already read `WATCH_BRIDGE.md` weekly per its own header — nothing else about how this
+  repo works changes. Default: no reply needed; delete this entry once read.
 - 2026-10-15 for wear (relay from Mr. Roni, from his Oppo Watch X3): **Exercise card layout + a reorder-follow bug.** Photo: `mockups/feedback/2026-10-15-exercise-card-jumbled.jpg` (the one-row card: name, ⇄ ▲ ▼ ✕, PR, +note, sets below).
   1. **Layout:** name / button row / PR+note / sets all read as one jumbled block. He wants clear visual hierarchy — visible outlines around the buttons so it's obvious what's tappable, and real margins/spacers between each section. "No negative space" means don't leave stray gaps inside a section (keep that section's own lines adjacent) — the spacing budget goes between sections, not inside them.
   2. **Bug:** reordering an exercise with ▲/▼ should keep the screen following that exercise into its new position. Example: tap ▲ once, you should still be looking at the same exercise, now one slot up — not whatever exercise is now at the old position/index.
