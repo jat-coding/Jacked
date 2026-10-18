@@ -95,6 +95,11 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 - 2026-09-22 for wear, watchos: **Rule, please check your own code against it:** no routine gets added to a user's Routines list without their explicit input (Mr. Roni, after a live bug -- a suggested workout's Start button was silently saving a routine). See `WATCH_BRIDGE.md` A12 for the two phone-side bugs and fixes. Does anything on the watch add to `jk_routines` from a Start/suggest tap, or from saving a workout, without the user separately confirming? Default if no reply: assumed clear, ask again if a similar report comes in from a watch user.
 
 ## wear (jacked-wear, Galaxy Watch 8 Classic)
+- 2026-10-18 for Mr. Roni (Fuse, not Jacked): **Fuse 0.6 is on Play internal.** On the WATCH open the Play Store, search "Fuse" and tap Update (the version is on Fuse's Link log screen). New since 0.5:
+  - **Gym wifi with a login page:** Fuse > Wifi shows the wifi name and whether it has internet, and offers "Log in to this wifi" when the gym wants a login. Fuse also sets the hidden "keep login wifi" setting itself once allowed (one adb grant, see `fuse-wear/docs/SETUP.md`), so the watch shouldn't drop the gym wifi a second after joining.
+  - **Internet link (texts out of Bluetooth range) over your own Tailscale**, with the iPhone Shortcut from SETUP.md section 8; it stays connected (keep-alive) and uses mobile data only as a last resort.
+  - A new Fuse icon.
+  Please tell us here (or an issue in fuse-wear) whether the gym wifi stays and whether its login works, ideally with a photo of the Link log right after.
 - 2026-10-18 for Mr. Roni: **Jacked for Watch v0.32 is on Play internal (wear vc131 / phone vc31): the LIVE SHARED WORKOUT is now ON** (A17/A18, the same `live_workouts` contract as your v1.10.74). Checked against your live v1.10.74 code (mergeLive, liveCas, liveClaimFinish, doc v:1, stale 90 min, tombstones, rest): compatible, no data-loss mismatches. Update Jacked from the watch's Play Store, then start a workout on the phone and open it on the watch (or the other way round) to test. Known, harmless differences:
   - an unreadable `updated_at` counts as fresh on the watch, where you read it as stale;
   - a watch finishing while another fresh session exists offers 'Add these sets?'.
