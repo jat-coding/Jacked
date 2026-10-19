@@ -4874,12 +4874,77 @@ async function destructiveRound2() {
   check('round2: no console errors during the flows (harness-blocked supabase loads excluded)', realErrs.length === 0, realErrs.join(' | '));
   await ctx.close();
 }
+async function calLiveToday() {
+  // Task card 2026-10-19 (calendar-worked-live-exercise): the standing rule is "Home calendar highlights a day once its
+  // first exercise is done" (2026-10-06, topic 620). A workout still in progress today (aw, not yet in hist) must light
+  // today's cell the moment a set is marked done; past/future days keep reading history only.
+  const OCT19 = new Date('2026-10-19T12:00:00-06:00');
+  const cex = [{ id: 'cex1', name: 'Barbell Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }];
+  const { page, ctx, errors } = await phone({ seed: { cex, routines: [{ id: 'r1', name: 'Push', desc: '', exercises: ['cex1'] }],
+    hist: [wk('2026-10-15', [ex('Barbell Bench Press', [[135, 8]])])] }, now: OCT19 });
+  const cls = ds => page.evaluate(ds => { const el = [...document.querySelectorAll('#calGrid .cd')].find(c => (c.getAttribute('onclick') || '').includes(`'${ds}'`)); return el ? el.className : null; }, ds);
+  await page.evaluate(() => sp('home'));
+  check('cal live: today starts unlit with nothing logged', await cls('2026-10-19') === 'cd today', await cls('2026-10-19'));
+  await page.evaluate(() => startRW('r1'));
+  await page.waitForTimeout(150);
+  await page.evaluate(() => sp('home'));   // workout started, no set done yet
+  check('cal live: a started workout with no set done does not light today', await cls('2026-10-19') === 'cd today', await cls('2026-10-19'));
+  await page.evaluate(() => sap());
+  await page.waitForTimeout(150);
+  const w = page.locator('#wSession input.si').nth(0), r = page.locator('#wSession input.si').nth(1);
+  await w.tap(); await page.keyboard.type('135'); await r.tap(); await page.keyboard.type('8');
+  await page.locator('#wSession .sd').first().tap();
+  await page.evaluate(() => cm('restModal'));
+  check('cal live: set is done in aw, not finished (hist still has only the 10-15 workout)', await page.evaluate(() => aw && aw.exercises[0].sets[0].done && gH().length === 1));
+  await page.evaluate(() => sp('home'));   // back to Home mid-workout, resume bar showing
+  await page.waitForTimeout(150);
+  check('cal live: today lights (cd worked today) once the first set is done, without Finish', await cls('2026-10-19') === 'cd worked today', await cls('2026-10-19'));
+  check('cal live: resume bar is up (really mid-workout on Home)', await page.evaluate(() => document.getElementById('resumeBar').classList.contains('show')));
+  await page.screenshot({ path: `${SHOTS}/cal-live-today-midworkout.png` });
+  check('cal live: past finished day is worked, not today', await cls('2026-10-15') === 'cd worked', await cls('2026-10-15'));
+  check('cal live: past empty day is missed', await cls('2026-10-14') === 'cd missed', await cls('2026-10-14'));
+  check('cal live: future day is future', await cls('2026-10-20') === 'cd future', await cls('2026-10-20'));
+  // Un-checking the only done set takes today back to unlit (display follows aw, nothing sticky).
+  await page.evaluate(() => { togSet(0, 0); sp('home'); });
+  check('cal live: un-checking the only done set unlights today again', await cls('2026-10-19') === 'cd today', await cls('2026-10-19'));
+  await page.evaluate(() => { togSet(0, 0); cm('restModal'); });
+  // Finish: hist picks up today, aw is gone; still one plain "cd worked today" cell.
+  await page.evaluate(() => finishW(true));
+  await page.waitForTimeout(400);
+  await page.evaluate(() => sp('home'));
+  check('cal live: after Finish aw is cleared and today is in history', await page.evaluate(() => !aw && gH().some(x => dayKey(x.date) === '2026-10-19')));
+  check('cal live: after Finish today still reads cd worked today (no double class)', await cls('2026-10-19') === 'cd worked today', await cls('2026-10-19'));
+  check('cal live: exactly one cell for today', await page.evaluate(() => [...document.querySelectorAll('#calGrid .cd')].filter(c => (c.getAttribute('onclick') || '').includes("'2026-10-19'")).length) === 1);
+  check('cal live: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+
+  // A workout started last night at 11:50pm and still running at 12:10am (touched just now, so not auto-finished) belongs
+  // to yesterday: it must not light today, and its own past day stays history-only per the card until it is finished.
+  const NIGHT = new Date('2026-10-19T00:10:00-06:00');
+  const old = { id: 'wold', routineId: null, name: 'Late', date: new Date('2026-10-18T23:50:00-06:00').toISOString(),
+    exercises: [{ exId: 'cex1', name: 'Barbell Bench Press', muscle: 'chest', tracking: 'weight_reps', sets: [{ weight: 60, reps: 8, done: true }] }] };
+  const p2 = await phone({ seed: { cex, activeWorkout: { aw: old, awStart: +new Date(old.date), awTouch: +NIGHT } }, now: NIGHT });
+  await p2.page.evaluate(() => sp('home'));
+  const c2 = ds => p2.page.evaluate(ds => { const el = [...document.querySelectorAll('#calGrid .cd')].find(c => (c.getAttribute('onclick') || '').includes(`'${ds}'`)); return el ? el.className : null; }, ds);
+  check('cal live: past-midnight aw from 10-18 is still live (not auto-finished)', await p2.page.evaluate(() => !!aw && aw.id === 'wold' && gH().length === 0));
+  check('cal live: a still-running aw from 10-18 does not light today', await c2('2026-10-19') === 'cd today', await c2('2026-10-19'));
+  check('cal live: a still-running aw from 10-18 leaves 10-18 history-only (missed)', await c2('2026-10-18') === 'cd missed', await c2('2026-10-18'));
+  check('cal live: past-midnight page has no page errors', p2.errors.length === 0, p2.errors.join(' | '));
+  await p2.ctx.close();
+
+  // 2026-10-06 regression: finished workout today, no aw -> worked + today.
+  const p3 = await phone({ seed: { hist: [wk('2026-10-19', [ex('Barbell Bench Press', [[135, 8]])], { hour: 9 })] }, now: OCT19 });
+  await p3.page.evaluate(() => sp('home'));
+  const t3 = await p3.page.evaluate(() => [...document.querySelectorAll('#calGrid .cd')].find(c => (c.getAttribute('onclick') || '').includes("'2026-10-19'")).className);
+  check('cal live: finished-today with no aw still reads cd worked today (2026-10-06 fix)', t3 === 'cd worked today' && await p3.page.evaluate(() => !aw), t3);
+  await p3.ctx.close();
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, calLiveToday, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

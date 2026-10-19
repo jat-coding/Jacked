@@ -2311,6 +2311,9 @@ function renderCal() {
   document.getElementById('calLabel').textContent=MONTHS[cM]+' '+cY;
   const h=gH(), wd=new Set(h.map(w=>dayKey(w.date)));
   const today=dayKey(new Date());
+  // "Highlights a day once its first exercise is done" (2026-10-06): a workout still in progress today isn't in hist
+  // until Finish, so count it once any set is done. Read-only; past days stay history-only.
+  if(aw&&dayKey(aw.date)===today&&(aw.exercises||[]).some(e=>(e.sets||[]).some(s=>s&&s.done))) wd.add(today);
   const fd=new Date(cY,cM,1).getDay(), dim=new Date(cY,cM+1,0).getDate();
   let html=['S','M','T','W','T','F','S'].map(d=>`<div class="cdl">${d}</div>`).join('');
   for (let i=0;i<fd;i++) html+=`<div class="cd"></div>`;
