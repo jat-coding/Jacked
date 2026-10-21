@@ -306,6 +306,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 
 /* progressive-overload badge: small chip under the exercise card's action
    buttons, right-aligned, so it never adds a row before the set/rep table */
+.sug-tag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:#d9b84a;border:1px dashed rgba(217,184,74,.6);border-radius:10px;padding:0 6px;line-height:15px;vertical-align:1px;text-transform:uppercase;white-space:nowrap}
 .progress-chip{display:inline-flex;align-items:center;gap:4px;font-family:var(--fb);font-size:10.5px;font-weight:700;border-radius:20px;padding:3px 9px 3px 7px;white-space:nowrap;cursor:pointer;-webkit-appearance:none;border:1px solid transparent}
 .progress-chip.up{color:var(--accent-bright);background:rgba(92,233,218,.1);border-color:rgba(92,233,218,.35)}
 .progress-chip.down{color:var(--muted);background:var(--bg3);border-color:var(--border2)}
@@ -1515,7 +1516,7 @@ async function usernameTaken(u, exceptMine){
 const KEY_SHAPE={
   routines:'a',routineSections:'a',collapsedSections:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
   prof:'o',prs:'o',settings:'o',exRename:'o',exOverride:'o',exNotes:'o',cardioPR:'o',holdPR:'o',metrics:'o',
-  sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o',prRepair:'o',prReset:'o'
+  sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o',prRepair:'o',prReset:'o',prSug:'o'
 };
 function shapeOk(k,v){
   const t=KEY_SHAPE[k];
@@ -1556,6 +1557,7 @@ function histInsert(h,rec){
   h.splice(i,0,rec); return h;
 }
 const gPR     = () => S.g('prs')      || {};
+const gPRSug  = () => S.g('prSug')    || {};   // {exId:{weight,reps,date}} suggested (estimate-only) PRs, see prWeightStep
 const gProf   = () => S.g('prof')     || null;
 const gFr     = () => S.g('friends')  || [];
 const gMetrics= () => S.g('metrics')  || {};
@@ -2351,10 +2353,10 @@ function openDay(ds){
         <div style="font-size:11px;color:var(--muted)">${w.duration||''} · ${w.sets||0} sets · ${(w.totalVolume||0)>0||workoutDistance(w)<=0?fmtW(w.totalVolume||0)+' '+uL():(Math.round(workoutDistance(w)*100)/100)+' mi'}</div>
       </div>
       <div>${(w.exercises||[]).map((e,ei)=>{
-        const p=pr.list.find(x=>x.ei===ei), all=e.sets||[], n=all.filter(s=>s.done).length||all.length;
+        const p=pr.list.find(x=>x.ei===ei), g=!p&&pr.sug.find(x=>x.ei===ei), all=e.sets||[], n=all.filter(s=>s.done).length||all.length;
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--border);font-size:13px">
           <span style="min-width:0;font-weight:600;color:${p?'#ffd700':'var(--text2)'}">${p?'★ ':''}${esc(e.name)}</span>
-          <span style="flex-shrink:0;white-space:nowrap;font-size:11px;${p?'font-weight:700;color:#ffd700':'color:var(--muted)'}">${p?prSetText(p):n+' set'+(n!==1?'s':'')}</span>
+          <span style="flex-shrink:0;white-space:nowrap;font-size:11px;${p?'font-weight:700;color:#ffd700':'color:var(--muted)'}">${p?prSetText(p):g?`${prSetText(g)}${SUG_TAG(' ')}`:n+' set'+(n!==1?'s':'')}</span>
         </div>`;}).join('')}</div>
       <button class="btn bg sm wf" style="margin-top:10px" onclick="cm('dayModal');openWD('${w.id}')">View details</button>
     </div>`;}).join('')+addBtn;
@@ -2402,7 +2404,7 @@ function renderEx() {
     exSearchMatch(q,e)&&
     chipMatch(mFlt,e)
   ).sort(exRankCmp).slice(0,80);   // favourites → used-before → rest
-  const prs=gPR(), hp=gHoldPR(), cp=gCardioPR();
+  const prs=gPR(), hp=gHoldPR(), cp=gCardioPR(), sp=gPRSug();
   const el=document.getElementById('exList');
   if (!filt.length) { el.innerHTML='<div class="es"><h3>No results</h3></div>'; return; }
   el.innerHTML=filt.map(e=>{
@@ -2417,13 +2419,21 @@ function renderEx() {
       </div>
       ${e.tracking==='distance'?(cp[e.id]&&cp[e.id].dist>0&&cp[e.id].time>0?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${fmtPace(pacePerMile(cp[e.id].dist,cp[e.id].time))}<div style="font-size:9px;color:var(--muted);font-weight:400">pace PR</div></div>`:'')
         :e.tracking==='duration'?(hp[e.id]?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${fmtHold(hp[e.id].sec)}<div style="font-size:9px;color:var(--muted);font-weight:400">hold PR</div></div>`:'')
-        :pr?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${dW(pr.weight)}${uL()}<div style="font-size:9px;color:var(--muted);font-weight:400">${pr.reps}r PR</div></div>`:''}
+        :pr?`<div style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent);text-align:right;flex-shrink:0">${dW(pr.weight)}${uL()}<div style="font-size:9px;color:var(--muted);font-weight:400">${pr.reps}r PR</div>${sugStands(sp[e.id],pr)?`<div class="ex-sug" style="font-size:9px;color:#d9b84a;font-weight:600">${sugText(sp[e.id])} suggested</div>`:''}</div>`:''}
     </div>`;
   }).join('');
 }
 
 // Exercise info popup: how-to instructions (from the exercise DB) + a bar chart
 // of recent top weights for this exercise from your history.
+// Exercise info: the suggested PR next to the documented one (prWeightStep).
+function exSugBlock(exId){
+  const g=gPRSug()[exId], p=gPR()[exId]; if(!sugStands(g,p)) return '';
+  return `<div id="exSugPR" style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:13px;font-weight:600">Suggested PR${SUG_TAG(' ')}</span><span style="font-family:var(--fh);font-weight:700;color:#d9b84a">${sugText(g)}</span></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:3px">Estimated from ${dW(g.weight)}${uL()} × ${g.reps}${p?`. Your PR is ${dW(p.weight)}${uL()} × ${p.reps}`:''}. Lift ${sugText(g)} and it becomes your PR.</div>
+  </div>`;
+}
 function openExInfo(exId){
   const ex=byId(exId);
   document.getElementById('exInfoName').textContent=ex.name;
@@ -2452,7 +2462,7 @@ function openExInfo(exId){
       <button class="btn bg sm" style="flex:1" onclick="toggleFav('${exId}')">${isFav(exId)?'★ Favorited':'☆ Favorite'}</button>
       <button class="btn bg sm" style="flex:1" onclick="openEditEx('${exId}')">Edit</button>
     </div>
-    ${storedPRText(exId)?`<button class="btn bg sm wf" style="margin-bottom:8px" id="resetPRBtn" onclick="resetPR('${exId}')">Reset PR (${storedPRText(exId)})</button>`:''}`;
+    ${exSugBlock(exId)}${storedPRText(exId)?`<button class="btn bg sm wf" style="margin-bottom:8px" id="resetPRBtn" onclick="resetPR('${exId}')">Reset PR (${storedPRText(exId)})</button>`:''}`;
   // Show the demonstration photo(s) at the top. DB exercises ship start/end
   // frames; a custom exercise shows its own local photo (if any) instead;
   // anything else (custom with no photo yet, warm-ups) falls back to the icon tile.
@@ -3691,15 +3701,22 @@ function liveRecompute(doc, rev, create){
   } else {
     const old=h[i], notes=new Map((old.exercises||[]).filter(e=>e.note).map(e=>[e.exId,e.note]));
     const exs=liveHistExercises(a.exercises).map(e=>notes.has(e.exId)?{...e,note:notes.get(e.exId)}:e);
-    const ps=new Map((old.prSets||[]).map(p=>[p.exId,p]));
-    commitPRs({exercises:exs}).forEach(p=>ps.set(p.exId,p));
-    const prSets=[...ps.keys()].map(exId=>{
-      const ei=exs.findIndex(e=>e.exId===exId), b=ei>=0?prBest(exs[ei]):null;
-      return b?{exId,ei,si:b.si,weight:b.weight,reps:b.reps}:null;
-    }).filter(Boolean);
+    const ps=new Map((old.prSets||[]).map(p=>[p.exId,p])), gs=new Map((old.sugSets||[]).map(p=>[p.exId,p]));
+    const got=commitPRs({exercises:exs});
+    got.forEach(p=>ps.set(p.exId,p)); got.suggested.forEach(p=>gs.set(p.exId,p));
+    // The documented set is not always the e1RM-best one any more (prWeightStep), so find the set by its numbers;
+    // a suggestion the late sets documented past is dropped, as the record was.
+    const at=(exId,p)=>{
+      const ei=exs.findIndex(e=>e.exId===exId); if(ei<0) return null;
+      const ex=exs[ei], si=(ex.sets||[]).findIndex(s=>s.done&&effWeight(ex,s)===p.weight&&(s.reps||0)===p.reps);
+      if(si>=0) return {exId,ei,si,weight:p.weight,reps:p.reps};
+      const b=prBest(ex); return b?{exId,ei,si:b.si,weight:b.weight,reps:b.reps}:null;
+    };
+    const prSets=[...ps.keys()].map(exId=>at(exId,ps.get(exId))).filter(Boolean);
+    const sugSets=[...gs.keys()].map(exId=>at(exId,gs.get(exId))).filter(p=>p&&sugStands(p,ps.get(p.exId)));
     const sets=exs.reduce((n,e)=>n+e.sets.filter(s=>s.done).length,0);
     const vol=exs.reduce((v,e)=>v+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+volWeight(e,s,old)*Math.max(0,s.reps||0),0):0),0);
-    h[i]={...old, exercises:exs, sets, totalVolume:Math.round(vol), prCount:prSets.length, prSets, lrev:rev};
+    h[i]={...old, exercises:exs, sets, totalVolume:Math.round(vol), prCount:prSets.length, prSets, ...(old.prRule===2||old.sugSets?{sugSets}:{}), lrev:rev};
   }
   _liveStats.recomputes++;
   if(!S.s('hist',h)){ prUndo(); return false; }   // storage full: the caller must not treat it as saved
@@ -3987,8 +4004,13 @@ function renderWS() {
     const hBest=isDur?((gHoldPR()[ex.exId]||{}).sec||0):0;
     const beatsPR=s=> cardio ? (s.weight>0&&s.reps>0&&mileEquiv(s.weight,s.reps)<cBest) : isDur ? s.weight>hBest : (isW&&e1rm(effWeight(ex,s),s.reps)>prMax);
     // Only ONE PR per exercise per workout — the single best beating set.
-    let prIdx=-1, prScore=-Infinity;
-    ex.sets.forEach((s,i)=>{ if(s.done&&beatsPR(s)){ const sc=score(s); if(sc>prScore){ prScore=sc; prIdx=i; } } });
+    let prIdx=-1, prScore=-Infinity, sugIdx=-1;
+    const psug=gPRSug()[ex.exId];
+    if(isW&&!cardio&&isWT(ex)){   // weight lifts: the finish rule itself (documented vs suggested, prWeightStep)
+      const st=prWeightStep(ex,pr||{weight:0,reps:0},psug);
+      if(st.doc) prIdx=st.doc.si;
+      if(st.sug) sugIdx=st.sug.si;
+    } else ex.sets.forEach((s,i)=>{ if(s.done&&beatsPR(s)){ const sc=score(s); if(sc>prScore){ prScore=sc; prIdx=i; } } });
     const exGotPR=prIdx>=0;
     const dispW=v=>isW?dW(v):isDur?toDispDur(v,exUnit):(v||0);
     const picking=aw._pairFrom===ei;
@@ -4015,8 +4037,8 @@ function renderWS() {
       ${picking?`<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:6px">Tap another exercise's link icon to pair</div>`:''}
       <div class="ebh">${ih}
         <div style="flex:1;min-width:0">
-          <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${esc(ex.name)}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">${cardio?(cprev&&cprev.time?`Best ${fmtPace(pacePerMile(cprev.dist,cprev.time))}${cprev.maxDist?` · Longest ${cprev.maxDist} mi`:''}`:'No cardio PR yet'):(pr?`PR: ${dW(pr.weight)}${uL()} × ${pr.reps}`:'No PR yet')}</div>
+          <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${esc(ex.name)}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}${sugIdx>=0?SUG_TAG(' '):''}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">${cardio?(cprev&&cprev.time?`Best ${fmtPace(pacePerMile(cprev.dist,cprev.time))}${cprev.maxDist?` · Longest ${cprev.maxDist} mi`:''}`:'No cardio PR yet'):(pr?`PR: ${dW(pr.weight)}${uL()} × ${pr.reps}`:'No PR yet')+(isW&&sugStands(psug,pr)?` · Suggested ${sugText(psug)}`:'')}</div>
         </div>
         <div class="eb-actions" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;max-width:150px">
           <div style="display:flex;gap:4px">
@@ -4075,7 +4097,7 @@ function renderWS() {
         const one=sb&&set.single===true;
         const sbp=sb?`<div class="sbp"><button class="cab-opt ${one?'on':''}" aria-pressed="${one}" onclick="setSingleArm(${ei},${si},true)">Single</button><button class="cab-opt ${one?'':'on'}" aria-pressed="${!one}" onclick="setSingleArm(${ei},${si},false)">Both</button></div>`:'';
         return `<div class="sr${sb?' sb':''}">
-          <div class="sn">${si+1}${isPR?'<span style="color:#ffd700"> ★</span>':''}</div>
+          <div class="sn">${si+1}${isPR?'<span style="color:#ffd700"> ★</span>':si===sugIdx?'<span class="sug-tag" style="padding:0 3px;margin-left:2px" title="suggested PR">S</span>':''}</div>
           <div class="ps">${prevStr}</div>
           ${inp3}${sbp}${inp4}
           <button class="sd ${set.done?'done':''}" onclick="togSet(${ei},${si})">
@@ -5083,12 +5105,48 @@ function prBest(ex){
   return best;
 }
 
+// Suggested vs documented PR (Mr. Roni, 2026-10-20: "anything calculated ... should just be suggested and not documented
+// as the person's PR, unless they actually lift that kind of weight"; then: "prioritize the higher weight for exercise PRs
+// not the combined weight of the reps. And then if the PR is for multiple weights then show the suggested PR").
+// One weight exercise against its documented record `prev` (jk_prs) and suggested record `sug` (jk_prSug):
+//  • doc: the heaviest set actually lifted (raw weight, more reps breaks a tie), if its raw weight beats the documented
+//    PR's raw weight. e1RM never decides this, not even between two real sets (200 x 1 stays over 190 x 3).
+//  • sug: the best set by e1RM, when the 1RM it implies is above the (new) documented raw weight and above the old
+//    suggestion's. That can be the documented set itself (a 3-rep PR shows its estimated 1RM as suggested). The implied
+//    weight is prE1rm(sug).
+//  • Promotion falls out of the rule: a set whose raw weight reaches prE1rm(sug) documents, and a suggestion no longer above
+//    the documented raw weight is cleared (keepSug false).
+// Shared by commitPRs (live) and prReplay (history) so they cannot drift.
+// SUG_EPS (kg): the suggested number is shown rounded to 0.1 lb/kg, so lifting the number on screen must clear it.
+const SUG_EPS=0.05;
+function prWeightStep(ex, prev, sug){
+  const pw=(prev&&prev.weight)||0, se=prE1rm(sug);
+  let heavy=null, est=null;
+  (ex.sets||[]).forEach((s,si)=>{
+    if(!(s.done&&(s.weight>0||s.reps>0))) return;
+    const w=effWeight(ex,s), reps=s.reps||0; if(!(reps>0)) return;
+    if(!heavy||w>heavy.weight||(w===heavy.weight&&reps>heavy.reps)) heavy={si,weight:w,reps};
+    if(!est||e1rm(w,reps)>e1rm(est.weight,est.reps)) est={si,weight:w,reps};
+  });
+  const doc=heavy&&heavy.weight>pw?heavy:null, dw=doc?doc.weight:pw;
+  const ee=est?e1rm(est.weight,est.reps):0, nsug=est&&ee>dw+SUG_EPS&&ee>se?est:null;
+  return {doc, sug:nsug, keepSug:!nsug&&se>dw+SUG_EPS};
+}
+// A suggestion only stands while the 1RM it implies is above the documented record's raw weight (another device, an
+// import or a merge may have documented a heavier lift since).
+function sugStands(sug, pr){ return !!sug&&prE1rm(sug)>((pr&&pr.weight)||0)+SUG_EPS; }
+function pruneSug(sugMap, prs){
+  const out={}; Object.keys(sugMap||{}).forEach(id=>{ if(sugStands(sugMap[id],(prs||{})[id])) out[id]=sugMap[id]; });
+  return out;
+}
 // Commit PRs from a finished workout.
-//  • Weight lifts: PR = a higher estimated 1RM (weight × reps). No lb PRs for cardio.
+//  • Weight lifts: documented PR / suggested PR, see prWeightStep. Suggested ones come back on list.suggested only:
+//    they are not PRs (not in prCount/prSets or any badge), just shown labeled "suggested".
 //  • Cardio (distance): PR = a faster pace (distance ÷ minutes).
 // Each returned entry also carries exId/ei/si (exercise + set index) so finish can store prSets.
 function commitPRs(workout) {
-  const prs=gPR(), cardio=gCardioPR(), hold=gHoldPR(), list=[]; let prsDirty=false, cDirty=false, hDirty=false;
+  const prs=gPR(), cardio=gCardioPR(), hold=gHoldPR(), sugs=gPRSug(), list=[], suggested=[]; let prsDirty=false, cDirty=false, hDirty=false, sDirty=false;
+  list.suggested=suggested;
   (workout.exercises||[]).forEach((ex,ei)=>{
     const exId=ex.exId; if(!exId||exId==='?') return;
     const best=prBest(ex); if(!best) return;
@@ -5112,13 +5170,18 @@ function commitPRs(workout) {
       if(changed){ cardio[exId]=nrec; cDirty=true; }
       return;
     }
-    const prev=prs[exId]||{weight:0,reps:0};
-    if(e1rm(best.weight,best.reps)>prE1rm(prev)){
-      prs[exId]={weight:best.weight,reps:best.reps,date:new Date().toISOString()}; prsDirty=true;
-      list.push({exId,ei,si:best.si,name:ex.name,weight:best.weight,reps:best.reps});
+    const prev=prs[exId]||{weight:0,reps:0}, st=prWeightStep(ex,prev,sugs[exId]), now=new Date().toISOString();
+    if(st.doc){
+      const d=st.doc; prs[exId]={weight:d.weight,reps:d.reps,date:now}; prsDirty=true;
+      list.push({exId,ei,si:d.si,name:ex.name,weight:d.weight,reps:d.reps});
     }
+    if(st.sug){
+      const g=st.sug; sugs[exId]={weight:g.weight,reps:g.reps,date:now}; sDirty=true;
+      suggested.push({exId,ei,si:g.si,name:ex.name,weight:g.weight,reps:g.reps,suggested:true,implied:e1rm(g.weight,g.reps)});
+    } else if(!st.keepSug&&sugs[exId]){ delete sugs[exId]; sDirty=true; }
   });
   if(prsDirty) S.s('prs',prs);
+  if(sDirty) S.s('prSug',sugs);
   if(cDirty) S.s('cardioPR',cardio);
   if(hDirty) S.s('holdPR',hold);
   return list;
@@ -5148,9 +5211,12 @@ let _prMemo=null;
 function prReplay(){
   const raw=localStorage.getItem('jk_hist')||'', bw=gBW();
   if(_prMemo&&_prMemo.raw===raw&&_prMemo.bw===bw) return _prMemo.map;
-  const rec=new Map(), bestC=new Map(), bestH=new Map(), map=new Map();
+  // rec/sugR: the documented and suggested records under today's rule (prWeightStep), over ALL history, so the record
+  // replay ends on is the one commitPRs and enforceDocumentedPRs keep. leg: the record pre-rule workouts were counted
+  // against (e1RM), only to replay THEIR stars/prCount as they were stored.
+  const rec=new Map(), sugR=new Map(), leg=new Map(), bestC=new Map(), bestH=new Map(), map=new Map();
   gH().map((w,i)=>({w,i})).sort((a,b)=>(new Date(a.w.date)-new Date(b.w.date))||(a.i-b.i)).forEach(({w})=>{
-    const list=[], imported=IMPORTED_ID.test(w.id||'');
+    const list=[], sug=[], imported=IMPORTED_ID.test(w.id||''), v2=!imported&&w.prRule===2;
     (w.exercises||[]).forEach((ex,ei)=>{
       const exId=ex.exId; if(!exId||exId==='?') return;
       const cardio=isCardio(ex), hold=isHold(ex);
@@ -5164,24 +5230,53 @@ function prReplay(){
         isPR=cur<(bestC.has(exId)?bestC.get(exId):Infinity);   // no prior record: same start as commitPRs
         if(isPR) bestC.set(exId,cur);
       } else {
-        const prev=rec.get(exId)||{weight:0,reps:0};
-        isPR=imported ? (b.weight>prev.weight||(b.weight===prev.weight&&b.reps>prev.reps)) : e1rm(b.weight,b.reps)>prE1rm(prev);
-        if(isPR) rec.set(exId,{weight:b.weight,reps:b.reps});
+        const prev=rec.get(exId)||{weight:0,reps:0}, lp=leg.get(exId)||{weight:0,reps:0};
+        if(imported){   // Strong/Hevy import: its own raw rule, never suggested (importWorkoutCsv)
+          isPR=b.weight>prev.weight||(b.weight===prev.weight&&b.reps>prev.reps);
+          if(isPR){ rec.set(exId,{weight:b.weight,reps:b.reps,wid:w.id}); if(!sugStands(sugR.get(exId),rec.get(exId))) sugR.delete(exId); }
+          if(b.weight>lp.weight||(b.weight===lp.weight&&b.reps>lp.reps)) leg.set(exId,{weight:b.weight,reps:b.reps});
+        } else {
+          const st=prWeightStep(ex,prev,sugR.get(exId));
+          if(st.doc) rec.set(exId,{weight:st.doc.weight,reps:st.doc.reps,wid:w.id});
+          if(st.sug) sugR.set(exId,{weight:st.sug.weight,reps:st.sug.reps,wid:w.id});
+          else if(!st.keepSug) sugR.delete(exId);
+          const legPR=e1rm(b.weight,b.reps)>prE1rm(lp);
+          if(legPR) leg.set(exId,{weight:b.weight,reps:b.reps});
+          if(v2){   // finished under the suggested/documented rule (buildFinishRec stamps prRule 2): the live rule exactly
+            if(st.doc) list.push({exId,name:ex.name,ei,si:st.doc.si,weight:st.doc.weight,reps:st.doc.reps,cardio,hold});
+            if(st.sug) sug.push({exId,name:ex.name,ei,si:st.sug.si,weight:st.sug.weight,reps:st.sug.reps,suggested:true,implied:e1rm(st.sug.weight,st.sug.reps)});
+            return;
+          }
+          isPR=legPR;   // older workouts keep the stars they were counted with (prCount was stored by that rule)
+        }
       }
       if(isPR) list.push({exId,name:ex.name,ei,si:b.si,weight:b.weight,reps:b.reps,cardio,hold});
     });
-    map.set(w.id,{n:list.length,list,at:new Set(list.map(p=>p.ei+':'+p.si))});
+    map.set(w.id,{n:list.length,list,at:new Set(list.map(p=>p.ei+':'+p.si)),sug,sugAt:new Set(sug.map(p=>p.ei+':'+p.si))});
   });
+  map.docEnd=rec;    // the documented record history ends on, per weight exercise (replayRecord)
+  map.sugEnd=sugR;   // the suggested record history ends on, per exercise (setRepairedPR, enforceDocumentedPRs)
   _prMemo={raw,bw,map};
   return map;
 }
-const NO_PRS={n:0,list:[],at:new Set()};
+const NO_PRS={n:0,list:[],at:new Set(),sug:[],sugAt:new Set()};
 // What may be SHOWN for a past workout. Nothing visible may disagree with the stored prCount:
 //  • w.prSets (saved by finishW) is trusted for count and stars, if it resolves against the exercises;
 //  • else the replay is used only when prCount is absent or equals the replay count;
 //  • else show the stored count with NO per-exercise/per-set stars — never guess which ones.
 function prsOf(w){
   if(!w) return NO_PRS;
+  const r=prsOfDoc(w);
+  // Suggested PRs (prWeightStep) are only ever labeled, never counted: from w.sugSets (saved by finish) when they still
+  // resolve against the exercises, else the replay.
+  let sug=(prReplay().get(w.id)||NO_PRS).sug;
+  if(Array.isArray(w.sugSets)){
+    const ok=w.sugSets.every(p=>{ const ex=(w.exercises||[])[p.ei]; return ex&&ex.exId===p.exId&&(ex.sets||[])[p.si]; });
+    if(ok) sug=w.sugSets.map(p=>({...p,name:w.exercises[p.ei].name,suggested:true,implied:e1rm(p.weight,p.reps)}));
+  }
+  return {...r,sug,sugAt:new Set(sug.map(p=>p.ei+':'+p.si))};
+}
+function prsOfDoc(w){
   const stored=typeof w.prCount==='number'?w.prCount:undefined;
   const hidden=()=>stored>0?{n:stored,list:[],at:new Set()}:NO_PRS;
   if(Array.isArray(w.prSets)){
@@ -5253,14 +5348,17 @@ function oldRulePRs(hist, exId){
 }
 // The running record prReplay ends on for one exercise, dated by the workout that set it (or null).
 function replayRecord(exId){
-  let last=null;
-  const byId=new Map(gH().map(w=>[w.id,w]));
-  prReplay().forEach((r,wid)=>r.list.forEach(p=>{ if(p.exId===exId&&!p.cardio&&!p.hold) last={weight:p.weight,reps:p.reps,w:byId.get(wid)}; }));
-  return last;
+  const r=prReplay().docEnd.get(exId); if(!r) return null;
+  return {weight:r.weight,reps:r.reps,w:gH().find(w=>w.id===r.wid)};
 }
 // Replace jk_prs[exId] with the replayed record, stamped `repaired` so the cloud merge accepts it even when it is
 // LOWER than a stale copy, and record the repair in jk_prRepair (merge rule: mergePRs).
 function setRepairedPR(prs, exId, at){
+  // The suggestion is rebuilt from history too (today's rule over all of it, prReplay), never from before a PR reset.
+  const sugs=gPRSug(), sr=prReplay().sugEnd.get(exId), rsAt=(S.g('prReset')||{})[exId];
+  const srW=sr&&gH().find(w=>w.id===sr.wid);
+  if(sr&&!(rsAt&&srW&&+new Date(srW.date)<+new Date(rsAt))){ const sw=gH().find(w=>w.id===sr.wid); sugs[exId]={weight:sr.weight,reps:sr.reps,date:(sugs[exId]&&sugs[exId].weight===sr.weight&&sugs[exId].reps===sr.reps&&sugs[exId].date)||(sw&&sw.date)||at,repaired:at}; S.s('prSug',sugs); }
+  else if(sugs[exId]){ delete sugs[exId]; S.s('prSug',sugs); }
   const old=prs[exId], r=replayRecord(exId);
   if(!r){ delete prs[exId]; return {old,now:null}; }
   // Keep the old record's date when it was set by that same workout (it is the finish time); else the workout's.
@@ -5360,7 +5458,7 @@ function dropPreReset(map, resets, dateOf){
 const _prDate=r=>r.date, _cardioDate=r=>r.date||r.maxDate;
 function clearPRsBefore(resets){
   let n=0;
-  [['prs',gPR(),_prDate],['cardioPR',gCardioPR(),_cardioDate],['holdPR',gHoldPR(),_prDate]].forEach(([k,m,d])=>{
+  [['prs',gPR(),_prDate],['cardioPR',gCardioPR(),_cardioDate],['holdPR',gHoldPR(),_prDate],['prSug',gPRSug(),_prDate]].forEach(([k,m,d])=>{
     const m2=dropPreReset(m,resets,d); if(Object.keys(m2).length!==Object.keys(m).length){ n+=Object.keys(m).length-Object.keys(m2).length; S.s(k,m2); }
   });
   return n;
@@ -5378,6 +5476,43 @@ function resetPR(exId){
 }
 function enforcePRResets(){
   try{ const cut=S.g('prReset'); return cut?clearPRsBefore(cut):0; }catch(e){ console.warn('[prReset] enforce failed',e); return 0; }
+}
+// Documented PR = heaviest weight actually lifted (2026-10-20, prWeightStep). Records written before that rule (or by a
+// device still on it) may hold a lighter multi-rep set whose e1RM was higher (190 x 3 over a real 200 x 1). Every launch,
+// cheap and idempotent: raise such a record to what history replays to, and give the suggestion history replays to when
+// it still implies more than that. Only raises to a strictly heavier weight, never lowers or creates a record; skips
+// exercises with a PR reset (history before the reset no longer counts) or body weight in the load (replay reads today's
+// body weight, not that day's, so it would drift with every weigh-in). A repaired exercise (jk_prRepair) is rebuilt
+// through setRepairedPR, so the record keeps the `repaired` stamp the merge relies on.
+function enforceDocumentedPRs(){
+  try{
+    const rp=prReplay(), prs=gPR(), sugs=gPRSug(), resets=S.g('prReset')||{}, repairs=S.g('prRepair')||{}, bwEx=new Set();
+    gH().forEach(w=>(w.exercises||[]).forEach(ex=>{ if((ex.sets||[]).some(st=>st.done&&Math.abs(effWeight(ex,st)-(st.weight||0))>1e-9)) bwEx.add(ex.exId); }));
+    let n=0, ns=0; const rebuild=[];
+    rp.docEnd.forEach((r,exId)=>{
+      const cur=prs[exId]; if(!cur||resets[exId]||bwEx.has(exId)) return;
+      if(repairs[exId]){ if(r.weight>((cur.weight)||0)+0.01) rebuild.push(exId); return; }
+      if(r.weight>((cur.weight)||0)+0.01){   // 0.01 kg: lb/kg rounding in stored copies is not a heavier lift
+        const w=gH().find(x=>x.id===r.wid);
+        prs[exId]={weight:r.weight,reps:r.reps,date:(w&&w.date)||cur.date}; n++;
+        console.info('[prRule] documented PR raised to the heaviest lift',exId,cur,prs[exId]);
+      }
+      const g=rp.sugEnd.get(exId);
+      if(g&&sugStands(g,prs[exId])&&prImpliesMore(g,sugs[exId])){
+        const w=gH().find(x=>x.id===g.wid);
+        sugs[exId]={weight:g.weight,reps:g.reps,date:(w&&w.date)||cur.date}; ns++;
+      }
+    });
+    if(n) S.s('prs',prs);
+    const keep=pruneSug(sugs,prs);
+    if(ns||Object.keys(keep).length!==Object.keys(sugs).length) S.s('prSug',keep);
+    if(rebuild.length){
+      const p2=gPR();
+      rebuild.forEach(id=>console.info('[prRule] repaired record rebuilt to the heaviest lift',id,setRepairedPR(p2,id,repairs[id])));
+      S.s('prs',p2);
+    }
+    return n+ns+rebuild.length;
+  }catch(e){ console.warn('[prRule] enforce failed',e); return 0; }
 }
 // merge: per exercise the LATEST reset wins (a newer reset on any device supersedes an older one).
 function mergePRReset(a,b){
@@ -5407,8 +5542,11 @@ function commitHistRepair(hist2, exIds, at){
     if(!wids.has(w.id)&&!has(w)) return w;
     let o=mine(before,w.id); const n=mine(after,w.id), pw=prevById.get(w.id);
     if(pw&&Array.isArray(pw.prSets)) o=[...o.filter(p=>!ch(p)),...pw.prSets.filter(p=>exIds.has(p.exId)&&chAt(pw,p))];
-    if(!o.length&&!n.length) return w;
+    const ns=(after.get(w.id)||NO_PRS).sug.filter(p=>exIds.has(p.exId));
+    if(!o.length&&!n.length&&!ns.length&&!(w.sugSets||[]).some(p=>exIds.has(p.exId))) return w;
     const w2={...w};
+    // Suggested PRs (prWeightStep) follow the replay the same way; never counted, so prCount is untouched by them.
+    if(Array.isArray(w.sugSets)) w2.sugSets=[...w.sugSets.filter(p=>!exIds.has(p.exId)),...ns.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps}))];
     if(typeof w.prCount==='number') w2.prCount=Math.max(0,w.prCount-o.length+n.length);
     if(Array.isArray(w.prSets)) w2.prSets=[...w.prSets.filter(p=>!exIds.has(p.exId)),...n.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps}))];
     workouts.push({id:w.id,date:w.date,prCount:[w.prCount,w2.prCount]});
@@ -5623,6 +5761,9 @@ function relabelHevyImports(){
 }
 const prSetText=p=>p.cardio?`${p.weight} mi · ${fmtPace(pacePerMile(p.weight,p.reps))}`:p.hold?`${fmtHold(p.weight)} hold`:`${dW(p.weight)}${uL()} × ${p.reps}`;
 const PR_STAR=(sp='')=>`<span style="color:#ffd700">${sp}★</span>`;
+// A suggested PR (estimate only, prWeightStep) is labeled, never starred: the star stays for PRs actually lifted.
+const SUG_TAG=(sp='')=>`${sp}<span class="sug-tag">suggested</span>`;
+const sugText=p=>`${dW(prE1rm(p))}${uL()}`;   // the weight a suggested PR implies for 1 rep
 
 function finishW(auto) {
   if (!aw) return;
@@ -5777,18 +5918,19 @@ function buildFinishRec(a,startTs,endTs){
   // actually followed tonight.
   const preProgress={};
   a.exercises.forEach(e=>{ if(progressTrackable(e.tracking||'weight_reps')) preProgress[e.exId]=evaluateProgress(e.exId); });
-  const prList=commitPRs(a);              // PRs committed ONLY now, on finish
+  const prList=commitPRs(a), sugList=prList.suggested;   // PRs committed ONLY now, on finish
   _liveStats.commits++;
   // Switch bookkeeping and live-sync state stay out of history.
   const {swaps:_sw,_pairFrom:_pf,tomb:_t,mu:_m,stamps:_st,rest:_r,startedAt:_sa,startedBy:_sb,finishedBy:_fb,v:_v,...awRec}=a;
-  const rec={...awRec,duration:dur,sets:ts,totalVolume:Math.round(vol),prCount:prList.length,prSets:prList.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps}))};
+  const rec={...awRec,duration:dur,sets:ts,totalVolume:Math.round(vol),prCount:prList.length,prSets:prList.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps})),
+    prRule:2,sugSets:sugList.map(({exId,ei,si,weight,reps})=>({exId,ei,si,weight,reps}))};
   rec.exercises=liveHistExercises(rec.exercises);
   if(!rec.name || rec.name==='Quick Workout') rec.name=autoNameWorkout(rec.exercises);
-  return {rec,prList,preProgress,vol,dur,ts,sec};
+  return {rec,prList,sugList,preProgress,vol,dur,ts,sec};
 }
 // Snapshot the PR records before a commit writes them; the returned function puts them back.
 function prSnap(){
-  const was=['prs','cardioPR','holdPR'].map(k=>[k,localStorage.getItem('jk_'+k)]);
+  const was=['prs','cardioPR','holdPR','prSug'].map(k=>[k,localStorage.getItem('jk_'+k)]);
   return ()=>was.forEach(([k,v])=>{ try{ if(v==null) localStorage.removeItem('jk_'+k); else localStorage.setItem('jk_'+k,v); }catch(_){} });
 }
 // The history write failed (storage full): keep the workout open here, finishing locally next time --
@@ -5800,7 +5942,7 @@ function finishUnsaved(){
 }
 function _commitFinish(endTs,rev) {
   const prUndo=prSnap();   // buildFinishRec commits PRs
-  const {rec,prList,preProgress,vol,dur,ts,sec}=buildFinishRec(aw,awStart,endTs);
+  const {rec,prList,sugList,preProgress,vol,dur,ts,sec}=buildFinishRec(aw,awStart,endTs);
   ws=sec;
   if(rev) rec.lrev=rev;
   // Detect if the workout's exercises differ from its source routine.
@@ -5817,12 +5959,12 @@ function _commitFinish(endTs,rev) {
   const summaryVol=Math.round(vol);
   const progressNotes=buildProgressNotes(rec,preProgress,prList);
   aw=null; _liveShadow=null;
-  showFinishSummary({name:rec.name,dur,ts,vol:summaryVol,prList,rid,rname,ids,progressNotes});
+  showFinishSummary({name:rec.name,dur,ts,vol:summaryVol,prList,sugList,rid,rname,ids,progressNotes});
   sp('home');
 }
 
 function showFinishSummary(o) {
-  const {name,dur,ts,vol,prList,progressNotes=[]}=o;
+  const {name,dur,ts,vol,prList,sugList=[],progressNotes=[]}=o;
   const c=document.getElementById('fsContent');
   c.innerHTML=`
     <div style="text-align:center;margin-bottom:4px">${prList.length?uic('trophy','#ffd700',42):uic('dumbbell','var(--muted)',42)}</div>
@@ -5838,6 +5980,14 @@ function showFinishSummary(o) {
       `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
         <span style="font-size:13px;font-weight:600">★ ${esc(p.name)}</span>
         <span style="font-family:var(--fh);font-weight:700;color:var(--accent)">${p.cardio||p.hold?p.label:dW(p.weight)+uL()+' × '+p.reps}</span>
+      </div>`).join(''):''}
+    ${sugList.length?`<div class="blk-t" id="fsSugPRs">Suggested PRs</div>`+sugList.map(p=>
+      `<div class="fs-sug" style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-size:13px;font-weight:600;min-width:0">${esc(p.name)}${SUG_TAG(' ')}</span>
+          <span style="font-family:var(--fh);font-weight:700;color:#d9b84a;white-space:nowrap">${sugText(p)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Estimated from ${dW(p.weight)}${uL()} × ${p.reps}. Becomes your PR once you lift ${sugText(p)}.</div>
       </div>`).join(''):''}
     ${progressNotes.length?progressNotes.map(n=>
       `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:var(--r);padding:9px 12px;margin-bottom:6px;font-size:12.5px;color:${n.type==='up'?'var(--accent-bright)':'var(--muted)'}">
@@ -5960,7 +6110,7 @@ function openWD(id) {
         <div><div style="font-family:var(--fh);font-size:17px;font-weight:700;color:var(--accent)">${esc(ex.name)}${ex.cable?` <span style="font-size:11px;color:var(--muted);font-weight:500">· ${ex.cable}</span>`:''}</div>${sub}</div>
       </div>
       ${ex.note?`<div style="font-size:12px;color:var(--text2);background:var(--bg3);border-radius:7px;padding:7px 9px;margin-bottom:8px">${ex.note.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`:''}
-      ${shown.map((s,i)=>{ const isPR=pr.at.has(ei+':'+all.indexOf(s)); return `<div style="display:flex;justify-content:space-between;padding:5px 2px;border-bottom:1px solid var(--border);font-size:12px"><span style="color:${isPR?'#ffd700':'var(--muted)'}">Set ${i+1}${isPR?PR_STAR(' '):''}</span><span style="font-weight:600${isPR?';color:#ffd700':''}">${setStr(s)}</span></div>`;}).join('')||'<div style="font-size:12px;color:var(--muted)">No sets logged</div>'}
+      ${shown.map((s,i)=>{ const isPR=pr.at.has(ei+':'+all.indexOf(s)), isSug=!isPR&&pr.sugAt.has(ei+':'+all.indexOf(s)); return `<div style="display:flex;justify-content:space-between;padding:5px 2px;border-bottom:1px solid var(--border);font-size:12px"><span style="color:${isPR?'#ffd700':'var(--muted)'}">Set ${i+1}${isPR?PR_STAR(' '):isSug?SUG_TAG(' '):''}</span><span style="font-weight:600${isPR?';color:#ffd700':''}">${setStr(s)}</span></div>`;}).join('')||'<div style="font-size:12px;color:var(--muted)">No sets logged</div>'}
     </div>`;
   });
   document.getElementById('wdContent').innerHTML=h;
@@ -8173,10 +8323,14 @@ async function syncMe() {
 }
 
 // ── Merge helpers (pure) ─────────────────────────────────────────────────────
-// Union two PR maps ({exId:{weight,reps,date}}) keeping the higher Epley e1rm.
+// Union two PR maps ({exId:{weight,reps,date}}) keeping the better record: for documented PRs (jk_prs) the heavier raw
+// weight, more reps breaking a tie (2026-10-20: the higher weight, never the rep-adjusted e1RM); `better` overrides it
+// (suggested PRs, jk_prSug, compare the 1RM they imply).
 // `repairs` ({exId:ISO}, jk_prRepair): for a repaired exercise, a record dated before the repair that is not
 // itself a repaired record is a stale copy and loses, even when heavier (Dad's 325 lb back extension, v1.10.56).
-function mergePRs(a,b,repairs){
+const prHeavier=(n,c)=>{ const nw=(n&&n.weight)||0, cw=(c&&c.weight)||0; return nw>cw||(nw===cw&&((n&&n.reps)||0)>((c&&c.reps)||0)); };
+const prImpliesMore=(n,c)=>prE1rm(n)>prE1rm(c);
+function mergePRs(a,b,repairs,better=prHeavier){
   a=(a&&typeof a==='object')?a:{}; b=(b&&typeof b==='object')?b:{};
   const ok=(exId,r)=>!repairs||!repairs[exId]||prOkAfterRepair(r,repairs[exId]);
   const out={};
@@ -8184,7 +8338,7 @@ function mergePRs(a,b,repairs){
   Object.keys(b).forEach(exId=>{
     const cur=out[exId], nw=b[exId];
     if(!ok(exId,nw)) return;
-    if(!cur || e1rm((nw&&nw.weight)||0,(nw&&nw.reps)||0) > e1rm((cur.weight)||0,(cur.reps)||0)) out[exId]=nw;
+    if(!cur || better(nw,cur)) out[exId]=nw;
   });
   return out;
 }
@@ -8326,6 +8480,9 @@ function mergeBackup(cloud, local, pendingNotes){
   if(resets) out.jk_prReset=resets;
   const rs=(m,d)=>resets&&m&&typeof m==='object'?dropPreReset(m,resets,d):m;
   if(cloud.jk_prs||local.jk_prs)           out.jk_prs=mergePRs(rs(cloud.jk_prs,_prDate), rs(local.jk_prs,_prDate), repairs);
+  // Suggested PRs: same best-wins merge, then any that the merged documented record has reached are dropped, so a
+  // stale suggestion on one device never outranks (or survives) a heavier lift documented on the other.
+  if(cloud.jk_prSug||local.jk_prSug)       out.jk_prSug=pruneSug(mergePRs(rs(cloud.jk_prSug,_prDate), rs(local.jk_prSug,_prDate), repairs, prImpliesMore), out.jk_prs);
   if(cloud.jk_cardioPR||local.jk_cardioPR) out.jk_cardioPR=mergeCardioPRs(rs(cloud.jk_cardioPR,_cardioDate), rs(local.jk_cardioPR,_cardioDate));
   if(cloud.jk_holdPR||local.jk_holdPR)     out.jk_holdPR=mergeHoldPRs(rs(cloud.jk_holdPR,_prDate), rs(local.jk_holdPR,_prDate));
 
@@ -9217,6 +9374,7 @@ async function importWorkoutCsv(text) {
   const merged=[...hist,...built].sort((a,b)=>new Date(a.date)-new Date(b.date));
   if(!S.s('hist',merged)){ toast('Import failed — not enough storage. Nothing was changed.','err'); return; }
   S.s('prs',prs); S.s('holdPR',hold); S.s('cardioPR',cardio);
+  const sugs=gPRSug(), keep=pruneSug(sugs,prs); if(Object.keys(keep).length!==Object.keys(sugs).length) S.s('prSug',keep);
   if(typeof syncMe==='function') syncMe();
   cm('profModal');
   toast(`Imported ${built.length} workout${built.length!==1?'s':''} ✓`+(badDate?` · ${badDate} skipped (date not readable)`:''),badDate?'err':'ok');
@@ -9535,6 +9693,7 @@ repairDipAdded();
 repairCardioHoldPRs();
 enforcePRRepairs();
 enforcePRResets();
+enforceDocumentedPRs();
 checkOnboarding();
 // Kick off DB load in background so it's ready when the user first opens Library/exercises
 setTimeout(loadDB, 500);

@@ -530,7 +530,34 @@ export async function liveSingleBoth() {
   check('live single/both: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
   await A.ctx.close(); await B.ctx.close();
 }
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale, liveEndedElsewhere, liveStartOverOpen, liveFinishStorageFull, liveSingleBoth];
+// Suggested vs documented PR (2026-10-20) on the live path: A finishes alone with an estimate-only beat (suggested), then
+// the watch's late set -- a real lift past what the estimate implied -- merges in. Both devices must end on ONE documented
+// PR with no stale suggestion, and the finished entry's stars must match.
+export async function liveSugPromote() {
+  const db = makeDb(); const A = await device(db, 'phone-A'), B = await device(db, 'wear-B');
+  const base = () => { S.s('prs', { cex1: { weight: 100, reps: 1, date: '2026-09-01T18:00:00.000Z' } }); S.s('prSug', {}); };
+  await ev(A, base); await ev(B, base);
+  const sid = await startShared(db, A, [[90, 8, true]]);   // e1RM 114 > 100 but lighter: suggested
+  await ev(B, () => liveResumeRemote());
+  db.offline.add('wear-B');
+  await ev(B, () => { addSet(0); const s = aw.exercises[0].sets[1]; s.weight = 120; s.reps = 1; s.done = true; renderWS(); clearTimeout(_livePushT); return liveSync(); });
+  await ev(A, () => { _finishWContinue(false); });
+  await wait(800);
+  const a0 = await ev(A, () => ({ prs: gPR(), sug: gPRSug(), w: gH()[0] }));
+  check('live sug: A finished alone -- suggested 90 x 8, documented 100 x 1 untouched, 0 PRs', a0.sug.cex1 && a0.sug.cex1.weight === 90 && a0.prs.cex1.weight === 100 && a0.w.prCount === 0 && a0.w.sugSets.length === 1, JSON.stringify(a0));
+  db.offline.delete('wear-B');
+  const r = await ev(B, () => liveSync());
+  await ev(A, () => liveSync());
+  const sa = await ev(A, sid => { const w = gH().find(x => x.id === sid); return { prs: gPR(), sug: gPRSug(), w, n: prsOf(w).n, sugN: prsOf(w).sug.length }; }, sid);
+  const sb = await ev(B, sid => { const w = gH().find(x => x.id === sid); return { prs: gPR(), sug: gPRSug(), w, n: prsOf(w).n, sugN: prsOf(w).sug.length }; }, sid);
+  check('live sug: the late 120 x 1 merged in', r === 'late-merged', r);
+  check('live sug: finisher promotes -- 120 x 1 documented, suggestion cleared, 1 PR on the late set, no suggested tag', sa.prs.cex1.weight === 120 && sa.prs.cex1.reps === 1 && !sa.sug.cex1 && sa.w.prCount === 1 && sa.w.prSets[0].si === 1 && sa.w.sugSets.length === 0 && sa.n === 1 && sa.sugN === 0, JSON.stringify(sa).slice(0, 600));
+  check('live sug: the late device agrees (120 x 1, no suggestion, 1 PR)', sb.prs.cex1.weight === 120 && !sb.sug.cex1 && sb.w.prCount === 1 && sb.n === 1 && sb.sugN === 0, JSON.stringify(sb).slice(0, 600));
+  check('live sug: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale, liveEndedElsewhere, liveStartOverOpen, liveFinishStorageFull, liveSingleBoth, liveSugPromote];
 
 // The app is killed (swiped away) right after tapping Finish: the Finish claim reached the
 // server and flipped the row to 'finished', but the local commit never ran. On reopening, the
