@@ -21,6 +21,11 @@ const store: Store = {
     if (error) throw error;
     return data;
   },
+  async getProfileByEmail(email) {
+    const { data, error } = await admin.from("profiles").select("code").eq("email", email).maybeSingle();
+    if (error) throw error;
+    return data;
+  },
   async getBackupHistIds(code) {
     const { data, error } = await admin.from("profile_backups").select("backup").eq("code", code).maybeSingle();
     if (error) throw error;
@@ -39,13 +44,16 @@ const store: Store = {
   async deleteUser(id) {
     await admin.auth.admin.deleteUser(id);
   },
-  async claimProfile(code, uid) {
-    const { data, error } = await admin.from("profiles").update({ user_id: uid }).eq("code", code).is("user_id", null).select("code");
+  async claimProfile(code, uid, email) {
+    const { data, error } = await admin.from("profiles")
+      .update({ user_id: uid, ...(email ? { email } : {}) })
+      .eq("code", code).is("user_id", null).select("code");
+    if (error?.code === "23505") return false;
     if (error) throw error;
     return (data ?? []).length === 1;
   },
-  async insertProfile(code, name, uid) {
-    const { error } = await admin.from("profiles").insert({ code, name, username: code, user_id: uid });
+  async insertProfile(code, name, uid, email) {
+    const { error } = await admin.from("profiles").insert({ code, name, username: code, user_id: uid, ...(email ? { email } : {}) });
     if (error?.code === "23505") return false;
     if (error) throw error;
     return true;
