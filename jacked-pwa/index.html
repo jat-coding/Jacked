@@ -44,13 +44,17 @@ try{screen.orientation.addEventListener('change',set)}catch(e){}})();
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* 2026-10-12 (recurrence of the 10/2 nav-float bug, this time with no popup involved): the
-   document itself must never scroll. iOS WebKit can re-layout a position:fixed sibling (nav)
-   a frame or more behind a touch-driven scroll of the document/body, which is what let it
-   visibly detach and float mid-content -- independent of any JS scroll-lock, which only ever
-   addressed the popup case. html/body are pinned to the viewport and never scroll; #jkRoot
-   (below) becomes the one real scroll container, same pattern already used for the rotated
-   landscape frame. -webkit-overflow-scrolling:touch is dropped here -- it only ever does
-   anything on an overflow:auto/scroll element, never on the document root, so it was dead. */
+   document itself must never scroll. iOS WebKit can re-layout a position:fixed element a frame
+   or more behind a touch-driven scroll of a scrolling ANCESTOR, letting it visibly detach and
+   float mid-content -- independent of any JS scroll-lock, which only ever addressed the popup
+   case. html/body are pinned to the viewport and never scroll; #jkRoot (below) becomes the one
+   real scroll container, same pattern already used for the rotated landscape frame.
+   -webkit-overflow-scrolling:touch is dropped here -- it only ever does anything on an
+   overflow:auto/scroll element, never on the document root, so it was dead.
+   2026-10-21 (3rd recurrence): the 10/12 fix still nested nav INSIDE #jkRoot, so it remained a
+   position:fixed descendant of the one scrolling ancestor -- still exactly the WebKit trigger
+   condition above. nav is now a sibling of #jkRoot (see its own markup, right before
+   #jkRoot's opening tag) so it is never nested inside anything that scrolls. */
 html,body{height:100%;overscroll-behavior:none;position:fixed;inset:0;overflow:hidden}
 /* Phone-first: stop pinch/double-tap zoom and rubber-band sliding. */
 body{background:var(--bg);color:var(--text);font-family:var(--fb);touch-action:pan-y}
@@ -474,12 +478,15 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
    the device's natural orientation is landscape (tablet/desktop window, angle 0), data-rot
    is unset and we fall back to hiding the app behind a rotate prompt. max-height:600px keeps
    desktop/tablet landscape usable. Runtime screen.orientation.lock() is also attempted.
-   Everything lives under #jkRoot: it is the one scroll container in portrait now too (2026-10-12
-   -- see the html,body comment above), filling the fixed/non-scrolling body via inset:0, so
-   position:fixed layers (nav, modals, toasts, sheets) stay outside the scrolling layer and
-   resolve against the real viewport; in the rotated frame it becomes the scroller inside the
-   transformed body instead, so those same fixed layers resolve against the transformed body
-   and rotate with it without scrolling. */
+   Everything else lives under #jkRoot: it is the one scroll container in portrait now too
+   (2026-10-12 -- see the html,body comment above), filling the fixed/non-scrolling body via
+   inset:0, so position:fixed layers inside it (modals, toasts, sheets) stay outside the
+   scrolling layer and resolve against the real viewport; in the rotated frame it becomes the
+   scroller inside the transformed body instead, so those same fixed layers resolve against the
+   transformed body and rotate with it without scrolling. nav (2026-10-21) is a sibling of
+   #jkRoot, not inside it (iOS WebKit can detach a position:fixed descendant of a scrolling
+   ancestor) -- it resolves against the real viewport in portrait, and against the transformed
+   body in the rotated frame, the same as before, since #jkRoot itself has no transform. */
 #rotateGuard{display:none}
 #jkRoot{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
 /* min-width guard: with interactive-widget=resizes-content, the on-screen keyboard
@@ -492,6 +499,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
    query is mirrored in JS as _LOCK_MQ (drag-to-reorder) — keep them in sync. */
 @media (orientation:landscape) and (max-height:600px) and (min-width:480px){
   html:not([data-rot]) #jkRoot>*:not(#rotateGuard):not(.tc){display:none!important}
+  html:not([data-rot]) body>nav{display:none!important}
   html:not([data-rot]) #rotateGuard{display:flex;position:fixed;inset:0;z-index:9998;background:var(--bg);
     flex-direction:column;align-items:center;justify-content:center;text-align:center;
     gap:16px;padding:32px;color:var(--text)}
@@ -550,6 +558,28 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 </style>
 </head>
 <body>
+<!-- NAV: a true sibling of #jkRoot, outside the scroll container -- see the comment at the
+     top of the stylesheet (html,body{...}) for why: nested inside #jkRoot, iOS WebKit can
+     detach this position:fixed bar and let it track the scroll instead of the viewport
+     (recurred 2026-10-02, 2026-10-12, 2026-10-21). -->
+<nav>
+  <div id="navInd" class="snap"></div>
+  <button class="nb" onclick="sp('routines')" id="nav-routines">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Routines
+  </button>
+  <button class="nb" onclick="sp('exercises')" id="nav-exercises">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>Library
+  </button>
+  <button class="nb active" onclick="sp('home')" id="nav-home">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
+  </button>
+  <button class="nb" onclick="sp('metrics')" id="nav-metrics">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Metrics
+  </button>
+  <button class="nb" onclick="sp('leaderboard')" id="nav-leaderboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Friends
+  </button>
+</nav>
 <div id="jkRoot">
 <div class="tc" id="tc"></div>
 <div id="rotateGuard">
@@ -601,26 +631,6 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <button class="btn ba sm" id="installBtn">Install</button>
   <button class="btn sm" style="color:var(--muted);background:none;border:none;padding:4px" onclick="document.getElementById('installBanner').classList.add('hidden')">✕</button>
 </div>
-
-<!-- NAV -->
-<nav>
-  <div id="navInd" class="snap"></div>
-  <button class="nb" onclick="sp('routines')" id="nav-routines">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Routines
-  </button>
-  <button class="nb" onclick="sp('exercises')" id="nav-exercises">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>Library
-  </button>
-  <button class="nb active" onclick="sp('home')" id="nav-home">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
-  </button>
-  <button class="nb" onclick="sp('metrics')" id="nav-metrics">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Metrics
-  </button>
-  <button class="nb" onclick="sp('leaderboard')" id="nav-leaderboard">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Friends
-  </button>
-</nav>
 
 <!-- Persistent "return to workout" bar (shown on every page during a session) -->
 <div id="resumeBar" onclick="sap()"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:-1px;margin-right:5px"><path d="M8 5v14l11-7z"/></svg>Return to workout · <span id="resumeTimer">00:00</span></div>
