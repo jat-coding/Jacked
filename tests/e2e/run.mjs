@@ -228,17 +228,38 @@ async function jacked() {
     const missing = bs.filter(b => !b.earned && b.name !== 'Jacked' && b.name !== 'Coward-Maxing').map(b => b.name);
     check('jacked: unlocked with every badge earned + all tiers gold', j.earned, `missing=${missing} ${j.desc}`);
     check('jacked: Coward-Maxing not required (it is locked here)', bs.find(b => b.name === 'Coward-Maxing').earned === false);
-    check('jacked: needs 10 (6 tiered + PR + Consistency + Challenge + Comeback), permanent ones not counted', /10 \/ 10 badges · 6 \/ 6 at Gold/.test(j.detail) && !/\d+ \/ \d+/.test(j.desc), j.detail + ' | ' + j.desc);
+    check('jacked: needs 10 (6 tiered + PR + Consistency + Challenge + Comeback), permanent ones not counted', /10 \/ 10 badges earned · 6 \/ 6 at Gold/.test(j.detail) && !/\d+ \/ \d+/.test(j.desc), j.detail + ' | ' + j.desc);
     check('jacked: all six tiered badges gold', bs.filter(b => b.tier).every(b => b.tier === 'gold') && bs.filter(b => b.tier).length === 6);
+    // Tap-to-expand (Mr. Roni, 2026-10-21): tapping a reached tier shows the exact logged set that earned it, not
+    // just the aggregate best on the row. Bench Gold here comes from the single 315x1 on 2026-09-08.
+    await page.evaluate(() => badgeInfo('Bench-Maxing')); await page.waitForTimeout(150);
+    const goldRow = page.locator('#badgeFullBody .bf-tier.on');
+    check('tap-detail: the Gold row is tappable (reached tier)', await goldRow.evaluate(el => el.classList.contains('tap')));
+    await goldRow.click(); await page.waitForTimeout(150);
+    const xp = page.locator('#badgeFullBody #tierxp-bench-gold');
+    check('tap-detail: expands in place on tap', await xp.isVisible());
+    const xpTxt = await xp.innerText();
+    check('tap-detail: shows the specific set -- date, exercise, actual weight/reps (not just the aggregate best)', /Sep 8, 2026/.test(xpTxt) && /Barbell Bench Press/i.test(xpTxt) && /315/.test(xpTxt) && /1 rep/.test(xpTxt), xpTxt);
+    await goldRow.click(); await page.waitForTimeout(150);
+    check('tap-detail: tapping again collapses it', !(await xp.isVisible()));
     await page.evaluate(() => sp('metrics'));
     await page.waitForTimeout(200);
     await page.locator('#page-metrics').getByText('Achievements').first().scrollIntoViewIfNeeded();
     await ctx.close();
   }
   {
+    // Any tier counts now (Mr. Roni, 2026-10-21): Gold is no longer required for Jacked.
     const { page, ctx } = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
     const bs = await badges(page);
-    check('jacked: locked when one tier is only silver (pull-ups 15)', bs.find(b => b.name === 'Pull-up-Maxing').tier === 'silver' && bs.find(b => b.name === 'Jacked').earned === false);
+    check('jacked: any-tier rule -- pull-ups only Silver still earns it', bs.find(b => b.name === 'Pull-up-Maxing').tier === 'silver' && bs.find(b => b.name === 'Jacked').earned === true, JSON.stringify(bs.find(b => b.name === 'Jacked')));
+    await ctx.close();
+  }
+  {
+    // A tier that's not earned at all (not even Bronze) still locks Jacked -- only Gold-specifically is no longer required.
+    const noPull = allGoldHistory().map(w => ({ ...w, exercises: (w.exercises || []).filter(e => e.exId !== 'Pullups') }));
+    const { page, ctx } = await phone({ seed: { hist: noPull, bw: 180 / LB, monthBadges: MB_SEP }, now: SEP15 });
+    const bs = await badges(page);
+    check('jacked: still locked when a required badge is not earned at any tier', bs.find(b => b.name === 'Pull-up-Maxing').tier === null && bs.find(b => b.name === 'Jacked').earned === false, JSON.stringify(bs.find(b => b.name === 'Jacked')));
     await ctx.close();
   }
   {
@@ -402,7 +423,7 @@ async function monthly() {
     check('title: Achievements is indented and level exactly like the Metrics title', Math.abs(tx.mx - tx.ax) < 0.5 && Math.abs(tx.my - tx.ay) < 0.5, JSON.stringify(tx));
     await page.screenshot({ path: `${SHOTS}/hero.png` });
     await ctx.close();
-    const l = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
+    const l = await phone({ seed: seed({ pullReps: 0 }), now: SEP15 });
     await l.page.evaluate(() => { sp('metrics'); openAch(); }); await l.page.waitForTimeout(300);
     check('hero: locked Jacked still has its own box at the top (greyed, no shimmer), once, not in the list', await l.page.evaluate(() => { const h = document.querySelector('#achFullBody .jh'); return !!h && h.classList.contains('lock') && document.querySelector('#achFullBody').firstElementChild === h && getComputedStyle(h, '::after').display === 'none' && getComputedStyle(h.querySelector('.jh-t')).animationName === 'none' && document.querySelectorAll('#achFullBody [onclick="badgeInfo(\'Jacked\')"]').length === 1; }));
     await l.ctx.close();
@@ -438,7 +459,7 @@ async function monthly() {
       ['Bench-Maxing', 'Shoulder-Maxing', 'Leg-Maxing', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing', 'PR-Maxing', 'Consistency-Maxing'].every(n => idx(n) > lab[1] && idx(n) < lab[2]) &&
       ['1000lb Club', 'Variety-Maxing'].every(n => idx(n) > lab[2]), JSON.stringify(g));
     await ctx.close();
-    const l = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
+    const l = await phone({ seed: seed({ pullReps: 0 }), now: SEP15 });
     await l.page.evaluate(() => { sp('metrics'); openAch(); }); await l.page.waitForTimeout(300);
     const gl = await l.page.evaluate(() => [...document.querySelectorAll('#achFullBody .bgrp, #achFullBody [onclick^="badgeInfo("]')].map(el => el.classList.contains('bgrp') ? '#' + el.textContent : el.getAttribute('onclick').slice(11, -2)));
     const jt = await l.page.evaluate(() => { const j = computeBadges().find(b => b.name === 'Jacked'); badgeInfo('Jacked'); return [j.desc, document.getElementById('badgeFullBody').innerText]; });
@@ -457,7 +478,7 @@ async function monthly() {
     check('gold titles: Jacked held -> tab titles shimmer in gold, box shimmers', on.attr && on.anim === 'ptSweep' && /text/.test(on.clip) && on.ht === 'jhTxt', JSON.stringify(on));
     const fr = await page.evaluate(() => { const g = getComputedStyle(document.body, '::before'); const sec = document.querySelector('#page-metrics .metric-card, #page-metrics .sec'); return [g.position, g.pointerEvents, getComputedStyle(document.body, '::after').position, sec && getComputedStyle(sec).outlineColor, sec && getComputedStyle(sec).outlineWidth, getComputedStyle(document.querySelector('.pt span')).textShadow]; });
     check('glow: soft edge glow (fixed, click-through), no screen border, gold outline on sections, dot has no teal glow', fr[0] === 'fixed' && fr[1] === 'none' && fr[2] !== 'fixed' && /255, 215, 0/.test(fr[3]) && parseFloat(fr[4]) > 0 && fr[5] === 'none', JSON.stringify(fr));
-    const t = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
+    const t = await phone({ seed: seed({ pullReps: 0 }), now: SEP15 });
     await t.page.evaluate(() => { renderHome(); sp('metrics'); });
     const off = await t.page.evaluate(() => ({ attr: document.documentElement.hasAttribute('data-jacked'), anim: getComputedStyle(document.querySelector('#page-metrics .pt')).animationName }));
     check('gold titles: no Jacked -> plain titles', !off.attr && off.anim === 'none', JSON.stringify(off));
@@ -531,7 +552,7 @@ async function achievementsPage() {
     const jr = await page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = achRow(computeBadges().find(b => b.name === 'Jacked')); document.body.appendChild(d); const t = d.innerText; const n = d.querySelector('div[style*="font-size:22px"]'); d.remove(); return { t, big: !!n }; });
     check('Jacked row: just the word, larger, no message under it', /Jacked/.test(jr.t) && !/something special/i.test(jr.t) && jr.big, JSON.stringify(jr));
     const jk = await page.evaluate(() => { badgeInfo('Jacked'); return document.getElementById('badgeFullBody').innerText; });
-    check('Jacked popup: generic wording, no lift/cardio list', /every tiered badge at Gold/.test(jk) && !/six lift/.test(jk), jk);
+    check('Jacked popup: generic wording, no lift/cardio list', /any tier counts on the tiered ones/.test(jk) && !/six lift/.test(jk), jk);
     await ctx.close();
   }
   {
@@ -580,7 +601,7 @@ async function achievementsPage() {
 }
 
 async function narrowAndShots() {
-  const h = allGoldHistory({ pullReps: 15 });   // Consistency earned, Jacked locked -> both visible
+  const h = allGoldHistory({ pullReps: 0 });   // Consistency earned, Jacked locked (pull-ups unearned at any tier) -> both visible
   for (const width of [320, 390]) {
     const { page, ctx } = await phone({ width, height: width === 320 ? 640 : 844, seed: { hist: h, bw: 180 / LB }, now: SEP15 });
     await page.evaluate(() => sp('metrics'));
@@ -1267,7 +1288,7 @@ async function benchGoodlift() {
     const seed = { prof: { name: 'T', username: '@t', code: '@t', ...prof }, hist };
     if (lb) seed.bw = lb / LB;
     const { page, ctx, errors } = await phone({ seed, now });
-    const r = await page.evaluate(() => { const b = computeBadges().find(x => x.name === 'Bench-Maxing'); return { T: badgeT().bench, det: BADGE_DETAIL['Bench-Maxing'], how: BADGE_HOW['Bench-Maxing'], tier: b.tier || null, desc: b.desc, all: b.all && b.all.tier, live: badgeTierForKey('bench', gH()).tier, ohp: badgeT().ohpFrac }; });
+    const r = await page.evaluate(() => { const b = computeBadges().find(x => x.name === 'Bench-Maxing'); return { T: badgeT().bench, det: BADGE_DETAIL['Bench-Maxing'], how: BADGE_HOW['Bench-Maxing'], tier: b.tier || null, kept: !!b.kept, desc: b.desc, all: b.all && b.all.tier, live: badgeTierForKey('bench', gH()).tier, ohp: badgeT().ohpFrac }; });
     return { ...r, page, ctx, errors };
   };
   const j = a => JSON.stringify(a), errs = [];
@@ -1304,7 +1325,15 @@ async function benchGoodlift() {
   const k = await run({ prof: { sex: 'male' }, lb: 250, hist: [bench('2026-09-20', 230)], now: OCT15 });
   check('bench goodlift: 250 lb man thresholds rise to 155/255/355', j(k.T) === '[155,255,355]', j(k.T));
   check('bench goodlift: a Silver earned before the switch is kept', k.tier === 'silver' && k.all === 'silver' && k.live === 'silver', j([k.tier, k.all, k.live]));
-  check('bench goodlift: a kept tier says so', /kept from the old numbers/.test(k.desc), k.desc);
+  // A kept tier is now a visible chip + tap-to-expand explanation, not a terse desc footnote (Mr. Roni, 2026-10-21).
+  check('bench goodlift: kept flag set, no terse desc footnote', k.kept === true && !/kept/i.test(k.desc), j([k.kept, k.desc]));
+  await k.page.evaluate(() => badgeInfo('Bench-Maxing')); await k.page.waitForTimeout(150);
+  const kChip = await k.page.locator('#badgeFullBody .bf-kept').first().innerText();
+  check('bench goodlift: popup shows an "Old standard" chip on the kept tier', /old standard/i.test(kChip), kChip);
+  const kSilverRow = k.page.locator('#badgeFullBody .bf-tier.on');
+  await kSilverRow.click(); await k.page.waitForTimeout(150);
+  const kXp = await k.page.locator('#badgeFullBody #tierxp-bench-silver').innerText();
+  check('bench goodlift: tapping the kept Silver row shows the earning set and the old-vs-current thresholds', /230/.test(kXp) && /Barbell Bench Press/i.test(kXp) && /retired standard/i.test(kXp) && /225 lb/.test(kXp) && /255 lb/.test(kXp), kXp);
   errs.push(...k.errors); await k.ctx.close();
   const n = await run({ prof: { sex: 'male' }, lb: 250, hist: [bench('2026-10-01', 230)], now: OCT15 });
   check('bench goodlift: the same lift after the switch is judged on the new numbers', n.tier === 'bronze' && n.live === 'bronze' && !/kept/.test(n.desc), j([n.tier, n.live, n.desc]));
@@ -1328,7 +1357,7 @@ async function sourcedRepCardio() {
   const OCT20 = new Date('2026-10-20T12:00:00-06:00');
   const P = (sex, birthday) => ({ name: 'T', username: '@t', code: '@t', sex, birthday });
   const open = async (seed, now = OCT20) => phone({ seed: { hist: [], ...seed }, now });
-  const probe = page => page.evaluate(() => { const T = badgeT(), o = {}; computeBadges().forEach(b => { o[b.name] = { tier: b.tier || null, desc: b.desc }; });
+  const probe = page => page.evaluate(() => { const T = badgeT(), o = {}; computeBadges().forEach(b => { o[b.name] = { tier: b.tier || null, kept: !!b.kept, desc: b.desc }; });
     return { T, o, live: { pullup: badgeTierForKey('pullup', gH()).tier, pushup: badgeTierForKey('pushup', gH()).tier, cardio: badgeTierForKey('cardio', gH()).tier },
       how: { pu: BADGE_DETAIL['Pull-up-Maxing'].how, ps: BADGE_HOW['Push-up-Maxing'], c: BADGE_DETAIL['Cardio-Maxing'].how } }; });
   const j = a => JSON.stringify(a), clk = a => a.map(fmtClockT).join(' ');
@@ -1353,20 +1382,31 @@ async function sourcedRepCardio() {
   // Tiers on sets logged after the switch: the new ladder only.
   const at = (d, exs) => [wk(d, exs)];
   r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: at('2026-10-15', [ex('Pull-up', [[0, 20]], 'bodyweight_reps'), ex('Push-up', [[0, 60]], 'bodyweight_reps'), ex('Run', [[1, 7]], 'distance')]) });
-  check('sourced: 20 pull-ups after the switch = Bronze (was Gold on the old 10/15/20)', r.o['Pull-up-Maxing'].tier === 'bronze' && r.live.pullup === 'bronze' && !/kept/.test(r.o['Pull-up-Maxing'].desc), j(r.o['Pull-up-Maxing']) + r.live.pullup);
+  check('sourced: 20 pull-ups after the switch = Bronze (was Gold on the old 10/15/20)', r.o['Pull-up-Maxing'].tier === 'bronze' && r.live.pullup === 'bronze' && r.o['Pull-up-Maxing'].kept === false, j(r.o['Pull-up-Maxing']) + r.live.pullup);
   check('sourced: 60 push-ups after the switch = Silver', r.o['Push-up-Maxing'].tier === 'silver' && r.live.pushup === 'silver', j(r.o['Push-up-Maxing']));
   check('sourced: a 7:00 mile after the switch earns no Cardio-Maxing (Bronze is 6:40)', r.o['Cardio-Maxing'].tier === null && r.live.cardio === null, j(r.o['Cardio-Maxing']) + r.live.cardio);
 
   // Grandfathered: the same sets logged before the switch keep their old tier, then age out after 3 months.
   const pre = at('2026-10-05', [ex('Pull-up', [[0, 20]], 'bodyweight_reps'), ex('Push-up', [[0, 60]], 'bodyweight_reps'), ex('Run', [[1, 7]], 'distance')]);
-  r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: pre });
-  check('sourced: 20 pull-ups logged before the switch keep Gold, marked kept', r.o['Pull-up-Maxing'].tier === 'gold' && r.live.pullup === 'gold' && /kept from the old numbers/.test(r.o['Pull-up-Maxing'].desc), j(r.o['Pull-up-Maxing']) + r.live.pullup);
-  check('sourced: 60 push-ups logged before the switch keep Silver (old ladder also Silver: not marked kept)', r.o['Push-up-Maxing'].tier === 'silver' && !/kept/.test(r.o['Push-up-Maxing'].desc), j(r.o['Push-up-Maxing']));
-  check('sourced: a 7:00 mile logged before the switch keeps Silver, marked kept', r.o['Cardio-Maxing'].tier === 'silver' && r.live.cardio === 'silver' && /kept from the old numbers/.test(r.o['Cardio-Maxing'].desc), j(r.o['Cardio-Maxing']) + r.live.cardio);
+  {
+    // A kept tier is now a visible chip + tap-to-expand explanation, not a terse desc footnote (Mr. Roni, 2026-10-21).
+    const { page, ctx, errors } = await open({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: pre });
+    const rr = await probe(page);
+    check('sourced: 20 pull-ups logged before the switch keep Gold, flagged kept (no terse desc footnote)', rr.o['Pull-up-Maxing'].tier === 'gold' && rr.live.pullup === 'gold' && rr.o['Pull-up-Maxing'].kept === true && !/kept/i.test(rr.o['Pull-up-Maxing'].desc), j(rr.o['Pull-up-Maxing']) + rr.live.pullup);
+    check('sourced: 60 push-ups logged before the switch keep Silver (old ladder also Silver: not flagged kept)', rr.o['Push-up-Maxing'].tier === 'silver' && rr.o['Push-up-Maxing'].kept === false, j(rr.o['Push-up-Maxing']));
+    check('sourced: a 7:00 mile logged before the switch keeps Silver, flagged kept', rr.o['Cardio-Maxing'].tier === 'silver' && rr.live.cardio === 'silver' && rr.o['Cardio-Maxing'].kept === true, j(rr.o['Cardio-Maxing']) + rr.live.cardio);
+    await page.evaluate(() => badgeInfo('Pull-up-Maxing')); await page.waitForTimeout(150);
+    const chip = await page.locator('#badgeFullBody .bf-kept').first().innerText();
+    check('sourced: pull-up popup shows an "Old standard" chip on the kept Gold tier', /old standard/i.test(chip), chip);
+    await page.locator('#badgeFullBody .bf-tier.on').click(); await page.waitForTimeout(150);
+    const xp = await page.locator('#badgeFullBody #tierxp-pullup-gold').innerText();
+    check('sourced: tapping the kept pull-up Gold row shows the earning set (20 reps) and the old-vs-current thresholds', /20 reps/.test(xp) && /Pull-up/i.test(xp) && /retired standard/i.test(xp), xp);
+    errs.push(...errors); await ctx.close();
+  }
   r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: pre }, new Date('2027-01-10T12:00:00-06:00'));
   check('sourced: the kept tiers expire once those sets are older than 3 months', r.o['Pull-up-Maxing'].tier === null && r.o['Cardio-Maxing'].tier === null, j([r.o['Pull-up-Maxing'], r.o['Cardio-Maxing']]));
   r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: [...pre, ...at('2026-10-16', [ex('Pull-up', [[0, 29]], 'bodyweight_reps')])] });
-  check('sourced: a new set that beats the old tier on the new ladder is not marked kept', r.o['Pull-up-Maxing'].tier === 'gold' && !/kept/.test(r.o['Pull-up-Maxing'].desc), j(r.o['Pull-up-Maxing']));
+  check('sourced: a new set that beats the old tier on the new ladder is not flagged kept', r.o['Pull-up-Maxing'].tier === 'gold' && r.o['Pull-up-Maxing'].kept === false, j(r.o['Pull-up-Maxing']));
 
   // Popup copy names the real source, not a hand-set adjustment.
   check('sourced: pull-up popup cites Strength Level for this sex, age and body weight', /Strength Level's Intermediate, Advanced and Elite pull-up standards for men aged 26 at 180 lb body weight\./.test(m26.how.pu) && !/Adjusted for your profile/.test(m26.how.pu), m26.how.pu);
