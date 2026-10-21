@@ -2,19 +2,29 @@ export type Profile = { code: string; user_id: string | null };
 
 export interface Store {
   getProfile(code: string): Promise<Profile | null>;
+  // Case-insensitive lookup against the optional user-supplied email column (distinct from
+  // the synthetic auth.users email) -- used to reject a sign-up that would collide.
+  getProfileByEmail(email: string): Promise<{ code: string } | null>;
   getBackupHistIds(code: string): Promise<string[]>;
   // null = failed; { weak: true } = Auth refused the password (too weak / found in a breach list).
   createUser(email: string, password: string): Promise<string | null | { weak: true }>;
   deleteUser(id: string): Promise<void>;
-  claimProfile(code: string, uid: string): Promise<boolean>;
-  insertProfile(code: string, name: string, uid: string): Promise<boolean>;
+  claimProfile(code: string, uid: string, email: string | null): Promise<boolean>;
+  insertProfile(code: string, name: string, uid: string, email: string | null): Promise<boolean>;
 }
 
-export type RegisterBody = { code?: unknown; password?: unknown; name?: unknown; proofIds?: unknown };
+export type RegisterBody = {
+  code?: unknown; password?: unknown; name?: unknown; proofIds?: unknown; email?: unknown;
+};
 
 export function normU(s: unknown): string {
   const h = String(s ?? "").trim().replace(/^@+/, "").toLowerCase().replace(/[^a-z0-9_]/g, "");
   return h ? "@" + h : "";
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export function normEmail(s: unknown): string {
+  return String(s ?? "").trim().toLowerCase();
 }
 
 // Sets the password for a username: creates the account if the username is free,
@@ -34,8 +44,18 @@ export async function register(store: Store, body: RegisterBody) {
   const password = typeof body.password === "string" ? body.password : "";
   if (password.length < 8 || password.length > 72) return { status: "weak_password" };
 
+  // Optional: lets the same account log in with either its username or this address.
+  let userEmail: string | null = null;
+  const rawEmail = normEmail(body.email);
+  if (rawEmail) {
+    if (rawEmail.length > 255 || !EMAIL_RE.test(rawEmail)) return { status: "invalid_email" };
+    userEmail = rawEmail;
+  }
+
   const prof = await store.getProfile(code);
   if (prof?.user_id) return { status: "already_claimed" };
+
+  if (userEmail && (await store.getProfileByEmail(userEmail))) return { status: "email_taken" };
 
   if (prof) {
     const cloudIds = await store.getBackupHistIds(code);
@@ -45,16 +65,18 @@ export async function register(store: Store, body: RegisterBody) {
   }
 
   // Never mailed: login resolves username → email via account_status().
-  const email = `${crypto.randomUUID()}@users.jacked.example.com`;
-  const uid = await store.createUser(email, password);
+  const authEmail = `${crypto.randomUUID()}@users.jacked.example.com`;
+  const uid = await store.createUser(authEmail, password);
   if (uid && typeof uid === "object") return { status: "weak_password" };
   if (!uid) return { status: "error" };
 
   const name = String(body.name ?? "").trim().slice(0, 40) || code.slice(1);
-  const won = prof ? await store.claimProfile(code, uid) : await store.insertProfile(code, name, uid);
+  const won = prof
+    ? await store.claimProfile(code, uid, userEmail)
+    : await store.insertProfile(code, name, uid, userEmail);
   if (!won) {
     await store.deleteUser(uid);
     return { status: prof ? "already_claimed" : "taken" };
   }
-  return { status: "ok", email };
+  return { status: "ok", email: authEmail };
 }
