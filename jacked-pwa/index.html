@@ -598,11 +598,17 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="ob-sub">Your personal lifting companion</div>
 
   <div class="ob-step active" id="ob0">
-    <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:8px">Welcome</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Create a new account, or log in to one you already have</div>
-    <button class="btn ba wf" onclick="obShowSignup()">Sign up</button>
-    <button class="btn bg wf" style="margin-top:10px" onclick="om('loginModal')">Log in</button>
-    <button class="btn bg wf" style="margin-top:8px" onclick="document.getElementById('importFile').click()">Restore from a backup file</button>
+    <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:8px">Log in</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Enter your username or email and password to load that account and all of its workouts onto this device.</div>
+    <form onsubmit="event.preventDefault();cloudLogin()" autocomplete="on">
+    <div class="fg"><input type="text" id="loginUser" name="username" placeholder="@username or email" autocapitalize="none" autocorrect="off" autocomplete="username" maxlength="255"></div>
+    <div class="fg"><div class="pw"><input type="password" id="loginPass" name="password" placeholder="Password" autocomplete="current-password"><button type="button" class="pw-tog" tabindex="-1" aria-label="Show password" onclick="pwToggle(this)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg></button></div></div>
+    <div id="loginMsg" style="display:none;font-size:12px;color:var(--orange);margin-bottom:10px"></div>
+    <button type="submit" class="btn ba wf">Log in &amp; load my data</button>
+    </form>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px">This replaces any data currently on this device.</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:18px">Don't have an account? <button type="button" onclick="obShowSignup()" style="background:none;border:none;padding:0;color:var(--accent);font-weight:700;text-decoration:underline;cursor:pointer;font-size:13px">Sign up</button></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px"><button type="button" onclick="document.getElementById('importFile').click()" style="background:none;border:none;padding:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:12px">Restore from a backup file</button></div>
   </div>
 
   <div class="ob-step" id="ob1">
@@ -616,7 +622,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div class="fg"><div class="pw"><input type="password" id="obPass2" placeholder="Confirm password" autocomplete="new-password"><button type="button" class="pw-tog" tabindex="-1" aria-label="Show password" onclick="pwToggle(this)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg></button></div></div>
     <button type="submit" class="btn ba wf" id="obNext1Btn">Continue →</button>
     </form>
-    <button class="btn bg sm" style="margin-top:14px" onclick="obBackToChoice()">‹ Back</button>
+    <div style="font-size:13px;color:var(--muted);margin-top:14px">Already have an account? <button type="button" onclick="obShowLogin()" style="background:none;border:none;padding:0;color:var(--accent);font-weight:700;text-decoration:underline;cursor:pointer;font-size:13px">Log in</button></div>
   </div>
 
   <div class="ob-step" id="ob2">
@@ -1093,22 +1099,6 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 
     <div class="sep"></div>
     <div id="profVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:4px 0 2px"></div>
-  </div>
-</div>
-
-<!-- LOG IN TO EXISTING ACCOUNT (cloud restore by username) -->
-<!-- z-index above .ob-wrap (500) so it shows when opened from the welcome screen -->
-<div class="mo ctr" id="loginModal" style="z-index:600">
-  <div class="md">
-    <div class="mh"><div class="mt">Log in</div><button class="cb" onclick="cm('loginModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Enter your username or email and password to load that account and all of its workouts onto this device.</div>
-    <form onsubmit="event.preventDefault();cloudLogin()" autocomplete="on">
-    <div class="fg"><label>Username or email</label><input type="text" id="loginUser" name="username" placeholder="@username or email" autocapitalize="none" autocorrect="off" autocomplete="username" maxlength="255"></div>
-    <div class="fg"><label>Password</label><div class="pw"><input type="password" id="loginPass" name="password" placeholder="••••••••" autocomplete="current-password"><button type="button" class="pw-tog" tabindex="-1" aria-label="Show password" onclick="pwToggle(this)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg></button></div></div>
-    <div id="loginMsg" style="display:none;font-size:12px;color:var(--orange);margin-bottom:10px"></div>
-    <button type="submit" class="btn ba wf">Log in &amp; load my data</button>
-    </form>
-    <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">This replaces any data currently on this device.</div>
   </div>
 </div>
 
@@ -1644,7 +1634,7 @@ function obShowSignup(){
   document.getElementById('ob0').classList.remove('active');
   document.getElementById('ob1').classList.add('active');
 }
-function obBackToChoice(){
+function obShowLogin(){
   document.getElementById('ob1').classList.remove('active');
   document.getElementById('ob0').classList.add('active');
 }
@@ -9172,7 +9162,6 @@ async function cloudLogin() {
     localStorage.setItem('jk_lastCloudBackup', JSON.stringify(dayKey(new Date())));
     clearDirty();
     localStorage.setItem('jk_appVersion', APP_VERSION);
-    cm('loginModal');
     toast('Welcome back — loading your data…','ok');
     setTimeout(()=>window.location.reload(), 700);
   } catch(e) { console.warn('cloudLogin',e); toast('Login failed — try again','err'); }

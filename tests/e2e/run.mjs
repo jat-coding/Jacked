@@ -1118,13 +1118,16 @@ async function portraitLock() {
     check('addCurated(): no page errors', errors.length === 0, errors.join(' | '));
     await ctx.close(); }
   // Typing works in the rotated frame and the field is not hidden (keyboard bug must not regress).
+  // Uses afModal as a stand-in modal-with-input (login moved inline into onboarding
+  // 2026-10-21 and #loginModal no longer exists; this test is about the rotated-keyboard-lock
+  // bug in general, not login specifically).
   { const { page, ctx } = await phone({ width: 844, height: 390, angle: 90 });
-    await page.evaluate(() => om('loginModal')); await page.waitForTimeout(150);
-    const inp = page.locator('#loginModal input').first();
+    await page.evaluate(() => om('afModal')); await page.waitForTimeout(150);
+    const inp = page.locator('#afModal input').first();
     await inp.tap(); await page.keyboard.type('abc');
     check('lock @90: focused input stays visible, keeps focus, accepts typing', (await inp.inputValue()) === 'abc' && (await inp.isVisible()) && (await page.evaluate(() => document.body.classList.contains('kb'))));
-    check('lock @90: modal input is on screen', inVp(await R(page, '#loginModal input'), 844, 390));
-    await page.screenshot({ path: `${SHOTS}/lock-844x390-90-login.png` });
+    check('lock @90: modal input is on screen', inVp(await R(page, '#afModal input'), 844, 390));
+    await page.screenshot({ path: `${SHOTS}/lock-844x390-90-modal.png` });
     await ctx.close(); }
   // Unchanged: portrait, keyboard-shrunk portrait, tablet, desktop.
   { const { page, ctx } = await phone({ width: 390, height: 844, angle: 0 });
