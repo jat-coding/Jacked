@@ -136,6 +136,10 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .bf-tier.wl{flex-wrap:wrap;row-gap:6px}
 .bf-lift{flex-basis:100%;display:flex;justify-content:space-between;gap:10px;font-size:13px;color:var(--text2);font-weight:700}
 .bf-you{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text2);background:var(--bg4);border-radius:10px;padding:2px 8px}
+.bf-kept{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);background:rgba(140,140,170,.16);border:1px solid rgba(140,140,170,.4);border-radius:10px;padding:2px 7px}
+.bf-tier.tap{cursor:pointer}
+.bf-chev{color:var(--muted);font-size:18px;line-height:1}
+.bf-tier-xp{padding:10px 14px;border:1px dashed var(--border);border-radius:14px;font-size:13px;line-height:1.5;color:var(--text2);text-align:left}
 .rc-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .rc-tile{border:1px solid var(--border2);border-radius:12px;padding:8px 12px;text-align:left;background:var(--bg2)}
 .rc-tile .v{font-family:var(--fh);font-size:24px;font-weight:800;line-height:1.1}
@@ -4897,6 +4901,67 @@ function cardioTierKept(pace,paceOld){
   const kept=(TIER_RANK[tOld]||0)>(TIER_RANK[t]||0);
   return {tier:kept?tOld:t, kept};
 }
+// Same rolling window computeBadges applies before checking any tiered badge (Mr. Roni, 2026-10-21, tap-to-expand
+// tier rows): kept as its own helper so badgeInfo can re-walk history without computeBadges' local h3.
+function last3mo(h){ const _n=new Date(), cut3=+new Date(_n.getFullYear(),_n.getMonth()-3,_n.getDate()); return h.filter(w=>+new Date(w.date)>=cut3); }
+// Every logged set for a tiered badge, flattened to {date,ex,reps,weight,value,variant} -- the same sets
+// liftVariantsOf/repTierOf/cardioBreakdown scan, just not reduced to a single best yet.
+function tierCrossingEntries(key,h){
+  const entries=[];
+  if(key==='bench'||key==='ohp'){
+    const V=LIFT_VARIANTS[key];
+    h.forEach(w=>(w.exercises||[]).forEach(ex=>{
+      const i=V.findIndex(x=>isStdEx(ex,x.key,w)); if(i<0) return;
+      (ex.sets||[]).forEach(s=>{ if(s.done&&(s.reps||0)>=1){ const lb=(s.weight||0)*2.20462;
+        entries.push({date:w.date,ex:ex.name,reps:s.reps,weight:s.weight,value:creditLb(V[i],lb),variant:V[i].label}); } }); }));
+  } else if(key==='squat'){
+    h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!isStdEx(ex,'squat',w)) return;
+      (ex.sets||[]).forEach(s=>{ if(s.done&&(s.reps||0)>=1) entries.push({date:w.date,ex:ex.name,reps:s.reps,weight:s.weight,value:(s.weight||0)*2.20462}); }); }));
+  } else if(key==='pullup'||key==='pushup'){
+    h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!repBadgeEx(ex,key,w)) return;
+      (ex.sets||[]).forEach(s=>{ if(s.done) entries.push({date:w.date,ex:ex.name,reps:s.reps||0,weight:null,value:s.reps||0}); }); }));
+  } else if(key==='cardio'){
+    h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!stdRun(ex,w)) return;
+      (ex.sets||[]).forEach(s=>{ if(s.done&&s.weight>0&&s.reps>0) entries.push({date:w.date,ex:ex.name,reps:s.reps,weight:s.weight,value:mileEquiv(s.weight,s.reps)}); }); }));
+  }
+  return entries;
+}
+// The first (earliest) entry to reach each tier threshold, bronze/silver/gold, scanning in chronological order.
+function firstCross(entries,thr,lowerBetter){
+  const order=['bronze','silver','gold'], res={bronze:null,silver:null,gold:null};
+  entries.slice().sort((a,b)=>+new Date(a.date)-+new Date(b.date)).forEach(e=>{
+    order.forEach((t,i)=>{ if(res[t]) return; const ok=lowerBetter?e.value<=thr[i]:e.value>=thr[i]; if(ok) res[t]=e; });
+  });
+  return res;
+}
+// Which exact logged set first crossed each tier's threshold, for the tap-to-expand tier rows in badgeInfo
+// (Mr. Roni, 2026-10-21): tries the CURRENT ladder first, then falls back to the retired (kept) ladder --
+// restricted to sets logged before that ladder switched, same cutoff benchTierOf/repTierOf/cardioTierKept use --
+// so a tier that only survives as "kept from the old numbers" still shows the set that actually earned it.
+function tierCrossingDetail(key,h){
+  const lowerBetter=key==='cardio', entries=tierCrossingEntries(key,h);
+  const T=key==='bench'?badgeT().bench:key==='ohp'?badgeT().ohpFrac:key==='squat'?badgeT().squatFrac:key==='cardio'?badgeT().cardio:badgeT()[key];
+  const cur=firstCross(entries,T,lowerBetter);
+  let legacy={bronze:null,silver:null,gold:null};
+  if(key==='bench'){
+    const old=entries.filter(e=>+new Date(e.date)<BENCH_GL_FROM&&e.variant==='Barbell bench');
+    legacy=firstCross(old,benchLegacyT(),false);
+  } else if(key==='pullup'||key==='pushup'||key==='cardio'){
+    const old=entries.filter(e=>+new Date(e.date)<STD_REPS_FROM);
+    legacy=firstCross(old,badgeLegacyT(key),lowerBetter);
+  }
+  const merged={}; ['bronze','silver','gold'].forEach(t=>{ merged[t]=cur[t]||legacy[t]||null; });
+  return merged;
+}
+// Format one crossing entry's actual stat for display -- reps/weight (or distance/time for cardio), not the
+// aggregate best.
+function tierCrossStat(key,e){
+  if(!e) return '';
+  if(key==='pullup'||key==='pushup') return `${e.reps} rep${e.reps!==1?'s':''}`;
+  if(key==='cardio') return `${Math.round(e.weight*100)/100} mi in ${fmtClock(e.reps)} (${fmtPace(pacePerMile(e.weight,e.reps))})`;
+  const base=`${dW(e.weight)}${uL()} × ${e.reps} rep${e.reps!==1?'s':''}`;
+  return (e.variant&&e.variant!=='Barbell bench'&&e.variant!=='Barbell overhead press')?`${base} (${e.variant})`:base;
+}
 const BADGE_META={
   bench:{name:'Bench-Maxing',icon:'dumbbell',color:MCOL.chest}, ohp:{name:'Shoulder-Maxing',icon:'dumbbell',color:MCOL.shoulders},
   squat:{name:'Leg-Maxing',icon:'dumbbell',color:MCOL.legs}, pullup:{name:'Pull-up-Maxing',icon:'dumbbell',color:MCOL.back},
@@ -6263,8 +6328,8 @@ let metricUnit='metric'; // 'metric' | 'imperial' — derived from the profile u
 
 // ── Achievement badges (computed live from history + PRs) ──
 // Coward-Maxing is a penalty badge that resets monthly. Jacked is LOCKED while you hold it
-// (Mr. Roni, 2026-09-24): Jacked needs every other badge earned, every tiered badge at Gold,
-// and no Coward-Maxing.
+// (Mr. Roni, 2026-09-24, Gold requirement dropped 2026-10-21 -- any tier counts): Jacked needs
+// every other badge earned, every tiered badge at any tier, and no Coward-Maxing.
 function computeBadges() {
   const h=gH(), prs=gPR();
   const dates=[...new Set(h.map(w=>dayKey(w.date)).filter(Boolean))].sort();
@@ -6414,8 +6479,8 @@ function computeBadges() {
   // NOTE: badge names follow the "<Title>-Maxing" convention — keep it for new badges.
   // Jacked is the exception by request. tiered:true marks the Bronze/Silver/Gold badges.
   const list=[
-    {icon:'dumbbell',color:MCOL.chest,name:'Bench-Maxing',tiered:true,tier:benchT,earned:!!benchT,
-      desc: `${benchStd?'Standard 1-rep bench':'1-rep bench'} (${uL()}): ${tlineW(bench,TH.bench)}`+(benchR.by&&benchR.by.key!=='bench'?` · ${benchR.by.label} ${lbN(bench)}`:'')+(benchR.kept?' · kept from the old numbers':''),
+    {icon:'dumbbell',color:MCOL.chest,name:'Bench-Maxing',tiered:true,tier:benchT,earned:!!benchT,kept:benchR.kept,
+      desc: `${benchStd?'Standard 1-rep bench':'1-rep bench'} (${uL()}): ${tlineW(bench,TH.bench)}`+(benchR.by&&benchR.by.key!=='bench'?` · ${benchR.by.label} ${lbN(bench)}`:''),
       lifts:benchR.lifts},
     {icon:'dumbbell',color:MCOL.shoulders,name:'Shoulder-Maxing',tiered:true,tier:ohpT,earned:!!ohpT,needsWeight:!haveBW,
       desc: !haveBW?'Enter body weight in Profile to unlock':`1-rep OHP (${uL()}): ${tlineW(ohp,TH.ohpFrac)}`+(ohpR.by&&ohpR.by.key!=='ohp'?` · ${ohpR.by.label} ${lbN(ohp)}`:''),
@@ -6429,12 +6494,12 @@ function computeBadges() {
         {t:'Deadlift',rows:[['Your best in that workout',lbTxt(bestParts.dead)]]},
         {t:'Total',met:club,rows:[['Combined',lbTxt(bestSingle)+' / '+lbTxt(1000)]]}
       ]:undefined},
-    {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tiered:true,tier:pullT,earned:!!pullT,
-      desc:`Best set: ${pullBest} reps — ${tline(pullBest,TH.pullup)}`+(pullR.kept?' · kept from the old numbers':'')},
-    {icon:'dumbbell',color:MCOL.triceps,name:'Push-up-Maxing',tiered:true,tier:pushT,earned:!!pushT,
-      desc:`Best set: ${pushBest} reps — ${tline(pushBest,TH.pushup)}`+(pushR.kept?' · kept from the old numbers':'')},
-    {icon:'heart',color:MCOL.cardio,name:'Cardio-Maxing',tiered:true,tier:cardioT,earned:!!cardioT,
-      desc: isFinite(cardioBest)?`Best mile pace: ${fmtClock(cardioBest)}/mi — ${tlineLow(cardioBest,[TH.cardio[0],TH.cardio[1],TH.cardio[2]])}`+(cardioR.kept?' · kept from the old numbers':''):'Log a Running exercise (miles + minutes) to unlock',
+    {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tiered:true,tier:pullT,earned:!!pullT,kept:pullR.kept,
+      desc:`Best set: ${pullBest} reps — ${tline(pullBest,TH.pullup)}`},
+    {icon:'dumbbell',color:MCOL.triceps,name:'Push-up-Maxing',tiered:true,tier:pushT,earned:!!pushT,kept:pushR.kept,
+      desc:`Best set: ${pushBest} reps — ${tline(pushBest,TH.pushup)}`},
+    {icon:'heart',color:MCOL.cardio,name:'Cardio-Maxing',tiered:true,tier:cardioT,earned:!!cardioT,kept:cardioR.kept,
+      desc: isFinite(cardioBest)?`Best mile pace: ${fmtClock(cardioBest)}/mi — ${tlineLow(cardioBest,[TH.cardio[0],TH.cardio[1],TH.cardio[2]])}`:'Log a Running exercise (miles + minutes) to unlock',
       lifts:cardioR.lifts},
     {icon:'target',color:'var(--blue)',name:'Variety-Maxing',earned:variety>=100,
       desc:`${variety} / 100 different exercises logged`},
@@ -6456,14 +6521,16 @@ function computeBadges() {
   const CUR={'Bench-Maxing':benchBy(benchR),'Shoulder-Maxing':haveBW&&ohp>0?ohpBy(ohpR):'','Leg-Maxing':haveBW&&sq>0?lbTxt(sq):'',
     'Pull-up-Maxing':pullBest>0?`${pullBest} reps`:'','Push-up-Maxing':pushBest>0?`${pushBest} reps`:'','Cardio-Maxing':isFinite(cardioBest)?`${fmtClock(cardioBest)}/mi`:''};
   list.forEach(b=>{ if(CUR[b.name]!==undefined) b.curV=CUR[b.name]; });
-  // Jacked (Mr. Roni, 2026-09-24): every Monthly-reset and 3-month-reset badge earned, the tiered ones all at Gold.
-  // Permanent badges (1000lb Club, Variety) are NOT required. Coward-Maxing is a penalty, not a requirement -- but holding it locks Jacked.
+  // Jacked (Mr. Roni, 2026-09-24; Gold requirement dropped 2026-10-21): every Monthly-reset and
+  // 3-month-reset badge earned -- a tiered badge counts at ANY tier (Bronze/Silver/Gold all qualify,
+  // b.earned is already true at any tier). Permanent badges (1000lb Club, Variety) are NOT required.
+  // Coward-Maxing is a penalty, not a requirement -- but holding it locks Jacked.
   const req=list.filter(b=>b.tiered||b.threeMonth||b.monthly);
   const tiered=list.filter(b=>b.tiered);
   const nEarned=req.filter(b=>b.earned).length, nGold=tiered.filter(b=>b.tier==='gold').length;
-  list.push({icon:'crown',color:'#ffd700',name:'Jacked',earned:nEarned===req.length&&nGold===tiered.length&&!weekOff,
-    desc:nEarned===req.length&&nGold===tiered.length&&!weekOff?'Every monthly and 3-month badge, tiers at Gold':'Unlock it and something special happens',
-    detail:`${nEarned} / ${req.length} badges · ${nGold} / ${tiered.length} at Gold`+(weekOff?' · locked by Coward-Maxing':''),
+  list.push({icon:'crown',color:'#ffd700',name:'Jacked',earned:nEarned===req.length&&!weekOff,
+    desc:nEarned===req.length&&!weekOff?'Every monthly and 3-month badge earned':'Unlock it and something special happens',
+    detail:`${nEarned} / ${req.length} badges earned`+(tiered.length?` · ${nGold} / ${tiered.length} at Gold`:'')+(weekOff?' · locked by Coward-Maxing':''),
     locked:weekOff});
   const jk=list[list.length-1];
   // Jacked is a monthly achievement: re-checked live, and every month you held it is kept.
@@ -6484,7 +6551,7 @@ const BADGE_HOW={
   'PR-Maxing':'Hit 7 personal records within any rolling 7-day window. Only the last 3 months count.',
   'Consistency-Maxing':'Finish a workout 7 days in a row. Only the last 3 months count.',
   'Coward-Maxing':'Given after 7+ days off in a row this month. Resets monthly.',
-  'Jacked':'Every Monthly and 3-month badge earned, every tier at Gold. Permanent badges not needed. Locked while you hold Coward-Maxing.',
+  'Jacked':'Every Monthly and 3-month badge earned -- any tier counts on the tiered ones. Permanent badges not needed. Locked while you hold Coward-Maxing.',
   get 'Pull-up-Maxing'(){ const T=badgeT().pullup; return `Most reps in one set of strict pull-ups. Chin-ups, assisted and band pull-ups don't count. Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]}.`+stdHowNote('pullup'); },
   get 'Push-up-Maxing'(){ const T=badgeT().pushup; return `Most reps in one set of standard push-ups (not summed). Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]}.`+stdHowNote('pushup'); },
   get 'Cardio-Maxing'(){ const T=badgeT().cardio.map(fmtClock); return `Best mile pace from Running (outdoor) or Running (treadmill); other cardio doesn't count. Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]} per mile.`+stdHowNote('cardio'); },
@@ -6515,8 +6582,15 @@ const BADGE_DETAIL={
   'PR-Maxing':{how:'Hit 7 personal records within any rolling 7-day window. A single workout\'s PRs all count toward the total.',note:'Resets every 3 months. Only the last 3 months count.'},
   'Consistency-Maxing':{how:'Finish a workout on 7 calendar days in a row. Same day twice still counts as one.',note:'Resets every 3 months. Only the last 3 months count.'},
   'Coward-Maxing':{how:'Given after 7+ days off in a row this month. Holding it locks Jacked.',note:'Resets monthly. Starts fresh on the 1st.'},
-  'Jacked':{how:'Earn every Monthly reset and 3-month reset badge, every tiered badge at Gold. Permanent badges are not needed. You also cannot have Coward-Maxing: holding it locks Jacked.',note:'Checked every month. Losing Gold on a 3-month badge, or missing a monthly badge, loses Jacked until you earn it back.'}
+  'Jacked':{how:'Earn every Monthly reset and 3-month reset badge -- any tier counts on the tiered ones, Gold not required. Permanent badges are not needed. You also cannot have Coward-Maxing: holding it locks Jacked.',note:'Checked every month. Dropping a tiered badge below Bronze, or missing a monthly badge, loses Jacked until you earn it back.'}
 };
+// Which badge key (the one repTierOf/liftVariantsOf/cardioBreakdown/tierCrossingDetail use) a tier-rows
+// badge name maps to -- Mr. Roni, 2026-10-21, tap-to-expand tier rows.
+const BADGE_KEY={'Bench-Maxing':'bench','Shoulder-Maxing':'ohp','Leg-Maxing':'squat','Pull-up-Maxing':'pullup','Push-up-Maxing':'pushup','Cardio-Maxing':'cardio'};
+function toggleTierXp(id){
+  const el=document.getElementById(id); if(!el) return;
+  el.style.display=(el.style.display==='none')?'block':'none';
+}
 function badgeInfo(name){
   const b=computeBadges().find(x=>x.name===name); if(!b) return;
   const d=BADGE_DETAIL[name]||{how:BADGE_HOW[name]||''};
@@ -6529,7 +6603,27 @@ function badgeInfo(name){
   const below=b.lifts&&liftsAt(null);
   // Per-exercise "how to earn it" sections (Bench-Maxing's dumbbell substitute, Cardio-Maxing's two run types).
   const exHow=(d.exHow||[]).map(x=>`<div class="bf-h">${esc(x.t)}</div><div class="bf-body">${x.body}</div>`).join('');
-  const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v])=>{const k=t.toLowerCase(),on=b.tier===k,li=b.lifts?liftsAt(k):'';return `<div class="bf-tier${on?' on':''}${li?' wl':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span>${li}</div>`;}).join('')}${below?`<div class="bf-tier wl" style="opacity:.7"><span style="color:var(--muted);font-weight:800;letter-spacing:.5px">Below Bronze</span>${below}</div>`:''}</div>`:'';
+  // Tap a tier you've actually reached to see the exact logged set that earned it -- date, exercise, actual
+  // reps/weight (Mr. Roni, 2026-10-21), not just the aggregate best shown on the row. Also where a kept tier
+  // (grandfathered from a retired, looser standard) explains itself instead of a terse footnote.
+  const xKey=BADGE_KEY[name];
+  const cross=xKey?tierCrossingDetail(xKey,last3mo(gH())):null;
+  const curThrNum=xKey==='bench'?badgeT().bench:xKey==='ohp'?badgeT().ohpFrac:xKey==='squat'?badgeT().squatFrac:xKey==='cardio'?badgeT().cardio:xKey?badgeT()[xKey]:null;
+  const legacyThrNum=xKey==='bench'?benchLegacyT():(xKey==='pullup'||xKey==='pushup'||xKey==='cardio')?badgeLegacyT(xKey):null;
+  const fmtThr=v=>xKey==='cardio'?fmtClock(v)+'/mi':(xKey==='pullup'||xKey==='pushup')?v+' reps':lbTxt(v);
+  const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v],ti)=>{
+    const k=t.toLowerCase(), on=b.tier===k, li=b.lifts?liftsAt(k):'';
+    const reached=!!xKey&&(TIER_RANK[k]||0)<=(TIER_RANK[b.tier]||0);
+    const entry=reached&&cross?cross[k]:null;
+    const keptHere=on&&!!b.kept;
+    const xpId=`tierxp-${xKey}-${k}`;
+    const chip=keptHere?'<span class="bf-kept">Old standard</span>':'';
+    const row=`<div class="bf-tier${on?' on':''}${li?' wl':''}${reached?' tap':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"${reached?` onclick="toggleTierXp('${xpId}')"`:''}><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}${chip}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span>${li}${reached?'<span class="bf-chev">&#8250;</span>':''}</div>`;
+    if(!reached) return row;
+    const setLine=entry?`<div>${fmtD(entry.date)} — <b>${esc(entry.ex)}</b>: ${tierCrossStat(xKey,entry)}</div>`:`<div style="color:var(--muted)">No logged set found for this tier -- it may predate your history.</div>`;
+    const keptLine=(keptHere&&legacyThrNum)?`<div style="margin-top:6px">Earned under the retired standard: the old ${capW(k)} line was ${fmtThr(legacyThrNum[ti])}. The current ${capW(k)} line is ${fmtThr(curThrNum[ti])} -- your last 3 months haven't cleared that yet, so this tier is grandfathered in and will age out with those old sets.</div>`:'';
+    return row+`<div class="bf-tier-xp" id="${xpId}" style="display:none">${setLine}${keptLine}</div>`;
+  }).join('')}${below?`<div class="bf-tier wl" style="opacity:.7"><span style="color:var(--muted);font-weight:800;letter-spacing:.5px">Below Bronze</span>${below}</div>`:''}</div>`:'';
   const note=d.note?`<div class="bf-h">Resets</div><div class="bf-body">${d.note}</div>`:'';
   const allT=b.all?`<div class="bf-h">Highest ever</div><div class="bf-tiers"><div class="bf-tier" style="opacity:.55;filter:grayscale(1)"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:700;text-transform:capitalize;color:var(--muted)">${b.all.tier===undefined?'':(b.all.tier||'no tier')}</span></div></div><div class="bf-body" style="font-size:12px;color:var(--muted);margin-top:6px">Your best in all of history. It never resets. The badge above only counts the last 3 months.</div>`:'';
   const teaser=(b.name==='Jacked'&&!b.earned)?`<div class="bf-h">Reward</div><div class="bf-body">Something special happens the moment you unlock this. You will know it when you see it.</div>`:'';
@@ -7350,10 +7444,13 @@ function achRow(b){
     ? `<span class="badge" style="background:${TIERC[b.tier]}22;color:${TIERC[b.tier]};border:1px solid ${TIERC[b.tier]}66;text-transform:capitalize">${b.tier}</span>`
     : (b.earned&&b.name!=='Coward-Maxing')?'<span class="badge baccent">Earned</span>'
     : b.earned?'<span class="badge bgreen">Earned</span>':'<span class="badge bm">Locked</span>';
+  // Visible flag for a tier kept from a retired, looser standard (Mr. Roni, 2026-10-21) -- was a terse
+  // " · kept from the old numbers" aside in desc; now its own chip, with the real explanation one tap away.
+  const keptChip=b.kept?`<span class="badge" style="background:rgba(140,140,170,.16);color:var(--muted);border:1px solid rgba(140,140,170,.4)" title="Earned under a retired, looser standard -- tap for details">Old standard</span>`:'';
   return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);opacity:${b.earned?1:.45};cursor:pointer" onclick="badgeInfo('${b.name}')">
     <div style="filter:${b.earned?'none':'grayscale(1)'}">${uic(b.icon,b.color,b.name==='Jacked'?36:28)}</div>
     <div style="flex:1;min-width:0">${b.name==='Jacked'?`<div style="font-weight:800;font-size:22px;letter-spacing:.3px">Jacked</div>`:`<div style="font-weight:700;font-size:14px">${b.name}</div><div style="font-size:12px;color:var(--muted)">${b.desc}</div>`}</div>
-    ${status}
+    ${keptChip}${status}
   </div>`;
 }
 function cardBadges(){
@@ -7749,7 +7846,7 @@ function openFriend(code){
     else { fpAvEl.style.cursor=''; fpAvEl.onclick=null; }
   }
   const days=new Set(p.days||[]);
-  const jkTile=hasJacked(p)?`<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:12px;border-radius:var(--r);border:1px solid rgba(255,215,0,.55);background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(255,215,0,.03) 60%)"><span style="display:flex;filter:drop-shadow(0 0 6px rgba(255,215,0,.6))">${uic('crown','#ffd700',30)}</span><div><div style="font-family:var(--fh);font-weight:800;font-size:17px;letter-spacing:1px;color:#ffd700;text-transform:uppercase">Jacked</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${p.isYou?'You hold':'Holds'} every monthly and 3-month badge, with every tiered badge at Gold.</div></div></div>`:'';
+  const jkTile=hasJacked(p)?`<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:12px;border-radius:var(--r);border:1px solid rgba(255,215,0,.55);background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(255,215,0,.03) 60%)"><span style="display:flex;filter:drop-shadow(0 0 6px rgba(255,215,0,.6))">${uic('crown','#ffd700',30)}</span><div><div style="font-family:var(--fh);font-weight:800;font-size:17px;letter-spacing:1px;color:#ffd700;text-transform:uppercase">Jacked</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${p.isYou?'You hold':'Holds'} every monthly and 3-month badge, with every tiered badge earned.</div></div></div>`:'';
   let h=jkTile+`<div class="stats-g" style="margin-bottom:10px">
       <div class="sc"><div class="sv">${p.workouts||0}</div><div class="sl">Workouts</div></div>
       <div class="sc"><div class="sv">${fmtW(p.totalVolume||0)}</div><div class="sl">${uL()} Vol</div></div>
