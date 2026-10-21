@@ -597,19 +597,26 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div class="ob-logo">JACKED.</div>
   <div class="ob-sub">Your personal lifting companion</div>
 
-  <div class="ob-step active" id="ob1">
+  <div class="ob-step active" id="ob0">
+    <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:8px">Welcome</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Create a new account, or log in to one you already have</div>
+    <button class="btn ba wf" onclick="obShowSignup()">Sign up</button>
+    <button class="btn bg wf" style="margin-top:10px" onclick="om('loginModal')">Log in</button>
+    <button class="btn bg wf" style="margin-top:8px" onclick="document.getElementById('importFile').click()">Restore from a backup file</button>
+  </div>
+
+  <div class="ob-step" id="ob1">
     <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:8px">Pick your username</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:20px">This is your unique handle — friends add you by it</div>
     <form onsubmit="event.preventDefault();obNext1()" autocomplete="on">
     <div class="fg"><input type="text" id="obUser" name="username" placeholder="@username" autocapitalize="none" autocorrect="off" autocomplete="username" maxlength="20"></div>
     <div class="fg"><input type="text" id="obName" placeholder="Display name (shown on leaderboard)" autocomplete="name"></div>
+    <div class="fg"><input type="text" id="obEmail" name="email" placeholder="Email (optional — lets you log in with it too)" autocapitalize="none" autocorrect="off" autocomplete="email" maxlength="255"></div>
     <div class="fg"><div class="pw"><input type="password" id="obPass" name="password" placeholder="Password (8+ characters)" autocomplete="new-password"><button type="button" class="pw-tog" tabindex="-1" aria-label="Show password" onclick="pwToggle(this)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg></button></div></div>
     <div class="fg"><div class="pw"><input type="password" id="obPass2" placeholder="Confirm password" autocomplete="new-password"><button type="button" class="pw-tog" tabindex="-1" aria-label="Show password" onclick="pwToggle(this)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg></button></div></div>
     <button type="submit" class="btn ba wf" id="obNext1Btn">Continue →</button>
     </form>
-    <div style="text-align:center;font-size:12px;color:var(--muted);margin:16px 0 8px">Already have an account?</div>
-    <button class="btn bg wf" onclick="om('loginModal')">Log in &amp; load my data</button>
-    <button class="btn bg wf" style="margin-top:8px" onclick="document.getElementById('importFile').click()">Restore from a backup file</button>
+    <button class="btn bg sm" style="margin-top:14px" onclick="obBackToChoice()">‹ Back</button>
   </div>
 
   <div class="ob-step" id="ob2">
@@ -1094,9 +1101,9 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="mo ctr" id="loginModal" style="z-index:600">
   <div class="md">
     <div class="mh"><div class="mt">Log in</div><button class="cb" onclick="cm('loginModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Enter your username and password to load that account and all of its workouts onto this device.</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Enter your username or email and password to load that account and all of its workouts onto this device.</div>
     <form onsubmit="event.preventDefault();cloudLogin()" autocomplete="on">
-    <div class="fg"><label>Username</label><input type="text" id="loginUser" name="username" placeholder="@username" autocapitalize="none" autocorrect="off" autocomplete="username" maxlength="20"></div>
+    <div class="fg"><label>Username or email</label><input type="text" id="loginUser" name="username" placeholder="@username or email" autocapitalize="none" autocorrect="off" autocomplete="username" maxlength="255"></div>
     <div class="fg"><label>Password</label><div class="pw"><input type="password" id="loginPass" name="password" placeholder="••••••••" autocomplete="current-password"><button type="button" class="pw-tog" tabindex="-1" aria-label="Show password" onclick="pwToggle(this)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg></button></div></div>
     <div id="loginMsg" style="display:none;font-size:12px;color:var(--orange);margin-bottom:10px"></div>
     <button type="submit" class="btn ba wf">Log in &amp; load my data</button>
@@ -1492,6 +1499,10 @@ function genCode() { return 'JCKD-' + uid(); }
 // Stored lowercase with a leading '@'. Letters/numbers/underscore, 3–20 chars.
 function normU(s){ const h=String(s||'').trim().replace(/^@+/,'').toLowerCase().replace(/[^a-z0-9_]/g,''); return h?'@'+h:''; }
 function validU(u){ const h=normU(u).slice(1); if(h.length<3) return 'Username needs at least 3 letters/numbers'; if(h.length>20) return 'Username too long (max 20)'; return null; }
+// Optional email at sign-up (lets the same account log in with either); also how the
+// shared username-or-email login field decides which lookup to run.
+function isEmailLike(s){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s||'').trim()); }
+function emailProblem(e){ const v=String(e||'').trim(); if(!v) return null; if(v.length>255) return 'Email too long'; if(!isEmailLike(v)) return 'Enter a valid email address, or leave it blank'; return null; }
 // Stranger-safe profile lookup: username + avatar are the only public fields, and they come
 // from the public_profiles() RPC (signed in or not). A project that hasn't run
 // 20260925_profiles_public_username_avatar_only.sql has no such function, so fall back to
@@ -1629,11 +1640,23 @@ function checkOnboarding() {
   }
 }
 
+function obShowSignup(){
+  document.getElementById('ob0').classList.remove('active');
+  document.getElementById('ob1').classList.add('active');
+}
+function obBackToChoice(){
+  document.getElementById('ob1').classList.remove('active');
+  document.getElementById('ob0').classList.add('active');
+}
+
 async function obNext1() {
   const u = normU(document.getElementById('obUser').value);
   const err = validU(u);
   if (err) { toast(err,'err'); return; }
   const name = document.getElementById('obName').value.trim() || u.slice(1);
+  const email = document.getElementById('obEmail').value.trim();
+  const emailErr = emailProblem(email);
+  if (emailErr) { toast(emailErr,'err'); return; }
   const pw = document.getElementById('obPass').value;
   const pwErr = pwProblem(pw, document.getElementById('obPass2').value);
   if (pwErr) { toast(pwErr,'err'); return; }
@@ -1641,10 +1664,10 @@ async function obNext1() {
   btn.disabled = true; const prev=btn.textContent; btn.textContent='Creating account…';
   // No backend reachable → start locally; the account gate asks for a password once online.
   if (supaOnline()) {
-    const r = await registerAccount({code:u, password:pw, name});
+    const r = await registerAccount({code:u, password:pw, name, email});
     if (r !== 'ok') {
       btn.disabled = false; btn.textContent=prev;
-      toast(r==='weak_password' ? 'That password is too weak or has appeared in a known data breach — pick a different one' : r==='already_claimed'||r==='taken'||r==='proof_failed' ? 'That username is already taken' : 'Could not create account — try again','err');
+      toast(r==='weak_password' ? 'That password is too weak or has appeared in a known data breach — pick a different one' : r==='email_taken' ? 'That email is already in use on another account' : r==='invalid_email' ? 'Enter a valid email address' : r==='already_claimed'||r==='taken'||r==='proof_failed' ? 'That username is already taken' : 'Could not create account — try again','err');
       return;
     }
   }
@@ -8291,9 +8314,9 @@ function pwProblem(pw, confirm){
 }
 // Create an account, or set the first password on an existing password-less one.
 // Resolves to the server status; on 'ok' this device is signed in.
-async function registerAccount({code, password, name, proofIds}){
+async function registerAccount({code, password, name, email, proofIds}){
   try{
-    const { data, error } = await SUPA.functions.invoke('jacked-auth',{body:{code, password, name, proofIds}});
+    const { data, error } = await SUPA.functions.invoke('jacked-auth',{body:{code, password, name, email, proofIds}});
     if (error || !data) { console.warn('register',error); return 'error'; }
     if (data.status !== 'ok') return data.status;
     return await signInAs(data.email, password) ? 'ok' : 'error';
@@ -8307,6 +8330,11 @@ async function signInAs(email, password){
 }
 async function accountStatus(code){
   const { data, error } = await SUPA.rpc('account_status',{p_code:code});
+  if (error) throw error;
+  return data || {status:'not_found'};
+}
+async function accountStatusByEmail(email){
+  const { data, error } = await SUPA.rpc('account_status_by_email',{p_email:email});
   if (error) throw error;
   return data || {status:'not_found'};
 }
@@ -9085,16 +9113,20 @@ async function signOut() {
 function loginMsg(t){ const el=document.getElementById('loginMsg'); el.textContent=t; el.style.display=t?'block':'none'; }
 async function cloudLogin() {
   if (!supaOnline()) { toast('No connection — cloud login unavailable','err'); return; }
-  const u = normU(document.getElementById('loginUser').value);
+  const raw = document.getElementById('loginUser').value.trim();
   const pw = document.getElementById('loginPass').value;
   loginMsg('');
-  if (validU(u)) { toast('Enter a valid username','err'); return; }
+  const byEmail = isEmailLike(raw);
+  if (!raw || (!byEmail && validU(raw))) { toast('Enter a valid username or email','err'); return; }
   if (!pw) { toast('Enter your password','err'); return; }
   toast('Logging in…');
   try {
-    const st = await accountStatus(u);
-    if (st.status === 'not_found') { toast('No account found with that username','err'); return; }
-    if (st.status === 'unclaimed') { loginMsg(`${u} doesn't have a password yet. Open Jacked on a device that's already signed in as ${u} — it will ask you to set one.`); return; }
+    const st = byEmail ? await accountStatusByEmail(raw) : await accountStatus(normU(raw));
+    if (st.status === 'not_found') { toast(byEmail ? 'No account found with that email' : 'No account found with that username','err'); return; }
+    // Only the username path can land here: an account only ever gets a user-supplied
+    // email once register() has already given it a password (see logic.ts register()).
+    if (st.status === 'unclaimed') { loginMsg(`${raw} doesn't have a password yet. Open Jacked on a device that's already signed in as ${raw} — it will ask you to set one.`); return; }
+    const u = byEmail ? st.code : normU(raw);
     const localHist = (S.g('hist')||[]).length;
     // What the device would lose. Workouts are the headline, but routines, custom
     // exercises, PRs and weight logs are just as unrecoverable, so they count too.

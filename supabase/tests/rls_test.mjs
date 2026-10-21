@@ -47,6 +47,10 @@ insert into storage.objects values ('avatars','@mom.jpg');
 `);
 await ex(fs.readFileSync(new URL("../migrations/20260913_password_auth.sql", import.meta.url), 'utf8'));
 ok(true, 'migration applied');
+await ex(fs.readFileSync(new URL("../migrations/20261016_account_status_rate_limit.sql", import.meta.url), 'utf8'));
+ok(true, 'rate-limit migration applied');
+await ex(fs.readFileSync(new URL("../migrations/20261021_signup_email.sql", import.meta.url), 'utf8'));
+ok(true, 'signup-email migration applied');
 
 const as = async (role, uid) => { await ex(`reset role; select set_config('request.jwt.claim.sub', '${uid||''}', false); set role ${role};`); };
 const MOM='11111111-1111-1111-1111-111111111111', DAD='22222222-2222-2222-2222-222222222222';
@@ -67,6 +71,36 @@ await expectErr(() => q(`select * from friend_requests`), 'anon cannot read frie
 ok((await q(`select account_status('@mom') s`))[0].s.status === 'claimed', 'account_status claimed');
 ok((await q(`select account_status('@dad') s`))[0].s.status === 'unclaimed', 'account_status unclaimed');
 ok((await q(`select account_status('@nope') s`))[0].s.status === 'not_found', 'account_status not_found');
+
+// account_status rate limit (20261016): per-IP, not per-code, so griefing a target's own
+// lookups isn't possible to begin with — only the calling IP gets throttled.
+await ex(`select set_config('request.headers', '{"x-forwarded-for":"9.9.9.1"}', false)`);
+for (let i = 0; i < 19; i++) await q(`select account_status('@mom') s`);
+ok((await q(`select account_status('@mom') s`))[0].s.status === 'rate_limited', '20th lookup from one IP throttled');
+ok((await q(`select account_status('@mom') s`))[0].s.status === 'rate_limited', 'stays throttled on the next call too');
+await ex(`select set_config('request.headers', '{"x-forwarded-for":"9.9.9.2"}', false)`);
+ok((await q(`select account_status('@mom') s`))[0].s.status === 'claimed', 'a different IP is unaffected (owner can still look themselves up)');
+await ex(`select set_config('request.headers', '', false)`);
+ok((await q(`select account_status('@dad') s`))[0].s.status === 'unclaimed', 'no x-forwarded-for header still answers (shared "unknown" bucket)');
+
+// Optional sign-up email (2026-10-21): still as anon -- it must NOT be able to set this
+// column itself (register() writes it with the service role, bypassing RLS entirely).
+await expectErr(() => q(`update profiles set email='x@y.com' where code='@mom'`), 'anon cannot set profiles.email directly (no column grant)');
+// Simulate what the edge function's service role does: @mom is claimed (has user_id),
+// so register() could have given it an email.
+await ex('reset role');
+await ex(`update profiles set email='Mom@Example.com' where code='@mom';`);
+const momAuthEmail = (await q(`select email from auth.users where id='${MOM}'`))[0].email;
+await as('anon');
+ok((await q(`select account_status_by_email('mom@example.com') s`))[0].s.status === 'claimed', 'account_status_by_email is case-insensitive (anon-callable, like account_status)');
+ok((await q(`select account_status_by_email('mom@example.com') s`))[0].s.email === momAuthEmail, 'account_status_by_email resolves to the account\'s real (synthetic) sign-in email');
+ok((await q(`select account_status_by_email('nobody@example.com') s`))[0].s.status === 'not_found', 'account_status_by_email not_found');
+await ex('reset role');
+await expectErr(() => q(`insert into profiles(code,name,username,email) values ('@evil2','E2','@evil2','mom@example.com')`), 'two profiles cannot share the same email, case-insensitively');
+await q(`insert into profiles(code,name,username) values ('@noemail1','N1','@noemail1'),('@noemail2','N2','@noemail2')`);
+ok(true, 'two accounts with no email at all is not a collision (partial index)');
+await as('anon');
+
 await q(`insert into feedback(username,text) values ('@x','hi')`); ok(true, 'anon can send feedback');
 await expectErr(() => q(`select * from feedback`), 'anon cannot read feedback');
 
