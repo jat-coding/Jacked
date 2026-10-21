@@ -18,26 +18,27 @@ async function dropToOnboarding(page) {
 async function onboardingChoice() {
   const { page, ctx, errors } = await phone({});
   await dropToOnboarding(page);
-  check('onboarding: choice screen (#ob0) is what shows first, not the sign-up form',
+  check('onboarding: the log-in form (#ob0) is what shows first, not the sign-up form',
     await page.evaluate(() => document.getElementById('ob0').classList.contains('active') && !document.getElementById('ob1').classList.contains('active')));
   check('onboarding: sign-up form is not visible yet', !(await page.locator('#ob1').isVisible()));
-  check('onboarding: choice screen offers Sign up and Log in', await page.locator('#ob0').getByRole('button', { name: 'Sign up' }).isVisible()
-    && await page.locator('#ob0').getByRole('button', { name: 'Log in' }).isVisible());
+  check('onboarding: log-in form is inline, not a modal popup', !(await page.locator('#loginModal').count()));
+  check('onboarding: log-in form has the username-or-email and password fields',
+    await page.locator('#ob0 #loginUser').isVisible() && await page.locator('#ob0 #loginPass').isVisible());
+  check('onboarding: log-in form keeps its password show/hide toggle', await page.locator('#ob0 .pw-tog').count() === 1);
+  check('onboarding: a secondary "Sign up" link is offered below the log-in form',
+    await page.locator('#ob0').getByRole('button', { name: 'Sign up', exact: true }).isVisible());
+  check('onboarding: "Restore from a backup file" is still reachable from the log-in view',
+    await page.locator('#ob0').getByRole('button', { name: 'Restore from a backup file' }).isVisible());
 
   await page.locator('#ob0').getByRole('button', { name: 'Sign up', exact: true }).tap();
   check('onboarding: tapping Sign up reveals the username/password form (#ob1)',
     await page.evaluate(() => document.getElementById('ob1').classList.contains('active') && !document.getElementById('ob0').classList.contains('active')));
   check('onboarding: sign-up form keeps its password show/hide toggles (not removed by the new field)',
     await page.locator('#ob1 .pw-tog').count() === 2);
-  check('onboarding: Back on the sign-up form returns to the choice screen', await page.locator('#ob1').getByRole('button', { name: '‹ Back' }).isVisible());
-  await page.locator('#ob1').getByRole('button', { name: '‹ Back' }).tap();
-  check('onboarding: Back actually switches the step back to #ob0',
+  check('onboarding: sign-up form offers a way back to the log-in view', await page.locator('#ob1').getByRole('button', { name: 'Log in', exact: true }).isVisible());
+  await page.locator('#ob1').getByRole('button', { name: 'Log in', exact: true }).tap();
+  check('onboarding: that link actually switches the step back to #ob0',
     await page.evaluate(() => document.getElementById('ob0').classList.contains('active') && !document.getElementById('ob1').classList.contains('active')));
-
-  await page.locator('#ob0').getByRole('button', { name: 'Log in', exact: true }).tap();
-  check('onboarding: Log in opens the existing #loginModal (not a rebuilt form)', await page.locator('#loginModal').evaluate(el => el.classList.contains('open')));
-  check('onboarding: login modal still asks for "Username or email"', (await page.locator('#loginModal label').first().textContent()) === 'Username or email');
-  check('onboarding: login form keeps its password show/hide toggle', await page.locator('#loginModal .pw-tog').count() === 1);
   check('onboarding: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
