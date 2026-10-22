@@ -204,14 +204,16 @@ async function prMaxing() {
   }
 }
 
-function allGoldHistory({ pullReps = 20 } = {}) {
+function allGoldHistory({ pullReps = 35 } = {}) {
   const h = [];
   // 7 straight days, each with a PR -> PR-Maxing + Consistency-Maxing
   days('2026-09-01', 7).forEach(d => h.push(wk(d, [], { pr: true })));
   // Big lifts in one workout: bench 315x1, squat 470x5, deadlift 405x1 -> 1000lb club, bench gold, leg gold @180bw
-  // (sourced Elite is 465 lb @ 180 lb body weight, 2026-10-06)
+  // (sourced Elite is 465 lb @ 180 lb body weight, 2026-10-06). pullReps=35 and 95 push-ups clear the
+  // rebalanced (midpoint-Silver) Gold lines at this profile (180 lb, no sex/age -> pull-up 28, push-up 83)
+  // with comfortable margin, 2026-10-21.
   h.push(wk('2026-09-08', [ex('Barbell Bench Press', [[315, 1]]), ex('Barbell Squat', [[470, 5]]), ex('Barbell Deadlift', [[405, 1]]),
-    ex('Barbell Overhead Press', [[185, 5]]), ex('Pull-up', [[0, pullReps]], 'bodyweight_reps'), ex('Push-up', [[0, 80]], 'bodyweight_reps'),
+    ex('Barbell Overhead Press', [[185, 5]]), ex('Pull-up', [[0, pullReps]], 'bodyweight_reps'), ex('Push-up', [[0, 95]], 'bodyweight_reps'),
     ex('Run', [[1, 6]], 'distance')]));
   // Variety: 100 distinct exercises
   const many = []; for (let i = 0; i < 100; i++) many.push(ex('Var ' + i, [[20, 5]], 'weight_reps', 'var' + i));
@@ -250,10 +252,12 @@ async function jacked() {
     await ctx.close();
   }
   {
-    // Any tier counts now (Mr. Roni, 2026-10-21): Gold is no longer required for Jacked.
+    // Any tier counts now (Mr. Roni, 2026-10-21): Gold is no longer required for Jacked. 15 reps lands on
+    // Bronze under the rebalanced (midpoint-Silver) ladder at this profile (13/21/28) -- still non-gold,
+    // still non-null, which is the actual rule being demonstrated.
     const { page, ctx } = await phone({ seed: seed({ pullReps: 15 }), now: SEP15 });
     const bs = await badges(page);
-    check('jacked: any-tier rule -- pull-ups only Silver still earns it', bs.find(b => b.name === 'Pull-up-Maxing').tier === 'silver' && bs.find(b => b.name === 'Jacked').earned === true, JSON.stringify(bs.find(b => b.name === 'Jacked')));
+    check('jacked: any-tier rule -- pull-ups only Bronze still earns it', bs.find(b => b.name === 'Pull-up-Maxing').tier === 'bronze' && bs.find(b => b.name === 'Jacked').earned === true, JSON.stringify(bs.find(b => b.name === 'Jacked')));
     await ctx.close();
   }
   {
@@ -1265,7 +1269,7 @@ async function badgeLadders() {
   // ohpFrac/squatFrac are sourced lb ladders now (2026-10-06), not fractions of body weight; with no body weight
   // set they clamp to the lowest sourced bodyweight row (110 lb male / 90 lb female).
   const clk = a => a.map(x => fmtClockT(x)).join(' ');
-  check('badge ladders: male 30 keeps the original lift ladders; pull/push/mile are the sourced no-body-weight rows', j(m.T.bench) === '[135,225,315]' && j(m.T.ohpFrac) === '[75,80,95]' && j(m.T.squatFrac) === '[155,175,275]' && j(m.T.pullup) === '[13,21,30]' && j(m.T.pushup) === '[39,62,87]' && clk(m.T.cardio) === '6:40 5:50 5:10', j(m.T));
+  check('badge ladders: male 30 keeps the original lift ladders; pull/push/mile are the sourced no-body-weight rows; Silver is the Bronze/Gold midpoint on every ladder (Mr. Roni, 2026-10-21)', j(m.T.bench) === '[135,225,315]' && j(m.T.ohpFrac) === '[75,85,95]' && j(m.T.squatFrac) === '[155,215,275]' && j(m.T.pullup) === '[13,22,30]' && j(m.T.pushup) === '[39,63,87]' && clk(m.T.cardio) === '7:50 7:00 6:05', j(m.T));
   const none = await ladders({});
   check('badge ladders: no sex or birthday set = male ladders (prime age)', j(none.T) === j(m26.T), j(none.T) + ' vs ' + j(m26.T));
   const f = await ladders({ sex: 'female', birthday: '1995-01-01' });
@@ -1278,27 +1282,30 @@ async function badgeLadders() {
   const teen = await ladders({ sex: 'male', birthday: '2010-01-01' });
   check('badge ladders: a 16-year-old is scaled down on the hand-set ladders', teen.T.pullup[2] < m.T.pullup[2], j(teen.T));
   check('badge ladders: bench has no youth factor (Foster skipped)', j(teen.T.bench) === j(m.T.bench), j(teen.T.bench));
-  check('badge ladders: description text follows the ladder and names its source', /Bronze 6, Silver 12, Gold 19\./.test(f.how) && /Strength Level's Intermediate, Advanced and Elite pull-up standards for women aged 31 at any body weight/.test(f.how) && f.det.tiers[2][1] === f.T.bench[2] + ' lb', f.how + ' | ' + j(f.det));
+  check('badge ladders: description text follows the ladder and names its source', /Bronze 6, Silver 13, Gold 19\./.test(f.how) && /Strength Level's Intermediate, Advanced and Elite pull-up standards for women aged 31 at any body weight/.test(f.how) && f.det.tiers[2][1] === f.T.bench[2] + ' lb', f.how + ' | ' + j(f.det));
   check('badge ladders: bench popup says it is the standard ladder when body weight is missing', /1 rep\..*Standard numbers: set your sex and body weight in Profile/.test(f.det.how), f.det.how);
   check('badge ladders: male description has no adjusted note', !/Adjusted/.test(m.how), m.how);
   check('badge ladders: no page errors', [m, m26, none, f, old, teen].every(x => x.errors.length === 0), '');
 }
 
-// Bench-Maxing from the IPF GOODLIFT formula (Mr. Roni approved "Option A", 2026-09-25): 30 / 50 / 70 points at the
-// lifter's sex and body weight, McCulloch age factor from 41, flat 135 / 225 / 315 without sex or body weight, and no
-// tier taken away from a lift logged before the switch. Expected numbers are the research worked tables.
+// Bench-Maxing from the IPF GOODLIFT formula (Mr. Roni approved "Option A", 2026-09-25): Bronze/Gold from the 30/70
+// GOODLIFT points at the lifter's sex and body weight, McCulloch age factor from 41, flat 135 / 315 Bronze/Gold
+// without sex or body weight. Silver is always the arithmetic midpoint of Bronze and Gold (Mr. Roni, 2026-10-21),
+// and no tier is grandfathered from a retired standard -- the all-time best is always judged on the current ladder
+// (the old GOODLIFT-switch grandfather clause was dropped the same day). Expected numbers are the research worked
+// tables, with Silver recomputed as the midpoint.
 async function benchGoodlift() {
   const OCT15 = new Date('2026-10-15T12:00:00-06:00');
   const run = async ({ prof = {}, lb = 0, hist = [], now = new Date('2026-09-25T19:14:00-06:00') }) => {
     const seed = { prof: { name: 'T', username: '@t', code: '@t', ...prof }, hist };
     if (lb) seed.bw = lb / LB;
     const { page, ctx, errors } = await phone({ seed, now });
-    const r = await page.evaluate(() => { const b = computeBadges().find(x => x.name === 'Bench-Maxing'); return { T: badgeT().bench, det: BADGE_DETAIL['Bench-Maxing'], how: BADGE_HOW['Bench-Maxing'], tier: b.tier || null, kept: !!b.kept, desc: b.desc, all: b.all && b.all.tier, live: badgeTierForKey('bench', gH()).tier, ohp: badgeT().ohpFrac }; });
+    const r = await page.evaluate(() => { const b = computeBadges().find(x => x.name === 'Bench-Maxing'); return { T: badgeT().bench, det: BADGE_DETAIL['Bench-Maxing'], how: BADGE_HOW['Bench-Maxing'], tier: b.tier || null, desc: b.desc, all: b.all && b.all.tier, live: badgeTierForKey('bench', gH()).tier, ohp: badgeT().ohpFrac }; });
     return { ...r, page, ctx, errors };
   };
   const j = a => JSON.stringify(a), errs = [];
   const want = [['female', 114, null, [70, 115, 160]], ['female', 148, null, [80, 135, 190]], ['female', 198, null, [90, 150, 210]],
-    ['male', 198, null, [135, 230, 320]], ['male', 198, '1981-01-01', [130, 215, 305]], ['male', 198, '1966-01-01', [100, 170, 240]],
+    ['male', 198, null, [135, 230, 320]], ['male', 198, '1981-01-01', [130, 220, 305]], ['male', 198, '1966-01-01', [100, 170, 240]],
     ['female', 148, '1981-01-01', [80, 130, 180]], ['male', 198, '1986-01-01', [135, 230, 320]]];
   for (const [sex, lb, birthday, T] of want) {
     const r = await run({ prof: birthday ? { sex, birthday } : { sex }, lb });
@@ -1308,8 +1315,8 @@ async function benchGoodlift() {
   const f = await run({ prof: { sex: 'female', birthday: '1981-01-01' }, lb: 148 });
   check('bench goodlift: popup says how it was worked out', /^Barbell flat bench press .*1 rep\..* Set for your sex and 148 lb body weight, eased for age 45\.$/.test(f.det.how) && !/GOODLIFT|points/i.test(f.det.how), f.det.how);
   check('bench goodlift: tap text says the same (no GOODLIFT points shown, 2026-09-30)', /Set for your sex and 148 lb body weight/.test(f.how) && !/GOODLIFT|points/i.test(f.how) && !/Adjusted for your profile/.test(f.how), f.how);
-  const bf = await f.page.evaluate(() => JSON.stringify(BADGE_FEMALE));
-  check('bench goodlift: bench, ohp and squat factors gone from BADGE_FEMALE (all three now sourced sex-specific tables), the rest unchanged', bf === '{"pullup":0.5,"pushup":0.6,"cardio":1.11}', bf);
+  const bfType = await f.page.evaluate(() => typeof BADGE_FEMALE);
+  check('bench goodlift: BADGE_FEMALE and the whole hand-set legacy ladder are gone (no grandfather mechanism left, Mr. Roni 2026-10-21)', bfType === 'undefined', bfType);
   await f.page.evaluate(() => badgeInfo('Bench-Maxing')); await f.page.waitForTimeout(250);
   const txt = await f.page.evaluate(() => document.getElementById('badgeFullBody').innerText);
   check('bench goodlift: the popup on screen shows the line and the tiers', /Set for your sex and 148 lb body weight/.test(txt) && !/GOODLIFT|points/i.test(txt) && /180 lb/.test(txt) && /130 lb/.test(txt), txt.replace(/\s+/g, ' '));
@@ -1325,29 +1332,27 @@ async function benchGoodlift() {
   const s = await run({ prof: { sex: 'male' }, lb: 198 });
   check('bench goodlift: with sex and body weight the badge line is not marked standard', /^1-rep bench/.test(s.desc), s.desc);
   errs.push(...s.errors); await s.ctx.close();
-  // No revoke. A 250 lb man benched 230 on Sep 20: Silver under the old 225, only Bronze under the new 255.
+  // No grandfather clause any more (Mr. Roni, 2026-10-21: "there shouldn't be extra levels or steps to this" --
+  // dropped the whole kept/legacy mechanism, bench included even though it wasn't named explicitly). A lift logged
+  // before the GOODLIFT switch is judged on the current ladder exactly like one logged after -- the date it was
+  // logged no longer matters at all.
   const bench = (d, lbs) => wk(d, [ex('Barbell Bench Press', [[lbs, 1]])]);
   const k = await run({ prof: { sex: 'male' }, lb: 250, hist: [bench('2026-09-20', 230)], now: OCT15 });
   check('bench goodlift: 250 lb man thresholds rise to 155/255/355', j(k.T) === '[155,255,355]', j(k.T));
-  check('bench goodlift: a Silver earned before the switch is kept', k.tier === 'silver' && k.all === 'silver' && k.live === 'silver', j([k.tier, k.all, k.live]));
-  // A kept tier is now a visible chip + tap-to-expand explanation, not a terse desc footnote (Mr. Roni, 2026-10-21).
-  check('bench goodlift: kept flag set, no terse desc footnote', k.kept === true && !/kept/i.test(k.desc), j([k.kept, k.desc]));
+  check('bench goodlift: 230 lb only clears the new Bronze (155), not the old Silver line (225) -- no grandfather', k.tier === 'bronze' && k.all === 'bronze' && k.live === 'bronze', j([k.tier, k.all, k.live]));
+  check('bench goodlift: no terse "kept" footnote, no .bf-kept chip anywhere in the DOM', !/kept/i.test(k.desc), k.desc);
   await k.page.evaluate(() => badgeInfo('Bench-Maxing')); await k.page.waitForTimeout(150);
-  const kChip = await k.page.locator('#badgeFullBody .bf-kept').first().innerText();
-  check('bench goodlift: popup shows an "Old standard" chip on the kept tier', /old standard/i.test(kChip), kChip);
-  const kSilverRow = k.page.locator('#badgeFullBody .bf-tier.on');
-  await kSilverRow.click(); await k.page.waitForTimeout(150);
-  const kXp = await k.page.locator('#badgeFullBody #tierxp-bench-silver').innerText();
-  check('bench goodlift: tapping the kept Silver row shows the earning set and the old-vs-current thresholds', /230/.test(kXp) && /Barbell Bench Press/i.test(kXp) && /retired standard/i.test(kXp) && /225 lb/.test(kXp) && /255 lb/.test(kXp), kXp);
+  const kChipCount = await k.page.locator('#badgeFullBody .bf-kept').count();
+  check('bench goodlift: the "Old standard" chip no longer exists', kChipCount === 0, String(kChipCount));
   errs.push(...k.errors); await k.ctx.close();
   const n = await run({ prof: { sex: 'male' }, lb: 250, hist: [bench('2026-10-01', 230)], now: OCT15 });
-  check('bench goodlift: the same lift after the switch is judged on the new numbers', n.tier === 'bronze' && n.live === 'bronze' && !/kept/.test(n.desc), j([n.tier, n.live, n.desc]));
+  check('bench goodlift: a lift logged after the switch is judged identically (same tier, same date no longer matters)', n.tier === 'bronze' && n.live === 'bronze' && j(n.T) === j(k.T), j([n.tier, n.live, n.T]));
   errs.push(...n.errors); await n.ctx.close();
   const w = await run({ prof: { sex: 'female' }, lb: 198, hist: [bench('2026-09-24', 190)], now: OCT15 });
-  check('bench goodlift: a 198 lb woman keeps the Gold her 190 earned under the old x0.6', w.tier === 'gold', j([w.T, w.tier]));
+  check('bench goodlift: a 198 lb woman\'s 190 lb lift is Silver on the current ladder (90/150/210) -- no more x0.6 legacy Gold', w.tier === 'silver', j([w.T, w.tier]));
   errs.push(...w.errors); await w.ctx.close();
   const x = await run({ prof: { sex: 'male' }, lb: 250, hist: [bench('2026-09-20', 230)], now: new Date('2027-01-05T12:00:00-06:00') });
-  check('bench goodlift: a kept tier still ages out after 3 months', x.tier === null && x.all === 'silver', j([x.tier, x.all]));
+  check('bench goodlift: the 3-month rolling window still applies (unrelated to the removed grandfather clause) -- tier is null once it ages out, all-time best stays Bronze on the current ladder', x.tier === null && x.all === 'bronze', j([x.tier, x.all]));
   errs.push(...x.errors); await x.ctx.close();
   const l = await run({ prof: { sex: 'male' }, lb: 165, hist: [bench('2026-10-01', 215)], now: OCT15 });
   check('bench goodlift: a lighter man reaches Silver at a lower weight than 225', l.tier === 'silver', j([l.T, l.tier]));
@@ -1355,63 +1360,61 @@ async function benchGoodlift() {
   check('bench goodlift: no page errors', errs.length === 0, errs.join(' | '));
 }
 
-// Pull-up / Push-up / Cardio-Maxing on sourced standards (2026-10-12/13): Strength Level reps by sex x age x body weight,
-// Running Level mile times x WMA/USATF 2025 age factors. Sets logged before STD_REPS_FROM keep the old tier if higher,
-// until they age out of the 3-month window (same rule as bench's GOODLIFT switch).
+// Pull-up / Push-up / Cardio-Maxing on sourced standards (2026-10-12/13): Strength Level reps by sex x age x body
+// weight, Running Level mile times x WMA/USATF 2025 age factors. No grandfather clause (Mr. Roni, 2026-10-21): a set
+// logged before the sourced-ladder switch is judged on the current ladder exactly like one logged after, same as
+// bench's dropped GOODLIFT-switch clause. Cardio's Bronze/Silver/Gold are additionally rescaled so prime-age men's
+// Gold is no faster than 6:00/mile (Mr. Roni's floor), and every tiered ladder's Silver is the Bronze/Gold midpoint.
 async function sourcedRepCardio() {
   const OCT20 = new Date('2026-10-20T12:00:00-06:00');
   const P = (sex, birthday) => ({ name: 'T', username: '@t', code: '@t', sex, birthday });
   const open = async (seed, now = OCT20) => phone({ seed: { hist: [], ...seed }, now });
-  const probe = page => page.evaluate(() => { const T = badgeT(), o = {}; computeBadges().forEach(b => { o[b.name] = { tier: b.tier || null, kept: !!b.kept, desc: b.desc }; });
+  const probe = page => page.evaluate(() => { const T = badgeT(), o = {}; computeBadges().forEach(b => { o[b.name] = { tier: b.tier || null, desc: b.desc }; });
     return { T, o, live: { pullup: badgeTierForKey('pullup', gH()).tier, pushup: badgeTierForKey('pushup', gH()).tier, cardio: badgeTierForKey('cardio', gH()).tier },
       how: { pu: BADGE_DETAIL['Pull-up-Maxing'].how, ps: BADGE_HOW['Push-up-Maxing'], c: BADGE_DETAIL['Cardio-Maxing'].how } }; });
   const j = a => JSON.stringify(a), clk = a => a.map(fmtClockT).join(' ');
   const errs = [];
   const run = async (seed, now) => { const { page, ctx, errors } = await open(seed, now); const r = await probe(page); errs.push(...errors); await ctx.close(); return r; };
 
-  // Ladders straight from the source tables (strengthlevel.com API rows, read 2026-10-12).
+  // Ladders straight from the source tables (strengthlevel.com API rows, read 2026-10-12), Silver recomputed as the
+  // Bronze/Gold midpoint (Mr. Roni, 2026-10-21).
   let r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB });
-  check('sourced: male 26 at 180 lb = Strength Level pull-ups 13/21/28, push-ups 38/60/83', j(r.T.pullup) === '[13,21,28]' && j(r.T.pushup) === '[38,60,83]', j(r.T));
-  check('sourced: male 26 mile = Running Level 6:38/5:46/5:08 to the nearest 5 s', clk(r.T.cardio) === '6:40 5:45 5:10', clk(r.T.cardio));
+  check('sourced: male 26 at 180 lb = Strength Level pull-ups 13/21/28 (Silver unchanged, already the midpoint), push-ups 38/61/83', j(r.T.pullup) === '[13,21,28]' && j(r.T.pushup) === '[38,61,83]', j(r.T));
+  check('sourced: male 26 mile = Running Level 6:38/5:46/5:08 rescaled so Gold lands on 6:00, Silver the midpoint -> 7:45/6:55/6:00', clk(r.T.cardio) === '7:45 6:55 6:00', clk(r.T.cardio));
   const m26 = r;
   r = await run({ prof: P('female', '2000-01-01'), bw: 140 / LB });
-  check('sourced: female 26 at 140 lb = pull-ups 6/12/19, push-ups 18/31/46, mile 7:45/6:50/6:05', j(r.T.pullup) === '[6,12,19]' && j(r.T.pushup) === '[18,31,46]' && clk(r.T.cardio) === '7:45 6:50 6:05', j(r.T) + ' ' + clk(r.T.cardio));
+  check('sourced: female 26 at 140 lb = pull-ups 6/13/19, push-ups 18/32/46, mile 9:00/8:05/7:10', j(r.T.pullup) === '[6,13,19]' && j(r.T.pushup) === '[18,32,46]' && clk(r.T.cardio) === '9:00 8:05 7:10', j(r.T) + ' ' + clk(r.T.cardio));
   r = await run({ prof: P('male', '1966-01-01'), bw: 180 / LB });
-  check('sourced: male 60 at 180 lb = pull-ups 3/9/14, push-ups 21/37/54, mile eased by WMA 0.7901 to 8:25/7:20/6:30', j(r.T.pullup) === '[3,9,14]' && j(r.T.pushup) === '[21,37,54]' && clk(r.T.cardio) === '8:25 7:20 6:30', j(r.T) + ' ' + clk(r.T.cardio));
+  check('sourced: male 60 at 180 lb = pull-ups 3/9/14, push-ups 21/38/54, mile eased by WMA 0.7901 to 9:50/8:45/7:35', j(r.T.pullup) === '[3,9,14]' && j(r.T.pushup) === '[21,38,54]' && clk(r.T.cardio) === '9:50 8:45 7:35', j(r.T) + ' ' + clk(r.T.cardio));
   const light = await run({ prof: P('male', '2000-01-01'), bw: 140 / LB }), heavy = await run({ prof: P('male', '2000-01-01'), bw: 240 / LB });
   check('sourced: a heavier man gets lower rep targets (140 lb vs 240 lb)', light.T.pullup.every((x, i) => x > heavy.T.pullup[i]) && light.T.pushup.every((x, i) => x > heavy.T.pushup[i]), j(light.T.pullup) + j(heavy.T.pullup) + j(light.T.pushup) + j(heavy.T.pushup));
   check('sourced: body weight does not move the mile ladder', j(light.T.cardio) === j(heavy.T.cardio), j(light.T.cardio) + j(heavy.T.cardio));
   r = await run({ prof: P('female', '1966-01-01'), bw: 160 / LB });
-  check('sourced: where the source says < 1 rep, the ladder still has three distinct tiers starting at 1', j(r.T.pullup) === '[1,2,7]', j(r.T.pullup));
+  check('sourced: where the source says < 1 rep, the ladder still has three distinct tiers starting at 1, Silver the midpoint', j(r.T.pullup) === '[1,4,7]', j(r.T.pullup));
 
-  // Tiers on sets logged after the switch: the new ladder only.
+  // Tiers on a logged set, judged on the current ladder only -- the date logged no longer matters at all.
   const at = (d, exs) => [wk(d, exs)];
   r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: at('2026-10-15', [ex('Pull-up', [[0, 20]], 'bodyweight_reps'), ex('Push-up', [[0, 60]], 'bodyweight_reps'), ex('Run', [[1, 7]], 'distance')]) });
-  check('sourced: 20 pull-ups after the switch = Bronze (was Gold on the old 10/15/20)', r.o['Pull-up-Maxing'].tier === 'bronze' && r.live.pullup === 'bronze' && r.o['Pull-up-Maxing'].kept === false, j(r.o['Pull-up-Maxing']) + r.live.pullup);
-  check('sourced: 60 push-ups after the switch = Silver', r.o['Push-up-Maxing'].tier === 'silver' && r.live.pushup === 'silver', j(r.o['Push-up-Maxing']));
-  check('sourced: a 7:00 mile after the switch earns no Cardio-Maxing (Bronze is 6:40)', r.o['Cardio-Maxing'].tier === null && r.live.cardio === null, j(r.o['Cardio-Maxing']) + r.live.cardio);
+  check('sourced: 20 pull-ups = Bronze (old hand-set ladder of 10/15/20 is gone entirely)', r.o['Pull-up-Maxing'].tier === 'bronze' && r.live.pullup === 'bronze', j(r.o['Pull-up-Maxing']) + r.live.pullup);
+  check('sourced: 60 push-ups = Bronze, not Silver -- the rescaled Silver line (61) sits one rep above it', r.o['Push-up-Maxing'].tier === 'bronze' && r.live.pushup === 'bronze', j(r.o['Push-up-Maxing']));
+  check('sourced: a 7:00 mile now earns Bronze (rescaled Bronze is 7:45, easier than the old 6:40)', r.o['Cardio-Maxing'].tier === 'bronze' && r.live.cardio === 'bronze', j(r.o['Cardio-Maxing']) + r.live.cardio);
+  check('sourced: no "kept" field survives anywhere on the badge list', Object.values(r.o).every(b => !('kept' in b)), j(r.o));
 
-  // Grandfathered: the same sets logged before the switch keep their old tier, then age out after 3 months.
+  // Logging the exact same sets on an earlier date (what used to be "before the switch") changes nothing: there is
+  // no cutoff date left in the code at all.
   const pre = at('2026-10-05', [ex('Pull-up', [[0, 20]], 'bodyweight_reps'), ex('Push-up', [[0, 60]], 'bodyweight_reps'), ex('Run', [[1, 7]], 'distance')]);
-  {
-    // A kept tier is now a visible chip + tap-to-expand explanation, not a terse desc footnote (Mr. Roni, 2026-10-21).
+  const rr = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: pre });
+  check('sourced: the same sets logged on an earlier date get the identical tiers -- no grandfather, no special-cased date', j(rr.o) === j(r.o) && j(rr.live) === j(r.live), j(rr.o) + ' vs ' + j(r.o));
+  const chipCount = await (async () => {
     const { page, ctx, errors } = await open({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: pre });
-    const rr = await probe(page);
-    check('sourced: 20 pull-ups logged before the switch keep Gold, flagged kept (no terse desc footnote)', rr.o['Pull-up-Maxing'].tier === 'gold' && rr.live.pullup === 'gold' && rr.o['Pull-up-Maxing'].kept === true && !/kept/i.test(rr.o['Pull-up-Maxing'].desc), j(rr.o['Pull-up-Maxing']) + rr.live.pullup);
-    check('sourced: 60 push-ups logged before the switch keep Silver (old ladder also Silver: not flagged kept)', rr.o['Push-up-Maxing'].tier === 'silver' && rr.o['Push-up-Maxing'].kept === false, j(rr.o['Push-up-Maxing']));
-    check('sourced: a 7:00 mile logged before the switch keeps Silver, flagged kept', rr.o['Cardio-Maxing'].tier === 'silver' && rr.live.cardio === 'silver' && rr.o['Cardio-Maxing'].kept === true, j(rr.o['Cardio-Maxing']) + rr.live.cardio);
     await page.evaluate(() => badgeInfo('Pull-up-Maxing')); await page.waitForTimeout(150);
-    const chip = await page.locator('#badgeFullBody .bf-kept').first().innerText();
-    check('sourced: pull-up popup shows an "Old standard" chip on the kept Gold tier', /old standard/i.test(chip), chip);
-    await page.locator('#badgeFullBody .bf-tier.on').click(); await page.waitForTimeout(150);
-    const xp = await page.locator('#badgeFullBody #tierxp-pullup-gold').innerText();
-    check('sourced: tapping the kept pull-up Gold row shows the earning set (20 reps) and the old-vs-current thresholds', /20 reps/.test(xp) && /Pull-up/i.test(xp) && /retired standard/i.test(xp), xp);
+    const n = await page.locator('#badgeFullBody .bf-kept').count();
     errs.push(...errors); await ctx.close();
-  }
+    return n;
+  })();
+  check('sourced: the "Old standard" chip never renders (the CSS class and the data behind it are both gone)', chipCount === 0, String(chipCount));
   r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: pre }, new Date('2027-01-10T12:00:00-06:00'));
-  check('sourced: the kept tiers expire once those sets are older than 3 months', r.o['Pull-up-Maxing'].tier === null && r.o['Cardio-Maxing'].tier === null, j([r.o['Pull-up-Maxing'], r.o['Cardio-Maxing']]));
-  r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: [...pre, ...at('2026-10-16', [ex('Pull-up', [[0, 29]], 'bodyweight_reps')])] });
-  check('sourced: a new set that beats the old tier on the new ladder is not flagged kept', r.o['Pull-up-Maxing'].tier === 'gold' && r.o['Pull-up-Maxing'].kept === false, j(r.o['Pull-up-Maxing']));
+  check('sourced: the 3-month rolling window still applies on its own (unrelated to the removed grandfather clause) -- tier is null once those sets age out', r.o['Pull-up-Maxing'].tier === null && r.o['Cardio-Maxing'].tier === null, j([r.o['Pull-up-Maxing'], r.o['Cardio-Maxing']]));
 
   // Popup copy names the real source, not a hand-set adjustment.
   check('sourced: pull-up popup cites Strength Level for this sex, age and body weight', /Strength Level's Intermediate, Advanced and Elite pull-up standards for men aged 26 at 180 lb body weight\./.test(m26.how.pu) && !/Adjusted for your profile/.test(m26.how.pu), m26.how.pu);
@@ -1708,20 +1711,22 @@ async function builtinMachines() {
   check('machines: assisted lifts are not "best lifts" (plain/assisted body weight rule)', r.plain.join() === 'false,false,true,true', r.plain.join());
   check('machines: assisted dip is not triceps tier evidence', !r.tri.best || r.tri.best.key !== 'bi_assisted_dip_machine', JSON.stringify(r.tri.best));
   check('machines: no machine feeds a Maxing ladder (assisted pull-ups are not pull-ups)', r.keys.every(k => k === null), r.keys.join());
-  // 20 assisted reps must not earn Pull-up-Maxing; 12 real pull-ups do; 25 scapular pull-ups do not; -Assist toggle on a plain pull-up does not.
+  // 20 assisted reps must not earn Pull-up-Maxing; 17 real pull-ups do; 25 scapular pull-ups do not; -Assist toggle on a plain pull-up does not.
+  // (17, not 12: at this profile's rebalanced ladder -- bw 80kg/~176lb, male, no age -> bronze/silver/gold 13/21/28 --
+  // 12 reps no longer clears the new Bronze line of 13; 17 clears it with margin, 2026-10-21.)
   const pb = await page.evaluate(() => {
     const mk = (id, name, reps, extra = {}) => ({ exId: id, name, muscle: 'lats', tracking: 'weight_reps', ...extra, sets: [{ weight: 0, reps, done: true }] });
     const d = new Date('2026-09-14T12:00:00-06:00').toISOString();
     const test = exs => { S.s('hist', [{ id: 'wx', name: 'W', date: d, exercises: exs, duration: '30:00', sets: 1, totalVolume: 0 }]); const b = computeBadges().find(b => b.name === 'Pull-up-Maxing'); return b.tier || null; };
     return { assisted: test([mk('bi_assisted_pullup_machine', 'Assisted Pull-Up (machine)', 20, { assist: true })]), band: test([mk('Band_Assisted_Pull-Up', 'Band Assisted Pull-Up', 20)]),
-      scap: test([mk('wu_lats', 'Scapular Pull-Up', 25)]), toggle: test([mk('Pullups', 'Pullups', 20, { bwMode: 'assist' })]), real: test([mk('Pullups', 'Pullups', 12)]),
+      scap: test([mk('wu_lats', 'Scapular Pull-Up', 25)]), toggle: test([mk('Pullups', 'Pullups', 20, { bwMode: 'assist' })]), real: test([mk('Pullups', 'Pullups', 17)]),
       live: [exerciseBadgeKey(mk('Band_Assisted_Pull-Up', 'Band Assisted Pull-Up', 1)), exerciseBadgeKey(mk('Pullups', 'Pullups', 1)), exerciseBadgeKey(mk('Pushups', 'Push-Up', 1))].join() };
   });
   check('machines: 20 assisted-machine reps earn no Pull-up-Maxing', pb.assisted === null, pb.assisted);
   check('machines: 20 band-assisted reps earn no Pull-up-Maxing', pb.band === null, pb.band);
   check('machines: 25 scapular pull-ups earn no Pull-up-Maxing', pb.scap === null, pb.scap);
   check('machines: pull-ups logged with the -Assist toggle earn no Pull-up-Maxing', pb.toggle === null, pb.toggle);
-  check('machines: 12 real pull-ups still earn bronze', pb.real === 'bronze', pb.real);
+  check('machines: 17 real pull-ups still earn bronze', pb.real === 'bronze', pb.real);
   check('machines: live badge chip keys', pb.live === ',pullup,pushup', pb.live);
   // Add to a live workout: assist carried, icon thumb in the card, no page errors.
   await page.evaluate(() => { S.s('hist', []); startEmpty(); addExToWorkout('bi_assisted_pullup_machine'); });
@@ -1993,8 +1998,8 @@ async function badgeStandard() {
   // Pull-ups: strict only.
   t = await tiers([E('Chin-Up', 'Chin-Up', [[0, 25]], 'bodyweight_reps')]);
   check('standard: 25 chin-ups earn no Pull-up-Maxing', t['Pull-up-Maxing'] === null, t['Pull-up-Maxing']);
-  t = await tiers([E('Pullups', 'Pullups', [[0, 20]], 'bodyweight_reps')]);
-  check('standard: 20 strict pull-ups earn Gold', t['Pull-up-Maxing'] === 'gold', t['Pull-up-Maxing']);
+  t = await tiers([E('Pullups', 'Pullups', [[0, 33]], 'bodyweight_reps')]);
+  check('standard: 33 strict pull-ups earn Gold', t['Pull-up-Maxing'] === 'gold', t['Pull-up-Maxing']);
   t = await tiers([E('cex3', 'Pull-up', [[0, 20]], 'bodyweight_reps')]);
   check('standard: a custom exercise named "Pull-up" earns nothing', t['Pull-up-Maxing'] === null, t['Pull-up-Maxing']);
   // Legs: barbell back squat only.
@@ -2011,10 +2016,10 @@ async function badgeStandard() {
   check('standard: incline bench earns no Bench-Maxing', t['Bench-Maxing'] === null, t['Bench-Maxing']);
   t = await tiers([E('Barbell_Bench_Press_-_Medium_Grip', 'Bench Press (barbell)', [[405, 1]])]);
   check('standard: barbell flat bench earns Gold', t['Bench-Maxing'] === 'gold', t['Bench-Maxing']);
-  t = await tiers([E('Seated_Barbell_Military_Press', 'Seated Military Press (barbell)', [[185, 5]]), E('Standing_Military_Press', 'Standing Military Press (barbell)', [[140, 5]])]);
-  check('standard: seated press ignored, standing barbell press counts (140 lb at 180 lb body weight = Silver, sourced standard)', t['Shoulder-Maxing'] === 'silver', t['Shoulder-Maxing']);
-  t = await tiers([E('Incline_Push-Up', 'Incline Push-Up', [[0, 90]], 'bodyweight_reps'), E('Pushups', 'Pushups', [[0, 35]], 'bodyweight_reps')]);
-  check('standard: incline push-ups ignored, standard push-ups count (35 = Bronze)', t['Push-up-Maxing'] === 'bronze', t['Push-up-Maxing']);
+  t = await tiers([E('Seated_Barbell_Military_Press', 'Seated Military Press (barbell)', [[185, 5]]), E('Standing_Military_Press', 'Standing Military Press (barbell)', [[160, 5]])]);
+  check('standard: seated press ignored, standing barbell press counts (160 lb at 180 lb body weight = Silver)', t['Shoulder-Maxing'] === 'silver', t['Shoulder-Maxing']);
+  t = await tiers([E('Incline_Push-Up', 'Incline Push-Up', [[0, 90]], 'bodyweight_reps'), E('Pushups', 'Pushups', [[0, 45]], 'bodyweight_reps')]);
+  check('standard: incline push-ups ignored, standard push-ups count (45 = Bronze)', t['Push-up-Maxing'] === 'bronze', t['Push-up-Maxing']);
   // 1000lb Club: the three standard barbell lifts only.
   const big = b => [E(b, 'bench', [[400, 1]]), E('Barbell_Squat', 'Squat (barbell)', [[400, 1]]), E('Barbell_Deadlift', 'Deadlift (barbell)', [[400, 1]])];
   t = await tiers(big('Smith_Machine_Incline_Bench_Press'));
@@ -2055,7 +2060,7 @@ async function badgeStandard() {
     await page.evaluate(async csv => { await importWorkoutCsv(csv); }, csv);
     const o = await page.evaluate(() => { const o = {}; computeBadges().forEach(b => { o[b.name] = b.tier || (b.earned ? 'earned' : null); }); o._ex = gH().flatMap(w => w.exercises.map(e => e.exId + ':' + e.tracking)); return o; });
     await ctx.close(); return { o, errors }; };
-  let r = await imp(['"Bench Press (Barbell)",0,normal,405,1,,', '"Squat (Barbell)",0,normal,470,5,,', '"Deadlift (Barbell)",0,normal,405,1,,', '"Overhead Press (Barbell)",0,normal,185,5,,', '"Pull Up",0,normal,0,20,,', '"Push Up",0,normal,0,80,,', '"Running",0,normal,,,5,1200']);
+  let r = await imp(['"Bench Press (Barbell)",0,normal,405,1,,', '"Squat (Barbell)",0,normal,470,5,,', '"Deadlift (Barbell)",0,normal,405,1,,', '"Overhead Press (Barbell)",0,normal,185,5,,', '"Pull Up",0,normal,0,33,,', '"Push Up",0,normal,0,92,,', '"Running",0,normal,,,5,1200']);
   check('standard: Hevy "Bench Press (Barbell)" counts for Bench-Maxing', r.o['Bench-Maxing'] === 'gold', JSON.stringify(r.o));
   check('standard: Hevy "Squat (Barbell)" counts for Leg-Maxing', r.o['Leg-Maxing'] === 'gold', r.o['Leg-Maxing']);
   check('standard: Hevy "Overhead Press (Barbell)" counts for Shoulder-Maxing', r.o['Shoulder-Maxing'] === 'gold', r.o['Shoulder-Maxing']);
@@ -2144,11 +2149,11 @@ async function maxingStandards() {
   // Pull-up-Maxing: strict palms-away pull-ups only.
   r = await B([E('Chin-Up', 'Chin-Up', [[0, 25]], 'bodyweight_reps'), E('Band_Assisted_Pull-Up', 'Band Assisted Pull-Up', [[0, 25]], 'bodyweight_reps'), E('Scapular_Pull-Up', 'Scapular Pull-Up', [[0, 25]], 'bodyweight_reps'), E('Mixed_Grip_Chin', 'Mixed Grip Chin', [[0, 25]], 'bodyweight_reps')]);
   check('maxing: chin-ups, band-assisted, scapular and mixed-grip chins no longer feed Pull-up-Maxing', r['Pull-up-Maxing'].tier === null, JSON.stringify(r['Pull-up-Maxing']));
-  r = await B([E('V-Bar_Pullup', 'V-Bar Pullup', [[0, 25]], 'bodyweight_reps'), E('Pullups', 'Pullups', [[0, 15]], 'bodyweight_reps')]);
-  check('maxing: V-bar pull-ups ignored, 15 strict pull-ups = Silver', r['Pull-up-Maxing'].tier === 'silver', JSON.stringify(r['Pull-up-Maxing']));
+  r = await B([E('V-Bar_Pullup', 'V-Bar Pullup', [[0, 25]], 'bodyweight_reps'), E('Pullups', 'Pullups', [[0, 25]], 'bodyweight_reps')]);
+  check('maxing: V-bar pull-ups ignored, 25 strict pull-ups = Silver', r['Pull-up-Maxing'].tier === 'silver', JSON.stringify(r['Pull-up-Maxing']));
   // Push-ups, squat, deadlift: no variants.
-  r = await B([E('Push-Up_Wide', 'Push-Up Wide', [[0, 90]], 'bodyweight_reps'), E('Decline_Push-Up', 'Decline Push-Up', [[0, 90]], 'bodyweight_reps'), E('Pushups', 'Pushups', [[0, 30]], 'bodyweight_reps')]);
-  check('maxing: wide and decline push-ups ignored, 30 standard push-ups = Bronze', r['Push-up-Maxing'].tier === 'bronze', JSON.stringify(r['Push-up-Maxing']));
+  r = await B([E('Push-Up_Wide', 'Push-Up Wide', [[0, 90]], 'bodyweight_reps'), E('Decline_Push-Up', 'Decline Push-Up', [[0, 90]], 'bodyweight_reps'), E('Pushups', 'Pushups', [[0, 45]], 'bodyweight_reps')]);
+  check('maxing: wide and decline push-ups ignored, 45 standard push-ups = Bronze', r['Push-up-Maxing'].tier === 'bronze', JSON.stringify(r['Push-up-Maxing']));
   r = await B([E('Barbell_Squat_To_A_Bench', 'Barbell Squat To A Bench', [[400, 5]]), E('Front_Barbell_Squat', 'Front Barbell Squat', [[400, 5]])]);
   check('maxing: squat-to-a-bench and front squat earn no Leg-Maxing', r['Leg-Maxing'].tier === null, JSON.stringify(r['Leg-Maxing']));
 
