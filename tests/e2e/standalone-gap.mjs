@@ -1,15 +1,16 @@
 // iOS 26.1+ standalone viewport shortfall (WebKit bug 301994): when installed to the home
-// screen, window.innerHeight is ~59px less than the real screen height, so anything SIZED via
-// 100vh / fixed inset:0+height (the document, full-bleed overlays) stops short of the bottom
-// and a bare strip of page background shows under them. Plain position:fixed;bottom:Npx bars
-// (nav, resume/rest bars, install banner) are NOT affected -- with viewport-fit=cover they
-// already land on the real screen edge regardless of the innerHeight bug, confirmed after a
-// first attempt (9b3b255) compensated them too and clipped them off-screen on his real phone.
-// The head script measures the gap into --standaloneGap and the stylesheet lets the genuinely
-// undersized layers reach down by it. Real hardware can't be driven from here; this suite
-// spoofs navigator.standalone plus a screen/innerHeight mismatch in Chromium and asserts the
-// variable is set and consumed only by the right elements. The spoofed screen stays in
-// portrait terms (390 x 903) like iOS does.
+// screen, window.innerHeight is ~59px less than the real screen height, so anything anchored
+// via 100vh / fixed bottom:0/inset:0 stops short of the real bottom and a bare strip of page
+// background shows under it. A debug ruler build (0e7b929) confirmed on his real phone
+// (IMG_0858) that even a plain position:fixed;bottom:0 line stops at the short, reported
+// bottom, not the real one -- so EVERY bottom-anchored fixed element needs --standaloneGap,
+// including ordinary bars like nav. (An earlier attempt at this, 3750df9, reasoned
+// viewport-fit=cover alone should already fix plain bottom:Npx bars and removed their
+// compensation; the ruler disproved that.) The head script measures the gap into
+// --standaloneGap and the stylesheet lets every bottom-anchored fixed layer reach down by it.
+// Real hardware can't be driven from here; this suite spoofs navigator.standalone plus a
+// screen/innerHeight mismatch in Chromium and asserts the variable is set and consumed by the
+// right elements. The spoofed screen stays in portrait terms (390 x 903) like iOS does.
 import { phone, check } from './harness.mjs';
 
 const GAP = 59;
@@ -50,11 +51,7 @@ async function standaloneGap() {
   const s = await measure(page);
   check('standalone gap: standalone -> --standaloneGap is 59px on <html>', s.gap === `${GAP}px` && s.fn === GAP, JSON.stringify(s));
   check('standalone gap: standalone -> body and #jkRoot reach the real screen bottom', s.body === s.ih + GAP && s.root === s.ih + GAP, JSON.stringify(s));
-  // 2026-10-22 correction: nav is plain position:fixed;bottom:Npx -- that already lands on the
-  // real screen edge on iOS (viewport-fit=cover) regardless of the innerHeight bug, so it gets
-  // NO gap compensation. The first attempt subtracted the gap here too and over-corrected,
-  // pushing nav past the real bottom edge and clipping it off-screen on his phone.
-  check('standalone gap: standalone -> nav is untouched by the gap (8px above the reported viewport bottom)', Math.round(s.nav) === s.ih - 8, JSON.stringify(s));
+  check('standalone gap: standalone -> nav moved down by the gap (8px above the real bottom)', Math.round(s.nav) === s.ih + GAP - 8, JSON.stringify(s));
   // Full-screen layers: bottom sheet modal, achievements page, badge page, resume/rest bars.
   const layers = await page.evaluate(() => {
     const r = el => el.getBoundingClientRect();
@@ -73,7 +70,7 @@ async function standaloneGap() {
   check('standalone gap: standalone -> bottom sheet sits on the real bottom (no bare strip under it)', Math.round(layers.md) === full, JSON.stringify(layers));
   check('standalone gap: standalone -> achievements full page reaches the real bottom', Math.round(layers.ach) === full, JSON.stringify(layers));
   check('standalone gap: standalone -> badge full page reaches the real bottom', Math.round(layers.badge) === full, JSON.stringify(layers));
-  check('standalone gap: standalone -> resume/rest bars are untouched by the gap, same as nav', Math.round(layers.resume) === layers.ih - 78 && Math.round(layers.rest) === layers.ih - 78, JSON.stringify(layers));
+  check('standalone gap: standalone -> resume/rest bars moved down with the nav', Math.round(layers.resume) === full - 78 && Math.round(layers.rest) === full - 78, JSON.stringify(layers));
   check('standalone gap: standalone -> --ah (page min-height) covers the real screen height', Math.round(layers.pageMin) === full, JSON.stringify(layers));
 
   // 3) Keyboard up (viewport shrinks far more than a status bar): gap must read 0, then come back on resize.
