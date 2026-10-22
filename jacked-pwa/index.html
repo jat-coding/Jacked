@@ -19,19 +19,12 @@ try{screen.orientation.addEventListener('change',set)}catch(e){}})();
 /* --standaloneGap = how much shorter window.innerHeight reads than the real screen, in px.
    Normally 0. iOS home-screen apps (iOS 26.1 onward, WebKit bug 301994) under-report
    innerHeight by ~status-bar height in standalone display-mode only (not in a Chrome/Safari
-   tab, where it's right) -- confirmed on his iPhone 2026-10-22: ih=793 vs real screen=852.
-   2026-10-22, two wrong turns before landing here: first (9b3b255) subtracted the gap from
-   nav/resumeBar/restBar/install-banner's `bottom` and he reported them clipped off-screen, so
-   the next attempt (3750df9) reasoned plain `position:fixed;bottom:0` must already land on the
-   real edge and removed that subtraction entirely. It didn't -- a debug build (0e7b929) put an
-   actual ruler on his screen (a line at plain `bottom:0`) and his photo (IMG_0858) shows real
-   black space between that line and the true bottom, matching the gap almost exactly. So
-   `position:fixed;bottom:0` does NOT escape this bug on his device; it needs the same
-   compensation as everything else. Nav/resumeBar/restBar/install-banner are back to
-   subtracting --standaloneGap (matching 9b3b255). Whatever looked clipped in the first
-   screenshots wasn't this -- not re-diagnosed, the ruler evidence just supersedes it. --ah,
-   html/body height and the full-bleed `inset:0` overlays (--fixedBottom) were never touched
-   either way. */
+   tab, where it's right). Confirmed and measured on his iPhone 2026-10-22 (ih=793 vs real
+   screen=852, a 59px gap) through a debug build with on-screen rulers: plain
+   `position:fixed;bottom:0` does NOT escape this bug, so every bottom-anchored fixed layer
+   (nav, resumeBar, restBar, install-banner, the inset:0 overlays via --fixedBottom, and
+   html/body's own height) needs this compensation -- confirmed his nav lands exactly navB
+   (20px) above the real screen bottom once applied. */
 (function(){var d=document.documentElement;
 function gap(){if(navigator.standalone!==true)return 0;
   var w=innerWidth,h=innerHeight,s=screen;
@@ -39,28 +32,7 @@ function gap(){if(navigator.standalone!==true)return 0;
   var full=w>h?Math.min(s.width,s.height):Math.max(s.width,s.height);
   var g=full-h;
   return g>0&&g<=100?g:0}   // anything bigger than a status bar isn't this bug; leave it alone
-function rawGap(){var w=innerWidth,h=innerHeight,s=screen;var full=w>h?Math.min(s.width,s.height):Math.max(s.width,s.height);return full-h}
-function set(){d.style.setProperty('--standaloneGap',gap()+'px');dbg()}
-/* TEMP 2026-10-22: on-screen readout to root-cause the real-device overshoot report (nav
-   pushed past the real bottom edge instead of reaching it) without guessing blind a 2nd time.
-   Remove once the actual fix is confirmed on his phone. */
-function dbg(){var e=document.getElementById('jkGapDbg');if(!e)return;
-  var sab=getComputedStyle(d).getPropertyValue('--sab').trim();
-  var nav=document.querySelector('nav'),nb=nav?Math.round(nav.getBoundingClientRect().bottom):'?';
-  var gapBelowNav=nav?(innerHeight-Math.round(nav.getBoundingClientRect().bottom)):'?';
-  e.textContent='ih='+innerHeight+' iw='+innerWidth+' sh='+screen.height+' sw='+screen.width+
-    ' standalone='+navigator.standalone+' rawGap='+rawGap()+' appliedGap='+gap()+' sab='+sab+
-    '\nnavBottom='+nb+' gapBelowNav(vs ih)='+gapBelowNav;
-  // Three rulers so the gap is a measurement, not a judgment call on a photo: RED = the real
-  // physical screen bottom (plain `position:fixed;bottom:0`, trusting that iOS honors it
-  // regardless of the innerHeight bug); BLUE = where window.innerHeight says the viewport
-  // ends (set via JS top, since that's a number, not a CSS anchor); YELLOW = nav's own
-  // measured bottom edge. If BLUE sits above RED with a visible stripe between them, that
-  // stripe is the real, literal gap. If YELLOW doesn't sit right on the visible nav bar,
-  // the fixed-positioning assumption this whole fix rests on is wrong.
-  var blue=document.getElementById('jkBlueLine'),yellow=document.getElementById('jkYellowLine');
-  if(blue)blue.style.top=(innerHeight-2)+'px';
-  if(yellow&&nav)yellow.style.top=(Math.round(nav.getBoundingClientRect().bottom)-2)+'px'}
+function set(){d.style.setProperty('--standaloneGap',gap()+'px')}
 set();addEventListener('resize',set);addEventListener('orientationchange',set);
 window.jkStandaloneGap=gap;})();
 </script>
@@ -613,10 +585,6 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 </style>
 </head>
 <body>
-<div id="jkGapDbg" style="position:fixed;top:calc(env(safe-area-inset-top) + 4px);left:4px;right:4px;z-index:9999;background:#000;color:#0f0;font:9px/1.3 monospace;padding:3px 6px;border-radius:6px;pointer-events:none;white-space:pre-wrap;opacity:.9"></div>
-<div id="jkRedLine" style="position:fixed;left:0;right:0;bottom:0;height:3px;background:red;z-index:9997;pointer-events:none"></div>
-<div id="jkBlueLine" style="position:fixed;left:0;right:0;top:0;height:3px;background:#2af;z-index:9997;pointer-events:none"></div>
-<div id="jkYellowLine" style="position:fixed;left:0;right:0;top:0;height:3px;background:#ff0;z-index:9997;pointer-events:none"></div>
 <!-- NAV: a true sibling of #jkRoot, outside the scroll container -- see the comment at the
      top of the stylesheet (html,body{...}) for why: nested inside #jkRoot, iOS WebKit can
      detach this position:fixed bar and let it track the scroll instead of the viewport
