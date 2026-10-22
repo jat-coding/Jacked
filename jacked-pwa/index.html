@@ -169,7 +169,6 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .bf-tier.wl{flex-wrap:wrap;row-gap:6px}
 .bf-lift{flex-basis:100%;display:flex;justify-content:space-between;gap:10px;font-size:13px;color:var(--text2);font-weight:700}
 .bf-you{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text2);background:var(--bg4);border-radius:10px;padding:2px 8px}
-.bf-kept{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);background:rgba(140,140,170,.16);border:1px solid rgba(140,140,170,.4);border-radius:10px;padding:2px 7px}
 .bf-tier.tap{cursor:pointer}
 .bf-chev{color:var(--muted);font-size:18px;line-height:1}
 .bf-tier-xp{padding:10px 14px;border:1px dashed var(--border);border-radius:14px;font-size:13px;line-height:1.5;color:var(--text2);text-align:left}
@@ -4603,15 +4602,11 @@ function repBadgeEx(ex,kind,w){
 }
 // A run set counts toward Cardio-Maxing: the standard run, with both distance and time logged.
 function stdRun(ex,w){ return (ex.tracking||'')==='distance'&&isStdEx(ex,'cardio',w); }
-const BADGE_TIER_THRESH={
-  bench:[135,225,315],
-  pullup:[10,15,20], pushup:[30,50,80], cardio:[9,8,6.5]   // cardio: mile-equiv ceilings, lower=better
-};
-// The pullup/pushup/cardio rows above, BADGE_FEMALE and badgeAgeFactor are the OLD hand-set ladders (male 18-39,
-// x BADGE_FEMALE for women, x badgeAgeFactor for age). Since 2026-10-13 they only (a) grandfather tiers earned before
-// the sourced ladders below shipped (STD_REPS_FROM, same rule as bench's BENCH_GL_FROM) and (b) give the Muscle Map
-// its age easing. The live Pull-up / Push-up / Cardio-Maxing ladders are sourced -- see REP_STD_AGES and CARDIO_STD.
-const BADGE_FEMALE={pullup:.5,pushup:.6,cardio:1.11};
+// Flat fallback bench ladder for no-sex/no-bodyweight profiles (benchLadder() below); every other tiered badge is
+// fully sourced (REP_STD_AGES/PULLUP_STD/PUSHUP_STD, CARDIO_STD, SQUAT_STD/OHP_STD) with no flat fallback needed.
+const BENCH_FALLBACK_LB=[135,315];   // Bronze, Gold -- Silver is the midpoint, same rule as every other ladder
+// badgeAgeFactor is the OLD hand-set age-easing curve. It no longer touches any tier ladder (all six are sourced
+// and use mccullochFactor/WMA age-grading instead, 2026-10-13); it survives only for the Muscle Map's age easing.
 function badgeAgeFactor(age){ return age==null?1:age<16?.75:age<18?.85:age<40?1:age<50?.95:age<60?.88:age<70?.78:.68; }
 // Pull-up-Maxing and Push-up-Maxing: sourced rep standards for your sex, age AND body weight (Mr. Roni, 2026-10-12:
 // "they should account for multiple [factors], like age, gender, weight"). Source: Strength Level's community rep
@@ -4727,12 +4722,15 @@ function repInterp(xs,x,f){
   if(x>=xs[xs.length-1]) return f(xs.length-1);
   for(let i=0;i<xs.length-1;i++) if(x<=xs[i+1]){ const t=(x-xs[i])/(xs[i+1]-xs[i]), a=f(i), b=f(i+1); return a.map((v,j)=>v+(b[j]-v)*t); }
 }
+// Bronze and Gold come straight from the source (Intermediate/Elite); Silver is the arithmetic midpoint between
+// them, not the source's own "Advanced" row (Mr. Roni, 2026-10-21: every tiered ladder scales at the same rate).
 function repLadder(table,sex,bwLb,age){
   const T=table[sex==='female'?'female':'male'], a=age==null?30:age;
   const v=bwLb>0 ? repInterp(REP_STD_AGES,a,i=>repInterp(T.bw,bwLb,j=>T.rows[i].slice(j*3,j*3+3)))
     : repInterp(T.age.map(r=>r[0]),a,i=>T.age[i].slice(1));
-  const b=Math.max(1,Math.round(v[0])), s=Math.max(b+1,Math.round(v[1]));
-  return [b,s,Math.max(s+1,Math.round(v[2]))];
+  const bronze=Math.max(1,Math.round(v[0])), gold=Math.max(bronze+2,Math.round(v[2]));
+  const silver=Math.max(bronze+1,Math.min(gold-1,Math.round((bronze+gold)/2)));
+  return [bronze,silver,gold];
 }
 // Cardio-Maxing: sourced mile times for your sex and age. Tier times: Running Level's 1-mile standards
 // (runninglevel.com/running-times/1-mile-times, built by Strength Level, read 2026-10-12), Intermediate / Advanced /
@@ -4743,30 +4741,33 @@ function repLadder(table,sex,bwLb,age){
 // "Age Factors", column "1 Mile", version 2025-07-27), one factor per year of age 5-100: your target is the prime-age
 // time divided by your factor (1.0 at men 19-29 and women 19-34). Body weight is NOT used: neither source, nor any
 // military run standard, ties running times to body weight. No birthday: factor 1.
-const CARDIO_STD={male:[398,346,308], female:[464,408,366]};   // seconds per mile: Intermediate, Advanced, Elite
+// Bronze and Gold, seconds per mile, sourced Intermediate/Elite scaled by 360/308 (Mr. Roni, 2026-10-21: "at least a
+// six minute mile, like worst case, hardest difficulty... nothing passed that" -- 5:08 was the sourced prime-age
+// men's Gold, faster than his floor; this scale lands prime-age men's Gold on exactly 360s/6:00, same factor
+// applied to both sexes so the relative men/women gap is preserved). Silver is no longer stored: it is always the
+// arithmetic midpoint of Bronze and Gold, computed in cardioLadder below, same rule as every other tiered badge.
+const CARDIO_STD={male:[465,360], female:[540,430]};
 const WMA_MILE={   // ages 5..100
   male:[0.599,0.6502,0.6978,0.7418,0.7822,0.819,0.8522,0.8818,0.9078,0.9302,0.949,0.966,0.983,0.9958,1,1,1,1,1,1,1,1,1,1,1,0.9977,0.9913,0.9844,0.9774,0.9705,0.9636,0.9566,0.9497,0.9427,0.9358,0.9289,0.9219,0.915,0.908,0.9011,0.8942,0.8872,0.8803,0.8733,0.8664,0.8595,0.8525,0.8456,0.8386,0.8317,0.8248,0.8178,0.8109,0.8039,0.797,0.7901,0.7831,0.7762,0.7692,0.7623,0.7554,0.7484,0.7415,0.7345,0.7274,0.7196,0.7111,0.7019,0.692,0.6814,0.6701,0.6581,0.6454,0.632,0.6179,0.6031,0.5876,0.5714,0.5545,0.5369,0.5186,0.4997,0.48,0.4596,0.4385,0.4168,0.3943,0.3711,0.3473,0.3227,0.2974,0.2715,0.2448,0.2175,0.1894,0.1607],
   female:[0.722,0.7513,0.7792,0.8057,0.8308,0.8545,0.8768,0.8977,0.9172,0.9353,0.952,0.968,0.984,0.996,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.9938,0.9911,0.9878,0.984,0.9797,0.9748,0.9695,0.9636,0.9573,0.9504,0.943,0.9351,0.9266,0.9177,0.9082,0.8985,0.8888,0.8791,0.8694,0.8597,0.85,0.8403,0.8306,0.8209,0.8111,0.8014,0.7917,0.782,0.7723,0.7626,0.7529,0.7432,0.7335,0.7238,0.714,0.7043,0.6946,0.6849,0.6752,0.6655,0.6558,0.6461,0.6364,0.6267,0.6168,0.6062,0.5946,0.5821,0.5686,0.5542,0.5388,0.5225,0.5053,0.4871,0.468,0.448,0.427,0.4051,0.3822,0.3584,0.3336,0.3079,0.2813,0.2537,0.2252,0.1958],
 };
 function wmaMileFactor(sex,age){ return age==null?1:WMA_MILE[sex==='female'?'female':'male'][Math.min(100,Math.max(5,Math.round(age)))-5]; }
-function cardioLadder(sex,age){ const f=wmaMileFactor(sex,age); return CARDIO_STD[sex==='female'?'female':'male'].map(sec=>Math.round(sec/f/5)/12); }   // min/mile, nearest 5 s
-// No badge is taken away by the switch (same rule as bench, BENCH_GL_FROM): a set logged before the sourced ladders
-// shipped keeps the tier the old hand-set ladder gave it, if that is higher, until it ages out of the 3-month window.
-// 13 Oct 2026 is the day this was built; it is a local-only build until Mr. Roni's prod go -- move it to the real ship
-// day then, so nothing logged against the old numbers in between loses its tier.
-const STD_REPS_FROM=+new Date(2026,9,13);   // local midnight
-function badgeLegacyT(key){
-  const fem=((gProf()||{}).sex==='female'), a=badgeAgeFactor(gAge()), B=BADGE_TIER_THRESH;
-  if(key==='cardio') return B.cardio.map(x=>Math.round(x*(fem?BADGE_FEMALE.cardio:1)/a*12)/12);
-  return B[key].map(x=>Math.max(1,Math.round(x*(fem?BADGE_FEMALE[key]:1)*a)));
+function cardioLadder(sex,age){   // min/mile, nearest 5 s; Silver is the midpoint of Bronze and Gold, every age
+  const f=wmaMileFactor(sex,age), [brSec,goSec]=CARDIO_STD[sex==='female'?'female':'male'];
+  const bronze=Math.round(brSec/f/5)*5, gold=Math.round(goSec/f/5)*5, silver=Math.round((bronze+gold)/2/5)*5;
+  return [bronze,silver,gold].map(sec=>sec/60);
 }
 // Bench-Maxing is computed, not hand-set (Mr. Roni approved "Option A", 2026-09-25): the IPF GOODLIFT raw
-// bench-only formula turns 30 / 50 / 70 points into a pound target at your sex and body weight, and the
+// bench-only formula turns a GOODLIFT point value into a pound target at your sex and body weight, and the
 // McCulloch masters table (1/coefficient) eases it from age 41; no age change at 40 or under, none without a
-// birthday. Same formula for men and women: a 198 lb man gets 135 / 230 / 320. With no sex or no body weight
-// in Profile it falls back to the flat 135 / 225 / 315 (still age-eased). Source: research-20260925-211435-52441.
+// birthday. Bronze/Gold are the 30- and 70-point targets; Silver is their arithmetic midpoint, not its own
+// GOODLIFT point value (Mr. Roni, 2026-10-21: every tiered ladder scales at the same rate) -- in practice this
+// lands within a few lb of the old 50-point figure almost everywhere, since the formula is close to linear over
+// a normal body-weight range. A 198 lb man gets 135 / 230 / 320. With no sex or no body weight in Profile it
+// falls back to the flat 135 / 315 Bronze/Gold (still age-eased), Silver the same midpoint rule.
+// Source: research-20260925-211435-52441.
 const GL_BENCH={male:[320.98041,281.40258,0.01008],female:[142.40398,442.52671,0.04724]};   // A, B, C
-const BENCH_POINTS=[30,50,70];
+const BENCH_POINTS=[30,70];   // GOODLIFT points for Bronze/Gold
 const MCCULLOCH=[1.010,1.020,1.031,1.043,1.055,1.068,1.082,1.097,1.113,1.130,1.147,1.165,1.184,1.204,1.225,1.246,1.268,1.291,1.315,1.340,
   1.366,1.393,1.421,1.450,1.480,1.511,1.543,1.576,1.610,1.645,1.681,1.718,1.756,1.795,1.835,1.876,1.918,1.961,2.005,2.050];   // ages 41-80
 function mccullochFactor(age){ return age==null||age<41?1:1/MCCULLOCH[Math.min(age,80)-41]; }
@@ -4775,7 +4776,11 @@ function thresholds_lb(sex,bwLb,points,age){
   return Math.round(kg/0.45359237*mccullochFactor(age)/5)*5;
 }
 function benchBasis(){ const p=gProf()||{}, sex=p.sex==='male'||p.sex==='female'?p.sex:null, bwLb=gBW()*2.20462; return {sex,bwLb,age:gAge(),ok:!!sex&&bwLb>0}; }
-function benchLadder(){ const b=benchBasis(); return b.ok?BENCH_POINTS.map(p=>thresholds_lb(b.sex,b.bwLb,p,b.age)):BADGE_TIER_THRESH.bench.map(x=>Math.round(x*mccullochFactor(b.age)/5)*5); }
+function benchLadder(){
+  const b=benchBasis();
+  const [bronze,gold]=b.ok?BENCH_POINTS.map(p=>thresholds_lb(b.sex,b.bwLb,p,b.age)):BENCH_FALLBACK_LB.map(x=>Math.round(x*mccullochFactor(b.age)/5)*5);
+  return [bronze, Math.round((bronze+gold)/2/5)*5, gold];
+}
 // Leg-Maxing (squat) and Shoulder-Maxing (ohp): 1 rep, sourced standards, same approach as bench (Mr. Roni,
 // 2026-10-06 11:56am-11:58am: "they should all be 1 reps, just as how bench maxing is... same approach as
 // Bench: sourced 1-rep standards, adjusted for sex, age and body weight... whatever counts as the 1-rep lift
@@ -4786,12 +4791,11 @@ function benchLadder(){ const b=benchBasis(); return b.ok?BENCH_POINTS.map(p=>th
 // scores the full SBD total, or bench as its own IPF competition). Sourced instead from StrengthLog's 1RM
 // strength standards (strengthlog.com/squat-strength-standards-lb, /overhead-press-strength-standards-lb --
 // training logs of 15,314 men / 6,760 women for squat, 14,081 men / 5,711 women for OHP), the Intermediate /
-// Advanced / Elite rows -> Bronze / Silver / Gold, linearly interpolated by body weight (lb), eased for age 41+
-// by the same McCulloch factor bench uses -- not badgeAgeFactor, to genuinely "count the same way" as bench.
+// Elite rows -> Bronze / Gold, linearly interpolated by body weight (lb), eased for age 41+ by the same McCulloch
+// factor bench uses -- not badgeAgeFactor, to genuinely "count the same way" as bench. Silver is the arithmetic
+// midpoint of Bronze and Gold (Mr. Roni, 2026-10-21), not the source's own "Advanced" row.
 // This is a recalibration, not just dropping the old 5-rep minimum: the old squatFrac/ohpFrac fractions were
 // explicitly calibrated for a 5-rep set, so reusing them at 1 rep would have badged a true 1RM far too easily.
-// No grandfather clause for already-earned tiers under the old 5-rep numbers (bench got one when its formula
-// changed, 2026-09-25/BENCH_GL_FROM) -- not built here, flagged to him, one-line addition if he wants it.
 const SQUAT_STD={   // [bodyweight lb, Intermediate, Advanced, Elite lb]
   male:[[110,155,175,274],[120,172,199,308],[130,187,220,339],[140,202,240,368],[150,216,258,394],
     [160,228,275,419],[170,240,291,443],[180,251,307,465],[190,262,321,486],[200,272,335,506],
@@ -4823,7 +4827,9 @@ function interpStd(rows,bwLb){
   return rows[rows.length-1].slice(1);
 }
 function stdLadder(table,sex,bwLb,age){
-  return interpStd(table[sex==='female'?'female':'male'],bwLb).map(v=>Math.round(v*mccullochFactor(age)/5)*5);
+  const v=interpStd(table[sex==='female'?'female':'male'],bwLb);   // [Intermediate, Advanced, Elite]
+  const bronze=Math.round(v[0]*mccullochFactor(age)/5)*5, gold=Math.round(v[2]*mccullochFactor(age)/5)*5;
+  return [bronze, Math.round((bronze+gold)/2/5)*5, gold];
 }
 // The one line the bench popup uses to say where its numbers came from. No GOODLIFT points shown (Mr. Roni, 2026-09-30).
 function benchHowNote(){
@@ -4844,11 +4850,6 @@ function stdHowNote(key){
     (bwLb>0?` at ${lbTxt(bwLb)} body weight.`:' at any body weight. Set your body weight in Profile to get your own.')+
     (age==null?' Set your birthday to adjust for age.':'');
 }
-// No badge is taken away by the switch: a lift logged before GOODLIFT tiers shipped keeps the tier it earned under
-// the old numbers (flat 135 / 225 / 315, x0.6 for women, old age factor) if that is higher. It still ages out of the
-// 3-month window like any other lift, so this retires itself by the end of 2026.
-const BENCH_GL_FROM=+new Date(2026,8,27);   // local midnight, 27 Sep 2026
-function benchLegacyT(){ const fem=(gProf()||{}).sex==='female', a=badgeAgeFactor(gAge()); return BADGE_TIER_THRESH.bench.map(x=>Math.max(5,Math.round(x*(fem?.6:1)*a/5)*5)); }
 // Bench-Maxing, Shoulder-Maxing and the 1000lb Club bench leg also take a dumbbell and a Smith machine version of the
 // lift (Mr. Roni, 2026-10-02 4:29-4:32pm, replacing the 9/30 sourced pair / 0.83 dumbbell conversion and the Smith
 // hold; convention reversed 2026-10-05 -- see below): barbell = 100% of the logged weight, dumbbell = +15%, Smith
@@ -4877,13 +4878,12 @@ function creditLb(v,lb){ return lb*v.mult; }   // logged lb (already the total, 
 // Every badge and tier counts ticked (done) sets only, the same rule as prBest and the volume totals (Mr. Roni,
 // 2026-10-14, pass-4 finding 2): a typed-but-never-ticked set is kept in history but earns nothing.
 // Best credited set per variant (sets with >= minReps reps), each placed on ladder T (null = no ladder, e.g. no body weight).
-function liftVariantsOf(badge,h,minReps,T,each){
+function liftVariantsOf(badge,h,minReps,T){
   const V=LIFT_VARIANTS[badge], lifts=V.map(x=>({key:x.key,label:x.label,v:0,rawLb:0}));
   h.forEach(w=>(w.exercises||[]).forEach(ex=>{
     const i=V.findIndex(x=>isStdEx(ex,x.key,w)); if(i<0) return;
     (ex.sets||[]).forEach(s=>{ if(s.done&&(s.reps||0)>=minReps){ const lb=(s.weight||0)*2.20462, v=creditLb(V[i],lb);
-      if(v>lifts[i].v){ lifts[i].v=v; lifts[i].rawLb=lb; }
-      if(each) each(w,i,lb); } });
+      if(v>lifts[i].v){ lifts[i].v=v; lifts[i].rawLb=lb; } } });
   }));
   lifts.forEach(l=>{ l.tier=T?tierOfLive(l.v,T):null; l.disp=l.v>0?lbTxt(l.v):''; });
   const got=lifts.filter(l=>l.v>0);
@@ -4891,11 +4891,7 @@ function liftVariantsOf(badge,h,minReps,T,each){
   return {tier:top?top.tier:null, value:top?top.v:0, by:top, lifts:got, all:lifts};
 }
 function benchTierOf(h){
-  let old=0;
-  const r=liftVariantsOf('bench',h,1,badgeT().bench,(w,i,lb)=>{ if(i===0&&+new Date(w.date)<BENCH_GL_FROM&&lb>old) old=lb; });
-  const tOld=tierOfLive(old,benchLegacyT()), kept=(TIER_RANK[tOld]||0)>(TIER_RANK[r.tier]||0);
-  if(kept) r.all[0].tier=tOld;
-  return {tier:kept?tOld:r.tier, value:kept?old:r.value, by:kept?r.all[0]:r.by, lifts:r.lifts, kept};
+  return liftVariantsOf('bench',h,1,badgeT().bench);
 }
 // Shoulder-Maxing: 1 rep, like bench; ladder is sourced lb standards (OHP_STD above, no body weight = no tier).
 function ohpTierOf(h){
@@ -4910,17 +4906,16 @@ const CARDIO_LEGS=[
   {key:'cardioTread', ids:['Running_Treadmill','Jogging_Treadmill'], label:'Running (treadmill)'},   // Jogging_Treadmill was dropped here until 2026-10-02
 ];
 function cardioBreakdown(src){
-  const legs=CARDIO_LEGS.map(x=>({key:x.key,label:x.label,v:Infinity,vOld:Infinity}));
+  const legs=CARDIO_LEGS.map(x=>({key:x.key,label:x.label,v:Infinity}));
   src.forEach(w=>(w.exercises||[]).forEach(ex=>{
     if(!stdRun(ex,w)) return;
     const id=badgeStdId(ex,w), i=CARDIO_LEGS.findIndex(x=>x.ids.includes(id)); if(i<0) return;
-    const pre=+new Date(w.date)<STD_REPS_FROM;
-    (ex.sets||[]).forEach(s=>{ if(s.done&&s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<legs[i].v) legs[i].v=me; if(pre&&me<legs[i].vOld) legs[i].vOld=me; } });
+    (ex.sets||[]).forEach(s=>{ if(s.done&&s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<legs[i].v) legs[i].v=me; } });
   }));
-  legs.forEach(l=>{ const r=cardioTierKept(l.v,l.vOld); l.tier=r.tier; l.kept=r.kept; l.disp=isFinite(l.v)?fmtClock(l.v)+'/mi':''; });
+  legs.forEach(l=>{ l.tier=isFinite(l.v)?tierOfLiveLow(l.v,badgeT().cardio):null; l.disp=isFinite(l.v)?fmtClock(l.v)+'/mi':''; });
   const got=legs.filter(l=>isFinite(l.v));
   const top=got.slice().sort((a,b)=>((TIER_RANK[b.tier]||0)-(TIER_RANK[a.tier]||0))||(a.v-b.v))[0]||null;
-  return {tier:top?top.tier:null, value:top?top.v:Infinity, lifts:got, kept:!!(top&&top.kept)};
+  return {tier:top?top.tier:null, value:top?top.v:Infinity, lifts:got};
 }
 // One sentence appended to a ladder's description when the profile's sex or age moved it.
 // ageFn: which age-easing function actually applies to this badge's ladder (pull/push/cardio use stdHowNote instead,
@@ -4932,20 +4927,14 @@ function badgeT(){
   return {bench:benchLadder(), ohpFrac:stdLadder(OHP_STD,sex,bwLb,age), squatFrac:stdLadder(SQUAT_STD,sex,bwLb,age),
     pullup:repLadder(PULLUP_STD,sex,bwLb,age), pushup:repLadder(PUSHUP_STD,sex,bwLb,age), cardio:cardioLadder(sex,age)};
 }
-// Pull-up / Push-up-Maxing tier from a history: best single set (never summed) on the sourced ladder, or the old
-// hand-set ladder for sets logged before STD_REPS_FROM if that is higher (kept=true).
+// Pull-up / Push-up-Maxing tier from a history: best single set (never summed) on the sourced ladder. No grandfather
+// clause (Mr. Roni, 2026-10-21: "there shouldn't be extra levels or steps to this" -- always the true all-time best
+// against the current ladder, dropping any earlier retired-standard carryover).
 function repTierOf(key,h){
-  let best=0, old=0;
-  h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!repBadgeEx(ex,key,w)) return; const pre=+new Date(w.date)<STD_REPS_FROM;
-    (ex.sets||[]).forEach(s=>{ if(!s.done) return; const r=s.reps||0; if(r>best) best=r; if(pre&&r>old) old=r; }); }));
-  const t=tierOfLive(best,badgeT()[key]), tOld=old>0?tierOfLive(old,badgeLegacyT(key)):null, kept=(TIER_RANK[tOld]||0)>(TIER_RANK[t]||0);
-  return {tier:kept?tOld:t, value:best, kept};
-}
-// Same rule for a mile pace (lower is better): pace = best overall, paceOld = best before STD_REPS_FROM.
-function cardioTierKept(pace,paceOld){
-  const t=isFinite(pace)?tierOfLiveLow(pace,badgeT().cardio):null, tOld=isFinite(paceOld)?tierOfLiveLow(paceOld,badgeLegacyT('cardio')):null;
-  const kept=(TIER_RANK[tOld]||0)>(TIER_RANK[t]||0);
-  return {tier:kept?tOld:t, kept};
+  let best=0;
+  h.forEach(w=>(w.exercises||[]).forEach(ex=>{ if(!repBadgeEx(ex,key,w)) return;
+    (ex.sets||[]).forEach(s=>{ if(!s.done) return; const r=s.reps||0; if(r>best) best=r; }); }));
+  return {tier:tierOfLive(best,badgeT()[key]), value:best};
 }
 // Same rolling window computeBadges applies before checking any tiered badge (Mr. Roni, 2026-10-21, tap-to-expand
 // tier rows): kept as its own helper so badgeInfo can re-walk history without computeBadges' local h3.
@@ -4981,23 +4970,11 @@ function firstCross(entries,thr,lowerBetter){
   return res;
 }
 // Which exact logged set first crossed each tier's threshold, for the tap-to-expand tier rows in badgeInfo
-// (Mr. Roni, 2026-10-21): tries the CURRENT ladder first, then falls back to the retired (kept) ladder --
-// restricted to sets logged before that ladder switched, same cutoff benchTierOf/repTierOf/cardioTierKept use --
-// so a tier that only survives as "kept from the old numbers" still shows the set that actually earned it.
+// (Mr. Roni, 2026-10-21): always against the current ladder, no retired-standard fallback.
 function tierCrossingDetail(key,h){
   const lowerBetter=key==='cardio', entries=tierCrossingEntries(key,h);
   const T=key==='bench'?badgeT().bench:key==='ohp'?badgeT().ohpFrac:key==='squat'?badgeT().squatFrac:key==='cardio'?badgeT().cardio:badgeT()[key];
-  const cur=firstCross(entries,T,lowerBetter);
-  let legacy={bronze:null,silver:null,gold:null};
-  if(key==='bench'){
-    const old=entries.filter(e=>+new Date(e.date)<BENCH_GL_FROM&&e.variant==='Barbell bench');
-    legacy=firstCross(old,benchLegacyT(),false);
-  } else if(key==='pullup'||key==='pushup'||key==='cardio'){
-    const old=entries.filter(e=>+new Date(e.date)<STD_REPS_FROM);
-    legacy=firstCross(old,badgeLegacyT(key),lowerBetter);
-  }
-  const merged={}; ['bronze','silver','gold'].forEach(t=>{ merged[t]=cur[t]||legacy[t]||null; });
-  return merged;
+  return firstCross(entries,T,lowerBetter);
 }
 // Format one crossing entry's actual stat for display -- reps/weight (or distance/time for cardio), not the
 // aggregate best.
@@ -5037,10 +5014,10 @@ function badgeTierForKey(key,h){
   if(key==='cardio'){
     // Cardio-Maxing resets every 3 months: current calendar quarter only (matches computeBadges).
     const qS=+new Date(new Date().getFullYear(), Math.floor(new Date().getMonth()/3)*3, 1);
-    let best=Infinity, old=Infinity;
-    h.forEach(w=>{ if(!(+new Date(w.date)>=qS)) return; const pre=+new Date(w.date)<STD_REPS_FROM; (w.exercises||[]).forEach(ex=>{ if(!stdRun(ex,w))return; (ex.sets||[]).forEach(s=>{ if(s.done&&s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<best)best=me; if(pre&&me<old)old=me; } }); }); });
+    let best=Infinity;
+    h.forEach(w=>{ if(!(+new Date(w.date)>=qS)) return; (w.exercises||[]).forEach(ex=>{ if(!stdRun(ex,w))return; (ex.sets||[]).forEach(s=>{ if(s.done&&s.weight>0&&s.reps>0){ const me=mileEquiv(s.weight,s.reps); if(me<best)best=me; } }); }); });
     if(!isFinite(best)) return {tier:null,value:0};
-    return {tier:cardioTierKept(best,old).tier, value:best};
+    return {tier:tierOfLiveLow(best,badgeT().cardio), value:best};
   }
   return {tier:null,value:0};
 }
@@ -6525,7 +6502,7 @@ function computeBadges() {
   // NOTE: badge names follow the "<Title>-Maxing" convention — keep it for new badges.
   // Jacked is the exception by request. tiered:true marks the Bronze/Silver/Gold badges.
   const list=[
-    {icon:'dumbbell',color:MCOL.chest,name:'Bench-Maxing',tiered:true,tier:benchT,earned:!!benchT,kept:benchR.kept,
+    {icon:'dumbbell',color:MCOL.chest,name:'Bench-Maxing',tiered:true,tier:benchT,earned:!!benchT,
       desc: `${benchStd?'Standard 1-rep bench':'1-rep bench'} (${uL()}): ${tlineW(bench,TH.bench)}`+(benchR.by&&benchR.by.key!=='bench'?` · ${benchR.by.label} ${lbN(bench)}`:''),
       lifts:benchR.lifts},
     {icon:'dumbbell',color:MCOL.shoulders,name:'Shoulder-Maxing',tiered:true,tier:ohpT,earned:!!ohpT,needsWeight:!haveBW,
@@ -6540,11 +6517,11 @@ function computeBadges() {
         {t:'Deadlift',rows:[['Your best in that workout',lbTxt(bestParts.dead)]]},
         {t:'Total',met:club,rows:[['Combined',lbTxt(bestSingle)+' / '+lbTxt(1000)]]}
       ]:undefined},
-    {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tiered:true,tier:pullT,earned:!!pullT,kept:pullR.kept,
+    {icon:'dumbbell',color:MCOL.back,name:'Pull-up-Maxing',tiered:true,tier:pullT,earned:!!pullT,
       desc:`Best set: ${pullBest} reps — ${tline(pullBest,TH.pullup)}`},
-    {icon:'dumbbell',color:MCOL.triceps,name:'Push-up-Maxing',tiered:true,tier:pushT,earned:!!pushT,kept:pushR.kept,
+    {icon:'dumbbell',color:MCOL.triceps,name:'Push-up-Maxing',tiered:true,tier:pushT,earned:!!pushT,
       desc:`Best set: ${pushBest} reps — ${tline(pushBest,TH.pushup)}`},
-    {icon:'heart',color:MCOL.cardio,name:'Cardio-Maxing',tiered:true,tier:cardioT,earned:!!cardioT,kept:cardioR.kept,
+    {icon:'heart',color:MCOL.cardio,name:'Cardio-Maxing',tiered:true,tier:cardioT,earned:!!cardioT,
       desc: isFinite(cardioBest)?`Best mile pace: ${fmtClock(cardioBest)}/mi — ${tlineLow(cardioBest,[TH.cardio[0],TH.cardio[1],TH.cardio[2]])}`:'Log a Running exercise (miles + minutes) to unlock',
       lifts:cardioR.lifts},
     {icon:'target',color:'var(--blue)',name:'Variety-Maxing',earned:variety>=100,
@@ -6650,25 +6627,18 @@ function badgeInfo(name){
   // Per-exercise "how to earn it" sections (Bench-Maxing's dumbbell substitute, Cardio-Maxing's two run types).
   const exHow=(d.exHow||[]).map(x=>`<div class="bf-h">${esc(x.t)}</div><div class="bf-body">${x.body}</div>`).join('');
   // Tap a tier you've actually reached to see the exact logged set that earned it -- date, exercise, actual
-  // reps/weight (Mr. Roni, 2026-10-21), not just the aggregate best shown on the row. Also where a kept tier
-  // (grandfathered from a retired, looser standard) explains itself instead of a terse footnote.
+  // reps/weight (Mr. Roni, 2026-10-21), not just the aggregate best shown on the row.
   const xKey=BADGE_KEY[name];
   const cross=xKey?tierCrossingDetail(xKey,last3mo(gH())):null;
-  const curThrNum=xKey==='bench'?badgeT().bench:xKey==='ohp'?badgeT().ohpFrac:xKey==='squat'?badgeT().squatFrac:xKey==='cardio'?badgeT().cardio:xKey?badgeT()[xKey]:null;
-  const legacyThrNum=xKey==='bench'?benchLegacyT():(xKey==='pullup'||xKey==='pushup'||xKey==='cardio')?badgeLegacyT(xKey):null;
-  const fmtThr=v=>xKey==='cardio'?fmtClock(v)+'/mi':(xKey==='pullup'||xKey==='pushup')?v+' reps':lbTxt(v);
-  const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v],ti)=>{
+  const tiers=d.tiers?`<div class="bf-h">Tiers</div><div class="bf-tiers">${d.tiers.map(([t,v])=>{
     const k=t.toLowerCase(), on=b.tier===k, li=b.lifts?liftsAt(k):'';
     const reached=!!xKey&&(TIER_RANK[k]||0)<=(TIER_RANK[b.tier]||0);
     const entry=reached&&cross?cross[k]:null;
-    const keptHere=on&&!!b.kept;
     const xpId=`tierxp-${xKey}-${k}`;
-    const chip=keptHere?'<span class="bf-kept">Old standard</span>':'';
-    const row=`<div class="bf-tier${on?' on':''}${li?' wl':''}${reached?' tap':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"${reached?` onclick="toggleTierXp('${xpId}')"`:''}><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}${chip}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span>${li}${reached?'<span class="bf-chev">&#8250;</span>':''}</div>`;
+    const row=`<div class="bf-tier${on?' on':''}${li?' wl':''}${reached?' tap':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"${reached?` onclick="toggleTierXp('${xpId}')"`:''}><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span>${li}${reached?'<span class="bf-chev">&#8250;</span>':''}</div>`;
     if(!reached) return row;
     const setLine=entry?`<div>${fmtD(entry.date)} — <b>${esc(entry.ex)}</b>: ${tierCrossStat(xKey,entry)}</div>`:`<div style="color:var(--muted)">No logged set found for this tier -- it may predate your history.</div>`;
-    const keptLine=(keptHere&&legacyThrNum)?`<div style="margin-top:6px">Earned under the retired standard: the old ${capW(k)} line was ${fmtThr(legacyThrNum[ti])}. The current ${capW(k)} line is ${fmtThr(curThrNum[ti])} -- your last 3 months haven't cleared that yet, so this tier is grandfathered in and will age out with those old sets.</div>`:'';
-    return row+`<div class="bf-tier-xp" id="${xpId}" style="display:none">${setLine}${keptLine}</div>`;
+    return row+`<div class="bf-tier-xp" id="${xpId}" style="display:none">${setLine}</div>`;
   }).join('')}${below?`<div class="bf-tier wl" style="opacity:.7"><span style="color:var(--muted);font-weight:800;letter-spacing:.5px">Below Bronze</span>${below}</div>`:''}</div>`:'';
   const note=d.note?`<div class="bf-h">Resets</div><div class="bf-body">${d.note}</div>`:'';
   const allT=b.all?`<div class="bf-h">Highest ever</div><div class="bf-tiers"><div class="bf-tier" style="opacity:.55;filter:grayscale(1)"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:700;text-transform:capitalize;color:var(--muted)">${b.all.tier===undefined?'':(b.all.tier||'no tier')}</span></div></div><div class="bf-body" style="font-size:12px;color:var(--muted);margin-top:6px">Your best in all of history. It never resets. The badge above only counts the last 3 months.</div>`:'';
@@ -7490,13 +7460,10 @@ function achRow(b){
     ? `<span class="badge" style="background:${TIERC[b.tier]}22;color:${TIERC[b.tier]};border:1px solid ${TIERC[b.tier]}66;text-transform:capitalize">${b.tier}</span>`
     : (b.earned&&b.name!=='Coward-Maxing')?'<span class="badge baccent">Earned</span>'
     : b.earned?'<span class="badge bgreen">Earned</span>':'<span class="badge bm">Locked</span>';
-  // Visible flag for a tier kept from a retired, looser standard (Mr. Roni, 2026-10-21) -- was a terse
-  // " · kept from the old numbers" aside in desc; now its own chip, with the real explanation one tap away.
-  const keptChip=b.kept?`<span class="badge" style="background:rgba(140,140,170,.16);color:var(--muted);border:1px solid rgba(140,140,170,.4)" title="Earned under a retired, looser standard -- tap for details">Old standard</span>`:'';
   return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);opacity:${b.earned?1:.45};cursor:pointer" onclick="badgeInfo('${b.name}')">
     <div style="filter:${b.earned?'none':'grayscale(1)'}">${uic(b.icon,b.color,b.name==='Jacked'?36:28)}</div>
     <div style="flex:1;min-width:0">${b.name==='Jacked'?`<div style="font-weight:800;font-size:22px;letter-spacing:.3px">Jacked</div>`:`<div style="font-weight:700;font-size:14px">${b.name}</div><div style="font-size:12px;color:var(--muted)">${b.desc}</div>`}</div>
-    ${keptChip}${status}
+    ${status}
   </div>`;
 }
 function cardBadges(){
