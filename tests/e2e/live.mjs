@@ -508,11 +508,18 @@ export async function liveSingleBoth() {
   const wire = live(db.row.doc.exercises.find(e => e.exId === 'Hammer_Curls').sets).map(s => s.single);
   check('live single/both: default Both goes on the wire as single:false on each set', JSON.stringify(wire) === '[false,false]', JSON.stringify(wire));
   check('live single/both: other device picks up the session', (await ev(B, () => liveResumeRemote())) === 'resumed');
-  await B.page.locator('#eb1 .sr').nth(0).locator('.sbp button', { hasText: 'Single' }).tap();
+  // The control is now exercise-level (Mr. Roni 2026-10-21): one tap sets every logged set on the exercise,
+  // not just the row it's drawn on.
+  await B.page.locator('#eb1 .sb-ex button', { hasText: 'Single' }).tap();
   await ev(B, () => { clearTimeout(_livePushT); return liveSync(); });
   await ev(A, () => liveSync());
-  const a = await ev(A, () => ({ f: aw.exercises[1].sets.map(s => s.single), on: [...document.querySelectorAll('#eb1 .sr')].map(r => r.querySelector('.sbp .on').textContent) }));
-  check('live single/both: a Single tapped on one device reaches the other (state and button)', JSON.stringify(a.f) === '[true,false]' && a.on.join() === 'Single,Both', JSON.stringify(a));
+  const a = await ev(A, () => ({ f: aw.exercises[1].sets.map(s => s.single), on: (document.querySelector('#eb1 .sb-ex .on') || {}).textContent }));
+  check('live single/both: a Single tapped on one device reaches the other and sets both of that exercise\'s sets (state and button)',
+    JSON.stringify(a.f) === '[true,true]' && a.on === 'Single', JSON.stringify(a));
+  // Put set 2 back on Both directly (a stray per-set write, same low-level setter a race can still hit), so
+  // the race below -- a toggle on one set racing an edit to the other -- has something real to race over.
+  await ev(A, () => { setSingleArm(1, 1, false); clearTimeout(_livePushT); return liveSync(); });
+  await ev(B, () => liveSync());
   // Race: A flips set 2 to Single while B changes set 1's reps, both on the same rev.
   await ev(A, () => { setSingleArm(1, 1, true); clearTimeout(_livePushT); });
   await ev(B, () => { uSet(1, 0, 'reps', '12'); clearTimeout(_livePushT); });

@@ -372,9 +372,6 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .cable-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
 .cab-opt{font-family:var(--fb);font-size:11px;font-weight:600;padding:4px 10px;border-radius:14px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;-webkit-appearance:none}
 .cab-opt.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
-.shr.sb,.sr.sb{grid-template-columns:28px 1fr 1fr 46px 1fr 36px}
-.sbp{display:flex;flex-direction:column;gap:3px}
-.sbp .cab-opt{padding:2px 0;font-size:10px;border-radius:7px;width:100%}
 
 /* progressive-overload badge: small chip under the exercise card's action
    buttons, right-aligned, so it never adds a row before the set/rep table */
@@ -4156,6 +4153,11 @@ function renderWS() {
           </div>
         </div>
       </div>
+      ${sb?`<div class="cable-row sb-ex" style="padding-left:2px">
+        <span class="cable-lbl">Arm</span>
+        <button class="cab-opt ${exSingleUI(ex)?'on':''}" onclick="setSingleArmEx(${ei},true)">Single</button>
+        <button class="cab-opt ${exSingleUI(ex)?'':'on'}" onclick="setSingleArmEx(${ei},false)">Both</button>
+      </div>`:''}
       ${isCable?`<div class="cable-row" style="padding-left:2px">
         <span class="cable-lbl">Cable</span>
         <button class="cab-opt ${cab==='pulley'?'on':''}" onclick="setCable(${ei},'pulley')">Pulley</button>
@@ -4174,7 +4176,7 @@ function renderWS() {
         <button class="cab-opt ${exUnit==='hr'?'on':''}" onclick="setDurUnit(${ei},'hr')">Hr</button>
       </div>`:''}
       <input class="ex-note" placeholder="${(exNote(ex.exId)||'Add note (remembered next time)…').replace(/"/g,'&quot;')}" value="" onchange="if(this.value.trim()) setExNote('${ex.exId}',this.value)">
-      <div class="shr${sb?' sb':''}"><span>Set</span><span>Prev</span><span>${col3}</span>${sb?'<span>Arm</span>':''}<span>${col4}</span><span>✓</span></div>
+      <div class="shr"><span>Set</span><span>Prev</span><span>${col3}</span><span>${col4}</span><span>✓</span></div>
       ${ex.sets.map((set,si)=>{
         const seedW=set.pw||0, seedR=set.pr||0;
         const dispR=r=>tracking==='distance'?minToClock(r):r;
@@ -4196,12 +4198,10 @@ function renderWS() {
         const inp4=tracking==='duration'?`<div class="ps">—</div>`
           :tracking==='distance'?`<input class="si${sc}" type="number" inputmode="decimal" min="0" step="0.01" value="${rVal}" placeholder="${rPlace}" oninput="uSet(${ei},${si},'reps',this.value,'clock')">`
           :`<input class="si${sc}" type="number" inputmode="numeric" min="0" value="${rVal}" placeholder="${rPlace}" oninput="uSet(${ei},${si},'reps',this.value)">`;
-        const one=sb&&set.single===true;
-        const sbp=sb?`<div class="sbp"><button class="cab-opt ${one?'on':''}" aria-pressed="${one}" onclick="setSingleArm(${ei},${si},true)">Single</button><button class="cab-opt ${one?'':'on'}" aria-pressed="${!one}" onclick="setSingleArm(${ei},${si},false)">Both</button></div>`:'';
-        return `<div class="sr${sb?' sb':''}">
+        return `<div class="sr">
           <div class="sn">${si+1}${isPR?'<span style="color:#ffd700"> ★</span>':''}</div>
           <div class="ps">${prevStr}</div>
-          ${inp3}${sbp}${inp4}
+          ${inp3}${inp4}
           <button class="sd ${set.done?'done':''}" onclick="togSet(${ei},${si})">
             ${set.done?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4dff91" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`}
           </button>
@@ -4360,7 +4360,12 @@ function addSet(ei) {
   [ei]=wsAt(ei); if(ei<0) return;
   // New set is blank; the previous set shows as a greyed placeholder. Typing
   // starts from zero; checking it without typing adopts the greyed value (togSet).
-  aw.exercises[ei].sets.push({weight:0, reps:0, done:false});
+  const s={weight:0, reps:0, done:false};
+  // Inherit this exercise's own Single/Both choice (set by the exercise-level control), so a
+  // set added mid-workout doesn't fall back to the exercise's generic default.
+  const ex=aw.exercises[ei];
+  if(typeof ex.single==='boolean') s.single=ex.single;
+  ex.sets.push(s);
   renderWS();
 }
 
@@ -4371,6 +4376,27 @@ function setSingleArm(ei,si,v) {
   const s=aw.exercises[ei]&&aw.exercises[ei].sets[si]; if(!s||s.single===v) return;
   s.single=v; haptic('light');
   renderWS();
+}
+// Single / Both at the exercise level (the control on the card, not a set row): one tap sets every
+// logged set on this exercise to agree, and is remembered on ex.single so the next addSet inherits
+// it. Per-set storage (s.single) still drives volume / strength-standards math and the live sync.
+function setSingleArmEx(ei,v) {
+  if(!aw) return;
+  [ei]=wsAt(ei); if(ei<0) return;
+  const ex=aw.exercises[ei]; if(!ex) return;
+  ex.single=v;
+  (ex.sets||[]).forEach(s=>{ s.single=v; });
+  haptic('light');
+  renderWS();
+}
+// What the exercise-level control should show: the exercise's own choice once he's tapped it here;
+// otherwise (a workout opened before this build, a watch-added set, or edited/imported history where
+// sets disagree) the most recently logged set's flag -- same "cascade from the most recent" rule the
+// rest of this screen already uses (setSuggestion), rather than a majority vote.
+function exSingleUI(ex) {
+  if(typeof ex.single==='boolean') return ex.single;
+  const sets=ex.sets||[];
+  return sets.length ? sets[sets.length-1].single===true : SINGLE_DEFAULT_IDS.has(ex.exId);
 }
 
 function setCable(ei,v) { [ei]=wsAt(ei); if(aw&&aw.exercises[ei]){ aw.exercises[ei].cable=v; saveAW(); renderWS(); } }
