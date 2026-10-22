@@ -16,6 +16,28 @@ function set(){var a=typeof window.orientation==='number'?window.orientation:(sc
 a=((a%360)+360)%360;if(a===90||a===270)d.setAttribute('data-rot',String(a));else d.removeAttribute('data-rot')}
 set();addEventListener('orientationchange',set);addEventListener('resize',set);
 try{screen.orientation.addEventListener('change',set)}catch(e){}})();
+/* --standaloneGap = how far the real screen reaches below what position:fixed;bottom:0 treats as
+   the bottom, in px. Normally 0. iOS home-screen apps (iOS 26.1 onward, WebKit bug 301994) report
+   a viewport that is short by the status-bar height in standalone display-mode only:
+   window.innerHeight is screen height minus ~59px, so every 100vh / fixed inset:0 box stops ~59px
+   above the real bottom and the bare page background shows as a strip under the nav and under
+   full-screen overlays (not in a Chrome/Safari tab, where the viewport is right). The page still
+   paints there, so the stylesheet lets bottom-anchored fixed layers reach down by this much
+   (grep --standaloneGap). Only iOS standalone (navigator.standalone) is measured: on Android,
+   screen height includes the system nav bar, so the same sum would push content under it.
+   Same logic as Pantry's useStandaloneBottomGap hook, in plain JS; runs in <head> so the first
+   paint is already right. Re-measured on resize/orientationchange; with the keyboard up the
+   viewport shrinks by far more than 100px, so the gap reads 0 until it closes. */
+(function(){var d=document.documentElement;
+function gap(){if(navigator.standalone!==true)return 0;
+  var w=innerWidth,h=innerHeight,s=screen;
+  // iOS keeps screen.width/height in portrait terms, so pick the edge that matches now.
+  var full=w>h?Math.min(s.width,s.height):Math.max(s.width,s.height);
+  var g=full-h;
+  return g>0&&g<=100?g:0}   // anything bigger than a status bar isn't this bug; leave it alone
+function set(){d.style.setProperty('--standaloneGap',gap()+'px')}
+set();addEventListener('resize',set);addEventListener('orientationchange',set);
+window.jkStandaloneGap=gap;})();
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -39,8 +61,12 @@ try{screen.orientation.addEventListener('change',set)}catch(e){}})();
   /* Safe-area insets go through variables so the landscape fake-lock (see #rotateGuard) can remap
      them: when the app is counter-rotated, its top/bottom sit on the phone's left/right edges. */
   --sat:env(safe-area-inset-top);--sab:env(safe-area-inset-bottom);
-  /* App-frame height for vh-based sizing; 100vw while counter-rotated (frame is landscape-tall). */
-  --ah:100vh;
+  /* iOS standalone viewport shortfall (WebKit bug 301994) -- set in px by the head script, 0 everywhere
+     else. --fixedBottom is the `bottom` a fixed inset:0 layer needs to reach the real screen bottom. */
+  --standaloneGap:0px;--fixedBottom:calc(0px - var(--standaloneGap));
+  /* App-frame height for vh-based sizing; 100vw while counter-rotated (frame is landscape-tall).
+     Portrait adds the standalone gap so .page / .md sizing covers the real screen height. */
+  --ah:calc(100vh + var(--standaloneGap));
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* 2026-10-12 (recurrence of the 10/2 nav-float bug, this time with no popup involved): the
@@ -55,12 +81,12 @@ try{screen.orientation.addEventListener('change',set)}catch(e){}})();
    position:fixed descendant of the one scrolling ancestor -- still exactly the WebKit trigger
    condition above. nav is now a sibling of #jkRoot (see its own markup, right before
    #jkRoot's opening tag) so it is never nested inside anything that scrolls. */
-html,body{height:100%;overscroll-behavior:none;position:fixed;inset:0;overflow:hidden}
+html,body{height:calc(100% + var(--standaloneGap));overscroll-behavior:none;position:fixed;inset:0;overflow:hidden}
 /* Phone-first: stop pinch/double-tap zoom and rubber-band sliding. */
 body{background:var(--bg);color:var(--text);font-family:var(--fb);touch-action:pan-y}
 
 html{--navB:max(8px,calc(var(--sab) - 14px))}
-nav{position:fixed;left:12px;right:12px;bottom:var(--navB);background:var(--bg2);border:1px solid var(--border);border-radius:30px;display:flex;z-index:100;padding:5px}
+nav{position:fixed;left:12px;right:12px;bottom:calc(var(--navB) - var(--standaloneGap));background:var(--bg2);border:1px solid var(--border);border-radius:30px;display:flex;z-index:100;padding:5px}
 .nb{flex:1;padding:8px 2px 7px;border-radius:24px;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--muted);font-family:var(--fb);font-size:9px;font-weight:600;cursor:pointer;transition:color .2s;letter-spacing:.3px;text-transform:uppercase;-webkit-appearance:none}
 .nb.active{color:var(--accent)}
 .nb svg{width:20px;height:20px;stroke-width:1.8}
@@ -95,16 +121,16 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;displa
 .tog.on::after{transform:translateX(20px);background:var(--on-accent)}
 
 /* MODAL */
-.mo{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:200;display:none;align-items:flex-end;justify-content:center}
+.mo{position:fixed;inset:0;bottom:var(--fixedBottom);background:rgba(0,0,0,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:200;display:none;align-items:flex-end;justify-content:center}
 .mo.open{display:flex}
 html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .mo,.mo .md,#achFull,#badgeFull,#recapFull,#gymYears{overscroll-behavior:contain}
-#achFull{position:fixed;inset:0;z-index:700;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#achFull{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:700;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch}
 #achFull.open{display:flex;animation:pageIn .2s ease-out}
 .agrow{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--border);cursor:pointer}
 .agt{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);min-width:104px}
 .agi{display:flex;gap:5px;flex:1;min-width:0;flex-wrap:wrap}.agc{font-size:12px;font-weight:800;color:var(--muted)}.agx{font-size:20px;color:var(--muted);line-height:1}
-#badgeFull,#recapFull,#gymYears{position:fixed;inset:0;z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--sab));-webkit-overflow-scrolling:touch}
+#badgeFull,#recapFull,#gymYears{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--sab));-webkit-overflow-scrolling:touch}
 #badgeFull.open,#recapFull.open,#gymYears.open{display:flex;animation:pageIn .2s ease-out}
 /* Gym years (2026-10-16): every day of a person's history, one square per day, lit = trained. Six months to a row so a
    square stays ~9px at 390px wide instead of 53 week columns at 5px; months are flex-grown by their week count so every
@@ -175,7 +201,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 :root[data-jacked] .pt{background:linear-gradient(105deg,#c99700 0%,#ffd700 36%,#fff6c2 50%,#ffd700 64%,#c99700 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:ptSweep 3.6s ease-in-out infinite;filter:drop-shadow(0 0 6px rgba(255,215,0,.35))}
 :root[data-jacked] .pt span{text-shadow:none}   /* the dot after JACKED joins the gold */
 /* While Jacked is held: a soft gold glow from the screen edges (Mr. Roni's pick, toned down). */
-:root[data-jacked] body::before{content:'';position:fixed;inset:0;z-index:9989;pointer-events:none;box-shadow:inset 0 0 26px 1px rgba(255,215,0,.26),inset 0 0 64px 4px rgba(255,180,0,.09);animation:jGlow 4.5s ease-in-out infinite}
+:root[data-jacked] body::before{content:'';position:fixed;inset:0;bottom:var(--fixedBottom);z-index:9989;pointer-events:none;box-shadow:inset 0 0 26px 1px rgba(255,215,0,.26),inset 0 0 64px 4px rgba(255,180,0,.09);animation:jGlow 4.5s ease-in-out infinite}
 @keyframes jGlow{0%,100%{opacity:.6}50%{opacity:.95}}
 /* Every section/card gets a gold outline (outline follows the radius and adds no layout shift). */
 :root[data-jacked] :is(.sec,.metric-card,.cw,.card,.card-dark,.eb,.wstats,.rc){outline:1.5px solid rgba(255,215,0,.5);outline-offset:-1.5px}
@@ -356,7 +382,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .qc{background:var(--bg3);border:1px solid rgba(32,211,194,.25);border-radius:var(--r);padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
 
 /* ONBOARDING */
-.ob-wrap{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center}
+.ob-wrap{position:fixed;inset:0;bottom:var(--fixedBottom);background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center}
 .ob-logo{font-family:var(--fh);font-size:64px;font-weight:900;color:var(--accent);margin-bottom:8px;letter-spacing:2px}
 .ob-sub{font-size:16px;color:var(--text2);margin-bottom:40px}
 .ob-step{display:none}.ob-step.active{display:block;width:100%;max-width:380px}
@@ -423,10 +449,10 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 /* While typing, hide fixed bottom chrome so the keyboard overlays it cleanly. */
 body.kb nav,body.kb .install-banner,body.kb #resumeBar{display:none!important}
 /* Persistent return-to-workout bar, sits just above the bottom nav. */
-#resumeBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(70px + var(--navB));z-index:96;background:var(--accent);color:var(--on-accent);font-family:var(--fb);font-weight:700;font-size:14px;text-align:center;padding:11px 16px;cursor:pointer;box-shadow:0 -4px 16px rgba(0,0,0,.35)}
+#resumeBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(70px + var(--navB) - var(--standaloneGap));z-index:96;background:var(--accent);color:var(--on-accent);font-family:var(--fb);font-weight:700;font-size:14px;text-align:center;padding:11px 16px;cursor:pointer;box-shadow:0 -4px 16px rgba(0,0,0,.35)}
 #resumeBar.show{display:block}
 /* Compact rest-timer bar, above the bottom nav. */
-#restBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(70px + var(--navB));z-index:97;background:var(--bg2);border:1px solid var(--border2);padding:8px 14px;align-items:center;justify-content:center;gap:12px;box-shadow:0 -4px 16px rgba(0,0,0,.4)}
+#restBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(70px + var(--navB) - var(--standaloneGap));z-index:97;background:var(--bg2);border:1px solid var(--border2);padding:8px 14px;align-items:center;justify-content:center;gap:12px;box-shadow:0 -4px 16px rgba(0,0,0,.4)}
 #restBar.show{display:flex}
 body.kb #restBar{display:none!important}
 /* When the rest bar is showing, lift the return-to-workout bar above it. */
@@ -436,7 +462,7 @@ body.resting #resumeBar{bottom:calc(118px + var(--navB));z-index:98}
 ::-webkit-scrollbar{display:none;width:0;height:0}
 
 /* install banner */
-.install-banner{position:fixed;bottom:80px;left:16px;right:16px;background:var(--bg2);border:1px solid rgba(32,211,194,.3);border-radius:var(--rl);padding:14px 16px;z-index:99;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.install-banner{position:fixed;bottom:calc(80px - var(--standaloneGap));left:16px;right:16px;background:var(--bg2);border:1px solid rgba(32,211,194,.3);border-radius:var(--rl);padding:14px 16px;z-index:99;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
 .install-banner.hidden{display:none}
 
 /* ===== Visual revamp (v0.14): periwinkle accent + depth ===== */
@@ -504,7 +530,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 @media (orientation:landscape) and (max-height:600px) and (min-width:480px){
   html:not([data-rot]) #jkRoot>*:not(#rotateGuard):not(.tc){display:none!important}
   html:not([data-rot]) body>nav{display:none!important}
-  html:not([data-rot]) #rotateGuard{display:flex;position:fixed;inset:0;z-index:9998;background:var(--bg);
+  html:not([data-rot]) #rotateGuard{display:flex;position:fixed;inset:0;bottom:var(--fixedBottom);z-index:9998;background:var(--bg);
     flex-direction:column;align-items:center;justify-content:center;text-align:center;
     gap:16px;padding:32px;color:var(--text)}
   #rotateGuard .rg-ic{font-size:52px;animation:rgspin 2.4s ease-in-out infinite}
@@ -514,7 +540,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
      rotated about its top-left corner and slid back on screen. data-rot 90 = device turned
      counter-clockwise (window.orientation 90, phone top on the screen's left): rotate -90deg.
      data-rot 270 = turned clockwise (phone top on the right): rotate +90deg. */
-  html[data-rot]{--ah:100vw;--aw:100vh}
+  html[data-rot]{--ah:100vw;--aw:calc(100vh + var(--standaloneGap))}
   html[data-rot] body{position:fixed;top:0;left:0;width:var(--aw);height:var(--ah);overflow:hidden;padding:0;
     transform-origin:0 0;touch-action:pan-x pan-y}
   html[data-rot="90"]{--sat:env(safe-area-inset-left);--sab:env(safe-area-inset-right)}
@@ -526,7 +552,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   html[data-rot] #jkRoot{display:block;position:absolute;inset:0;overflow:auto;overscroll-behavior:none}
   /* #rotateGuard stays hidden (base rule); it is only the no-lock fallback. */
 }
-@supports (height:100dvh){@media (orientation:landscape) and (max-height:600px) and (min-width:480px){html[data-rot]{--aw:100dvh}}}
+@supports (height:100dvh){@media (orientation:landscape) and (max-height:600px) and (min-width:480px){html[data-rot]{--aw:calc(100dvh + var(--standaloneGap))}}}
 @keyframes rgspin{0%,60%,100%{transform:rotate(0)}30%{transform:rotate(-90deg)}}
 
 /* ===== Hybrid layout (2026-09-21 test): big titles, one soft card per section, dark stat wells, hairline rows ===== */
