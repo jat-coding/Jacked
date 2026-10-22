@@ -4481,23 +4481,24 @@ async function singleBoth() {
   check('single/both: all 105 exist in the app\'s loaded free-exercise-db library as dumbbell, weight x reps lifts', !ids.missing.length && !ids.notDb.length && !ids.notWR.length, JSON.stringify(ids));
   check('single/both: the 10-14 list (26) is inside the always-single 32', ids.old26);
 
-  // Every one of the 105 added to a workout the real way gets a tappable pair on its set row; default per group.
+  // Every one of the 105 added to a workout the real way gets exactly one tappable pair on its exercise
+  // card (Mr. Roni 2026-10-21: he wants the control once per exercise, not once per set row); default per group.
   await page.evaluate(ALL => { startEmpty(); ALL.forEach(id => addExToWorkout(id)); addExToWorkout('Barbell_Bench_Press_-_Medium_Grip'); addExToWorkout('Tate_Press'); }, ALL);
   const ui = await page.evaluate(ALL => {
     const out = { bad: [], wrongDefault: [], others: [] };
     aw.exercises.forEach((e, i) => {
-      const card = document.getElementById('eb' + i), rows = [...card.querySelectorAll('.sr')];
-      const pairs = rows.map(r => [...r.querySelectorAll('.sbp button')].map(b => b.textContent.trim() + (b.classList.contains('on') ? '*' : '')).join('/'));
-      if (!ALL.includes(e.exId)) { if (card.querySelector('.sbp')) out.others.push(e.exId); return; }
-      if (!rows.length || pairs.some(p => !/^Single\*?\/Both\*?$/.test(p))) out.bad.push(e.exId + ':' + pairs.join(','));
+      const card = document.getElementById('eb' + i), ctl = card.querySelector('.sb-ex');
+      if (!ALL.includes(e.exId)) { if (ctl) out.others.push(e.exId); return; }
+      const pair = ctl ? [...ctl.querySelectorAll('button')].map(b => b.textContent.trim() + (b.classList.contains('on') ? '*' : '')).join('/') : '';
+      if (!ctl || !/^Single\*?\/Both\*?$/.test(pair)) out.bad.push(e.exId + ':' + pair);
       const want = SINGLE_DEFAULT_IDS.has(e.exId) ? 'Single*/Both' : 'Single/Both*';
-      if (pairs.some(p => p !== want) || e.sets.some(s => s.single !== SINGLE_DEFAULT_IDS.has(e.exId))) out.wrongDefault.push(e.exId + ':' + pairs.join(','));
+      if (pair !== want || e.sets.some(s => s.single !== SINGLE_DEFAULT_IDS.has(e.exId))) out.wrongDefault.push(e.exId + ':' + pair);
     });
     out.n = aw.exercises.length; return out;
   }, ALL);
-  check('single/both: all 105 show a Single / Both pair on every set row (both groups, none button-less)', ui.n === 107 && !ui.bad.length, JSON.stringify(ui.bad.slice(0, 5)));
-  check('single/both: new sets default to Single for the 32 and Both for the 73 (button and stored s.single agree)', !ui.wrongDefault.length, JSON.stringify(ui.wrongDefault.slice(0, 5)));
-  check('single/both: a barbell lift and a dumbbell lift outside the list (Tate_Press) get no pair', !ui.others.length, ui.others.join());
+  check('single/both: all 105 show exactly one Single / Both control per exercise card (both groups, none control-less)', ui.n === 107 && !ui.bad.length, JSON.stringify(ui.bad.slice(0, 5)));
+  check('single/both: new exercises default to Single for the 32 and Both for the 73 (control and stored s.single agree)', !ui.wrongDefault.length, JSON.stringify(ui.wrongDefault.slice(0, 5)));
+  check('single/both: a barbell lift and a dumbbell lift outside the list (Tate_Press) get no control', !ui.others.length, ui.others.join());
   await page.evaluate(() => { clearAW(); aw = null; _liveShadow = null; });
 
   // A real workout: hammer curls (toggle) 2 sets 20 x 10, concentration curls (always-single) 15 x 10, one-arm row
@@ -4511,35 +4512,59 @@ async function singleBoth() {
   await typeSet(0, 0, 20, 10); await typeSet(0, 1, 20, 10); await typeSet(1, 0, 15, 10); await typeSet(2, 0, 50, 10); await typeSet(3, 0, 100, 5);
   await page.evaluate(() => cm('restModal'));
   const before = await page.evaluate(() => document.getElementById('wMini').textContent);
-  // Tap: hammer curls set 1 -> Single; concentration curls -> Both.
-  await page.locator('#eb0 .sr').nth(0).locator('.sbp button', { hasText: 'Single' }).tap();
-  await page.locator('#eb1 .sr').nth(0).locator('.sbp button', { hasText: 'Both' }).tap();
+  // Tap the exercise-level control: hammer curls (both sets) -> Single; concentration curls -> Both.
+  await page.locator('#eb0 .sb-ex button', { hasText: 'Single' }).tap();
+  await page.locator('#eb1 .sb-ex button', { hasText: 'Both' }).tap();
   const st = await page.evaluate(() => ({ flags: aw.exercises.map(e => e.sets.map(s => s.single)), saved: S.g('activeWorkout').aw.exercises.map(e => e.sets.map(s => s.single)),
-    on: [...document.querySelectorAll('#wSession .sr')].map(r => [...r.querySelectorAll('.sbp .on')].map(b => b.textContent).join('')), mini: document.getElementById('wMini').textContent }));
-  check('single/both: tapping flips only that set (hammer set 1 Single, set 2 still Both; concentration Both; row Single)',
-    JSON.stringify(st.flags) === JSON.stringify([[true, false], [false], [true], [null]]) && st.on.join() === 'Single,Both,Both,Single,', JSON.stringify(st));
+    on: [...document.querySelectorAll('#wSession .eb')].map(c => { const s = c.querySelector('.sb-ex'); return s ? [...s.querySelectorAll('.on')].map(b => b.textContent).join('') : ''; }),
+    mini: document.getElementById('wMini').textContent }));
+  check('single/both: tapping the exercise control flips every set on that exercise (both hammer sets Single; concentration Both; others untouched)',
+    JSON.stringify(st.flags) === JSON.stringify([[true, true], [false], [true], [null]]) && st.on.join() === 'Single,Both,Single,', JSON.stringify(st));
   check('single/both: the choice is saved with the open workout (saveAW)', JSON.stringify(st.saved) === JSON.stringify(st.flags), JSON.stringify(st.saved));
-  // lifted: before taps = 20*10 + 20*10 + 2*15*10 + 2*50*10 + 100*5 = 2,200; after = 2*200 + 200 + 150 + 1000 + 500 = 2,250.
-  check('single/both: the live "lifted" figure follows the taps (2,200 lb -> 2,250 lb)', /^2(\.2K|,?200) lb lifted/.test(before) && /^2(\.3K|\.25K|,?250) lb lifted/.test(st.mini), before + ' -> ' + st.mini);
+  // lifted: before taps = 20*10 + 20*10 + 2*15*10 + 2*50*10 + 100*5 = 2,200; after (both hammer sets now Single) =
+  // 2*200 + 2*200 + 150 + 1000 + 500 = 2,450.
+  const wantMini = await page.evaluate(() => fmtW(2450 / 2.20462) + ' ' + uL() + ' lifted');
+  check('single/both: the live "lifted" figure follows the taps (2,200 lb -> 2,450 lb)', /^2(\.2K|,?200) lb lifted/.test(before) && st.mini.startsWith(wantMini), before + ' -> ' + st.mini + ' (want ' + wantMini + ')');
   await page.reload(); await page.waitForFunction(() => document.querySelector('nav') && document.querySelector('nav').style.display === 'flex'); await dbReady(page);
   const kept = await page.evaluate(() => { const a = S.g('activeWorkout'); return a && a.aw.exercises.map(e => e.sets.map(s => s.single)); });
   check('single/both: the choices survive a reload', JSON.stringify(kept) === JSON.stringify(st.flags), JSON.stringify(kept));
   await page.evaluate(() => _cfDone(true)); await page.waitForTimeout(200);   // "Resume your unfinished workout?" -> yes
-  check('single/both: the reopened workout draws the saved choices', JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('#wSession .sr')].map(r => [...r.querySelectorAll('.sbp .on')].map(b => b.textContent).join('')))) === '["Single","Both","Both","Single",""]');
+  check('single/both: the reopened workout draws the saved choices', JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('#wSession .eb')].map(c => { const s = c.querySelector('.sb-ex'); return s ? [...s.querySelectorAll('.on')].map(b => b.textContent).join('') : ''; }))) === '["Single","Both","Single",""]');
   await page.screenshot({ path: `${SHOTS}/single-both-row.png` });
-  const fit = await page.evaluate(() => { const r = document.querySelector('#wSession .sr.sb'); return r ? { ow: r.scrollWidth - r.clientWidth, right: Math.max(...[...r.children].map(c => c.getBoundingClientRect().right)), vw: innerWidth } : null; });
-  check('single/both: the set row with the pair fits a 390px screen (no overflow)', !fit || (fit.ow <= 0 && fit.right <= fit.vw), JSON.stringify(fit));
+  const fit = await page.evaluate(() => { const r = document.querySelector('#wSession .sb-ex'); return r ? { ow: r.scrollWidth - r.clientWidth, right: Math.max(...[...r.children].map(c => c.getBoundingClientRect().right)), vw: innerWidth } : null; });
+  check('single/both: the exercise-level control fits a 390px screen (no overflow)', !!fit && fit.ow <= 0 && fit.right <= fit.vw, JSON.stringify(fit));
 
   await page.evaluate(() => { cm('restModal'); finishW(true); }); await page.waitForTimeout(300);
   const fin = await page.evaluate(() => { const w = gH().find(x => x.exercises.some(e => e.exId === 'Hammer_Curls') && x.exercises.length === 4);
     const k = 1 / 2.20462;
-    return { tv: w && w.totalVolume, want: Math.round(2 * 20 * k * 10 + 20 * k * 10 + 15 * k * 10 + 2 * 50 * k * 10 + 100 * k * 5),
+    return { tv: w && w.totalVolume, want: Math.round(2 * 20 * k * 10 + 2 * 20 * k * 10 + 15 * k * 10 + 2 * 50 * k * 10 + 100 * k * 5),
       flags: w && w.exercises.map(e => e.sets.map(s => s.single)), pr: ['Hammer_Curls', 'Concentration_Curls', 'One-Arm_Dumbbell_Row'].map(id => gPR()[id] && Math.round(gPR()[id].weight * 2.20462)) }; });
-  check('single/both: finished workout stores 2x20x10 + 20x10 + 15x10 (Both) + 2x50x10 + 100x5 = 2,250 lb', fin.tv === fin.want, JSON.stringify(fin));
-  check('single/both: the finished history entry keeps each set\'s choice', JSON.stringify(fin.flags) === '[[true,false],[false],[true],[null]]', JSON.stringify(fin.flags));
+  check('single/both: finished workout stores 2x20x10 + 2x20x10 (Single) + 15x10 (Both) + 2x50x10 + 100x5 = 2,450 lb', fin.tv === fin.want, JSON.stringify(fin));
+  check('single/both: the finished history entry keeps each set\'s choice', JSON.stringify(fin.flags) === '[[true,true],[false],[true],[null]]', JSON.stringify(fin.flags));
   check('single/both: PRs are the logged weights (20 / 15 / 50 lb), never doubled', JSON.stringify(fin.pr) === '[20,15,50]', JSON.stringify(fin.pr));
   const olds = await page.evaluate(() => gH().filter(w => /^wsb/.test(w.id)).map(w => w.totalVolume));
   check('single/both: older stored totals untouched (777 x 3)', olds.length === 3 && olds.every(v => v === 777), JSON.stringify(olds));
+
+  // The exercise-level control bulk-applies: a NEW set added after tapping Single inherits Single (not the
+  // old per-exercise default), and tapping Both again brings a previously-mixed exercise back into agreement.
+  // (seedSets would otherwise carry over however many sets Hammer Curls was logged with above, so the layout
+  // is pinned explicitly here to exactly 2 sets.)
+  await page.evaluate(() => cm('fsModal'));   // close the finish-summary modal left open by finishW above
+  await page.evaluate(() => { startEmpty(); addExToWorkout('Hammer_Curls');
+    aw.exercises[0].sets = [{ weight: 20, reps: 10, done: false }, { weight: 20, reps: 10, done: false }];
+    renderWS();
+    setSingleArm(0, 0, true); });   // simulate mixed history: set 0 Single, set 1 Both (no exercise-level choice made yet)
+  const mixed = await page.evaluate(() => ({ flags: aw.exercises[0].sets.map(s => s.single), ui: exSingleUI(aw.exercises[0]) }));
+  check('single/both: with mixed sets and no exercise-level choice yet, the control shows the most recently logged set\'s value',
+    JSON.stringify(mixed.flags) === '[true,false]' && mixed.ui === false, JSON.stringify(mixed));
+  await page.locator('#eb0 .sb-ex button', { hasText: 'Single' }).tap();
+  const afterTap = await page.evaluate(() => aw.exercises[0].sets.map(s => s.single));
+  check('single/both: tapping Single resolves the mixed sets -- both now agree', JSON.stringify(afterTap) === '[true,true]', JSON.stringify(afterTap));
+  await page.evaluate(() => addSet(0));
+  const inherited = await page.evaluate(() => aw.exercises[0].sets.map(s => s.single));
+  check('single/both: a set added after that inherits the exercise\'s own choice (Single), not Hammer Curls\' usual Both default',
+    JSON.stringify(inherited) === '[true,true,true]', JSON.stringify(inherited));
+  await page.evaluate(() => { clearAW(); aw = null; _liveShadow = null; });
 
   // volWeight rules: own flag wins; no flag = the 10-14 list; imported never; customs never; PR math reads effWeight.
   const vw = await page.evaluate(() => {
