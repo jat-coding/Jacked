@@ -20,17 +20,18 @@ try{screen.orientation.addEventListener('change',set)}catch(e){}})();
    Normally 0. iOS home-screen apps (iOS 26.1 onward, WebKit bug 301994) under-report
    innerHeight by ~status-bar height in standalone display-mode only (not in a Chrome/Safari
    tab, where it's right) -- confirmed on his iPhone 2026-10-22: ih=793 vs real screen=852.
-   2026-10-22 correction: plain `position:fixed;bottom:0` (with viewport-fit=cover, already
-   set above) already lands on the REAL screen edge on iOS regardless of this bug -- it's an
-   innerHeight/layout-flow metric bug, not a fixed-positioning one. The first attempt at this
-   fix (9b3b255) also subtracted --standaloneGap from ordinary bottom-pinned bars (nav,
-   resumeBar, restBar, install-banner), which over-corrected and pushed them past the real
-   bottom edge, clipping them off-screen (his IMG_0854/IMG_0856). Reverted for those -- they
-   need nothing. The gap is only real for boxes whose SIZE is tied to 100vh/height (the
-   scrollable document; full-bleed `inset:0` overlays sized via top+bottom, see --fixedBottom)
-   -- those are genuinely short by this much and still need it. Same split Pantry actually
-   uses: its useStandaloneBottomGap hook has exactly one consumer, a full-bleed PDF overlay,
-   not its main bottom nav. */
+   2026-10-22, two wrong turns before landing here: first (9b3b255) subtracted the gap from
+   nav/resumeBar/restBar/install-banner's `bottom` and he reported them clipped off-screen, so
+   the next attempt (3750df9) reasoned plain `position:fixed;bottom:0` must already land on the
+   real edge and removed that subtraction entirely. It didn't -- a debug build (0e7b929) put an
+   actual ruler on his screen (a line at plain `bottom:0`) and his photo (IMG_0858) shows real
+   black space between that line and the true bottom, matching the gap almost exactly. So
+   `position:fixed;bottom:0` does NOT escape this bug on his device; it needs the same
+   compensation as everything else. Nav/resumeBar/restBar/install-banner are back to
+   subtracting --standaloneGap (matching 9b3b255). Whatever looked clipped in the first
+   screenshots wasn't this -- not re-diagnosed, the ruler evidence just supersedes it. --ah,
+   html/body height and the full-bleed `inset:0` overlays (--fixedBottom) were never touched
+   either way. */
 (function(){var d=document.documentElement;
 function gap(){if(navigator.standalone!==true)return 0;
   var w=innerWidth,h=innerHeight,s=screen;
@@ -110,7 +111,7 @@ html,body{height:calc(100% + var(--standaloneGap));overscroll-behavior:none;posi
 body{background:var(--bg);color:var(--text);font-family:var(--fb);touch-action:pan-y}
 
 html{--navB:max(8px,calc(var(--sab) - 14px))}
-nav{position:fixed;left:12px;right:12px;bottom:var(--navB);background:var(--bg2);border:1px solid var(--border);border-radius:30px;display:flex;z-index:100;padding:5px}
+nav{position:fixed;left:12px;right:12px;bottom:calc(var(--navB) - var(--standaloneGap));background:var(--bg2);border:1px solid var(--border);border-radius:30px;display:flex;z-index:100;padding:5px}
 .nb{flex:1;padding:8px 2px 7px;border-radius:24px;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--muted);font-family:var(--fb);font-size:9px;font-weight:600;cursor:pointer;transition:color .2s;letter-spacing:.3px;text-transform:uppercase;-webkit-appearance:none}
 .nb.active{color:var(--accent)}
 .nb svg{width:20px;height:20px;stroke-width:1.8}
@@ -473,10 +474,10 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 /* While typing, hide fixed bottom chrome so the keyboard overlays it cleanly. */
 body.kb nav,body.kb .install-banner,body.kb #resumeBar{display:none!important}
 /* Persistent return-to-workout bar, sits just above the bottom nav. */
-#resumeBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(70px + var(--navB));z-index:96;background:var(--accent);color:var(--on-accent);font-family:var(--fb);font-weight:700;font-size:14px;text-align:center;padding:11px 16px;cursor:pointer;box-shadow:0 -4px 16px rgba(0,0,0,.35)}
+#resumeBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(70px + var(--navB) - var(--standaloneGap));z-index:96;background:var(--accent);color:var(--on-accent);font-family:var(--fb);font-weight:700;font-size:14px;text-align:center;padding:11px 16px;cursor:pointer;box-shadow:0 -4px 16px rgba(0,0,0,.35)}
 #resumeBar.show{display:block}
 /* Compact rest-timer bar, above the bottom nav. */
-#restBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(70px + var(--navB));z-index:97;background:var(--bg2);border:1px solid var(--border2);padding:8px 14px;align-items:center;justify-content:center;gap:12px;box-shadow:0 -4px 16px rgba(0,0,0,.4)}
+#restBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(70px + var(--navB) - var(--standaloneGap));z-index:97;background:var(--bg2);border:1px solid var(--border2);padding:8px 14px;align-items:center;justify-content:center;gap:12px;box-shadow:0 -4px 16px rgba(0,0,0,.4)}
 #restBar.show{display:flex}
 body.kb #restBar{display:none!important}
 /* When the rest bar is showing, lift the return-to-workout bar above it. */
@@ -486,7 +487,7 @@ body.resting #resumeBar{bottom:calc(118px + var(--navB));z-index:98}
 ::-webkit-scrollbar{display:none;width:0;height:0}
 
 /* install banner */
-.install-banner{position:fixed;bottom:80px;left:16px;right:16px;background:var(--bg2);border:1px solid rgba(32,211,194,.3);border-radius:var(--rl);padding:14px 16px;z-index:99;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.install-banner{position:fixed;bottom:calc(80px - var(--standaloneGap));left:16px;right:16px;background:var(--bg2);border:1px solid rgba(32,211,194,.3);border-radius:var(--rl);padding:14px 16px;z-index:99;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
 .install-banner.hidden{display:none}
 
 /* ===== Visual revamp (v0.14): periwinkle accent + depth ===== */
