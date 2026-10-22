@@ -45,8 +45,21 @@ function set(){d.style.setProperty('--standaloneGap',gap()+'px');dbg()}
    Remove once the actual fix is confirmed on his phone. */
 function dbg(){var e=document.getElementById('jkGapDbg');if(!e)return;
   var sab=getComputedStyle(d).getPropertyValue('--sab').trim();
+  var nav=document.querySelector('nav'),nb=nav?Math.round(nav.getBoundingClientRect().bottom):'?';
+  var gapBelowNav=nav?(innerHeight-Math.round(nav.getBoundingClientRect().bottom)):'?';
   e.textContent='ih='+innerHeight+' iw='+innerWidth+' sh='+screen.height+' sw='+screen.width+
-    ' standalone='+navigator.standalone+' rawGap='+rawGap()+' appliedGap='+gap()+' sab='+sab}
+    ' standalone='+navigator.standalone+' rawGap='+rawGap()+' appliedGap='+gap()+' sab='+sab+
+    '\nnavBottom='+nb+' gapBelowNav(vs ih)='+gapBelowNav;
+  // Three rulers so the gap is a measurement, not a judgment call on a photo: RED = the real
+  // physical screen bottom (plain `position:fixed;bottom:0`, trusting that iOS honors it
+  // regardless of the innerHeight bug); BLUE = where window.innerHeight says the viewport
+  // ends (set via JS top, since that's a number, not a CSS anchor); YELLOW = nav's own
+  // measured bottom edge. If BLUE sits above RED with a visible stripe between them, that
+  // stripe is the real, literal gap. If YELLOW doesn't sit right on the visible nav bar,
+  // the fixed-positioning assumption this whole fix rests on is wrong.
+  var blue=document.getElementById('jkBlueLine'),yellow=document.getElementById('jkYellowLine');
+  if(blue)blue.style.top=(innerHeight-2)+'px';
+  if(yellow&&nav)yellow.style.top=(Math.round(nav.getBoundingClientRect().bottom)-2)+'px'}
 set();addEventListener('resize',set);addEventListener('orientationchange',set);
 window.jkStandaloneGap=gap;})();
 </script>
@@ -600,6 +613,9 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 </head>
 <body>
 <div id="jkGapDbg" style="position:fixed;top:calc(env(safe-area-inset-top) + 4px);left:4px;right:4px;z-index:9999;background:#000;color:#0f0;font:9px/1.3 monospace;padding:3px 6px;border-radius:6px;pointer-events:none;white-space:pre-wrap;opacity:.9"></div>
+<div id="jkRedLine" style="position:fixed;left:0;right:0;bottom:0;height:3px;background:red;z-index:9997;pointer-events:none"></div>
+<div id="jkBlueLine" style="position:fixed;left:0;right:0;top:0;height:3px;background:#2af;z-index:9997;pointer-events:none"></div>
+<div id="jkYellowLine" style="position:fixed;left:0;right:0;top:0;height:3px;background:#ff0;z-index:9997;pointer-events:none"></div>
 <!-- NAV: a true sibling of #jkRoot, outside the scroll container -- see the comment at the
      top of the stylesheet (html,body{...}) for why: nested inside #jkRoot, iOS WebKit can
      detach this position:fixed bar and let it track the scroll instead of the viewport
