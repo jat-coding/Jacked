@@ -137,7 +137,14 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .agrow{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--border);cursor:pointer}
 .agt{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);min-width:104px}
 .agi{display:flex;gap:5px;flex:1;min-width:0;flex-wrap:wrap}.agc{font-size:12px;font-weight:800;color:var(--muted)}.agx{font-size:20px;color:var(--muted);line-height:1}
-#badgeFull,#recapFull,#gymYears{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--sab));-webkit-overflow-scrolling:touch}
+/* #badgeFull gets its own rule (2026-10-23, 5th nav-buffer attempt): a real-WebKit audit
+   (tests/e2e/nav-buffer-audit.mjs) measured its Close button landing 28-50px past where the
+   floating nav's top edge would be, because this shared rule only reserved sab+20px at the
+   bottom -- nothing for the nav's own ~62px footprint + --navB, unlike .page/.md which already
+   reserve both. #recapFull/#gymYears measured clean in the same audit run, so they keep the
+   original padding below. */
+#badgeFull{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + 62px + var(--navB));-webkit-overflow-scrolling:touch}
+#recapFull,#gymYears{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--sab));-webkit-overflow-scrolling:touch}
 #badgeFull.open,#recapFull.open,#gymYears.open{display:flex;animation:pageIn .2s ease-out}
 /* Gym years (2026-10-16): every day of a person's history, one square per day, lit = trained. Six months to a row so a
    square stays ~9px at 390px wide instead of 53 week columns at 5px; months are flex-grown by their week count so every
@@ -449,7 +456,11 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    action bar at the bottom so the keyboard OVERLAYS it instead of pushing it up. */
 .ae-md{display:flex;flex-direction:column;height:calc(var(--ah)*.9);max-height:calc(var(--ah)*.9);padding:0 20px;overflow:hidden}
 .ae-top{flex-shrink:0;padding-top:6px}
-.ae-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:10px}
+/* padding-bottom nav-aware since 2026-10-23 (5th nav-buffer attempt): #aeModal's own `.md`
+   class gets overridden by `.ae-md{padding:0 20px;overflow:hidden}` (later in source order),
+   so .ae-list -- not the shared .md rule -- is this sheet's real bottom reserve; the audit
+   measured the last exercise row landing under the nav's reserved zone with the old flat 10px. */
+.ae-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(10px + 62px + var(--navB))}
 .ae-grp{font-family:var(--fh);font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);padding:10px 2px 6px;position:sticky;top:0;z-index:3;background:var(--bg2);box-shadow:0 4px 6px -4px var(--bg2)}
 .ms-bar{flex-shrink:0;background:var(--bg2);border-top:1px solid var(--border2);padding:12px 16px calc(12px + var(--sab));display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 -20px}
 /* While typing, hide fixed bottom chrome so the keyboard overlays it cleanly. */
