@@ -818,7 +818,7 @@ async function portraitLock() {
     check(`${tag}: bottom nav on the ${a === 90 ? 'right' : 'left'} edge, upright-to-phone (tall, narrow), on screen`, nav.h > nav.w * 3 && inVp(nav, W, H) && (a === 90 ? nav.right > W - 30 : nav.left < 30), JSON.stringify(nav));
     const ph = await R(page, '#page-home .ph');
     check(`${tag}: page header (app top) sits on the ${a === 90 ? 'left' : 'right'} edge`, a === 90 ? ph.left < 2 : ph.right > W - 2, JSON.stringify(ph));
-    check(`${tag}: home page fits the short axis (no clipping)`, (await R(page, '#page-home')).h <= H + 1 && (await page.evaluate(() => document.getElementById('jkRoot').scrollWidth <= document.getElementById('jkRoot').clientWidth + 1)));
+    check(`${tag}: home page fits the short axis (no clipping)`, (await R(page, '#page-home')).h <= H + 1 && (await page.evaluate(() => (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollWidth <= (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).clientWidth + 1)));
     // Text really is rotated: the "JACKED." wordmark reads along the screen's long axis.
     const title = await page.evaluate(() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('#page-home .pt')); const b = r.getBoundingClientRect(); return { w: b.width, h: b.height }; });
     check(`${tag}: title text runs vertically on screen (rotated)`, title.h > title.w, JSON.stringify(title));
@@ -838,7 +838,7 @@ async function portraitLock() {
   // Every tab and the live workout fit the frame width in the rotated frame (no sideways overflow), on the narrowest phone.
   { const cex = [{ id: 'cex1', name: 'Barbell Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps', category: 'strength', notes: '', images: [], _c: true }];
     const { page, ctx, errors } = await phone({ width: 667, height: 375, angle: 90, now: SEP15, seed: { cex, routines: [{ id: 'r1', name: 'Push', desc: '', exercises: ['cex1'] }], hist: [wk('2026-09-10', [ex('Barbell Bench Press', [[185, 5]])])] } });
-    const overflow = () => page.evaluate(() => { const r = document.getElementById('jkRoot'); return r.scrollWidth - r.clientWidth; });
+    const overflow = () => page.evaluate(() => { const r = (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')); return r.scrollWidth - r.clientWidth; });
     for (const t of ['home', 'routines', 'exercises', 'metrics', 'leaderboard']) {
       await page.evaluate(t => sp(t), t); await page.waitForTimeout(200);
       check(`lock @90 667x375: ${t} tab has no sideways overflow`, (await overflow()) <= 1, String(await overflow()));
@@ -856,7 +856,7 @@ async function portraitLock() {
     const cdp = await ctx.newCDPSession(page);
     const tp = (t, x, y) => cdp.send('Input.dispatchTouchEvent', { type: t, touchPoints: t === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
     const swipe = async (x, y, dx, dy) => { await tp('touchStart', x, y); for (let i = 1; i <= 15; i++) { await tp('touchMove', x + dx * i / 15, y + dy * i / 15); await page.waitForTimeout(20); } await tp('touchEnd'); await page.waitForTimeout(700); };
-    const top = () => page.evaluate(() => document.getElementById('jkRoot').scrollTop);
+    const top = () => page.evaluate(() => (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTop);
     // App down (content up) = finger toward the phone-top edge: left for 90, right for 270.
     await swipe(400, 200, a === 90 ? -220 : 220, 0);
     const t1 = await top();
@@ -1138,7 +1138,7 @@ async function portraitLock() {
     // portrait; data-rot/transform/guard still do.
     check('portrait: no data-rot, no transform, guard hidden', s.rot === null && s.tf === 'none' && s.guard === 'none', JSON.stringify(s));
     check('portrait: nav is a wide pill at the bottom', nav.w > nav.h * 3 && nav.bottom > 800 && nav.bottom <= 844, JSON.stringify(nav));
-    check('portrait: #jkRoot is the one scroll container (position:absolute, overflow-y:auto)', await page.evaluate(() => { const c = getComputedStyle(document.getElementById('jkRoot')); return c.position === 'absolute' && c.overflowY === 'auto'; }));
+    check('portrait (browser tab, jk-doc): the document scrolls, html/body/#jkRoot are not pinned', await page.evaluate(() => { const h = document.documentElement, c = getComputedStyle(document.getElementById('jkRoot')), b = getComputedStyle(document.body); return h.classList.contains('jk-doc') && c.position === 'static' && b.position === 'static' && document.scrollingElement.scrollHeight > innerHeight; }));
     await page.screenshot({ path: `${SHOTS}/lock-portrait-unchanged.png` }); await ctx.close(); }
   { // keyboard-shrunk portrait (~360x300 layout viewport reads as landscape); worst case: device reports angle 90 anyway.
     for (const a of [0, 90]) {
@@ -1488,7 +1488,7 @@ async function typeRulebook() {
     await page.evaluate(p => sp(p), pg); await page.waitForTimeout(300);
     all[pg] = await page.evaluate(measure);
     if (pg === 'home' || pg === 'metrics') await page.screenshot({ path: `${SHOTS}/rulebook-${pg}-393.png`, fullPage: false });
-    if (pg === 'metrics') { await page.evaluate(() => document.getElementById('jkRoot').scrollTo(0, 400)); await page.waitForTimeout(150); await page.screenshot({ path: `${SHOTS}/rulebook-metrics-scrolled-393.png` }); }
+    if (pg === 'metrics') { await page.evaluate(() => (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTo(0, 400)); await page.waitForTimeout(150); await page.screenshot({ path: `${SHOTS}/rulebook-metrics-scrolled-393.png` }); }
     if (pg === 'leaderboard') await page.screenshot({ path: `${SHOTS}/rulebook-friends-393.png` });
     check(`rulebook: ${pg} no page errors`, errors.length === 0, errors.join(' | '));
     await ctx.close();
@@ -2863,10 +2863,10 @@ async function popupScrollLock() {
   await page.evaluate(() => sp('metrics')); await page.waitForTimeout(300);
   const Y = 600;
   const pageTop = () => page.evaluate(() => document.querySelector('.page.active').getBoundingClientRect().top);
-  // #jkRoot is the real scroll container now (2026-10-12, see jacked-pwa/index.html); window
-  // never scrolls, so these suites read/set the lock target there instead of window.scrollY.
-  const jScrollTo = y => page.evaluate(y => document.getElementById('jkRoot').scrollTo(0, y), y);
-  const jScrollY = () => page.evaluate(() => document.getElementById('jkRoot').scrollTop);
+  // The scroller is #jkRoot in the home-screen app and the rotated frame (2026-10-12), and the
+  // document itself in a browser tab (jk-doc, 2026-10-22) -- which is what this test page is.
+  const jScrollTo = y => page.evaluate(y => (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTo(0, y), y);
+  const jScrollY = () => page.evaluate(() => (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTop);
   const OPEN = {
     recap: () => openRecap(2026, 7), badge: () => badgeInfo(computeBadges()[0].name), achievements: () => openAch(),
     profile: () => om('profModal'), friendProfile: () => om('fpModal'), workoutDetail: () => om('wdModal'), lightbox: () => om('avLightbox'),
@@ -2929,14 +2929,14 @@ async function navPinned() {
   await page.evaluate(() => sp('leaderboard')); await page.waitForTimeout(400);
   // #jkRoot is the real scroll container now (2026-10-12); window never scrolls.
   const nav = () => page.evaluate(() => { const b = document.querySelector('nav').getBoundingClientRect(), nb = parseFloat(getComputedStyle(document.querySelector('nav')).bottom);
-    return { bottom: b.bottom, want: innerHeight - nb, w: b.width, h: b.height, y: document.getElementById('jkRoot').scrollTop, pos: document.body.style.position, top: document.body.style.top }; });
+    return { bottom: b.bottom, want: innerHeight - nb, w: b.width, h: b.height, y: (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTop, pos: document.body.style.position, top: document.body.style.top }; });
   const pinned = n => Math.abs(n.bottom - n.want) < 1 && n.h < 90 && n.w > 300;
   const swipe = async (dy, x = 195, y0 = 620) => { const c = await ctx.newCDPSession(page);
     await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y0 }] });
     for (let k = 1; k <= 10; k++) await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y0 - k * dy / 10 }] });
     await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await c.detach(); await page.waitForTimeout(250); };
   let n = await nav();
-  check('nav pinned: Friends tab is long enough to scroll, nav starts at the viewport bottom', pinned(n) && (await page.evaluate(() => { const r = document.getElementById('jkRoot'); return r.scrollHeight - r.clientHeight; })) > 600, JSON.stringify(n));
+  check('nav pinned: Friends tab is long enough to scroll, nav starts at the viewport bottom', pinned(n) && (await page.evaluate(() => { const r = (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')); return r.scrollHeight - r.clientHeight; })) > 600, JSON.stringify(n));
   await swipe(350); n = await nav();
   check('nav pinned: touch-scrolling Friends moves the page, nav stays at the bottom', n.y > 100 && pinned(n), JSON.stringify(n));
   await page.mouse.move(195, 400); await page.mouse.wheel(0, 300); await page.waitForTimeout(200); n = await nav();
@@ -2948,10 +2948,10 @@ async function navPinned() {
   const bad = [];
   // A loaded machine (other headless browsers running) can still be laying out after the fixed waits: wait until
   // scrollY holds still for 5 frames before reading it, so the check measures the lock, not render lag.
-  const settle = () => page.evaluate(() => new Promise(res => { let last = -1, same = 0, n = 0; const f = () => { const y = document.getElementById('jkRoot').scrollTop; same = y === last ? same + 1 : 0; last = y; if (same >= 5 || ++n > 120) res(); else requestAnimationFrame(f); }; requestAnimationFrame(f); }));
+  const settle = () => page.evaluate(() => new Promise(res => { let last = -1, same = 0, n = 0; const f = () => { const y = (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTop; same = y === last ? same + 1 : 0; last = y; if (same >= 5 || ++n > 120) res(); else requestAnimationFrame(f); }; requestAnimationFrame(f); }));
   for (const [name, open, close] of OPEN) {
-    await page.evaluate(() => { sp('leaderboard'); document.getElementById('jkRoot').scrollTo(0, 500); }); await page.waitForTimeout(60); await settle();
-    const y0 = await page.evaluate(() => document.getElementById('jkRoot').scrollTop);
+    await page.evaluate(() => { sp('leaderboard'); (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTo(0, 500); }); await page.waitForTimeout(60); await settle();
+    const y0 = await page.evaluate(() => (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTop);
     await page.evaluate(open); await page.waitForTimeout(120); await settle();
     const o = await nav();
     await swipe(300, 195, 700); await page.mouse.move(195, 420); await page.mouse.wheel(0, 500); await page.waitForTimeout(120);
@@ -2969,13 +2969,13 @@ async function navPinned() {
   check('nav pinned: a long popup (Achievements) still touch-scrolls its own content', achT > 50, String(achT));
   check('nav pinned: lock released after the last popup', !(await page.evaluate(() => document.documentElement.classList.contains('popup-lock'))));
   // A popup that switches tabs: the new tab starts at its top, nav at the bottom.
-  await page.evaluate(() => { document.getElementById('jkRoot').scrollTo(0, 500); om('profModal'); }); await page.waitForTimeout(80);
+  await page.evaluate(() => { (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTo(0, 500); om('profModal'); }); await page.waitForTimeout(80);
   await page.evaluate(() => { sp('metrics'); cm('profModal'); }); await page.waitForTimeout(150); n = await nav();
   check('nav pinned: a popup that switched tabs lands on the new tab at its top, nav pinned', n.y === 0 && pinned(n), JSON.stringify(n));
   // Portrait-lock rotate path: turn to landscape (fake lock), use popups there, turn back, and around a rotation mid-popup.
   const rotate = async (a) => { const [w, h] = a ? [844, 390] : [390, 844]; await page.setViewportSize({ width: w, height: h });
     await page.evaluate(a => { window.__wo = a === 270 ? -90 : a; dispatchEvent(new Event('orientationchange')); dispatchEvent(new Event('resize')); }, a); await page.waitForTimeout(250); };
-  await page.evaluate(() => { sp('leaderboard'); document.getElementById('jkRoot').scrollTo(0, 400); }); await page.waitForTimeout(80);
+  await page.evaluate(() => { sp('leaderboard'); (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTo(0, 400); }); await page.waitForTimeout(80);
   await rotate(90);
   const land = await page.evaluate(() => ({ rot: document.documentElement.getAttribute('data-rot'), tf: getComputedStyle(document.body).transform }));
   await page.evaluate(() => om('fpModal')); await page.waitForTimeout(100); await page.evaluate(() => cm('fpModal'));
@@ -2984,13 +2984,13 @@ async function navPinned() {
   check('nav pinned: landscape lock engaged, popups used there, back to portrait: nav at the bottom', land.rot === '90' && land.tf !== 'none' && pinned(n), JSON.stringify({ land, n }));
   await swipe(300); n = await nav();
   check('nav pinned: after the rotate path, scrolling keeps the nav at the bottom', pinned(n), JSON.stringify(n));
-  await page.evaluate(() => { document.getElementById('jkRoot').scrollTo(0, 300); om('fpModal'); }); await page.waitForTimeout(80);
+  await page.evaluate(() => { (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTo(0, 300); om('fpModal'); }); await page.waitForTimeout(80);
   await rotate(270); const midRot = await page.evaluate(() => ({ top: document.body.style.top, w: document.body.style.width })); await page.evaluate(() => cm('fpModal')); await page.waitForTimeout(80);
   await rotate(0); await swipe(200); n = await nav();
   check('nav pinned: popup open across a rotation (portrait -> landscape -> close -> portrait): no inline body offset, nav pinned while scrolling', midRot.top === '' && midRot.w === '' && pinned(n), JSON.stringify({ midRot, n }));
-  await page.evaluate(() => { document.getElementById('jkRoot').scrollTo(0, 300); }); await rotate(90); await page.evaluate(() => om('fpModal')); await page.waitForTimeout(80);
+  await page.evaluate(() => { (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).scrollTo(0, 300); }); await rotate(90); await page.evaluate(() => om('fpModal')); await page.waitForTimeout(80);
   await rotate(0); await page.evaluate(() => cm('fpModal')); await page.waitForTimeout(80); await swipe(200); n = await nav();
-  check('nav pinned: popup opened in landscape, closed in portrait: nav pinned while scrolling', pinned(n) && !(await page.evaluate(() => document.getElementById('jkRoot').style.overflow)), JSON.stringify(n));
+  check('nav pinned: popup opened in landscape, closed in portrait: nav pinned while scrolling', pinned(n) && !(await page.evaluate(() => (document.documentElement.matches('.jk-doc:not([data-rot])') ? document.scrollingElement : document.getElementById('jkRoot')).style.overflow)), JSON.stringify(n));
   check('nav pinned: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }

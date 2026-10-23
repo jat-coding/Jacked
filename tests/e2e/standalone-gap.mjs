@@ -26,6 +26,8 @@ async function standaloneGap() {
     om('qsModal'); document.getElementById('achFull').classList.add('open'); document.getElementById('badgeFull').classList.add('open');
     document.getElementById('resumeBar').style.display = 'block'; document.getElementById('restBar').style.display = 'flex';
     const out = {
+      doc: document.documentElement.classList.contains('jk-doc'), rootPos: getComputedStyle(document.getElementById('jkRoot')).position,
+      rootOy: getComputedStyle(document.getElementById('jkRoot')).overflowY, bodyPos: getComputedStyle(document.body).position,
       bar: document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.content,
       gap: getComputedStyle(document.documentElement).getPropertyValue('--standaloneGap').trim(),
       ih: innerHeight, body: r(document.body).height, root: r(document.getElementById('jkRoot')).height, nav: r(document.querySelector('nav')).bottom,
@@ -45,6 +47,7 @@ async function standaloneGap() {
   check('standalone: modal backdrop and bottom sheet end at the viewport bottom', Math.round(m.mo) === ih && Math.round(m.md) === ih, j);
   check('standalone: achievements and badge pages end at the viewport bottom', Math.round(m.ach) === ih && Math.round(m.badge) === ih, j);
   check('standalone: resume/rest bars sit above the nav, inside the viewport', Math.round(m.resume) === ih - 78 && Math.round(m.rest) === ih - 78, j);
+  check('standalone: home-screen app keeps the pinned layout (no jk-doc; body fixed, #jkRoot is the scroller)', !m.doc && m.bodyPos === 'fixed' && m.rootPos === 'absolute' && m.rootOy === 'auto', j);
   check('standalone: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
