@@ -5260,7 +5260,8 @@ function prBest(ex){
 // not the combined weight of the reps. And then if the PR is for multiple weights then show the suggested PR").
 // One weight exercise against its documented record `prev` (jk_prs) and suggested record `sug` (jk_prSug):
 //  • doc: the heaviest set actually lifted (raw weight, more reps breaks a tie), if its raw weight beats the documented
-//    PR's raw weight. e1RM never decides this, not even between two real sets (200 x 1 stays over 190 x 3).
+//    PR's raw weight, OR ties it with strictly more reps than the documented PR had (same weight proven for more reps
+//    is directly better, not an estimate). e1RM never decides this, not even between two real sets (200 x 1 stays over 190 x 3).
 //  • sug: the best set by e1RM, when the 1RM it implies is above the (new) documented raw weight and above the old
 //    suggestion's. That can be the documented set itself (a 3-rep PR shows its estimated 1RM as suggested). The implied
 //    weight is prE1rm(sug).
@@ -5270,7 +5271,7 @@ function prBest(ex){
 // SUG_EPS (kg): the suggested number is shown rounded to 0.1 lb/kg, so lifting the number on screen must clear it.
 const SUG_EPS=0.05;
 function prWeightStep(ex, prev, sug){
-  const pw=(prev&&prev.weight)||0, se=prE1rm(sug);
+  const pw=(prev&&prev.weight)||0, pwReps=(prev&&prev.reps)||0, se=prE1rm(sug);
   let heavy=null, est=null;
   (ex.sets||[]).forEach((s,si)=>{
     if(!(s.done&&(s.weight>0||s.reps>0))) return;
@@ -5278,7 +5279,9 @@ function prWeightStep(ex, prev, sug){
     if(!heavy||w>heavy.weight||(w===heavy.weight&&reps>heavy.reps)) heavy={si,weight:w,reps};
     if(!est||e1rm(w,reps)>e1rm(est.weight,est.reps)) est={si,weight:w,reps};
   });
-  const doc=heavy&&heavy.weight>pw?heavy:null, dw=doc?doc.weight:pw;
+  // Same weight as the documented PR but strictly more reps is directly proven better
+  // (no e1RM/suggested treatment needed) — ties the raw-weight check with a reps tie-break.
+  const doc=heavy&&(heavy.weight>pw||(heavy.weight===pw&&heavy.reps>pwReps))?heavy:null, dw=doc?doc.weight:pw;
   const ee=est?e1rm(est.weight,est.reps):0, nsug=est&&ee>dw+SUG_EPS&&ee>se?est:null;
   return {doc, sug:nsug, keepSug:!nsug&&se>dw+SUG_EPS};
 }

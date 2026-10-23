@@ -120,8 +120,8 @@ export async function suggestedPR() {
   r = await finish(page, { [DEAD]: [[205, 1], [180, 10]] });   // 180 x 10 implies 240 but is lighter
   check('raw weight: 205 x 1 documents even with a higher-e1RM lighter set in the same workout; 240 suggested', lb(r.prs[DEAD].weight) === 205 && r.prs[DEAD].reps === 1 && r.w.prSets[0].si === 0 && lb(r.sug[DEAD].weight) === 180 && r.sug[DEAD].reps === 10 && r.w.sugSets[0].si === 1, JSON.stringify([r.prs[DEAD], r.sug[DEAD], r.w.prSets, r.w.sugSets]));
   await closeFs(page);
-  r = await finish(page, { [DEAD]: [[205, 5]] });   // same raw weight, more reps: not a new documented PR (strictly heavier); ~239 < 240
-  check('raw weight: same weight with more reps is not a new documented PR', lb(r.prs[DEAD].weight) === 205 && r.prs[DEAD].reps === 1 && r.w.prCount === 0 && lb(r.sug[DEAD].weight) === 180, JSON.stringify([r.prs[DEAD], r.sug[DEAD]]));
+  r = await finish(page, { [DEAD]: [[205, 5]] });   // same raw weight, strictly more reps: an unambiguous new documented PR, no e1RM needed; its own ~239 estimate stays below the existing 240 suggestion, which is kept
+  check('raw weight: same weight with strictly more reps documents a new PR', lb(r.prs[DEAD].weight) === 205 && r.prs[DEAD].reps === 5 && r.w.prCount === 1 && lb(r.sug[DEAD].weight) === 180 && r.sug[DEAD].reps === 10, JSON.stringify([r.prs[DEAD], r.sug[DEAD]]));
   await closeFs(page);
 
   // A first-ever lift is a real set, so it documents (no PR yet = nothing to estimate past); heavier-and-more-reps documents too.
