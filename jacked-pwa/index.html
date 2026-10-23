@@ -146,21 +146,19 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 #badgeFull{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + 62px + var(--navB));-webkit-overflow-scrolling:touch}
 #recapFull,#gymYears{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--sab));-webkit-overflow-scrolling:touch}
 #badgeFull.open,#recapFull.open,#gymYears.open{display:flex;animation:pageIn .2s ease-out}
-/* Gym years (2026-10-16): every day of a person's history, one square per day, lit = trained. Six months to a row so a
-   square stays ~9px at 390px wide instead of 53 week columns at 5px; months are flex-grown by their week count so every
-   square is the same size. */
+/* Gym years (2026-10-16, redesigned 2026-10-23 per voice memo): every day of a person's history, one square per
+   day, lit = trained. One flat grid per year -- no month breakout, no gaps between months -- fixed column count
+   (18) so rows just keep stacking, like a GitHub contribution graph; 18 keeps each square ~17-18px at both 375px
+   (iPhone SE) and 393px (iPhone 16) rather than shrinking to fit a wider grid on screen. */
 #gymYears{padding-left:16px;padding-right:16px}
 .gy-year{margin:0 0 18px;text-align:left}
 .gy-yh{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 8px;padding-top:12px;border-top:1px solid var(--border)}
 .gy-yh b{font-family:var(--fh);font-size:22px;font-weight:800}
 .gy-yh span{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
-.gy-half{display:flex;margin-bottom:10px}
-.gy-m{min-width:0;flex-basis:0;flex-shrink:1}.gy-m+.gy-m{margin-left:7px}
-.gy-ml{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
-.gy-g{display:grid;grid-template-rows:repeat(7,auto);grid-auto-flow:column;grid-auto-columns:1fr}
-.gy-d{aspect-ratio:1;margin:1px;border-radius:2px;background:var(--bg3)}
+.gy-grid{display:grid;grid-template-columns:repeat(18,1fr);gap:2px}
+.gy-d{aspect-ratio:1;border-radius:2px;background:var(--bg3)}
 .gy-d.on{background:var(--accent)}
-.gy-d.pad,.gy-d.fut{background:transparent}
+.gy-d.fut{background:transparent}
 .bf-x{position:fixed;top:calc(14px + var(--sat));right:16px;width:38px;height:38px;font-size:18px}
 .bf-wrap{max-width:460px;width:100%;margin:0 auto;padding-top:34px;text-align:center;flex:1}
 .bf-icon{width:132px;height:132px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
@@ -7368,26 +7366,26 @@ function openRecap(y,m){
   document.getElementById('recapFull').scrollTop=0;
 }
 function closeRecap(){ document.getElementById('recapFull').classList.remove('open'); }
-// Gym years: one block per year that has any training (oldest first), Jan-Dec, one square per day, lit when trained.
-// Binary on purpose (Mr. Roni, 2026-10-16), no volume shading. No code = you (gH()); a friend's code = their synced p.days.
+// Gym years: one block per year that has any training (newest first), one flat grid of every day of that year
+// (Jan 1 .. Dec 31, no month breakout), lit when trained. Binary on purpose (Mr. Roni, 2026-10-16), no volume
+// shading. No code = you (gH()); a friend's code = their synced p.days.
 function gymYearsHtml(days){
   const today=dayKey(new Date());
-  const years=[...new Set([...days].map(d=>+d.slice(0,4)))].sort((a,b)=>a-b);
+  const years=[...new Set([...days].map(d=>+d.slice(0,4)))].sort((a,b)=>b-a);
   if(!years.length) return `<div class="bf-stat" style="margin-top:30px">No training days yet.</div>`;
   const p2=n=>String(n).padStart(2,'0');
-  const wks=(y,m)=>Math.ceil((new Date(y,m,1).getDay()+new Date(y,m+1,0).getDate())/7);
-  const halfW=(y,a)=>[0,1,2,3,4,5].reduce((s,i)=>s+wks(y,a+i),0);
-  // Every half-row grows to the widest one's week count (a spacer takes up the rest), so squares match across all rows.
-  const maxW=Math.max(...years.flatMap(y=>[halfW(y,0),halfW(y,6)]));
-  const month=(y,m)=>{
-    const fd=new Date(y,m,1).getDay(), dim=new Date(y,m+1,0).getDate(), weeks=wks(y,m);
-    let g='<i class="gy-d pad"></i>'.repeat(fd);
-    for(let d=1;d<=dim;d++){ const ds=`${y}-${p2(m+1)}-${p2(d)}`; g+=`<i class="gy-d${days.has(ds)?' on':ds>today?' fut':''}" data-d="${ds}"></i>`; }
-    return `<div class="gy-m" style="flex-grow:${weeks}"><div class="gy-ml">${MONTHS[m].slice(0,3)}</div><div class="gy-g">${g}</div></div>`;
+  const isLeap=y=>(y%4===0&&y%100!==0)||y%400===0;
+  const grid=y=>{
+    const diy=isLeap(y)?366:365;
+    let g='';
+    for(let i=0;i<diy;i++){
+      const dt=new Date(y,0,1+i), ds=`${y}-${p2(dt.getMonth()+1)}-${p2(dt.getDate())}`;
+      g+=`<i class="gy-d${days.has(ds)?' on':ds>today?' fut':''}" data-d="${ds}"></i>`;
+    }
+    return `<div class="gy-grid">${g}</div>`;
   };
-  const half=(y,a)=>{ const sp=maxW-halfW(y,a); return `<div class="gy-half">${[0,1,2,3,4,5].map(i=>month(y,a+i)).join('')}${sp?`<div style="flex:${sp} 1 0"></div>`:''}</div>`; };
   return years.map(y=>{ const n=[...days].filter(d=>d.startsWith(y+'-')).length;
-    return `<div class="gy-year" data-y="${y}"><div class="gy-yh"><b>${y}</b><span>${n} day${n!==1?'s':''}</span></div>${half(y,0)}${half(y,6)}</div>`; }).join('');
+    return `<div class="gy-year" data-y="${y}"><div class="gy-yh"><b>${y}</b><span>${n} day${n!==1?'s':''}</span></div>${grid(y)}</div>`; }).join('');
 }
 function openGymYears(code){
   let days, who;
