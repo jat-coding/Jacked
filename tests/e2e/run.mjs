@@ -425,7 +425,7 @@ async function monthly() {
     await page.evaluate(() => { sp('metrics'); openAch(); }); await page.waitForTimeout(300);
     const r = await page.evaluate(() => { const h = document.querySelector('#achFullBody .jh'); const rc = h.getBoundingClientRect(); return { has: true, cnt: document.querySelectorAll('#achFullBody [onclick="badgeInfo(\'Jacked\')"]').length, ht: rc.height, txt: h.innerText.trim(), icon: !!h.querySelector('svg') }; });
     check('hero: unlocked Jacked is a short crown + name box at the top, once, no description', r.cnt === 1 && r.ht < 70 && /^JACKED$/i.test(r.txt) && r.icon, JSON.stringify(r));
-    const tx = await page.evaluate(() => { sp('metrics'); const m = document.querySelector('#page-metrics .pt').getBoundingClientRect(); const a = document.querySelector('#achFull .pt').getBoundingClientRect(); return { mx: m.left, ax: a.left, my: m.top, ay: a.top }; });
+    const tx = await page.evaluate(() => { const m = document.querySelector('#page-metrics .pt').getBoundingClientRect(); const a = document.querySelector('#achFull .pt').getBoundingClientRect(); return { mx: m.left, ax: a.left, my: m.top, ay: a.top }; });
     check('title: Achievements is indented and level exactly like the Metrics title', Math.abs(tx.mx - tx.ax) < 0.5 && Math.abs(tx.my - tx.ay) < 0.5, JSON.stringify(tx));
     await page.screenshot({ path: `${SHOTS}/hero.png` });
     await ctx.close();
@@ -4976,7 +4976,10 @@ async function calLiveToday() {
   const old = { id: 'wold', routineId: null, name: 'Late', date: new Date('2026-10-18T23:50:00-06:00').toISOString(),
     exercises: [{ exId: 'cex1', name: 'Barbell Bench Press', muscle: 'chest', tracking: 'weight_reps', sets: [{ weight: 60, reps: 8, done: true }] }] };
   const p2 = await phone({ seed: { cex, activeWorkout: { aw: old, awStart: +new Date(old.date), awTouch: +NIGHT } }, now: NIGHT });
-  await p2.page.evaluate(() => sp('home'));
+  // renderHome() directly, not sp('home') -- a non-stale aw leaves maybeResumeAW()'s "Resume?"
+  // confirm open and deliberately unanswered here; sp() now closes any open popup on a tab
+  // switch (the nav-tab-closes-popup fix), which would answer it as Cancel and discard aw.
+  await p2.page.evaluate(() => renderHome());
   const c2 = ds => p2.page.evaluate(ds => { const el = [...document.querySelectorAll('#calGrid .cd')].find(c => (c.getAttribute('onclick') || '').includes(`'${ds}'`)); return el ? el.className : null; }, ds);
   check('cal live: past-midnight aw from 10-18 is still live (not auto-finished)', await p2.page.evaluate(() => !!aw && aw.id === 'wold' && gH().length === 0));
   check('cal live: a still-running aw from 10-18 does not light today', await c2('2026-10-19') === 'cd today', await c2('2026-10-19'));
