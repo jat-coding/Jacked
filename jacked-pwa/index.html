@@ -4995,6 +4995,14 @@ function tierCrossingDetail(key,h){
   const T=key==='bench'?badgeT().bench:key==='ohp'?badgeT().ohpFrac:key==='squat'?badgeT().squatFrac:key==='cardio'?badgeT().cardio:badgeT()[key];
   return firstCross(entries,T,lowerBetter);
 }
+// Which exact logged set is the current all-time best, for the tap-to-expand "Highest ever" row in badgeInfo
+// (Mr. Roni, 2026-10-23 voice memo): same tierCrossingEntries this badge's tier rows already scan, over full
+// history instead of last3mo, reduced to the single most-extreme entry instead of the first one past each tier.
+function allTimeBestDetail(key,h){
+  const lowerBetter=key==='cardio', entries=tierCrossingEntries(key,h);
+  if(!entries.length) return null;
+  return entries.reduce((best,e)=>(lowerBetter?e.value<best.value:e.value>best.value)?e:best);
+}
 // Format one crossing entry's actual stat for display -- reps/weight (or distance/time for cardio), not the
 // aggregate best.
 function tierCrossStat(key,e){
@@ -6665,7 +6673,11 @@ function badgeInfo(name){
     return row+`<div class="bf-tier-xp" id="${xpId}" style="display:none">${setLine}</div>`;
   }).join('')}${below?`<div class="bf-tier wl" style="opacity:.7"><span style="color:var(--muted);font-weight:800;letter-spacing:.5px">Below Bronze</span>${below}</div>`:''}</div>`:'';
   const note=d.note?`<div class="bf-h">Resets</div><div class="bf-body">${d.note}</div>`:'';
-  const allT=b.all?`<div class="bf-h">Highest ever</div><div class="bf-tiers"><div class="bf-tier" style="opacity:.55;filter:grayscale(1)"><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:700;text-transform:capitalize;color:var(--muted)">${b.all.tier===undefined?'':(b.all.tier||'no tier')}</span></div></div><div class="bf-body" style="font-size:12px;color:var(--muted);margin-top:6px">Your best in all of history. It never resets. The badge above only counts the last 3 months.</div>`:'';
+  // Tap the Highest-ever row to see the exact logged set that earned it -- same xKey lookup as the tier
+  // rows above, over full history instead of last3mo (Mr. Roni, 2026-10-23 voice memo).
+  const allBest=xKey?allTimeBestDetail(xKey,gH()):null;
+  const allXpId=`allxp-${xKey}`;
+  const allT=b.all?`<div class="bf-h">Highest ever</div><div class="bf-tiers"><div class="bf-tier${xKey?' tap':''}" style="opacity:.55;filter:grayscale(1)"${xKey?` onclick="toggleTierXp('${allXpId}')"`:''}><span style="font-weight:800">${b.all.v}</span><span style="margin-left:auto;font-weight:700;text-transform:capitalize;color:var(--muted)">${b.all.tier===undefined?'':(b.all.tier||'no tier')}</span>${xKey?'<span class="bf-chev">&#8250;</span>':''}</div>${xKey?`<div class="bf-tier-xp" id="${allXpId}" style="display:none">${allBest?`<div>${fmtD(allBest.date)} — <b>${esc(allBest.ex)}</b>: ${tierCrossStat(xKey,allBest)}</div>`:'<div style="color:var(--muted)">No logged set found for this -- it may predate your history.</div>'}</div>`:''}</div><div class="bf-body" style="font-size:12px;color:var(--muted);margin-top:6px">Your best in all of history. It never resets. The badge above only counts the last 3 months.</div>`:'';
   const teaser=(b.name==='Jacked'&&!b.earned)?`<div class="bf-h">Reward</div><div class="bf-body">Something special happens the moment you unlock this. You will know it when you see it.</div>`:'';
   const secs=(b.sections||[]).map(x=>`<div class="bf-h" style="display:flex;align-items:center;gap:8px">${x.t}${x.met?'<span style="color:var(--green);font-size:13px;letter-spacing:0">&#10003; met</span>':''}</div><div class="bf-tiers">${x.rows.map(([l,v])=>`<div class="bf-tier${x.met?' on':''}" style="${x.met?'border-color:rgba(61,220,151,.45);background:rgba(61,220,151,.07)':''}"><span style="color:var(--text2);font-weight:600">${l}</span><span style="margin-left:auto;font-weight:800">${v}</span></div>`).join('')}</div>`).join('');
   const ever=(b.name==='Jacked'&&b.everYM)?`<div class="bf-h">Best in history</div><div class="bf-body">Last held ${MONTHS[+b.everYM.slice(5)-1]} ${b.everYM.slice(0,4)}. Held in ${b.months} month${b.months!==1?'s':''} so far.</div>`:'';
