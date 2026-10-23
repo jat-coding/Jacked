@@ -1269,7 +1269,7 @@ async function badgeLadders() {
   // ohpFrac/squatFrac are sourced lb ladders now (2026-10-06), not fractions of body weight; with no body weight
   // set they clamp to the lowest sourced bodyweight row (110 lb male / 90 lb female).
   const clk = a => a.map(x => fmtClockT(x)).join(' ');
-  check('badge ladders: male 30 keeps the original lift ladders; pull/push/mile are the sourced no-body-weight rows; Silver is the Bronze/Gold midpoint on every ladder (Mr. Roni, 2026-10-21)', j(m.T.bench) === '[135,225,315]' && j(m.T.ohpFrac) === '[75,85,95]' && j(m.T.squatFrac) === '[155,215,275]' && j(m.T.pullup) === '[13,22,30]' && j(m.T.pushup) === '[39,63,87]' && clk(m.T.cardio) === '7:50 7:00 6:05', j(m.T));
+  check('badge ladders: male 30 keeps the original lift ladders; pull/push/mile are the sourced no-body-weight rows; Silver is the Bronze/Gold midpoint on every ladder (Mr. Roni, 2026-10-21)', j(m.T.bench) === '[135,225,315]' && j(m.T.ohpFrac) === '[75,85,95]' && j(m.T.squatFrac) === '[155,215,275]' && j(m.T.pullup) === '[13,22,30]' && j(m.T.pushup) === '[39,63,87]' && clk(m.T.cardio) === '8:30 7:35 6:35', j(m.T));
   const none = await ladders({});
   check('badge ladders: no sex or birthday set = male ladders (prime age)', j(none.T) === j(m26.T), j(none.T) + ' vs ' + j(m26.T));
   const f = await ladders({ sex: 'female', birthday: '1995-01-01' });
@@ -1364,7 +1364,8 @@ async function benchGoodlift() {
 // weight, Running Level mile times x WMA/USATF 2025 age factors. No grandfather clause (Mr. Roni, 2026-10-21): a set
 // logged before the sourced-ladder switch is judged on the current ladder exactly like one logged after, same as
 // bench's dropped GOODLIFT-switch clause. Cardio's Bronze/Silver/Gold are additionally rescaled so prime-age men's
-// Gold is no faster than 6:00/mile (Mr. Roni's floor), and every tiered ladder's Silver is the Bronze/Gold midpoint.
+// Gold is no faster than 6:30/mile (Mr. Roni's floor, raised 2026-10-22 from 6:00), and every tiered ladder's
+// Silver is the Bronze/Gold midpoint.
 async function sourcedRepCardio() {
   const OCT20 = new Date('2026-10-20T12:00:00-06:00');
   const P = (sex, birthday) => ({ name: 'T', username: '@t', code: '@t', sex, birthday });
@@ -1380,12 +1381,12 @@ async function sourcedRepCardio() {
   // Bronze/Gold midpoint (Mr. Roni, 2026-10-21).
   let r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB });
   check('sourced: male 26 at 180 lb = Strength Level pull-ups 13/21/28 (Silver unchanged, already the midpoint), push-ups 38/61/83', j(r.T.pullup) === '[13,21,28]' && j(r.T.pushup) === '[38,61,83]', j(r.T));
-  check('sourced: male 26 mile = Running Level 6:38/5:46/5:08 rescaled so Gold lands on 6:00, Silver the midpoint -> 7:45/6:55/6:00', clk(r.T.cardio) === '7:45 6:55 6:00', clk(r.T.cardio));
+  check('sourced: male 26 mile = Running Level 6:38/5:46/5:08 rescaled so Gold lands on 6:30, Silver the midpoint -> 8:25/7:30/6:30', clk(r.T.cardio) === '8:25 7:30 6:30', clk(r.T.cardio));
   const m26 = r;
   r = await run({ prof: P('female', '2000-01-01'), bw: 140 / LB });
-  check('sourced: female 26 at 140 lb = pull-ups 6/13/19, push-ups 18/32/46, mile 9:00/8:05/7:10', j(r.T.pullup) === '[6,13,19]' && j(r.T.pushup) === '[18,32,46]' && clk(r.T.cardio) === '9:00 8:05 7:10', j(r.T) + ' ' + clk(r.T.cardio));
+  check('sourced: female 26 at 140 lb = pull-ups 6/13/19, push-ups 18/32/46, mile 9:50/8:50/7:45', j(r.T.pullup) === '[6,13,19]' && j(r.T.pushup) === '[18,32,46]' && clk(r.T.cardio) === '9:50 8:50 7:45', j(r.T) + ' ' + clk(r.T.cardio));
   r = await run({ prof: P('male', '1966-01-01'), bw: 180 / LB });
-  check('sourced: male 60 at 180 lb = pull-ups 3/9/14, push-ups 21/38/54, mile eased by WMA 0.7901 to 9:50/8:45/7:35', j(r.T.pullup) === '[3,9,14]' && j(r.T.pushup) === '[21,38,54]' && clk(r.T.cardio) === '9:50 8:45 7:35', j(r.T) + ' ' + clk(r.T.cardio));
+  check('sourced: male 60 at 180 lb = pull-ups 3/9/14, push-ups 21/38/54, mile eased by WMA 0.7901 to 10:40/9:30/8:15', j(r.T.pullup) === '[3,9,14]' && j(r.T.pushup) === '[21,38,54]' && clk(r.T.cardio) === '10:40 9:30 8:15', j(r.T) + ' ' + clk(r.T.cardio));
   const light = await run({ prof: P('male', '2000-01-01'), bw: 140 / LB }), heavy = await run({ prof: P('male', '2000-01-01'), bw: 240 / LB });
   check('sourced: a heavier man gets lower rep targets (140 lb vs 240 lb)', light.T.pullup.every((x, i) => x > heavy.T.pullup[i]) && light.T.pushup.every((x, i) => x > heavy.T.pushup[i]), j(light.T.pullup) + j(heavy.T.pullup) + j(light.T.pushup) + j(heavy.T.pushup));
   check('sourced: body weight does not move the mile ladder', j(light.T.cardio) === j(heavy.T.cardio), j(light.T.cardio) + j(heavy.T.cardio));
@@ -1397,7 +1398,7 @@ async function sourcedRepCardio() {
   r = await run({ prof: P('male', '2000-01-01'), bw: 180 / LB, hist: at('2026-10-15', [ex('Pull-up', [[0, 20]], 'bodyweight_reps'), ex('Push-up', [[0, 60]], 'bodyweight_reps'), ex('Run', [[1, 7]], 'distance')]) });
   check('sourced: 20 pull-ups = Bronze (old hand-set ladder of 10/15/20 is gone entirely)', r.o['Pull-up-Maxing'].tier === 'bronze' && r.live.pullup === 'bronze', j(r.o['Pull-up-Maxing']) + r.live.pullup);
   check('sourced: 60 push-ups = Bronze, not Silver -- the rescaled Silver line (61) sits one rep above it', r.o['Push-up-Maxing'].tier === 'bronze' && r.live.pushup === 'bronze', j(r.o['Push-up-Maxing']));
-  check('sourced: a 7:00 mile now earns Bronze (rescaled Bronze is 7:45, easier than the old 6:40)', r.o['Cardio-Maxing'].tier === 'bronze' && r.live.cardio === 'bronze', j(r.o['Cardio-Maxing']) + r.live.cardio);
+  check('sourced: a 7:00 mile now earns Silver (rescaled thresholds are 8:25/7:30/6:30, slower across the board than before the 6:30 floor)', r.o['Cardio-Maxing'].tier === 'silver' && r.live.cardio === 'silver', j(r.o['Cardio-Maxing']) + r.live.cardio);
   check('sourced: no "kept" field survives anywhere on the badge list', Object.values(r.o).every(b => !('kept' in b)), j(r.o));
 
   // Logging the exact same sets on an earlier date (what used to be "before the switch") changes nothing: there is
