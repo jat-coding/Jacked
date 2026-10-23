@@ -28,6 +28,14 @@ try{screen.orientation.addEventListener('change',set)}catch(e){}})();
    the same. --standaloneGap stays at its 0px default; its consumers are left in place.
    iOS reads the status-bar style when the app is added to the Home Screen, so an existing
    install has to be removed and re-added to pick this up. */
+/* jk-doc (2026-10-22, Mr. Roni: "putting the screen behind the address bar for the browser"):
+   iOS 26 Safari never paints position:fixed content below its floating address bar -- only the
+   scrolling document shows through under it. Pinned html/body made the whole app one fixed
+   layer, so a Safari tab stopped in a black band above the bar. In a browser tab (not the
+   home-screen app) the document scrolls instead, so pages run on under the bar. The home-screen
+   app keeps the pinned layout and its nav-float protection (see the html,body rule's comment). */
+(function(){var mm=function(q){return window.matchMedia&&matchMedia(q).matches};
+if(navigator.standalone!==true&&!mm('(display-mode: standalone)')&&!mm('(display-mode: fullscreen)'))document.documentElement.classList.add('jk-doc');})();
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -72,6 +80,11 @@ try{screen.orientation.addEventListener('change',set)}catch(e){}})();
    condition above. nav is now a sibling of #jkRoot (see its own markup, right before
    #jkRoot's opening tag) so it is never nested inside anything that scrolls. */
 html,body{height:calc(100% + var(--standaloneGap));overscroll-behavior:none;position:fixed;inset:0;overflow:hidden}
+/* Browser tab (jk-doc, set in <head>): the document is the scroller so pages run on under iOS 26
+   Safari's floating address bar. Not in the home-screen app, and not in the rotated landscape
+   frame, which needs its own #jkRoot scroller. */
+html.jk-doc:not([data-rot]),html.jk-doc:not([data-rot]) body{position:static;height:auto;overflow:visible}
+html.jk-doc:not([data-rot]) #jkRoot{position:static;overflow:visible}
 /* Phone-first: stop pinch/double-tap zoom and rubber-band sliding. */
 body{background:var(--bg);color:var(--text);font-family:var(--fb);touch-action:pan-y}
 
@@ -9572,7 +9585,7 @@ function syncScrollLock(){
     const s=_sl; _sl=null;
     if(root) root.style.overflow='';
     html.classList.remove('popup-lock');
-    if(s.page!==pg&&root) root.scrollTop=0;   // a popup switched tabs: new tab from its top
+    if(s.page!==pg){ if(root) root.scrollTop=0; window.scrollTo(0,0); }   // a popup switched tabs: new tab from its top (window: browser tab, jk-doc)
   }
 }
 new MutationObserver(()=>{ syncScrollLock(); syncPopupHistory(); }).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
