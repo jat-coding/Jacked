@@ -6636,7 +6636,12 @@ function badgeInfo(name){
     const reached=!!xKey&&(TIER_RANK[k]||0)<=(TIER_RANK[b.tier]||0);
     const entry=reached&&cross?cross[k]:null;
     const xpId=`tierxp-${xKey}-${k}`;
-    const row=`<div class="bf-tier${on?' on':''}${li?' wl':''}${reached?' tap':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"${reached?` onclick="toggleTierXp('${xpId}')"`:''}><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span>${li}${reached?'<span class="bf-chev">&#8250;</span>':''}</div>`;
+    // Chevron goes before the li lift-breakdown line, not after (Mr. Roni, 2026-10-22 bug report):
+    // .bf-lift is flex-basis:100%, which forces it onto its own wrapped line inside .bf-tier.wl --
+    // anything placed after it in document order wraps down with it instead of staying on the
+    // first line next to the value, which is why the chevron was landing at the far-left edge
+    // below the subtitle instead of right-aligned and vertically centered on the tier row.
+    const row=`<div class="bf-tier${on?' on':''}${li?' wl':''}${reached?' tap':''}" style="${on?`border-color:${TIERC[k]}88;background:${TIERC[k]}14`:''}"${reached?` onclick="toggleTierXp('${xpId}')"`:''}><span style="color:${TIERC[k]};font-weight:800;letter-spacing:.5px">${t}</span>${on?'<span class="bf-you">You</span>':''}<span style="margin-left:auto;font-weight:${on?800:600}">${v}</span>${reached?'<span class="bf-chev">&#8250;</span>':''}${li}</div>`;
     if(!reached) return row;
     const setLine=entry?`<div>${fmtD(entry.date)} — <b>${esc(entry.ex)}</b>: ${tierCrossStat(xKey,entry)}</div>`:`<div style="color:var(--muted)">No logged set found for this tier -- it may predate your history.</div>`;
     return row+`<div class="bf-tier-xp" id="${xpId}" style="display:none">${setLine}</div>`;
