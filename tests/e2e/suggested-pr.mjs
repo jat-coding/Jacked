@@ -22,7 +22,7 @@ async function finish(page, sets, at) {
     startRW('rS');
     aw.exercises.forEach(e => { e.sets = sets[e.exId].map(([w, r]) => ({ weight: w, reps: r, done: true })); });
     renderWS();
-    const card = ids.map((id, ei) => { const el = document.getElementById('eb' + ei); return { star: /★ PR/.test(el.innerHTML), sug: !!el.querySelector('.ebn .sug-tag'), sub: el.querySelector('.ebn').parentElement.textContent }; });
+    const card = ids.map((id, ei) => { const el = document.getElementById('eb' + ei); return { star: /★ PR/.test(el.innerHTML), sug: !!el.querySelector('.ebn .sug-tag'), setSug: !!el.querySelector('.sn .sug-tag'), sub: el.querySelector('.ebn').parentElement.textContent }; });
     if (at) aw.date = at;
     _finishWContinue(false);
     const fs = document.getElementById('fsContent');
@@ -53,7 +53,10 @@ export async function suggestedPR() {
 
   // Done-when 1: 200 x 8 (e1RM ~253) beats the 220 x 1 PR's e1RM but is lighter -> suggested, not documented.
   let r = await finish(page, { [BENCH]: [[185, 5], [200, 8]] });
-  check('suggested PR: live card labels the estimate-only beat "suggested", no PR star', !r.card[0].star && r.card[0].sug, JSON.stringify(r.card));
+  // 2026-10-23 (Mr. Roni, friend flagged it as confusing mid-set): the gold SUGGESTED pill + 'S' set
+  // marker are hidden on THIS screen (the live, in-progress workout) only -- the estimate is still
+  // tracked underneath (r.sug/r.w.sugSets/the finish-summary and exercise-info checks below).
+  check('suggested PR: live in-progress screen hides the suggested tag and the per-set S marker, no PR star', !r.card[0].star && !r.card[0].sug && !r.card[0].setSug, JSON.stringify(r.card));
   check('suggested PR: documented 220 x 1 left as it was', lb(r.prs[BENCH].weight) === 220 && r.prs[BENCH].reps === 1 && r.prs[BENCH].date === OLD, JSON.stringify(r.prs[BENCH]));
   check('suggested PR: stored as a separate suggested record (200 x 8)', r.sug[BENCH] && lb(r.sug[BENCH].weight) === 200 && r.sug[BENCH].reps === 8, JSON.stringify(r.sug));
   check('suggested PR: not counted as a PR (prCount 0, no prSets), saved in sugSets', r.w.prCount === 0 && r.w.prSets.length === 0 && r.w.sugSets.length === 1 && r.w.sugSets[0].si === 1 && r.w.prRule === 2, JSON.stringify([r.w.prCount, r.w.prSets, r.w.sugSets]));
@@ -100,7 +103,7 @@ export async function suggestedPR() {
   // "if the PR is for multiple weights then show the suggested PR": a heavier 3-rep set documents as 270 x 3 AND shows the
   // ~297 it implies as suggested, both on screen at once.
   r = await finish(page, { [BENCH]: [[270, 3]] });
-  check('suggested PR: a multi-rep PR documents its real weight and also shows the implied 1RM as suggested', r.card[0].star && r.card[0].sug && lb(r.prs[BENCH].weight) === 270 && r.prs[BENCH].reps === 3 && lb(r.sug[BENCH].weight) === 270 && r.sug[BENCH].reps === 3 && r.w.prCount === 1 && r.w.sugSets.length === 1 && /New PRs/.test(r.fsText) && /297/.test(r.fsText) && r.fsSug, JSON.stringify([r.card, r.prs[BENCH], r.sug[BENCH]]) + r.fsText.slice(0, 300));
+  check('suggested PR: a multi-rep PR documents its real weight and also implies a suggested 1RM (not shown on the live screen, but stored and on the finish summary)', r.card[0].star && !r.card[0].sug && !r.card[0].setSug && lb(r.prs[BENCH].weight) === 270 && r.prs[BENCH].reps === 3 && lb(r.sug[BENCH].weight) === 270 && r.sug[BENCH].reps === 3 && r.w.prCount === 1 && r.w.sugSets.length === 1 && /New PRs/.test(r.fsText) && /297/.test(r.fsText) && r.fsSug, JSON.stringify([r.card, r.prs[BENCH], r.sug[BENCH]]) + r.fsText.slice(0, 300));
   await closeFs(page);
   const both = await page.evaluate(id => { openExInfo(id); return (document.getElementById('exSugPR') || {}).textContent || ''; }, BENCH);
   check('suggested PR: exercise info shows both at once (suggested 297, PR 270 x 3)', /297/.test(both) && /Your PR is 270/.test(both), both);
@@ -112,7 +115,7 @@ export async function suggestedPR() {
   check('raw weight: first single documents 200 x 1, nothing suggested', lb(r.prs[DEAD].weight) === 200 && r.prs[DEAD].reps === 1 && !r.sug[DEAD] && r.w.prCount === 1, JSON.stringify([r.prs[DEAD], r.sug[DEAD]]));
   await closeFs(page);
   r = await finish(page, { [DEAD]: [[190, 3]] });
-  check('raw weight: real 190 x 3 does NOT replace the real 200 x 1 (no e1RM between real lifts); 209 suggested', lb(r.prs[DEAD].weight) === 200 && r.prs[DEAD].reps === 1 && lb(r.sug[DEAD].weight) === 190 && r.sug[DEAD].reps === 3 && r.w.prCount === 0 && !r.card[0].star && r.card[0].sug, JSON.stringify([r.prs[DEAD], r.sug[DEAD], r.card]));
+  check('raw weight: real 190 x 3 does NOT replace the real 200 x 1 (no e1RM between real lifts); 209 suggested (not shown live)', lb(r.prs[DEAD].weight) === 200 && r.prs[DEAD].reps === 1 && lb(r.sug[DEAD].weight) === 190 && r.sug[DEAD].reps === 3 && r.w.prCount === 0 && !r.card[0].star && !r.card[0].sug && !r.card[0].setSug, JSON.stringify([r.prs[DEAD], r.sug[DEAD], r.card]));
   await closeFs(page);
   r = await finish(page, { [DEAD]: [[205, 1], [180, 10]] });   // 180 x 10 implies 240 but is lighter
   check('raw weight: 205 x 1 documents even with a higher-e1RM lighter set in the same workout; 240 suggested', lb(r.prs[DEAD].weight) === 205 && r.prs[DEAD].reps === 1 && r.w.prSets[0].si === 0 && lb(r.sug[DEAD].weight) === 180 && r.sug[DEAD].reps === 10 && r.w.sugSets[0].si === 1, JSON.stringify([r.prs[DEAD], r.sug[DEAD], r.w.prSets, r.w.sugSets]));
