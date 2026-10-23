@@ -4648,7 +4648,7 @@ async function gymYears() {
     const b = document.getElementById('gymYearsBody'), f = document.getElementById('gymYears');
     const sq = [...b.querySelectorAll('.gy-d[data-d]')];
     const lit = sq.filter(e => e.classList.contains('on'));
-    const ys = [...b.querySelectorAll('.gy-year')].map(y => ({ y: +y.dataset.y, n: y.querySelectorAll('.gy-d[data-d]').length, m: y.querySelectorAll('.gy-m').length, months: [...y.querySelectorAll('.gy-ml')].map(e => e.textContent).join(',') }));
+    const ys = [...b.querySelectorAll('.gy-year')].map(y => ({ y: +y.dataset.y, n: y.querySelectorAll('.gy-d[data-d]').length, grids: y.querySelectorAll('.gy-grid').length }));
     const one = lit[0], off = sq.find(e => !e.classList.contains('on') && !e.classList.contains('fut'));
     const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
     const probe = document.createElement('i'); probe.style.background = acc; document.body.appendChild(probe); const accRgb = getComputedStyle(probe).backgroundColor; probe.remove();
@@ -4666,9 +4666,9 @@ async function gymYears() {
   check('gym years: tapping the Home month/year label opens the full-screen overlay', await isOpen());
   check('gym years: overlay is a registered popup (top of POPUP_SEL) and locks page scroll', await page.evaluate(() => topPopup() && topPopup().id === 'gymYears' && document.documentElement.classList.contains('popup-lock')));
   const g = await grid();
-  check('gym years: one block per year with history, oldest first (2023..2026, no fixed 2-year range)', g.ys.map(y => y.y).join() === '2023,2024,2025,2026', JSON.stringify(g.ys.map(y => y.y)));
-  check('gym years: each year has Jan-Dec month columns and one square per calendar day (365/366)', g.ys.every(y => y.m === 12 && y.months === 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec' && y.n === ((y.y % 4 === 0) ? 366 : 365)), JSON.stringify(g.ys));
-  check('gym years: exactly the trained days are lit (binary, from history)', g.lit.length === mine.length && g.lit.join() === [...mine].sort().join(), `${g.lit.length} lit vs ${mine.length}`);
+  check('gym years: one block per year with history, newest first (2026..2023, no fixed 2-year range)', g.ys.map(y => y.y).join() === '2026,2025,2024,2023', JSON.stringify(g.ys.map(y => y.y)));
+  check('gym years: each year is one flat grid (no month breakout) with one square per calendar day (365/366)', g.ys.every(y => y.grids === 1 && y.n === ((y.y % 4 === 0) ? 366 : 365)), JSON.stringify(g.ys));
+  check('gym years: exactly the trained days are lit (binary, from history)', g.lit.length === mine.length && [...g.lit].sort().join() === [...mine].sort().join(), `${g.lit.length} lit vs ${mine.length}`);
   check('gym years: the month off (Aug 2024) is all unlit', !g.lit.some(d => d.startsWith('2024-08')));
   check('gym years: lit squares use the accent colour, unlit ones do not', g.litBg === g.accRgb && g.offBg !== g.accRgb, `${g.litBg} / ${g.accRgb} / ${g.offBg}`);
   check('gym years: no horizontal overflow at 390px', g.ow <= 0 && g.maxRight <= g.vw, JSON.stringify({ ow: g.ow, r: g.maxRight, vw: g.vw }));
@@ -4704,7 +4704,7 @@ async function gymYears() {
   await page.waitForTimeout(250);
   const fg = await grid();
   check('gym years (friend): opens over the profile, labelled with their name', await isOpen() && fg.who === 'Pal Jones' && await page.evaluate(() => document.getElementById('fpModal').classList.contains('open')), fg.who);
-  check('gym years (friend): one block per year of their history, 2021..2026', fg.ys.map(y => y.y).join() === '2021,2022,2023,2024,2025,2026', JSON.stringify(fg.ys.map(y => y.y)));
+  check('gym years (friend): one block per year of their history, newest first (2026..2021)', fg.ys.map(y => y.y).join() === '2026,2025,2024,2023,2022,2021', JSON.stringify(fg.ys.map(y => y.y)));
   check('gym years (friend): every one of their ~900 days is lit, recent ones included (old 400 cap kept only the oldest)', fg.lit.length === pal.length && fg.lit.includes('2026-10-14'), `${fg.lit.length} lit vs ${pal.length}`);
   check('gym years (friend): no horizontal overflow at 390px', fg.ow <= 0 && fg.maxRight <= fg.vw);
   await page.screenshot({ path: `${SHOTS}/gym-years-friend.png` });
