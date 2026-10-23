@@ -141,15 +141,21 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    (tests/e2e/nav-buffer-audit.mjs) measured its Close button landing 28-50px past where the
    floating nav's top edge would be, because this shared rule only reserved sab+20px at the
    bottom -- nothing for the nav's own ~62px footprint + --navB, unlike .page/.md which already
-   reserve both. #recapFull/#gymYears measured clean in the same audit run, so they keep the
-   original padding below. */
+   reserve both. #recapFull/#gymYears measured clean in that run's modest SEED data -- both
+   turned out to have the same unreserved padding here and needed their own fixes too, below
+   (2026-10-23 exhaustive sweep, after worst-case/stress content exposed both). */
 #badgeFull{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + 62px + var(--navB));-webkit-overflow-scrolling:touch}
 #recapFull,#gymYears{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--sab));-webkit-overflow-scrolling:touch}
 #badgeFull.open,#recapFull.open,#gymYears.open{display:flex;animation:pageIn .2s ease-out}
 /* Gym years (2026-10-16): every day of a person's history, one square per day, lit = trained. Six months to a row so a
    square stays ~9px at 390px wide instead of 53 week columns at 5px; months are flex-grown by their week count so every
    square is the same size. */
-#gymYears{padding-left:16px;padding-right:16px}
+/* padding-bottom made nav-aware 2026-10-23: the shared #recapFull,#gymYears rule above reserves
+   only sab+20px, no allowance for the nav's own ~62px footprint. With only a couple months of
+   history the day-square grid never gets tall enough to reach it (confirmed clean), but a real
+   WebKit measurement seeded with 4 years of training data found the last day square landing
+   23-45px past the nav's reserved zone -- a years-into-use user would hit this for real. */
+#gymYears{padding-left:16px;padding-right:16px;padding-bottom:calc(20px + 62px + var(--navB))}
 .gy-year{margin:0 0 18px;text-align:left}
 .gy-yh{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 8px;padding-top:12px;border-top:1px solid var(--border)}
 .gy-yh b{font-family:var(--fh);font-size:22px;font-weight:800}
@@ -192,7 +198,12 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 @media (max-height:700px){.rc-tile{padding:6px 12px}.rc-tile .v{font-size:20px}.rc-row{padding:6px 11px;margin-bottom:4px}.rc-b{padding:6px 4px}.rc-b .n{margin-top:1px}.rc-chips{margin:0 0 6px}}
 @media (min-height:780px){.rc-tile{padding:14px 14px}.rc-tile .v{font-size:30px}.rc-row{padding:13px 12px;margin-bottom:9px}.rc-tiles,.rc-grid{gap:10px}.rc-b{padding:16px 4px}.rc-b .n{font-size:15px;margin-top:6px}.rc-b .c{font-size:12px}.rc-chips{margin:6px 0 12px}}
 #recapFullBody{display:flex;flex-direction:column;justify-content:center}
-#recapFull{overflow-y:auto;padding-top:calc(10px + var(--sat));padding-bottom:calc(10px + var(--sab))}
+/* padding-bottom made nav-aware 2026-10-23 (exhaustive nav-buffer sweep): this override reserved
+   only sab+10px, same gap as #achFull's base rule had before #badgeFull's own fix -- a real
+   WebKit measurement (tests/e2e/nav-buffer-audit.mjs, "Monthly recap") found the Share button
+   60px past the nav's reserved zone (negative = hidden under it) on every phone/orientation
+   tested. Matches the established 62px nav height + navB pattern used everywhere else. */
+#recapFull{overflow-y:auto;padding-top:calc(10px + var(--sat));padding-bottom:calc(10px + 62px + var(--navB))}
 #recapFull .bf-foot{display:flex;justify-content:center}#recapShareBtn{width:min(100%,280px)}
 #recapFull .bf-x{top:calc(8px + var(--sat))}
 .bgrp{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);opacity:.6;margin:12px 0 0}
@@ -237,6 +248,13 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    called Profile/Settings clean -- scoped to this modal only, not applied to the shorter .mo.ctr
    dialogs (confirm/plate-calc/etc.) that don't reach the bottom and don't need it. */
 #profModal .md{padding-bottom:calc(24px + 62px + var(--navB))}
+/* Same latent bug as #profModal above, found by the same exhaustive sweep (2026-10-23): these
+   two other `.mo.ctr` dialogs looked clean under the modest nav-buffer-audit SEED because their
+   content never got tall enough to actually need to scroll -- a real WebKit measurement with
+   worst-case content (6 PRs/4 suggested/4 notes for the finish summary; two workouts logged on
+   one day, 8 exercises each, for the day-detail popup) pushed both past max-height and found
+   their last button 22-27px past the nav's reserved zone with the flat 24px .mo.ctr .md padding. */
+#fsModal .md,#dayModal .md{padding-bottom:calc(24px + 62px + var(--navB))}
 .drag-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 16px;flex-shrink:0}
 .mh{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .mt{font-family:var(--fh);font-size:26px;font-weight:800}
@@ -4081,6 +4099,11 @@ function renderWS() {
     const hBest=isDur?((gHoldPR()[ex.exId]||{}).sec||0):0;
     const beatsPR=s=> cardio ? (s.weight>0&&s.reps>0&&mileEquiv(s.weight,s.reps)<cBest) : isDur ? s.weight>hBest : (isW&&e1rm(effWeight(ex,s),s.reps)>prMax);
     // Only ONE PR per exercise per workout — the single best beating set.
+    // sugIdx (prWeightStep's `.sug`) is computed but no longer rendered here: a friend mid-set
+    // flagged the gold SUGGESTED pill + 'S' marker as confusing on this exact screen (2026-10-23,
+    // Mr. Roni's call) -- renderWS() is only ever called for the live, not-yet-finished workout,
+    // so the suggested-PR tags are suppressed on this screen only; they still show in exercise
+    // info, workout history detail and the finish-workout summary.
     let prIdx=-1, prScore=-Infinity, sugIdx=-1;
     const psug=gPRSug()[ex.exId];
     if(isW&&!cardio&&isWT(ex)){   // weight lifts: the finish rule itself (documented vs suggested, prWeightStep)
@@ -4114,7 +4137,7 @@ function renderWS() {
       ${picking?`<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:6px">Tap another exercise's link icon to pair</div>`:''}
       <div class="ebh">${ih}
         <div style="flex:1;min-width:0">
-          <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${esc(ex.name)}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}${sugIdx>=0?SUG_TAG(' '):''}</div>
+          <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${esc(ex.name)}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:3px">${cardio?(cprev&&cprev.time?`Best ${fmtPace(pacePerMile(cprev.dist,cprev.time))}${cprev.maxDist?` · Longest ${cprev.maxDist} mi`:''}`:'No cardio PR yet'):(pr?`PR: ${dW(pr.weight)}${uL()} × ${pr.reps}`:'No PR yet')+(isW&&sugStands(psug,pr)?` · Suggested ${sugText(psug)}`:'')}</div>
         </div>
         <div class="eb-actions" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;max-width:150px">
@@ -4174,7 +4197,7 @@ function renderWS() {
         const one=sb&&set.single===true;
         const sbp=sb?`<div class="sbp"><button class="cab-opt ${one?'on':''}" aria-pressed="${one}" onclick="setSingleArm(${ei},${si},true)">Single</button><button class="cab-opt ${one?'':'on'}" aria-pressed="${!one}" onclick="setSingleArm(${ei},${si},false)">Both</button></div>`:'';
         return `<div class="sr${sb?' sb':''}">
-          <div class="sn">${si+1}${isPR?'<span style="color:#ffd700"> ★</span>':si===sugIdx?'<span class="sug-tag" style="padding:0 3px;margin-left:2px" title="suggested PR">S</span>':''}</div>
+          <div class="sn">${si+1}${isPR?'<span style="color:#ffd700"> ★</span>':''}</div>
           <div class="ps">${prevStr}</div>
           ${inp3}${sbp}${inp4}
           <button class="sd ${set.done?'done':''}" onclick="togSet(${ei},${si})">
