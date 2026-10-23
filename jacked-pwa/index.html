@@ -8363,7 +8363,14 @@ const SUPABASE_URL = 'https://qehlrwnumrjktujidabz.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_vmf9BELfVFZpKrdMN3Z34g_R9l056gJ';
 let SUPA = null, liveFriends = null, liveSent = [], _authUid = null;
 // Warm start: last fetched friends list, so the Friends tab paints instantly and refreshes behind it.
-try{ const c=JSON.parse(localStorage.getItem('jk_friendsCache')||'null'); if(Array.isArray(c)&&c.length) liveFriends=c; }catch(_){}
+// Read through cleanPerson + filter(Boolean), same as refreshFriends() applies when it WRITES this
+// cache (line ~8899 below) -- this key isn't in KEY_SHAPE (it's a derived cache, not real data) so
+// nothing else validates it, and it survives cloud restores and app upgrades verbatim. A stale/bad
+// entry here (an old build that cached differently, a corrupted restore) used to reach friendSrc()
+// unsanitized and throw inside renderLB()'s first line (`src.filter(f=>!f.pending)` on a null/non-
+// object entry), aborting the WHOLE render before the "Leaderboards" header or either placeholder
+// ever painted -- reported 2026-10-23 as the Friends tab going completely blank.
+try{ const c=JSON.parse(localStorage.getItem('jk_friendsCache')||'null'); if(Array.isArray(c)&&c.length){ const clean=c.map(cleanPerson).filter(Boolean); if(clean.length) liveFriends=clean; } }catch(_){}
 let _signingOut = false;   // our own Sign out: its SIGNED_OUT event is expected, not a lost session
 function supaInit() {
   try {
@@ -9334,9 +9341,13 @@ async function submitFeedback() {
 
 // All local jk_* data as a plain object (the live workout is transient, excluded).
 // Shared by file export AND cloud sync so they always carry the same bundle.
+// jk_friendsCache is also excluded (2026-10-23): it's a derived, self-rebuilding warm-start
+// cache (see the comment above its read, near SUPABASE_URL), not source data -- backing it up
+// only risks carrying a stale/corrupted copy forward through every future restore on every
+// device, which is how one bad cache outlived every later bug fix to the code that writes it.
 function collectBackup() {
   const out={};
-  Object.keys(localStorage).filter(k=>k.startsWith('jk_')&&k!=='jk_activeWorkout'&&k!=='jk_appVersion')
+  Object.keys(localStorage).filter(k=>k.startsWith('jk_')&&k!=='jk_activeWorkout'&&k!=='jk_appVersion'&&k!=='jk_friendsCache')
     .forEach(k=>{ try{ out[k]=JSON.parse(localStorage.getItem(k)); }catch(e){ out[k]=localStorage.getItem(k); } });
   return out;
 }
