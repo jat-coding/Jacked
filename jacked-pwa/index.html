@@ -161,7 +161,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .gy-d{aspect-ratio:1;margin:1px;border-radius:2px;background:var(--bg3)}
 .gy-d.on{background:var(--accent)}
 .gy-d.pad,.gy-d.fut{background:transparent}
-.bf-x{position:absolute;top:calc(14px + var(--sat));right:16px;width:38px;height:38px;font-size:18px}
+.bf-x{position:fixed;top:calc(14px + var(--sat));right:16px;width:38px;height:38px;font-size:18px}
 .bf-wrap{max-width:460px;width:100%;margin:0 auto;padding-top:34px;text-align:center;flex:1}
 .bf-icon{width:132px;height:132px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
 .bf-status{font-size:13px;font-weight:800;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px}
@@ -230,6 +230,13 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .bf-foot{max-width:460px;width:100%;margin:8px auto 0}.mo.ctr{align-items:center;padding-top:calc(var(--sat) + 8px)}
 .md{background:var(--bg2);border:1px solid var(--border2);border-radius:24px 24px 0 0;width:100%;max-width:640px;max-height:calc(var(--ah)*.92);overflow-y:auto;padding:6px 20px calc(40px + 62px + var(--navB));overscroll-behavior:contain}
 .mo.ctr .md{border-radius:20px;max-width:400px;padding:24px;max-height:calc(var(--ah)*.92 - var(--sat))}
+/* #profModal is tall/scrollable (Body Metrics, Data & Backup, Feedback, Account) and its last
+   buttons (Sign Out) can reach the real bottom -- the shared .mo.ctr .md rule above gives it a
+   flat 24px with no nav allowance at all, unlike .md's own base rule. Confirmed broken on a real
+   device screenshot 2026-10-23 (Sign Out nearly touching the nav) even though the headless audit
+   called Profile/Settings clean -- scoped to this modal only, not applied to the shorter .mo.ctr
+   dialogs (confirm/plate-calc/etc.) that don't reach the bottom and don't need it. */
+#profModal .md{padding-bottom:calc(24px + 62px + var(--navB))}
 .drag-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 16px;flex-shrink:0}
 .mh{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .mt{font-family:var(--fh);font-size:26px;font-weight:800}
