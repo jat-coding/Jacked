@@ -2521,11 +2521,9 @@ function renderEx() {
 // Exercise info: the suggested PR next to the documented one (prWeightStep).
 function exSugBlock(exId){
   const g=gPRSug()[exId], p=gPR()[exId]; if(!sugStands(g,p)) return '';
-  const xpId='sugxp-exinfo';
   return `<div id="exSugPR" style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:13px;font-weight:600">Suggested PR${SUG_TAG(' ',xpId)}</span><span style="font-family:var(--fh);font-weight:700;color:#d9b84a">${sugText(g)}</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:13px;font-weight:600">Suggested PR</span><span style="font-family:var(--fh);font-weight:700;color:#d9b84a">${sugText(g)}</span></div>
     <div style="font-size:11px;color:var(--muted);margin-top:3px">Estimated from ${dW(g.weight)}${uL()} × ${g.reps}${p?`. Your PR is ${dW(p.weight)}${uL()} × ${p.reps}`:''}. Lift ${sugText(g)} and it becomes your PR.</div>
-    <div class="bf-tier-xp" id="${xpId}" style="display:none;margin-top:8px">${SUG_EXPLAIN}</div>
   </div>`;
 }
 function openExInfo(exId){
@@ -6164,14 +6162,13 @@ function showFinishSummary(o) {
         <span style="font-size:13px;font-weight:600">★ ${esc(p.name)}</span>
         <span style="font-family:var(--fh);font-weight:700;color:var(--accent)">${p.cardio||p.hold?p.label:dW(p.weight)+uL()+' × '+p.reps}</span>
       </div>`).join(''):''}
-    ${sugList.length?`<div class="blk-t" id="fsSugPRs">Suggested PRs</div>`+sugList.map((p,pi)=>{ const xpId=`sugxp-fs-${pi}`; return `<div class="fs-sug" style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
+    ${sugList.length?`<div class="blk-t" id="fsSugPRs">Suggested PRs</div>`+sugList.map(p=>`<div class="fs-sug" style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <span style="font-size:13px;font-weight:600;min-width:0">${esc(p.name)}${SUG_TAG(' ',xpId)}</span>
+          <span style="font-size:13px;font-weight:600;min-width:0">${esc(p.name)}</span>
           <span style="font-family:var(--fh);font-weight:700;color:#d9b84a;white-space:nowrap">${sugText(p)}</span>
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Estimated from ${dW(p.weight)}${uL()} × ${p.reps}. Becomes your PR once you lift ${sugText(p)}.</div>
-        <div class="bf-tier-xp" id="${xpId}" style="display:none;margin-top:6px">${SUG_EXPLAIN}</div>
-      </div>`;}).join(''):''}
+      </div>`).join(''):''}
     ${progressNotes.length?progressNotes.map(n=>
       `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:var(--r);padding:9px 12px;margin-bottom:6px;font-size:12.5px;color:${n.type==='up'?'var(--accent-bright)':'var(--muted)'}">
         <span>${n.type==='up'?'▲':'▼'}</span><span>${n.text}</span>
