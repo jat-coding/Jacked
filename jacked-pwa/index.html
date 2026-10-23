@@ -16,28 +16,21 @@ function set(){var a=typeof window.orientation==='number'?window.orientation:(sc
 a=((a%360)+360)%360;if(a===90||a===270)d.setAttribute('data-rot',String(a));else d.removeAttribute('data-rot')}
 set();addEventListener('orientationchange',set);addEventListener('resize',set);
 try{screen.orientation.addEventListener('change',set)}catch(e){}})();
-/* --standaloneGap = how much shorter window.innerHeight reads than the real screen, in px.
-   Normally 0. iOS home-screen apps (iOS 26.1 onward, WebKit bug 301994) under-report
-   innerHeight by ~status-bar height in standalone display-mode only (not in a Chrome/Safari
-   tab, where it's right). Confirmed and measured on his iPhone 2026-10-22 (ih=793 vs real
-   screen=852, a 59px gap) through a debug build with on-screen rulers: plain
-   `position:fixed;bottom:0` does NOT escape this bug, so every bottom-anchored fixed layer
-   (nav, resumeBar, restBar, install-banner, the inset:0 overlays via --fixedBottom, and
-   html/body's own height) needs this compensation -- confirmed his nav lands exactly navB
-   (20px) above the real screen bottom once applied. */
-(function(){var d=document.documentElement;
-function gap(){if(navigator.standalone!==true)return 0;
-  var w=innerWidth,h=innerHeight,s=screen;
-  // iOS keeps screen.width/height in portrait terms, so pick the edge that matches now.
-  var full=w>h?Math.min(s.width,s.height):Math.max(s.width,s.height);
-  var g=full-h;
-  return g>0&&g<=100?g:0}   // anything bigger than a status bar isn't this bug; leave it alone
-function set(){d.style.setProperty('--standaloneGap',gap()+'px')}
-set();addEventListener('resize',set);addEventListener('orientationchange',set);
-window.jkStandaloneGap=gap;})();
+/* iOS home-screen bottom strip (iOS 26.1+, WebKit bug 301994), 2026-10-22: with a
+   `black-translucent` status bar plus viewport-fit=cover, iOS draws the page from the true
+   screen top but only paints a viewport one status bar short (793 of 852 on his iPhone), so
+   the bottom ~59px is outside anything the page can paint. The first fix (9b3b255..004e91f)
+   measured that gap into --standaloneGap and pushed the nav and overlays down by it -- on his
+   real phone (screenshot 6:01pm) that slid the nav INTO the unpainted strip and sliced it in
+   half. Other apps confirmed on real devices that no CSS height/position trick reaches that
+   strip. The status bar is now opaque `black` instead: the page starts below the status bar
+   and its viewport runs to the real bottom. Jacked's background is #000, so the top looks
+   the same. --standaloneGap stays at its 0px default; its consumers are left in place.
+   iOS reads the status-bar style when the app is added to the Home Screen, so an existing
+   install has to be removed and re-added to pick this up. */
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Jacked">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
