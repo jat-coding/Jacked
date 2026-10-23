@@ -2439,7 +2439,7 @@ function openDay(ds){
       <div style="margin-bottom:8px">${uic('bed','var(--muted)',40)}</div>
       <div style="font-size:15px;color:var(--text2);font-weight:600">sorry little baby didn't workout this day</div></div>`+addBtn;
   } else {
-    c.innerHTML=ws.map(w=>{ const pr=prsOf(w); return `<div class="card-dark" style="margin-bottom:8px">
+    c.innerHTML=ws.map((w,wi)=>{ const pr=prsOf(w); return `<div class="card-dark" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
         <div>
           <div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--accent)">${esc(w.name)}</div>
@@ -2448,11 +2448,11 @@ function openDay(ds){
         <div style="font-size:11px;color:var(--muted)">${w.duration||''} · ${w.sets||0} sets · ${(w.totalVolume||0)>0||workoutDistance(w)<=0?fmtW(w.totalVolume||0)+' '+uL():(Math.round(workoutDistance(w)*100)/100)+' mi'}</div>
       </div>
       <div>${(w.exercises||[]).map((e,ei)=>{
-        const p=pr.list.find(x=>x.ei===ei), g=!p&&pr.sug.find(x=>x.ei===ei), all=e.sets||[], n=all.filter(s=>s.done).length||all.length;
+        const p=pr.list.find(x=>x.ei===ei), g=!p&&pr.sug.find(x=>x.ei===ei), all=e.sets||[], n=all.filter(s=>s.done).length||all.length, xpId=`sugxp-day-${wi}-${ei}`;
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--border);font-size:13px">
           <span style="min-width:0;font-weight:600;color:${p?'#ffd700':'var(--text2)'}">${p?'★ ':''}${esc(e.name)}</span>
-          <span style="flex-shrink:0;white-space:nowrap;font-size:11px;${p?'font-weight:700;color:#ffd700':'color:var(--muted)'}">${p?prSetText(p):g?`${prSetText(g)}${SUG_TAG(' ')}`:n+' set'+(n!==1?'s':'')}</span>
-        </div>`;}).join('')}</div>
+          <span style="flex-shrink:0;white-space:nowrap;font-size:11px;${p?'font-weight:700;color:#ffd700':'color:var(--muted)'}">${p?prSetText(p):g?`${prSetText(g)}${SUG_TAG(' ',xpId)}`:n+' set'+(n!==1?'s':'')}</span>
+        </div>${g?`<div class="bf-tier-xp" id="${xpId}" style="display:none;margin:4px 0 6px">${SUG_EXPLAIN}</div>`:''}`;}).join('')}</div>
       <button class="btn bg sm wf" style="margin-top:10px" onclick="cm('dayModal');openWD('${w.id}')">View details</button>
     </div>`;}).join('')+addBtn;
   }
@@ -2524,9 +2524,11 @@ function renderEx() {
 // Exercise info: the suggested PR next to the documented one (prWeightStep).
 function exSugBlock(exId){
   const g=gPRSug()[exId], p=gPR()[exId]; if(!sugStands(g,p)) return '';
+  const xpId='sugxp-exinfo';
   return `<div id="exSugPR" style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:13px;font-weight:600">Suggested PR${SUG_TAG(' ')}</span><span style="font-family:var(--fh);font-weight:700;color:#d9b84a">${sugText(g)}</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:13px;font-weight:600">Suggested PR${SUG_TAG(' ',xpId)}</span><span style="font-family:var(--fh);font-weight:700;color:#d9b84a">${sugText(g)}</span></div>
     <div style="font-size:11px;color:var(--muted);margin-top:3px">Estimated from ${dW(g.weight)}${uL()} × ${g.reps}${p?`. Your PR is ${dW(p.weight)}${uL()} × ${p.reps}`:''}. Lift ${sugText(g)} and it becomes your PR.</div>
+    <div class="bf-tier-xp" id="${xpId}" style="display:none;margin-top:8px">${SUG_EXPLAIN}</div>
   </div>`;
 }
 function openExInfo(exId){
@@ -5910,7 +5912,11 @@ function relabelHevyImports(){
 const prSetText=p=>p.cardio?`${p.weight} mi · ${fmtPace(pacePerMile(p.weight,p.reps))}`:p.hold?`${fmtHold(p.weight)} hold`:`${dW(p.weight)}${uL()} × ${p.reps}`;
 const PR_STAR=(sp='')=>`<span style="color:#ffd700">${sp}★</span>`;
 // A suggested PR (estimate only, prWeightStep) is labeled, never starred: the star stays for PRs actually lifted.
-const SUG_TAG=(sp='')=>`${sp}<span class="sug-tag">suggested</span>`;
+// Tap the tag to see what "suggested" means -- a friend asked what it meant and there was no explanation
+// anywhere it still shows (Mr. Roni, 2026-10-23). Reuses the toggleTierXp tap-to-reveal pattern: pass an id
+// and the tag becomes tappable, toggling a sibling .bf-tier-xp div the call site renders next to it.
+const SUG_EXPLAIN='Estimated PR from a higher-rep set — it won’t count as a real PR until you lift this exact weight for this rep count.';
+const SUG_TAG=(sp='',id='')=>id?`${sp}<span class="sug-tag" style="cursor:pointer" onclick="event.stopPropagation();toggleTierXp('${id}')">suggested</span>`:`${sp}<span class="sug-tag">suggested</span>`;
 const sugText=p=>`${dW(prE1rm(p))}${uL()}`;   // the weight a suggested PR implies for 1 rep
 
 function finishW(auto) {
@@ -6129,14 +6135,14 @@ function showFinishSummary(o) {
         <span style="font-size:13px;font-weight:600">★ ${esc(p.name)}</span>
         <span style="font-family:var(--fh);font-weight:700;color:var(--accent)">${p.cardio||p.hold?p.label:dW(p.weight)+uL()+' × '+p.reps}</span>
       </div>`).join(''):''}
-    ${sugList.length?`<div class="blk-t" id="fsSugPRs">Suggested PRs</div>`+sugList.map(p=>
-      `<div class="fs-sug" style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
+    ${sugList.length?`<div class="blk-t" id="fsSugPRs">Suggested PRs</div>`+sugList.map((p,pi)=>{ const xpId=`sugxp-fs-${pi}`; return `<div class="fs-sug" style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <span style="font-size:13px;font-weight:600;min-width:0">${esc(p.name)}${SUG_TAG(' ')}</span>
+          <span style="font-size:13px;font-weight:600;min-width:0">${esc(p.name)}${SUG_TAG(' ',xpId)}</span>
           <span style="font-family:var(--fh);font-weight:700;color:#d9b84a;white-space:nowrap">${sugText(p)}</span>
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Estimated from ${dW(p.weight)}${uL()} × ${p.reps}. Becomes your PR once you lift ${sugText(p)}.</div>
-      </div>`).join(''):''}
+        <div class="bf-tier-xp" id="${xpId}" style="display:none;margin-top:6px">${SUG_EXPLAIN}</div>
+      </div>`;}).join(''):''}
     ${progressNotes.length?progressNotes.map(n=>
       `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:var(--r);padding:9px 12px;margin-bottom:6px;font-size:12.5px;color:${n.type==='up'?'var(--accent-bright)':'var(--muted)'}">
         <span>${n.type==='up'?'▲':'▼'}</span><span>${n.text}</span>
@@ -6258,7 +6264,7 @@ function openWD(id) {
         <div><div style="font-family:var(--fh);font-size:17px;font-weight:700;color:var(--accent)">${esc(ex.name)}${ex.cable?` <span style="font-size:11px;color:var(--muted);font-weight:500">· ${ex.cable}</span>`:''}</div>${sub}</div>
       </div>
       ${ex.note?`<div style="font-size:12px;color:var(--text2);background:var(--bg3);border-radius:7px;padding:7px 9px;margin-bottom:8px">${ex.note.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`:''}
-      ${shown.map((s,i)=>{ const isPR=pr.at.has(ei+':'+all.indexOf(s)), isSug=!isPR&&pr.sugAt.has(ei+':'+all.indexOf(s)); return `<div style="display:flex;justify-content:space-between;padding:5px 2px;border-bottom:1px solid var(--border);font-size:12px"><span style="color:${isPR?'#ffd700':'var(--muted)'}">Set ${i+1}${isPR?PR_STAR(' '):isSug?SUG_TAG(' '):''}</span><span style="font-weight:600${isPR?';color:#ffd700':''}">${setStr(s)}</span></div>`;}).join('')||'<div style="font-size:12px;color:var(--muted)">No sets logged</div>'}
+      ${shown.map((s,i)=>{ const isPR=pr.at.has(ei+':'+all.indexOf(s)), isSug=!isPR&&pr.sugAt.has(ei+':'+all.indexOf(s)), xpId=`sugxp-wd-${ei}-${i}`; return `<div style="display:flex;justify-content:space-between;padding:5px 2px;border-bottom:1px solid var(--border);font-size:12px"><span style="color:${isPR?'#ffd700':'var(--muted)'}">Set ${i+1}${isPR?PR_STAR(' '):isSug?SUG_TAG(' ',xpId):''}</span><span style="font-weight:600${isPR?';color:#ffd700':''}">${setStr(s)}</span></div>${isSug?`<div class="bf-tier-xp" id="${xpId}" style="display:none;margin:2px 0 6px">${SUG_EXPLAIN}</div>`:''}`;}).join('')||'<div style="font-size:12px;color:var(--muted)">No sets logged</div>'}
     </div>`;
   });
   document.getElementById('wdContent').innerHTML=h;
