@@ -753,7 +753,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 </div>
 
 <!-- ACTIVE WORKOUT -->
-<div class="page" id="page-active" style="padding-top:0;padding-bottom:130px">
+<div class="page" id="page-active" style="padding-top:0">
   <div class="ab">
     <div>
       <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:1px" id="awName">Workout</div>
@@ -801,7 +801,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 
 <!-- Routine card 3-dot menu: Edit / Delete -->
 <div class="mo" id="rMenuModal">
-  <div class="md" style="padding-bottom:calc(24px + env(safe-area-inset-bottom))">
+  <div class="md">
     <div class="drag-handle"></div>
     <div class="mh" style="margin-bottom:10px"><div class="mt" id="rMenuName" style="font-size:20px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div><button class="cb" onclick="cm('rMenuModal')" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <button class="rmenu-row" id="rMenuEdit" onclick="rMenuPick('edit')"><span id="rMenuEditIc"></span>Edit routine</button>
@@ -812,7 +812,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- 3-dot action sheet for popups (workout detail, exercise info, profile photo): same .mo sheet as rMenuModal,
      z-index above the popup it opens from (200/250) and below the confirm (700) that Delete then shows. -->
 <div class="mo" id="actMenu" style="z-index:300">
-  <div class="md" style="padding-bottom:calc(24px + env(safe-area-inset-bottom))">
+  <div class="md">
     <div class="drag-handle"></div>
     <div class="mh" style="margin-bottom:10px"><div class="mt" id="actMenuName" style="font-size:20px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div><button class="cb" onclick="cm('actMenu')" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div id="actMenuRows"></div>
