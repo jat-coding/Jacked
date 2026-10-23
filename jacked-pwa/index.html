@@ -16,7 +16,11 @@ function set(){var a=typeof window.orientation==='number'?window.orientation:(sc
 a=((a%360)+360)%360;if(a===90||a===270)d.setAttribute('data-rot',String(a));else d.removeAttribute('data-rot')}
 set();addEventListener('orientationchange',set);addEventListener('resize',set);
 try{screen.orientation.addEventListener('change',set)}catch(e){}})();
-/* iOS home-screen bottom strip (iOS 26.1+, WebKit bug 301994), 2026-10-22: with a
+/* LOCKED (Mr. Roni, 2026-10-22: "never change this"). This block, the jk-doc script below, the
+   opaque `black` status-bar meta and the html,body pinning rule are his confirmed iOS full-screen
+   fix. Do not change any of them without asking him. Why and what failed before:
+   agent memory/decisions/jacked-ios-full-screen-fix-locked-2026-10-22.md.
+   iOS home-screen bottom strip (iOS 26.1+, WebKit bug 301994), 2026-10-22: with a
    `black-translucent` status bar plus viewport-fit=cover, iOS draws the page from the true
    screen top but only paints a viewport one status bar short (793 of 852 on his iPhone), so
    the bottom ~59px is outside anything the page can paint. The first fix (9b3b255..004e91f)
