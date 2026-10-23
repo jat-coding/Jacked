@@ -382,7 +382,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 /* When both a metric-tier badge and a progression badge land on the same
    exercise at once, they scroll horizontally within the action-buttons'
    own width instead of forcing the header/exercise-name column wider. */
-.badge-row{display:flex;gap:6px;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.badge-row{display:flex;gap:6px;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;max-width:100%}
 .badge-row::-webkit-scrollbar{display:none}
 /* Very narrow phones (<360px): the name column was squeezed to a few
    characters and ran underneath the action buttons. Let the header wrap so
@@ -4134,7 +4134,7 @@ function renderWS() {
       ${picking?`<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:6px">Tap another exercise's link icon to pair</div>`:''}
       <div class="ebh">${ih}
         <div style="flex:1;min-width:0">
-          <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${esc(ex.name)}</span>${exGotPR?' <span style="color:#ffd700;font-size:15px">★ PR</span>':''}</div>
+          <div class="ebn"><span onclick="openExInfo('${ex.exId}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px">${esc(ex.name)}</span></div>
           <div style="font-size:11px;color:var(--muted);margin-top:3px">${cardio?(cprev&&cprev.time?`Best ${fmtPace(pacePerMile(cprev.dist,cprev.time))}${cprev.maxDist?` · Longest ${cprev.maxDist} mi`:''}`:'No cardio PR yet'):(pr?`PR: ${dW(pr.weight)}${uL()} × ${pr.reps}`:'No PR yet')+(isW&&sugStands(psug,pr)?` · Suggested ${sugText(psug)}`:'')}</div>
         </div>
         <div class="eb-actions" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;max-width:150px">
@@ -4145,6 +4145,7 @@ function renderWS() {
             <button class="btn bd ic xs" onclick="rmExAsk(${ei})" aria-label="Remove">${uic('trash',undefined,14)}</button>
           </div>
           <div class="badge-row">
+            ${exGotPR?`<span class="progress-chip" style="color:#ffd700;background:rgba(255,215,0,.12);border-color:rgba(255,215,0,.4)">★ PR</span>`:''}
             ${mTierBadge?`<span class="progress-chip" style="color:${TIERC[mTierBadge.tier]};background:${TIERC[mTierBadge.tier]}22;border-color:${TIERC[mTierBadge.tier]}66" onclick="metricBadgeInfo('${mTierBadge.key}','${mTierBadge.tier}',${mTierBadge.value},'${(ex.name||'').replace(/'/g,"\\'")}')">${uic('trophy',TIERC[mTierBadge.tier],11)} ${capW(mTierBadge.tier)}</span>`:''}
             ${progress.up?`<span class="progress-chip up" onclick="progressInfo('up')">▲ Go up</span>`
               :showDown?`<span class="progress-chip down" onclick="progressInfo('down')">▼ Lighter</span>`:''}
