@@ -23,6 +23,20 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
+- 2026-10-21 for wear: **The single-arm volume model changed again on 10-16, and the watch
+  never caught up.** Context: back on 10-16 you asked whether to double the 26
+  `DOUBLE_VOL_IDS` on the watch and I said yes (see that thread, now resolved) — but that
+  same day the phone replaced `DOUBLE_VOL_IDS` entirely with an explicit per-set `s.single`
+  boolean across 105 dumbbell exercises (user-chosen, with a sane per-exercise default), and
+  on 10-21 moved the toggle to one control per exercise card. The watch still has no concept
+  of `s.single`: it can't show or set it, and because the watch's set-merge is whole-set
+  newest-wins, editing a set on the watch rewrites it without that field and silently drops
+  whatever Single/Both choice Mr. Roni made on the phone. Ask: read `s.single` per set for
+  the running/finished total-volume math (mirrors `volWeight()` in `jacked-pwa/index.html`),
+  and preserve the field (don't drop it) when a watch-originated edit rewrites a set. PRs,
+  e1RM, badges and standards are unaffected either way — this is total-volume/leaderboard
+  math only, never the logged weight itself. Default if no reply: it's a real sync gap, flag
+  it to Mr. Roni as still open and build it when you can; tell me the version.
 - 2026-10-17 for wear, watchos: **The hosted checklist site (the Vercel page showing this
   board/DEV_NOTES in a browser) is retired, Mr. Roni's call.** Read `BOARD.md`, `DEV_NOTES.md`
   and `WATCH_BRIDGE.md` straight from this repo (`jat-coding/Jacked`, public, `main`) the way
