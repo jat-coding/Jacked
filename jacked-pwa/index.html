@@ -8976,12 +8976,24 @@ async function syncNow(){
 // on tomorrow's cold boot. S.s() is the single choke point for every write, so
 // the trigger lives here instead of in ~40 call sites.
 //
-// The two exclusions are mandatory, not stylistic:
+// The first two exclusions are mandatory, not stylistic:
 //  - 'lastCloudBackup' is written BY syncBackup() itself → including it would
 //    retrigger the sync that just wrote it, forever.
 //  - 'activeWorkout' is written on EVERY logged set and is deliberately absent
 //    from collectBackup() → including it would cost a ~190KB round trip per set.
-const SYNC_SKIP = new Set(['activeWorkout','lastCloudBackup','appVersion']);
+// The rest (added 2026-10-24, Supabase load-cut) are a load decision, not a
+// correctness one: each still gets picked up by collectBackup() whenever a
+// real trigger fires (finishing a workout, deleting one, closing the app), so
+// nothing is permanently lost — it just doesn't force its OWN resend of the
+// whole account the instant it happens.
+//  - 'exNotes': typed via onchange on the per-exercise note box, mid-workout,
+//    once per exercise noted — a personal reminder, not data worth a full
+//    account resend seconds after each one.
+//  - 'favEx': toggled while browsing the exercise library, as often as any
+//    other tap there.
+//  - 'collapsedSections': which routine folders are expanded — on-device UI
+//    state, same category as 'activeWorkout', not account content.
+const SYNC_SKIP = new Set(['activeWorkout','lastCloudBackup','appVersion','exNotes','favEx','collapsedSections']);
 let _syncTimer=null, _syncing=false, _syncAgain=false;
 
 // PERSISTENT dirty flag — "scheduled" is not "done". A sync in flight dies
@@ -9791,7 +9803,7 @@ document.addEventListener('visibilitychange', ()=>{
 // lightly while the Friends tab is open (no background notifications on web).
 const _onLB=()=>document.getElementById('page-leaderboard')&&document.getElementById('page-leaderboard').classList.contains('active');
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && _onLB() && typeof refreshFriends==='function') refreshFriends(); });
-setInterval(()=>{ if(!document.hidden && _onLB() && typeof supaEnabled==='function' && supaEnabled()) refreshFriends(); }, 25000);
+setInterval(()=>{ if(!document.hidden && _onLB() && typeof supaEnabled==='function' && supaEnabled()) refreshFriends(); }, 75000);
 
 // ============================================================
 // TOAST
