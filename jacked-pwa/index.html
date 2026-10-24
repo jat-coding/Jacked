@@ -8456,7 +8456,6 @@ async function authBoot(){
 }
 function onAuthed(){
   cm('authGate'); _gate = null;
-  subscribeFriends();
   liveBoot();
   if (typeof maybeCloudBackup==='function') maybeCloudBackup();
   if (isDirty()) scheduleSync();
@@ -8505,30 +8504,6 @@ async function authGateSubmit(){
 window.addEventListener('online', ()=>{ if (!_authUid && !_gate && gProf()) authBoot(); else if (liveOn()) liveFlushFinishQ().then(()=>liveSync()); });
 // Coming back to the app: catch up with the live row (watch-started workout to resume, late sets).
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && liveOn()) liveSchedule(300); });
-
-// Realtime: push friend add/accept/remove to both devices instead of waiting for
-// the 25s poll. Needs the `friend_requests` table added to Supabase's realtime
-// publication; if it isn't, this is a harmless no-op and the poll still covers it.
-let _frChan=null, _frT=null;
-function scheduleFriendRefresh(){ clearTimeout(_frT); _frT=setTimeout(()=>{ if(typeof refreshFriends==='function') refreshFriends(); }, 500); }
-function subscribeFriends(){
-  if(!supaEnabled()||_frChan) return;
-  const p=gProf(); if(!p||!p.code) return;
-  const my=p.code;
-  try{
-    // postgres_changes supports one filter, not OR — a friend_requests row can have
-    // `my` on either side, so two channels (one per side) both drive the same debounced
-    // refresh instead of one unfiltered channel that notified every other user's rows too.
-    _frChan=[
-      SUPA.channel('jk_friend_requests_from')
-        .on('postgres_changes',{event:'*',schema:'public',table:'friend_requests',filter:'from_code=eq.'+my},scheduleFriendRefresh)
-        .subscribe(),
-      SUPA.channel('jk_friend_requests_to')
-        .on('postgres_changes',{event:'*',schema:'public',table:'friend_requests',filter:'to_code=eq.'+my},scheduleFriendRefresh)
-        .subscribe()
-    ];
-  }catch(e){ console.warn('subscribeFriends',e); }
-}
 
 // True only when the badges/data columns genuinely don't exist yet (a project
 // that never ran the v0.6 migration). Anything else — network, size, timeout —
