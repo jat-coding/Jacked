@@ -8,6 +8,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import zlib from 'zlib';
+import { readFile } from 'fs/promises';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW || 'playwright');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -15,14 +16,43 @@ export const APP_DIR = path.resolve(HERE, '../../jacked-pwa');
 export const PORT = Number(process.env.JK_PORT || 8765);
 export const URL = `http://127.0.0.1:${PORT}/index.html`;
 
+// Standing-questions 2026-10-17 item 10 (memory/context/mistake-fix-queue.md "2026-09-26
+// 19:00", [[jacked-e2e-silently-tested-old-code-on-busy-port]]): an orphan python3
+// http.server on :8765, left over from a prior run, passed e2e three times (9/25 21:45,
+// 9/25 23:53, 9/26 19:00) against OLD code -- the readiness loop below only checks "does
+// something answer at URL", which an orphan does immediately, so it can't tell "my spawned
+// server became ready" from "something else was already here". Two checks fix that: (1)
+// refuse outright if anything already answers on PORT before spawning at all, and (2)
+// after spawn, verify the bytes actually served are the real index.html on disk, not a
+// stale/cached copy -- catches the case where something IS this test's own spawn but is
+// somehow serving the wrong directory or a cached response.
+async function alreadyServing() {
+  try { const r = await fetch(URL); return r.ok; } catch { return false; }
+}
+
 let server;
 export async function startServer() {
+  if (await alreadyServing()) {
+    throw new Error(`port ${PORT} is already serving something -- refusing to test against it `
+      + `(an orphan server here tested old code 3 times in a row on 2026-09-25/26). Kill the `
+      + `existing process (lsof -ti :${PORT} | xargs kill) or run with a different JK_PORT.`);
+  }
   server = spawn('python3', ['-m', 'http.server', String(PORT), '--bind', '127.0.0.1', '--directory', APP_DIR], { stdio: 'ignore' });
+  let ready = false;
   for (let i = 0; i < 50; i++) {
-    try { const r = await fetch(URL); if (r.ok) return; } catch (_) {}
+    try { const r = await fetch(URL); if (r.ok) { ready = true; break; } } catch (_) {}
     await new Promise(r => setTimeout(r, 100));
   }
-  throw new Error('server did not start');
+  if (!ready) throw new Error('server did not start');
+  const [served, onDisk] = await Promise.all([
+    fetch(URL).then(r => r.arrayBuffer()).then(Buffer.from),
+    readFile(path.join(APP_DIR, 'index.html')),
+  ]);
+  if (!served.equals(onDisk)) {
+    stopServer();
+    throw new Error(`server on port ${PORT} is serving ${served.length} bytes but the real `
+      + `index.html on disk is ${onDisk.length} bytes -- refusing to test against stale content`);
+  }
 }
 export function stopServer() { if (server) server.kill(); }
 
@@ -50,7 +80,13 @@ export async function phone({ width = 390, height = 844, seed = {}, now = null, 
       Object.defineProperty(screen, 'orientation', { value: { angle: a, type: 'landscape-primary', addEventListener() {} }, configurable: true }); }
   }, [angle, via]);
   await ctx.route(/supabase/, r => r.abort());
-  if (!process.env.JK_FONTS) await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());   // JK_FONTS=1 loads the real web fonts for screenshots
+  // standing-questions 2026-10-20 item 11 (queue 2026-09-24 nightly, "Jacked mockups didn't
+  // look like the app" -- real fonts were opt-in via JK_FONTS=1, so a mockup generated with
+  // no flags rendered in a fallback font and looked wrong against the live app
+  // [[mockups-must-render-like-the-live-app]]). Default flipped: real fonts load unless
+  // explicitly blocked with JK_BLOCK_FONTS=1 (a fast run that doesn't care about rendering
+  // fidelity). JK_FONTS=1 is still accepted as a no-op for any existing caller that sets it.
+  if (process.env.JK_BLOCK_FONTS) await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));

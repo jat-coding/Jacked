@@ -65,7 +65,11 @@ const SCREENS = [
   ['Badge detail: Jacked (hero/teaser)', '#badgeFull', () => badgeInfo('Jacked')],
   ['Badge detail: PR-Maxing (sections)', '#badgeFull', () => badgeInfo('PR-Maxing')],
   ['Badge detail: Consistency-Maxing', '#badgeFull', () => badgeInfo('Consistency-Maxing')],
-  ['Monthly recap', '#recapFull', () => openRecapNow()],
+  // openRecapNow() is gated to the first 7 days of the month (recapMonthToShow) --
+  // the audit's fixed clock is the 23rd, so it always returned null and the screen
+  // never opened ("no interactive element found"). openRecap(y,m) renders the same
+  // markup for any month that has data, bypassing the auto-prompt date gate.
+  ['Monthly recap', '#recapFull', () => openRecap(new Date().getFullYear(), new Date().getMonth() - 1)],
   ['Gym years (your calendar)', '#gymYears', () => openGymYears()],
   ['Routine 3-dot action sheet', '#rMenuModal .md', () => openRMenu('r1')],
   ['Generic action sheet (long)', '#actMenu .md', () => openActMenu('Workout', [
@@ -79,21 +83,79 @@ const SCREENS = [
   ['Create Routine', '#crModal .md', () => openCR()],
   ['Create Exercise', '#ceModal .md', () => openCE()],
   ['Add Exercise picker', '#aeModal .md', () => openAEModal('routine')],
-  ['Workout detail', '#wdModal .md', () => openWD(hist[0].id)],
-  ['Edit Workout', '#weModal .md', () => openWE(hist[0].id)],
-  ['Reorder exercises', '#reorderModal .md', () => { startEmpty(); openReorder(); }],
-  ['Finish-workout summary', '#fsModal .md', () => showFinishSummary({ name: 'Push Day', dur: '58:12', ts: 12, vol: 18450, prList: [{ name: 'Barbell Bench Press', weight: 245, reps: 1 }], sugList: [], progressNotes: [] })],
+  // `hist` below is this file's own top-level (Node-side) seed array -- it does not exist
+  // as a global inside the page, so page.evaluate(open) threw ReferenceError for every one
+  // of these and the screen was never measured. gH() is the in-page function (reads
+  // localStorage) that holds the equivalent data once seeded.
+  ['Workout detail', '#wdModal .md', () => openWD(gH()[0].id)],
+  ['Edit Workout', '#weModal .md', () => openWE(gH()[0].id)],
+  // openReorder() silently no-ops on an empty workout (if(!aw.exercises.length) return) --
+  // startEmpty() alone left aw.exercises=[] so the modal never opened. Add two exercises first.
+  ['Reorder exercises', '#reorderModal .md', () => { startEmpty(); addExToWorkout('Barbell_Bench_Press_-_Medium_Grip'); addExToWorkout('Barbell_Squat'); openReorder(); }],
+  // showFinishSummary's markup unconditionally does o.ids.join(...) for the "Save as a new
+  // routine" button -- the test object had no `ids`, so this threw before the modal opened.
+  ['Finish-workout summary', '#fsModal .md', () => showFinishSummary({ name: 'Push Day', dur: '58:12', ts: 12, vol: 18450, ids: ['Barbell_Bench_Press_-_Medium_Grip'], prList: [{ name: 'Barbell Bench Press', weight: 245, reps: 1 }], sugList: [], progressNotes: [] })],
   ['Plate calculator', '#pcModal .md', () => openPlate()],
   ['Reorder metric cards', '#cardOrderModal .md', () => openCardOrder()],
   ['Reorder routine sections', '#routineOrderModal .md', () => openRoutineOrder()],
   ['Friend profile', '#fpModal .md', () => openFriend('@buddy1')],
   ['Friend badges list', '#fbModal .md', () => showFriendBadges('@buddy1')],
-  ['Friend streak calendar (day)', '#dayModal .md', () => openFriendDay('@buddy1', '2026-10-01')],
+  // openFriendDay() needs p.wd (a friend's shared workout list) and, when a match is found,
+  // swaps content into #fpModal -- it never touches #dayModal. #dayModal is YOUR OWN calendar
+  // day popup (Home tab), opened only by openDay(ds); the SEED friend has no `wd` entry for
+  // 2026-10-01 either, so the old call just toasted an error and nothing opened.
+  ['Calendar day detail (own history)', '#dayModal .md', () => openDay(dayKey(gH()[0].date))],
   ['Exercise info', '#exInfoModal .md', () => openExInfo('Barbell_Bench_Press_-_Medium_Grip')],
   ['Add Friend', '#afModal .md', () => openAF()],
   ['Badge-earned-live popup', '#achModal .md', () => om('achModal')],
-  ['Generic confirm dialog', '#confirmModal .md', () => showConfirm('Delete this?', {})],
+  // showConfirm() returns a Promise that only resolves on a real click; page.evaluate()
+  // awaits whatever its page-side function returns, so returning that promise hung every
+  // run for the full OP_TIMEOUT. Call it without returning its result -- the modal still
+  // opens synchronously, which is all this audit needs to measure.
+  ['Generic confirm dialog', '#confirmModal .md', () => { showConfirm('Delete this?', {}); }],
   ['Cloud-sync prompt', '#cloudPromptModal .md', () => om('cloudPromptModal')],
+  // Not dismissable, so never reachable through normal navigation in this harness --
+  // opened directly to measure it at all (task brief: "every reachable screen").
+  ['Account gate (signed-out/unclaimed)', '#authGate .md', () => om('authGate')],
+  // Only wired from a friend's real photo (openAvatarLightbox); a fake URL is enough to
+  // measure the layout since the close button's position doesn't depend on the image loading.
+  ['Friend photo lightbox', '#avLightbox', () => openAvatarLightbox('https://example.invalid/x.jpg')],
+  // --- Worst-case stress variants (2026-10-23): several `.mo.ctr` dialogs looked clean above
+  // only because the modest SEED content never made them tall enough to actually need to
+  // scroll -- the exact failure mode that hid the Profile/Settings bug (see the long comment
+  // on #profModal .md in index.html). These push each one past its max-height on purpose.
+  ['STRESS Finish-workout summary (6 PRs + 4 suggested + 4 notes)', '#fsModal .md', () => showFinishSummary({
+    name: 'Push Day', dur: '58:12', ts: 24, vol: 18450, ids: ['Barbell_Bench_Press_-_Medium_Grip'],
+    prList: Array.from({ length: 6 }, (_, i) => ({ name: 'Exercise Number ' + i, weight: 245, reps: 1 })),
+    sugList: Array.from({ length: 4 }, (_, i) => ({ name: 'Suggested Exercise ' + i, weight: 200, reps: 5 })),
+    progressNotes: Array.from({ length: 4 }, (_, i) => ({ type: 'up', text: 'Progress note ' + i + ' about this lift trending up.' })),
+  })],
+  // Longest real showConfirm() call in the codebase (crownInfo(), 269 chars) instead of the
+  // short placeholder message above.
+  ['STRESS Generic confirm dialog (longest real message)', '#confirmModal .md', () => { crownInfo(); }],
+  // Two workouts logged on the same calendar day (the app supports this -- openDay groups every
+  // match for that date into one scroll view), each with 8 exercises.
+  ['STRESS Calendar day detail (2 workouts, 8 exercises each)', '#dayModal .md', () => {
+    const base = gH()[0];
+    const manyEx = Array.from({ length: 8 }, (_, i) => ({ ...base.exercises[0], name: 'Exercise ' + i }));
+    const extra1 = { ...base, id: 'stress1', name: 'Morning Heavy Push Day — Full Body Strength Session', exercises: manyEx };
+    const extra2 = { ...base, id: 'stress2', name: 'Evening Accessories', exercises: manyEx };
+    S.s('hist', [extra1, extra2, ...gH()]);
+    openDay(dayKey(base.date));
+  }],
+  // Four years of training history instead of the SEED's ~2 months, for the one full-screen
+  // overlay whose shared rule reserves only sab+20px at the bottom with no 62px/navB nav
+  // allowance at all (#gymYears) -- same unreserved pattern #recapFull just failed on.
+  ['STRESS Gym years (4 years of data)', '#gymYears', () => {
+    const base = gH()[0];
+    const extra = [];
+    const nowPage = new Date();   // page.clock.setFixedTime(now) below makes this equal the Node-side `now`
+    for (let y = 0; y < 4; y++) for (let i = 0; i < 60; i++) extra.push({ ...base, id: `stressgy${y}_${i}`, date: new Date(nowPage.getTime() - (y * 400 + i * 5) * 864e5).toISOString() });
+    S.s('hist', [...gH(), ...extra]);
+    openGymYears();
+  }],
+  ['STRESS Account gate: setup (confirm-password field shown)', '#authGate .md', () => { document.getElementById('agPass2Wrap').style.display = 'block'; om('authGate'); }],
+  ['STRESS Plate calculator (heavy target, many plates/side)', '#pcModal .md', () => { om('pcModal'); document.getElementById('pcTarget').value = 795; document.getElementById('pcBar').value = 45; calcPlates(); }],
 ];
 
 function measure(sel) {
@@ -148,7 +210,22 @@ function measure(sel) {
     if (top && (nav.contains(top) || top === nav)) { navPaintsOver = true; probeDetail = `elementFromPoint(${Math.round(x)},${Math.round(y)}) -> ${top.id ? '#' + top.id : top.tagName}`; break; }
   }
   const gap = Math.round(navR.top - r.bottom); // positive = clear gap above nav's top edge
-  return { label, elBottom: Math.round(r.bottom), navTop: Math.round(navR.top), gap, navPaintsOver, probeDetail, innerHeight };
+  // The interactive-only scan above is blind to purely visual content with nothing to tap --
+  // #gymYears' day squares (no onclick) are a real example. Separately track the lowest LEAF
+  // element (no element children, so a wrapping div's bottom -- which just mirrors its last
+  // child -- doesn't win by default) of any kind, so a screen whose bottom-most real content
+  // is non-interactive still gets a true "does it clear the nav" answer.
+  let lastAny = null, lastAnyBottom = -Infinity;
+  for (const el of scope.querySelectorAll('*')) {
+    if (el.children.length || !vis(el)) continue;
+    if (nav.contains(el)) continue;
+    const r2 = el.getBoundingClientRect();
+    if (r2.height === 0) continue;
+    if (r2.bottom > lastAnyBottom) { lastAnyBottom = r2.bottom; lastAny = el; }
+  }
+  const gapAny = lastAny ? Math.round(navR.top - lastAnyBottom) : null;
+  const anyLabel = lastAny ? (lastAny.id ? '#' + lastAny.id : lastAny.className ? '.' + String(lastAny.className).split(' ')[0] : lastAny.tagName.toLowerCase()) : null;
+  return { label, elBottom: Math.round(r.bottom), navTop: Math.round(navR.top), gap, navPaintsOver, probeDetail, innerHeight, gapAny, anyLabel };
 }
 
 await startServer();
@@ -204,7 +281,7 @@ for (const [label, w, tabH, fullH, sat, sab] of PHONES) {
           try { m = await withTimeout(page.evaluate(measure, sel), OP_TIMEOUT_MS, `measure ${scrName}`); } catch (e) { m = { error: 'measure threw: ' + String(e).split('\n')[0] }; }
           const entry = { label, w, h, mode, scr: scrName, ...m };
           report.push(entry);
-          const bad = m.navPaintsOver || (typeof m.gap === 'number' && m.gap < 0);
+          const bad = m.navPaintsOver || (typeof m.gap === 'number' && m.gap < 0) || (typeof m.gapAny === 'number' && m.gapAny < 0);
           if (bad || m.error) {
             const safe = scrName.replace(/[^a-z0-9]+/gi, '_');
             await withTimeout(page.screenshot({ path: `${OUT}/${w}x${h}-${mode}-${safe}.png` }), OP_TIMEOUT_MS, `screenshot ${scrName}`).catch(() => {});
@@ -238,9 +315,9 @@ for (const [label, w, tabH, fullH, sat, sab] of PHONES) {
 try { await browser.close(); } catch (_) { /* already gone */ }
 try { stopServer(); } catch (_) {}
 
-const problems = report.filter(r => r.error || r.navPaintsOver || (typeof r.gap === 'number' && r.gap < 0));
+const problems = report.filter(r => r.error || r.navPaintsOver || (typeof r.gap === 'number' && r.gap < 0) || (typeof r.gapAny === 'number' && r.gapAny < 0));
 for (const r of report) {
-  const tag = r.error ? 'ERROR' : r.navPaintsOver ? 'NAV VISIBLE OVER CONTENT' : (r.gap < 0 ? 'OVERLAP (hidden)' : null);
+  const tag = r.error ? 'ERROR' : r.navPaintsOver ? 'NAV VISIBLE OVER CONTENT' : (r.gap < 0 ? 'OVERLAP (hidden)' : (typeof r.gapAny === 'number' && r.gapAny < 0) ? 'OVERLAP (hidden, non-interactive)' : null);
   if (tag) console.log(`[${tag}] ${r.label} ${r.w}x${r.h} ${r.mode} / ${r.scr}${r.error ? ': ' + r.error : ` -- gap=${r.gap}px, last="${r.label}"`}`);
 }
 console.log(`\n${report.length} screen checks, ${problems.length} with problems, ${report.length - problems.length} clean. Page errors: ${crashCount}`);
