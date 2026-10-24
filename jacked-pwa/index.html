@@ -196,6 +196,14 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .rc-b{border:1px solid var(--border2);border-radius:12px;padding:8px 4px;text-align:center;background:var(--bg2);min-width:0}
 .rc-b .n{font-weight:800;font-size:13px;margin-top:3px}.rc-b .t{font-size:10px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;margin-top:1px}.rc-b .c{font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-height:700px){.rc-tile{padding:6px 12px}.rc-tile .v{font-size:20px}.rc-tiles{margin-bottom:4px}.rc-row{padding:4px 11px;margin-bottom:2px}.rc-b{padding:6px 4px}.rc-b .n{margin-top:1px}.rc-chips{margin:0 0 3px}.rc-grid{gap:6px}}
+/* 2026-10-24: the 2026-10-23 nav-buffer fix below added 62px+navB of required bottom
+   padding to #recapFull so the Share button clears the floating nav -- correct, but on the
+   smallest supported screen (360x640) that reserved space alone pushes worst-case recap
+   content (crown+challenge+comeback chips, best lift, best week, 6 gold tiers) 21px past
+   the viewport, forcing a scroll the 2026-09-24 "one screen, no scroll" rule forbids
+   (tests/e2e/run.mjs, "recap fits one screen"). The nav-safety padding has to stay; trim
+   the recap's own internal spacing further at this one height instead. */
+@media (max-height:660px){#recapFullBody .bf-title{margin-bottom:4px!important}#recapFullBody .bf-status{margin-bottom:0!important}#recapFullBody .bf-h{margin:6px 0 3px!important}.rc-tiles{margin-bottom:2px}.rc-row{padding:2px 11px;margin-bottom:1px}.rc-b{padding:4px 4px}.rc-grid{gap:4px}.rc-chips{margin:0 0 1px}}
 @media (min-height:780px){.rc-tile{padding:14px 14px}.rc-tile .v{font-size:30px}.rc-row{padding:13px 12px;margin-bottom:9px}.rc-tiles,.rc-grid{gap:10px}.rc-b{padding:16px 4px}.rc-b .n{font-size:15px;margin-top:6px}.rc-b .c{font-size:12px}.rc-chips{margin:6px 0 12px}}
 #recapFullBody{display:flex;flex-direction:column;justify-content:center}
 /* padding-bottom made nav-aware 2026-10-23 (exhaustive nav-buffer sweep): this override reserved
