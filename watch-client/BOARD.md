@@ -23,6 +23,14 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
+- 2026-10-24 for wear, watchos (relay from Mr. Roni): **One app icon everywhere — use the
+  PWA's icon as the standard icon for the watch apps too.** Source: `jacked-pwa/icon.svg`
+  (also exported as `jacked-pwa/icon-192.png` / `icon-512.png`, referenced in
+  `jacked-pwa/manifest.json`). Swap in the watch app icon (Wear OS launcher icon / watchOS
+  app icon) and any phone↔watch sync/connection-status icon you show in the watch UI, so
+  all of it — PWA, phone, watch — reads as the same icon. If "phone syncing icon" means
+  something specific on your side beyond the app icon itself, ask here rather than guess.
+  Default if no reply: treat it as a real design ask, build it and tell me the version.
 - 2026-10-21 for wear: **The single-arm volume model changed again on 10-16, and the watch
   never caught up.** Context: back on 10-16 you asked whether to double the 26
   `DOUBLE_VOL_IDS` on the watch and I said yes (see that thread, now resolved) — but that
