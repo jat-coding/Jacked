@@ -10000,7 +10000,13 @@ function render(){
   el.style.cssText='position:fixed;left:10px;right:10px;top:calc(env(safe-area-inset-top) + 8px);z-index:9998;background:#1e1e26;border:1px solid #363642;border-radius:14px;padding:12px 14px;font-family:"DM Sans",sans-serif;font-size:13px;line-height:1.4;color:#f3f3f8;box-shadow:0 10px 28px -12px rgba(0,0,0,.6);display:flex;align-items:flex-start;gap:10px';
   var msg=document.createElement('div');
   msg.style.flex='1';
-  msg.textContent='Your Jacked icon still has an old setting that leaves a gap at the bottom. Delete this icon from your Home Screen, reopen the site in Safari, then Share → Add to Home Screen again.';
+  msg.appendChild(document.createTextNode('Your Jacked icon still has an old setting that leaves a gap at the bottom. Delete this icon from your Home Screen, then '));
+  var link=document.createElement('a');
+  link.href='https://jacked-trainer.netlify.app';
+  link.textContent='tap here to reopen Jacked in Safari';
+  link.style.cssText='color:#ffd700;text-decoration:underline;font-weight:600';
+  msg.appendChild(link);
+  msg.appendChild(document.createTextNode(', then Share → Add to Home Screen again.'));
   var close=document.createElement('button');
   close.textContent='✕';
   close.setAttribute('aria-label','Dismiss');
