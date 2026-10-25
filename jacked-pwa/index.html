@@ -9946,53 +9946,5 @@ setTimeout(loadDB, 500);
 })();
 </script>
 </div><!-- /#jkRoot -->
-<!-- Old-install banner (2026-10-24), purely additive: reads measurements only, never touches
-     the LOCKED status-bar meta / jk-doc script / html,body pinning above
-     (memory/decisions/jacked-ios-full-screen-fix-locked-2026-10-22.md). A home-screen icon
-     added before the 2026-10-24 opaque-status-bar fix shipped still carries the old
-     black-translucent config forever -- iOS only reads that meta at Add to Home Screen time --
-     and still shows the unpainted bottom strip. Detects that strip directly with the same
-     screen-vs-innerHeight measurement proven correct on his phone 2026-10-22 (793 vs 852,
-     commit d50cde6's gap()), not a version/date guess, and only inside an installed app. -->
-<script>
-(function(){
-function isStandaloneApp(){
-  return navigator.standalone===true||(window.matchMedia&&(matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches));
-}
-function measureGap(){
-  var w=innerWidth,h=innerHeight,s=screen;
-  var full=w>h?Math.min(s.width,s.height):Math.max(s.width,s.height);
-  var g=full-h;
-  return g>0&&g<=100?g:0;   // anything bigger than a status bar isn't this bug
-}
-var DISMISS_KEY='jk_oldInstallBannerDismissed';
-var el=null;
-function render(){
-  if(!isStandaloneApp()||measureGap()<=0){ if(el){el.remove();el=null} return }
-  if(el||sessionStorage.getItem(DISMISS_KEY)==='1')return;
-  el=document.createElement('div');
-  el.id='jkOldInstallBanner';
-  el.style.cssText='position:fixed;left:10px;right:10px;top:calc(env(safe-area-inset-top) + 8px);z-index:9998;background:#1e1e26;border:1px solid #363642;border-radius:14px;padding:12px 14px;font-family:"DM Sans",sans-serif;font-size:13px;line-height:1.4;color:#f3f3f8;box-shadow:0 10px 28px -12px rgba(0,0,0,.6);display:flex;align-items:flex-start;gap:10px';
-  var msg=document.createElement('div');
-  msg.style.flex='1';
-  msg.appendChild(document.createTextNode('Your Jacked icon still has an old setting that leaves a gap at the bottom. Delete this icon from your Home Screen, then '));
-  var link=document.createElement('a');
-  link.href='https://jacked-trainer.netlify.app';
-  link.textContent='tap here to reopen Jacked in Safari';
-  link.style.cssText='color:#ffd700;text-decoration:underline;font-weight:600';
-  msg.appendChild(link);
-  msg.appendChild(document.createTextNode(', then Share → Add to Home Screen again.'));
-  var close=document.createElement('button');
-  close.textContent='✕';
-  close.setAttribute('aria-label','Dismiss');
-  close.style.cssText='background:none;border:none;color:#a4a4b4;font-size:16px;cursor:pointer;padding:0 0 0 4px;line-height:1';
-  close.onclick=function(){ try{sessionStorage.setItem(DISMISS_KEY,'1')}catch(e){} if(el){el.remove();el=null} };
-  el.appendChild(msg);el.appendChild(close);
-  document.body.appendChild(el);
-}
-if(document.readyState==='complete')render();else addEventListener('load',render);
-addEventListener('resize',render);addEventListener('orientationchange',render);
-})();
-</script>
 </body>
 </html>
