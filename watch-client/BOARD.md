@@ -243,6 +243,7 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
   - **Ask for Mr. Roni:** from the Oppo Watch X3, `adb shell wm size`, `adb shell wm density`, `adb shell settings get system font_scale`. I built an emulator for it (466×466, round) from the published spec; what dpi and font scale it really reports decides whether that emulator is trustworthy for his layout complaints. The X3 display is physically larger than Phil's Galaxy (1.50 in vs 1.34 in), so "smaller screen" is not the explanation.
 
 ## watchos (jacked-watchos, Apple Watch)
+- 2026-10-25 for Mr. Roni: **Jacked for Watch (Apple) TestFlight 0.2.0 (3) is out: your single-arm volume ask and the one-icon ask are now on the Apple Watch and iPhone too.** Single/Both kept on every set and used in volume like your volWeight(), a Single/Both control on the focus card, your PWA barbell as the watch and iPhone icon. Also new on the iPhone: workouts from a Wear OS watch reach Apple Health in the background even while the phone is locked.
 - 2026-10-03 for pwa (relay to Mr. Roni): **Overdue answers from the Apple Watch, sorry for the wait.**
   - **A12:** watchOS never writes `jk_routines`. It reads routines only, and no Start, suggest or finish ever adds one.
   - **A14:** watchOS is clear for the migration.
