@@ -51,6 +51,10 @@ await ex(fs.readFileSync(new URL("../migrations/20261016_account_status_rate_lim
 ok(true, 'rate-limit migration applied');
 await ex(fs.readFileSync(new URL("../migrations/20261021_signup_email.sql", import.meta.url), 'utf8'));
 ok(true, 'signup-email migration applied');
+await ex(fs.readFileSync(new URL("../migrations/20260925_profiles_public_username_avatar_only.sql", import.meta.url), 'utf8'));
+ok(true, 'friend-profile privacy migration applied');
+await ex(fs.readFileSync(new URL("../migrations/20261026_friend_requests_lockdown.sql", import.meta.url), 'utf8'));
+ok(true, 'friend-requests lockdown migration applied');
 
 const as = async (role, uid) => { await ex(`reset role; select set_config('request.jwt.claim.sub', '${uid||''}', false); set role ${role};`); };
 const MOM='11111111-1111-1111-1111-111111111111', DAD='22222222-2222-2222-2222-222222222222';
@@ -63,7 +67,8 @@ ok((await q(`select count(*)::int c from profiles_history where op='pre_auth_mig
 
 // anon
 await as('anon');
-ok((await q(`select count(*)::int c from profiles`))[0].c === 3, 'anon can read public profile rows');
+ok((await q(`select count(*)::int c from profiles`))[0].c === 0, 'anon reads 0 rows directly from profiles (20260925: row policy is to authenticated only)');
+ok((await q(`select count(*)::int c from public_profiles(array['@mom','@dad','@empty'])`))[0].c === 3, 'anon reads the public username/avatar surface via public_profiles() instead');
 await expectErr(() => q(`select * from profile_backups`), 'anon cannot read backups');
 await expectErr(() => q(`update profiles set name='x' where code='@mom'`), 'anon cannot update profiles');
 await expectErr(() => q(`insert into profiles(code) values ('@evil')`), 'anon cannot insert profiles');
@@ -135,9 +140,22 @@ await expectErr(() => q(`update profiles set user_id='${DAD}' where code='@mom'`
 await expectErr(() => q(`update profiles set code='@x' where code='@mom'`), 'owner cannot change code directly');
 await expectErr(() => q(`delete from profiles where code='@mom'`), 'owner cannot delete profile row');
 ok((await q(`select * from friend_requests`)).length === 1, 'mom sees only her friend requests');
-ok((await q(`update friend_requests set status='accepted' where from_code='@mom' returning id`)).length === 1, 'mom updates own request');
+// 20261026 lockdown: the sender is no longer a party who can transition status -- only
+// the recipient (owns_code(to_code)) can, so mom updating her own mom->dad row now affects 0.
+ok((await q(`update friend_requests set status='accepted' where from_code='@mom' returning id`)).length === 0, 'mom (sender, not recipient) can no longer flip her own request\'s status');
 ok((await q(`delete from friend_requests where from_code='@dad' returning id`)).length === 0, 'mom cannot delete dad<->empty request');
-await q(`insert into friend_requests(from_code,to_code,status) values ('@mom','@empty','accepted')`); ok(true, 'mom can send request');
+
+// A forged insert that starts out already 'accepted' is rejected (fr_write now requires
+// status='pending'); the real client-equivalent insert (status 'pending') still works.
+await expectErr(() => q(`insert into friend_requests(from_code,to_code,status) values ('@mom','@empty','accepted')`), 'forged accepted insert is rejected');
+await q(`insert into friend_requests(from_code,to_code,status) values ('@mom','@empty','pending')`); ok(true, 'mom can send a real (pending) request');
+// Sender self-accepting her own pending request: RLS-blocked updates return 0 affected
+// rows rather than throwing, so this is a row-count check, not expectErr.
+ok((await q(`update friend_requests set status='accepted' where from_code='@mom' and to_code='@empty' returning id`)).length === 0, 'mom cannot self-accept her own pending request');
+// Re-aiming from_code via UPDATE is rejected outright: the column grant only covers
+// `status`, so this errors regardless of RLS or which rows the WHERE clause would match.
+await expectErr(() => q(`update friend_requests set from_code='@dad' where from_code='@mom' and to_code='@empty'`), 're-aiming from_code via UPDATE is rejected (status is the only updatable column)');
+
 await q(`insert into storage.objects values ('avatars','@mom.jpg')`); ok(true, 'mom writes own avatar');
 ok((await q(`select rename_profile('@dad') r`))[0].r.status === 'taken', 'rename to taken');
 ok((await q(`select rename_profile('BAD') r`))[0].r.status === 'invalid', 'rename invalid');
@@ -145,6 +163,30 @@ ok((await q(`select rename_profile('@mommy') r`))[0].r.status === 'ok', 'rename 
 ok((await q(`select code from profile_backups`))[0].code === '@mommy', 'backup followed rename (cascade)');
 ok((await q(`select count(*)::int c from friend_requests where from_code='@mommy'`))[0].c === 2, 'friend requests followed rename');
 ok((await q(`select owns_code('@mommy') o`))[0].o === true, 'owns renamed code');
+
+// A genuine RECIPIENT accepting a real pending request still works, and is_friend_of
+// then returns true for both directions -- the fix narrows who can accept, it doesn't
+// break accepting itself.
+await ex('reset role');
+const VIC='33333333-3333-3333-3333-333333333333';
+await q(`insert into profiles(code,name,username,workouts,data) values ('@vic','Vic','@vic',9,'{"days":["x"]}')`);
+await ex(`insert into auth.users values ('${VIC}','vic@x')`);
+await ex(`update profiles set user_id='${VIC}' where code='@vic'`);
+await as('authenticated', MOM); // code is now @mommy after the rename above
+await q(`insert into friend_requests(from_code,to_code,status) values ('@mommy','@vic','pending')`); ok(true, 'mommy sends vic a real request');
+await as('authenticated', VIC);
+ok((await q(`update friend_requests set status='accepted' where from_code='@mommy' and to_code='@vic' returning id`)).length === 1, 'vic (the recipient) accepts the pending request');
+ok((await q(`select is_friend_of('@mommy') f`))[0].f === true, 'vic sees mommy as an accepted friend');
+await as('authenticated', MOM);
+ok((await q(`select is_friend_of('@vic') f`))[0].f === true, 'mommy sees vic as an accepted friend back (accept works both directions)');
+
+// A victim's full profile is still invisible to an attacker with only a forged or
+// non-existent friendship -- no row from `profiles`, and no private field from
+// friend_profiles() either.
+await as('authenticated', DAD);
+ok((await q(`select * from profiles where code='@vic'`)).length === 0, 'attacker with no real friendship reads 0 rows of the victim\'s profile');
+ok((await q(`select data from friend_profiles(array['@vic'])`))[0].data === null, 'friend_profiles hands a non-friend no private data for the victim');
+
 await ex('reset role');
 ok((await q(`select count(*)::int c from profiles_history where code='@mom'`))[0].c === 0 && (await q(`select count(*)::int c from profiles_history where code='@mommy'`))[0].c === 31, 'history follows rename');
 await as('authenticated', MOM);
