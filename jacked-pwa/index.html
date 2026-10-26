@@ -1167,6 +1167,22 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 
     <div class="sep"></div>
     <div class="blk-t">Account</div>
+    <!-- Email on file: add one (signed up without) or change it. Saved on its own button,
+         straight to the server -- not part of the profile Save below. -->
+    <div class="fg" id="profEmailBlk"><label>Email</label>
+      <div id="profEmailView" style="display:flex;align-items:center;gap:10px">
+        <div id="profEmailVal" style="flex:1;min-width:0;font-size:14px;overflow-wrap:anywhere"></div>
+        <button class="btn bg" id="profEmailBtn" style="padding:8px 14px" onclick="editProfEmail()">Add email</button>
+      </div>
+      <div id="profEmailEdit" style="display:none">
+        <input type="email" id="profEmailIn" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" maxlength="255" placeholder="you@example.com" onkeydown="if(event.key==='Enter'){event.preventDefault();saveProfEmail();}">
+        <div class="fr" style="margin-top:8px">
+          <button class="btn bg" onclick="cancelProfEmail()">Cancel</button>
+          <button class="btn ba" id="profEmailSave" onclick="saveProfEmail()">Save email</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Lets you log in with your email as well as your username.</div>
+    </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Signing out clears this device's data. Your workouts live only here — <b>export a backup first</b> if you want to keep them or move them to another account.</div>
     <div class="fr">
       <button class="btn bg" onclick="exportData()">Export backup</button>
@@ -9210,6 +9226,7 @@ function openProf() {
   document.getElementById('profTab-main').style.display='block';
   document.getElementById('profTab-body').style.display='none';
   profTabsMark('main');
+  loadProfEmail();
   om('profModal');
 }
 // Age is derived from the stored birthday, never stored itself, so it stays
@@ -9406,6 +9423,77 @@ async function saveProf() {
 // ============================================================
 // DATA EXPORT / IMPORT (local backup — no backend)
 // ============================================================
+// Email on file (Profile -> Account). profiles.email has no client read/write grant, so both
+// directions go through my_email()/set_my_email() (supabase/migrations/20261026_set_my_email.sql),
+// which apply sign-up's exact rules: trimmed + lowercased, unique case-insensitively, and
+// 'email_taken'/'invalid_email' statuses. Never touches the synthetic sign-in email.
+let _profEmail = null;   // the email on file; null = none
+// A project that hasn't run 20261026_set_my_email.sql yet has no such function.
+function emailRpcMissing(e){ return !!e && (e.code==='PGRST202' || /could not find the function/i.test(e.message||'')); }
+function showProfEmail(){
+  const val=document.getElementById('profEmailVal'), btn=document.getElementById('profEmailBtn');
+  val.textContent=_profEmail||'No email on file';
+  val.style.color=_profEmail?'':'var(--muted)';
+  btn.textContent=_profEmail?'Change':'Add email';
+  btn.style.display='';
+}
+function profEmailNote(msg){
+  const val=document.getElementById('profEmailVal');
+  val.textContent=msg; val.style.color='var(--muted)';
+  document.getElementById('profEmailBtn').style.display='none';
+}
+async function loadProfEmail(){
+  cancelProfEmail();
+  if(!supaEnabled()){ profEmailNote('Sign in to add an email'); return; }
+  profEmailNote('Loading…');
+  try{
+    const { data, error } = await SUPA.rpc('my_email');
+    if(error) throw error;
+    if(!data || data.status!=='ok') throw new Error((data && data.status) || 'no_data');
+    _profEmail = data.email || null;
+    showProfEmail();
+  }catch(e){
+    console.warn('my_email',e);
+    profEmailNote(emailRpcMissing(e) ? "Adding an email isn't switched on yet" : "Couldn't load your email, reopen Profile to retry");
+  }
+}
+function editProfEmail(){
+  document.getElementById('profEmailView').style.display='none';
+  document.getElementById('profEmailEdit').style.display='';
+  const inp=document.getElementById('profEmailIn'); inp.value=_profEmail||''; inp.focus();
+}
+function cancelProfEmail(){
+  document.getElementById('profEmailEdit').style.display='none';
+  document.getElementById('profEmailView').style.display='flex';
+}
+async function saveProfEmail(){
+  const v=document.getElementById('profEmailIn').value.trim();
+  // Same client-side check sign-up runs (emailProblem), except blank isn't "skip" here.
+  if(!v){ toast('Enter an email address','err'); return; }
+  const bad=emailProblem(v);
+  if(bad){ toast(bad==='Email too long'?bad:'Enter a valid email address','err'); return; }
+  if(!supaEnabled()){ toast('Sign in to change your email','err'); return; }
+  if(_profEmail && v.toLowerCase()===_profEmail){ cancelProfEmail(); return; }
+  const btn=document.getElementById('profEmailSave'), prev=btn.textContent;
+  btn.disabled=true; btn.textContent='Saving…';
+  try{
+    const { data, error } = await SUPA.rpc('set_my_email',{p_email:v});
+    if(error) throw error;
+    const s=data && data.status;
+    if(s==='ok'){
+      const first=!_profEmail;
+      _profEmail=data.email||v.toLowerCase();
+      cancelProfEmail(); showProfEmail();
+      toast(first?'Email added ✓':'Email updated ✓','ok');
+    } else {
+      toast(s==='email_taken' ? 'That email is already in use on another account' : s==='invalid_email' ? 'Enter a valid email address' : s==='not_authenticated' ? 'Sign in again to change your email' : 'Could not save email — try again','err');
+    }
+  }catch(e){
+    console.warn('set_my_email',e);
+    toast(emailRpcMissing(e) ? "Adding an email isn't switched on yet — try again later" : 'Could not save email — try again','err');
+  }finally{ btn.disabled=false; btn.textContent=prev; }
+}
+
 async function submitFeedback() {
   const el=document.getElementById('fbText'), t=(el.value||'').trim();
   if(!t){ toast('Type your feedback first','err'); return; }
