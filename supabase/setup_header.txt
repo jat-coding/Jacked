@@ -1,0 +1,19 @@
+-- ============================================================
+-- Jacked — full Supabase setup (base schema + every migration)
+-- ============================================================
+-- GENERATED FILE (weekly review #15, 2026-10-26) -- do not hand-edit. It had drifted since
+-- 2026-09 (unauthed, permissive policies) while every migration under supabase/migrations/
+-- since then locked the real project down; re-running the stale version would have
+-- reopened every table those migrations fixed.
+--
+-- To change the schema: edit supabase/setup_base.sql (base tables/bucket) or add a new file
+-- under supabase/migrations/ (any later change), then run supabase/regen_setup_sql.sh to
+-- rebuild this file. Every migration here drops-then-recreates any policy/function it
+-- changes and gates its DDL with IF NOT EXISTS/OR REPLACE, so re-running the regenerated
+-- file end to end — on a brand-new project OR an already-migrated one — always lands on
+-- the exact same final schema. It cannot reopen a table a later migration locked down.
+--
+-- 1. Brand-new project: SQL Editor → New query → paste ALL of this → Run.
+-- 2. In index.html, fill in SUPABASE_URL and SUPABASE_ANON_KEY
+--    (Project Settings → API → Project URL and the "anon public" key).
+-- ============================================================

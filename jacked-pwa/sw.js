@@ -1,5 +1,10 @@
 // Bump CACHE whenever you ship a new build so clients re-fetch the shell.
-const CACHE = 'jacked-v1.10.0';
+// This byte alone is what makes an already-installed PWA even notice a new deploy (the
+// browser only re-checks a service worker's own bytes, never its contents' behavior) --
+// it went 74 releases unbumped before 2026-10-26 because nothing forced it to change, so
+// index.html's resident-page update check (search RESIDENT-PAGE FIX) no longer depends on
+// this value alone: it also polls index.html's own BUILD string directly.
+const CACHE = 'jacked-v1.11.0';
 const ASSETS = [
   './',
   './index.html',
@@ -49,6 +54,27 @@ self.addEventListener('fetch', e => {
   // this silently defeated v1.5's merge-safety on repeat backups, and the
   // poisoned entry persisted across days on resident pages).
   if (req.url.includes('supabase.co')) return; // network, no SW involvement
+
+  // supabase-js CDN script: pinned to an exact version in index.html (no more floating
+  // @2), so same-URL content never changes underneath a given deploy -- but cache-first
+  // with no refresh path still means a device that fetched it once would never pick up a
+  // later pin bump via this SW alone. Same stale-while-revalidate shape as the exercise DB
+  // below: serve the cached copy instantly, refresh it in the background.
+  if (req.url.includes('cdn.jsdelivr.net')) {
+    e.respondWith(
+      caches.match(req).then(cached => {
+        const network = fetch(req).then(r => {
+          if (r && r.status === 200) {
+            const clone = r.clone();
+            caches.open(CACHE).then(c => c.put(req, clone));
+          }
+          return r;
+        }).catch(() => cached);
+        return cached || network;
+      })
+    );
+    return;
+  }
 
   // Exercise DB + images: cache-first with background refresh (rarely changes,
   // big payloads, must work offline).
