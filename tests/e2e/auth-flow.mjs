@@ -227,4 +227,125 @@ async function loginUsernameOrEmail() {
   }
 }
 
-export const AUTH_FLOW_SUITES = [onboardingChoice, signupEmailFieldLocal, signupEmailOnline, loginUsernameOrEmail];
+// Profile -> Account email (Mr. Roni, 2026-10-26: "where is the location for adding your
+// email to your account?"). The stub mirrors set_my_email()'s rules from
+// supabase/migrations/20261026_set_my_email.sql (PGlite-tested there): trim + lowercase,
+// unique case-insensitively against OTHER accounts. Records every rpc so the tests can
+// prove a malformed email never reaches the network.
+async function installEmailStub(page, { mine, others = [], missing = false }) {
+  await page.evaluate(({ mine, others, missing }) => {
+    window.__rpcCalls = [];
+    window.__email = { mine, others };
+    _authUid = 'uid-me';
+    SUPA = {
+      rpc: async (fn, args) => {
+        window.__rpcCalls.push([fn, args]);
+        if (missing) return { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + fn } };
+        const st = window.__email;
+        if (fn === 'my_email') return { data: { status: 'ok', email: st.mine }, error: null };
+        if (fn === 'set_my_email') {
+          const v = String(args.p_email || '').trim().toLowerCase();
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || v.length > 255) return { data: { status: 'invalid_email' }, error: null };
+          if (st.others.includes(v)) return { data: { status: 'email_taken' }, error: null };
+          st.mine = v; return { data: { status: 'ok', email: v }, error: null };
+        }
+        return { data: null, error: { message: 'unexpected rpc ' + fn } };
+      },
+      auth: { getSession: async () => ({ data: { session: { user: { id: 'uid-me' } } } }), signOut: async () => ({}) },
+      from: () => ({ select() { return this; }, eq() { return this; }, in() { return this; }, maybeSingle: async () => ({ data: null, error: null }), then(r) { return Promise.resolve({ data: [], error: null }).then(r); } }),
+      channel: () => ({ on() { return this; }, subscribe() { return this; } }), removeChannel() {},
+    };
+  }, { mine, others, missing });
+}
+const emailVal = page => page.locator('#profEmailVal').textContent();
+const clearToasts = page => page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+
+async function accountEmail() {
+  { // First-time add: an account that signed up with no email (the case he asked about).
+    const { page, ctx, errors } = await phone({});
+    await installEmailStub(page, { mine: null, others: ['taken@example.com'] });
+    await page.evaluate(() => openProf());
+    await page.waitForFunction(() => document.getElementById('profEmailVal').textContent !== 'Loading…');
+    check('account email: Profile has an Email row in the Account section',
+      await page.evaluate(() => { const b = document.getElementById('profEmailBlk'); let n = b; while ((n = n.previousElementSibling)) if (n.classList.contains('blk-t')) return n.textContent === 'Account'; return false; }));
+    check('account email: no email on file says so', (await emailVal(page)) === 'No email on file', await emailVal(page));
+    check('account email: offers "Add email" when none is on file', (await page.locator('#profEmailBtn').textContent()) === 'Add email' && await page.locator('#profEmailBtn').isVisible());
+    await page.locator('#profEmailBtn').tap();
+    check('account email: Add email opens an email input', await page.locator('#profEmailIn').isVisible() && (await page.locator('#profEmailIn').getAttribute('type')) === 'email');
+
+    const before = (await page.evaluate(() => window.__rpcCalls.length));
+    for (const bad of ['not-an-email', 'a@b', '']) {
+      await clearToasts(page);
+      await page.locator('#profEmailIn').fill(bad);
+      await page.locator('#profEmailSave').tap();
+      check(`account email: ${JSON.stringify(bad)} is rejected with a clear message`, /Enter (a valid )?(an )?email address/.test(await toasts(page)), await toasts(page));
+    }
+    check('account email: malformed/blank emails never reach the network', (await page.evaluate(() => window.__rpcCalls.length)) === before,
+      JSON.stringify(await page.evaluate(() => window.__rpcCalls)));
+
+    await clearToasts(page);
+    await page.locator('#profEmailIn').fill('Taken@Example.com');
+    await page.locator('#profEmailSave').tap();
+    await page.waitForTimeout(100);
+    check("account email: someone else's email is rejected as already in use (same wording as sign-up)", /That email is already in use on another account/.test(await toasts(page)), await toasts(page));
+    check('account email: after email_taken the input stays open with what was typed', await page.locator('#profEmailIn').isVisible() && (await page.locator('#profEmailIn').inputValue()) === 'Taken@Example.com');
+    check('account email: email_taken saved nothing', (await page.evaluate(() => window.__email.mine)) === null);
+
+    await clearToasts(page);
+    await page.locator('#profEmailIn').fill('  Me@Example.com ');
+    await page.locator('#profEmailSave').tap();
+    await page.waitForTimeout(100);
+    const calls = await page.evaluate(() => window.__rpcCalls.filter(c => c[0] === 'set_my_email'));
+    check('account email: saving calls the set_my_email RPC (not supabase.auth)', calls.length === 2 && calls[1][1].p_email === 'Me@Example.com', JSON.stringify(calls));
+    check('account email: first-time add confirms "Email added"', /Email added/.test(await toasts(page)), await toasts(page));
+    check('account email: the saved email shows in the row (lowercased like sign-up)', (await emailVal(page)) === 'me@example.com', await emailVal(page));
+    check('account email: button now says Change', (await page.locator('#profEmailBtn').textContent()) === 'Change');
+    check('account email: input closed after save', !(await page.locator('#profEmailIn').isVisible()));
+    check('account email (first-time add): no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  { // Change an existing email; reopening Profile re-reads it from the server.
+    const { page, ctx, errors } = await phone({});
+    await installEmailStub(page, { mine: 'old@example.com', others: [] });
+    await page.evaluate(() => openProf());
+    await page.waitForFunction(() => document.getElementById('profEmailVal').textContent !== 'Loading…');
+    check('account email: shows the current email on file', (await emailVal(page)) === 'old@example.com', await emailVal(page));
+    await page.locator('#profEmailBtn').tap();
+    check('account email: Change pre-fills the current email', (await page.locator('#profEmailIn').inputValue()) === 'old@example.com');
+    await page.locator('#profEmailIn').fill('new@example.com');
+    await page.locator('#profEmailIn').press('Enter');
+    await page.waitForTimeout(100);
+    check('account email: changing confirms "Email updated"', /Email updated/.test(await toasts(page)), await toasts(page));
+    await page.evaluate(() => { cm('profModal'); openProf(); });
+    await page.waitForFunction(() => document.getElementById('profEmailVal').textContent !== 'Loading…');
+    check('account email: reopening Profile shows the changed email from the server', (await emailVal(page)) === 'new@example.com', await emailVal(page));
+    await page.locator('#profEmailBtn').tap();
+    await page.locator('#profEmailIn').fill('x@y.co');
+    await page.getByRole('button', { name: 'Cancel', exact: true }).first().tap();
+    check('account email: Cancel closes the input without saving', !(await page.locator('#profEmailIn').isVisible()) && (await page.evaluate(() => window.__email.mine)) === 'new@example.com');
+    check('account email (change): no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  { // Not signed in (local-only account): no button, a plain hint instead of a failing call.
+    const { page, ctx, errors } = await phone({});
+    await page.evaluate(() => openProf());
+    check('account email: signed out shows "Sign in to add an email" and no button',
+      (await emailVal(page)) === 'Sign in to add an email' && !(await page.locator('#profEmailBtn').isVisible()), await emailVal(page));
+    check('account email (signed out): no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  { // Server not migrated yet (RPC missing): a clear note, not a generic failure or a crash.
+    const { page, ctx, errors } = await phone({});
+    await installEmailStub(page, { mine: null, missing: true });
+    await page.evaluate(() => openProf());
+    await page.waitForFunction(() => document.getElementById('profEmailVal').textContent !== 'Loading…');
+    check('account email: missing RPC shows "not switched on yet"', /isn't switched on yet/.test(await emailVal(page)), await emailVal(page));
+    check('account email (rpc missing): no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+}
+
+export const AUTH_FLOW_SUITES = [onboardingChoice, signupEmailFieldLocal, signupEmailOnline, loginUsernameOrEmail, accountEmail];
