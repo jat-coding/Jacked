@@ -142,7 +142,10 @@ async function installLoginStub(page, { byCode, byEmail }) {
 async function loginUsernameOrEmail() {
   const STATUSES = {
     byCode: { '@alice': { status: 'claimed', email: 'synthetic-alice@users.jacked.example.com' } },
-    byEmail: { 'alice@example.com': { status: 'claimed', email: 'synthetic-alice@users.jacked.example.com', code: '@alice' } },
+    // No `email` here (weekly review #13, 2026-10-26): account_status_by_email no longer
+    // hands back the sign-in email directly, only the username -- cloudLogin resolves the
+    // real email through a second account_status(code) call, same as the username path.
+    byEmail: { 'alice@example.com': { status: 'claimed', code: '@alice' } },
   };
 
   { // Username path: unchanged behaviour, still resolves through account_status(p_code).
@@ -164,8 +167,12 @@ async function loginUsernameOrEmail() {
     await page.evaluate(() => { document.getElementById('loginUser').value = 'alice@example.com'; document.getElementById('loginPass').value = 'hunter2'; });
     await page.evaluate(() => cloudLogin());
     const calls = await page.evaluate(() => window.__rpcCalls);
-    check('login by email: looks it up via account_status_by_email(p_email), not account_status', calls.some(([fn, a]) => fn === 'account_status_by_email' && a.p_email === 'alice@example.com')
-      && !calls.some(([fn]) => fn === 'account_status'), JSON.stringify(calls));
+    // weekly review #13 (2026-10-26): account_status_by_email no longer hands back the
+    // sign-in email itself, so the email path now makes a SECOND call, to
+    // account_status(code), to resolve it -- same throttle, same round trip the username
+    // path already made.
+    check('login by email: looks it up via account_status_by_email(p_email)', calls.some(([fn, a]) => fn === 'account_status_by_email' && a.p_email === 'alice@example.com'), JSON.stringify(calls));
+    check('login by email: then resolves the real sign-in email via account_status(p_code), not from account_status_by_email directly', calls.some(([fn, a]) => fn === 'account_status' && a.p_code === '@alice'), JSON.stringify(calls));
     const prof = await page.evaluate(() => JSON.parse(localStorage.getItem('jk_prof') || 'null'));
     check('login by email: resolves to the SAME account (@alice), same password', prof && prof.code === '@alice' && prof.username === '@alice', JSON.stringify(prof));
     check('login by email: no page errors', errors.length === 0, errors.join(' | '));
@@ -191,6 +198,31 @@ async function loginUsernameOrEmail() {
     check('login: an input that is neither a valid username nor an email is rejected up front', /Enter a valid username or email/.test(await toasts(page)), await toasts(page));
     check('login: garbage input never reaches the server', (await page.evaluate(() => window.__rpcCalls)).length === 0);
     check('login (garbage input): no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  { // A server-side throttle (weekly review #13/#14) must show a clear message, not the
+    // generic "wrong password" a dropped email/undefined status would have produced.
+    const { page, ctx, errors } = await phone({});
+    await installLoginStub(page, { byCode: {}, byEmail: { 'alice@example.com': { status: 'rate_limited', retry_after: 300 } } });
+    await page.evaluate(() => { document.getElementById('loginUser').value = 'alice@example.com'; document.getElementById('loginPass').value = 'hunter2'; });
+    await page.evaluate(() => cloudLogin());
+    check('login by email: rate_limited from account_status_by_email shows a clear message', /Too many attempts/.test(await page.locator('#loginMsg').textContent()), await page.locator('#loginMsg').textContent());
+    check('login (rate limited by email): no page errors', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  { // The email path's SECOND call (account_status(code), to resolve the real sign-in
+    // email) can itself be the one that's throttled -- must fail the same clear way, not
+    // sign in with an undefined email.
+    const { page, ctx, errors } = await phone({});
+    await installLoginStub(page, { byCode: { '@alice': { status: 'rate_limited', retry_after: 300 } }, byEmail: { 'alice@example.com': { status: 'claimed', code: '@alice' } } });
+    await page.evaluate(() => { document.getElementById('loginUser').value = 'alice@example.com'; document.getElementById('loginPass').value = 'hunter2'; });
+    await page.evaluate(() => cloudLogin());
+    check('login by email: rate_limited on the second (account_status) hop shows the same clear message', /Too many attempts/.test(await page.locator('#loginMsg').textContent()), await page.locator('#loginMsg').textContent());
+    const prof2 = await page.evaluate(() => JSON.parse(localStorage.getItem('jk_prof')||'null'));
+    check('login by email: never signed in with a missing email (this device stays on its own account)', prof2 && prof2.code !== '@alice', JSON.stringify(prof2));
+    check('login (rate limited on second hop): no page errors', errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
 }

@@ -51,6 +51,8 @@ await ex(fs.readFileSync(new URL("../migrations/20261016_account_status_rate_lim
 ok(true, 'rate-limit migration applied');
 await ex(fs.readFileSync(new URL("../migrations/20261021_signup_email.sql", import.meta.url), 'utf8'));
 ok(true, 'signup-email migration applied');
+await ex(fs.readFileSync(new URL("../migrations/20261026_account_status_hardening.sql", import.meta.url), 'utf8'));
+ok(true, 'account_status hardening migration applied');
 await ex(fs.readFileSync(new URL("../migrations/20260925_profiles_public_username_avatar_only.sql", import.meta.url), 'utf8'));
 ok(true, 'friend-profile privacy migration applied');
 await ex(fs.readFileSync(new URL("../migrations/20261026_friend_requests_lockdown.sql", import.meta.url), 'utf8'));
@@ -98,8 +100,39 @@ await ex(`update profiles set email='Mom@Example.com' where code='@mom';`);
 const momAuthEmail = (await q(`select email from auth.users where id='${MOM}'`))[0].email;
 await as('anon');
 ok((await q(`select account_status_by_email('mom@example.com') s`))[0].s.status === 'claimed', 'account_status_by_email is case-insensitive (anon-callable, like account_status)');
-ok((await q(`select account_status_by_email('mom@example.com') s`))[0].s.email === momAuthEmail, 'account_status_by_email resolves to the account\'s real (synthetic) sign-in email');
+// weekly review #13 (2026-10-26): no email in the response any more -- it used to be a
+// free, unthrottled email -> real-sign-in-email oracle. Only the username comes back; the
+// client resolves the email through the equally-throttled account_status(code) instead.
+ok((await q(`select account_status_by_email('mom@example.com') s`))[0].s.code === '@mom', 'account_status_by_email resolves to the account\'s username, not its sign-in email');
+ok((await q(`select account_status_by_email('mom@example.com') s`))[0].s.email === undefined, 'account_status_by_email no longer hands back the sign-in email at all');
 ok((await q(`select account_status_by_email('nobody@example.com') s`))[0].s.status === 'not_found', 'account_status_by_email not_found');
+// The client resolves the real email through this second call instead (same as the
+// username login path always has) -- confirm it actually gives back the right one.
+ok((await q(`select account_status('@mom') s`))[0].s.email === momAuthEmail, 'account_status(code) still resolves to the account\'s real (synthetic) sign-in email, for the two-hop email login path');
+
+// account_status_by_email rate limit (weekly review #13, 2026-10-26): same per-IP throttle
+// as account_status, now applied to the email lookup too -- a script scanning a harvested
+// email list gets cut off exactly like one scanning usernames.
+await ex(`select set_config('request.headers', '{"x-forwarded-for":"5.5.5.1"}', false)`);
+for (let i = 0; i < 19; i++) await q(`select account_status_by_email('mom@example.com') s`);
+ok((await q(`select account_status_by_email('mom@example.com') s`))[0].s.status === 'rate_limited', '20th email lookup from one IP throttled');
+await ex(`select set_config('request.headers', '{"x-forwarded-for":"5.5.5.2"}', false)`);
+ok((await q(`select account_status_by_email('mom@example.com') s`))[0].s.status === 'claimed', 'a different IP is unaffected by the email-lookup throttle');
+
+// IP-spoof fix (weekly review #14, 2026-10-26): the throttle used to key on the LEFTMOST
+// x-forwarded-for entry, which a real proxy chain never sets -- it only APPENDS the
+// address it actually saw, so the leftmost entry is exactly what the client sent. A script
+// that changes that value on every request used to buy itself a fresh bucket every time.
+await ex(`select set_config('request.headers', '{"x-forwarded-for":"1.1.1.1, 6.6.6.1"}', false)`);
+for (let i = 0; i < 19; i++) {
+  await ex(`select set_config('request.headers', '{"x-forwarded-for":"${Math.random()}, 6.6.6.1"}', false)`);
+  await q(`select account_status('@mom') s`);
+}
+ok((await q(`select account_status('@mom') s`))[0].s.status === 'rate_limited', 'a fresh, random leftmost XFF value on every request no longer buys a new quota');
+await ex(`select set_config('request.headers', '{"x-forwarded-for":"9.9.9.9, 6.6.6.1"}', false)`);
+ok((await q(`select account_status('@mom') s`))[0].s.status === 'rate_limited', 'changing the leftmost value again still hits the SAME (rightmost-keyed) bucket');
+await ex(`select set_config('request.headers', '{"x-forwarded-for":"2.2.2.2, 6.6.6.2"}', false)`);
+ok((await q(`select account_status('@mom') s`))[0].s.status === 'claimed', 'a genuinely different rightmost (real, proxy-appended) IP is unaffected');
 await ex('reset role');
 await expectErr(() => q(`insert into profiles(code,name,username,email) values ('@evil2','E2','@evil2','mom@example.com')`), 'two profiles cannot share the same email, case-insensitively');
 await q(`insert into profiles(code,name,username) values ('@noemail1','N1','@noemail1'),('@noemail2','N2','@noemail2')`);

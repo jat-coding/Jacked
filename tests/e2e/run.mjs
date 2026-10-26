@@ -7,6 +7,7 @@ import { LIVE_SUITES } from './live.mjs';
 import { SUGGESTED_SUITES } from './suggested-pr.mjs';
 import { AUTH_FLOW_SUITES } from './auth-flow.mjs';
 import { STANDALONE_GAP_SUITES } from './standalone-gap.mjs';
+import { WEEKLY_REVIEW_SUITES } from './weekly-review-fixes.mjs';
 const SHOTS = process.env.SHOTS || '/tmp/jk16/shots';
 fs.mkdirSync(SHOTS, { recursive: true });
 const badges = page => page.evaluate(() => computeBadges().map(b => ({ name: b.name, earned: b.earned, tier: b.tier || null, desc: b.desc, detail: b.detail })));
@@ -3649,24 +3650,29 @@ async function cardioHoldEdit() {
   await ctx.close();
 }
 async function weightEditUnchanged() {
-  // (c) A weight-lift edit saves exactly as before: no repair call, no PR/record change (out of scope, Mr. Roni 2026-10-08).
+  // (c) weekly review #11 (2026-10-26): a weight-lift edit now repairs its own PR too, same
+  // as cardio/hold has done since 2026-10-08 -- chTouched used to only ever look at
+  // cardio/hold exIds, so fixing bench 185 -> 190 here used to leave the stale 185 lb PR
+  // standing forever. A save that doesn't touch any exercise's own sets/tracking/position
+  // (a rename) still fires nothing, same as before.
   const seed = chSeed();
   const { page, ctx, errors } = await phone({ seed, now: SEP15 });
   await page.evaluate(() => { window._chCalls = []; const orig = commitHistRepair; window.commitHistRepair = (h, ids, at) => { _chCalls.push([...ids]); return orig(h, ids, at); }; });
-  const before = await chState(page);
   await weEdit(page, 'wrun1', "weUpd(0,0,'weight'", '190');
   const a = await chState(page), w = a.hist.find(x => x.id === 'wrun1'), w0 = seed.hist.find(x => x.id === 'wrun1');
   check('weight edit: bench 185 -> 190 saved to history', Math.round(w.exercises[0].sets[0].weight * LB) === 190, String(w.exercises[0].sets[0].weight * LB));
-  check('weight edit: no repair call fired', (await page.evaluate(() => _chCalls.length)) === 0);
-  check('weight edit: prCount/prSets exactly as stored before (unchanged behaviour)', w.prCount === w0.prCount && JSON.stringify(w.prSets) === JSON.stringify(w0.prSets), JSON.stringify(w.prSets));
-  check('weight edit: jk_prs, cardio/hold records and jk_prRepair byte-for-byte unchanged', a.prs === before.prs && JSON.stringify(a.cardio) === JSON.stringify(before.cardio) && JSON.stringify(a.hold) === JSON.stringify(before.hold) && a.cut === null);
+  check('weekly review #11: a weight-lift edit now fires a repair call for that exercise', JSON.stringify(await page.evaluate(() => _chCalls)) === JSON.stringify([['Barbell_Bench_Press_-_Medium_Grip']]), JSON.stringify(await page.evaluate(() => _chCalls)));
+  const bench = JSON.parse(a.prs)['Barbell_Bench_Press_-_Medium_Grip'];
+  check('weekly review #11: the bench PR record itself is re-derived to 190 lb, stamped repaired (no longer stuck at 185)', Math.round(bench.weight * LB) === 190 && !!bench.repaired, JSON.stringify(bench));
+  check('weight edit: the workout\'s own prSets entry for bench follows the correction too', Math.round(w.prSets.find(p => p.exId.includes('Bench')).weight * LB) === 190, JSON.stringify(w.prSets));
+  check('weight edit: prCount unchanged here (bench was, and still is, the only PR either way)', w.prCount === w0.prCount, `${w.prCount} vs ${w0.prCount}`);
   check('weight edit: totalVolume recomputed as before (190 x 5)', Math.round(w.totalVolume * LB) === 950, String(w.totalVolume));
-  // A save that changes nothing on the run (name only) doesn't repair it either; touching the run calls it for the run only.
-  await page.evaluate(() => { openWE('wrun1'); document.getElementById('weName').value = 'Renamed'; saveWE(); });
+  // A save that changes nothing about the exercises (name only) still fires no repair; touching the run calls it for the run only.
+  await page.evaluate(() => { window._chCalls = []; openWE('wrun1'); document.getElementById('weName').value = 'Renamed'; saveWE(); });
   check('weight edit: rename-only save fires no repair', (await page.evaluate(() => _chCalls.length)) === 0);
   await weEdit(page, 'wrun1', "weUpd(1,0,'reps'", '7.05');
   const calls = await page.evaluate(() => _chCalls);
-  check('mixed workout: editing the run repairs the run only (bench not passed in)', calls.length === 1 && calls[0].join() === RUN, JSON.stringify(calls));
+  check('mixed workout: editing the run repairs the run only (bench not passed in, since bench itself didn\'t change this time)', calls.length === 1 && calls[0].join() === RUN, JSON.stringify(calls));
   check('weight edit: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
@@ -5024,7 +5030,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, calLiveToday, ...AUTH_FLOW_SUITES, ...STANDALONE_GAP_SUITES, ...SUGGESTED_SUITES, ...LIVE_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, calLiveToday, ...AUTH_FLOW_SUITES, ...STANDALONE_GAP_SUITES, ...SUGGESTED_SUITES, ...LIVE_SUITES, ...WEEKLY_REVIEW_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

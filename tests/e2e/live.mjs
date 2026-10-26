@@ -20,7 +20,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const LIVE_FINISH_WAIT = 7000;   // past the app's 4 s finish bounds, short of its 10 s request timeout: Finish must not need the stuck request to die first
 const clone = v => (v == null ? v : JSON.parse(JSON.stringify(v)));
 
-function makeDb() {
+export function makeDb() {
   const db = { row: null, ops: [], casMiss: 0, offline: new Set(), other: [], gate: null, hang: 0 };
   // Hold the next n reads until all n have arrived, so two devices read the same rev and race.
   db.barrier = n => {
@@ -57,7 +57,7 @@ function makeDb() {
 }
 
 // A booted app page signed in as @tester, with the stub client installed. `name` is its device id.
-async function device(db, name) {
+export async function device(db, name) {
   const d = await phone({ seed: SEED });
   await d.page.exposeFunction('__lw', s => db.handle(JSON.parse(s), name));
   await d.page.evaluate(name => {
@@ -83,7 +83,7 @@ async function device(db, name) {
   }, name);
   return { ...d, name };
 }
-const ev = (d, fn, arg) => d.page.evaluate(fn, arg);
+export const ev = (d, fn, arg) => d.page.evaluate(fn, arg);
 // Start a routine workout on A with sets [w,reps,done]... and publish it.
 async function startShared(db, A, sets) {
   await ev(A, sets => {

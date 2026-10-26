@@ -49,7 +49,13 @@ system libs on the desktop host — resolved 2026-09-15
 8. **Any new or changed file in `supabase/migrations/`**: run its PGlite test (pattern:
    `supabase/tests/live_workouts_test.mjs` — copy `supabase/` next to a `node_modules` with
    `@electric-sql/pglite`, ESM ignores NODE_PATH) including the rollback. Never apply a migration
-   to the real project without Mr. Roni's explicit go for that migration.
+   to the real project without Mr. Roni's explicit go for that migration. Then run
+   `supabase/regen_setup_sql.sh` so `jacked-pwa/SUPABASE_SETUP.sql` (generated from
+   `supabase/setup_base.sql` + every migration, weekly review #15 2026-10-26) picks up the new
+   file — a migration added without regenerating is exactly how that file drifted stale and
+   silently reopened every table a later migration had locked down the first time it
+   mattered. `supabase/tests/setup_sql_test.mjs` is the PGlite check for the regenerated
+   file itself (applies it twice to prove a re-run can't reopen anything).
 
 9. **Before building anything the watches also implement**, read `git log origin/main -- watch-client/`
    (not just the local checkout's copy of `BOARD.md`): Phil's team pushes to `main`, and on 2026-10-06 three

@@ -48,8 +48,12 @@ if(navigator.standalone!==true&&!mm('(display-mode: standalone)')&&!mm('(display
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Jacked — Workout Tracker</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<!-- Supabase client (used only if SUPABASE_URL/KEY are filled in below; degrades to local). -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase client (used only if SUPABASE_URL/KEY are filled in below; degrades to local).
+     Pinned to an exact version with SRI (weekly review #4, 2026-10-26): the floating @2
+     let a compromised or broken release run in the same page as every user's session and
+     data with no way to verify it. Bumping the version needs a matching integrity hash --
+     recompute with: curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0" integrity="sha384-UagCvVPT5XXA0Hx+nJYUAGBFseHT9zBgpJMSebsAxl9lciTwbT+39j5VfRjdP5Tp" crossorigin="anonymous"></script>
 <style>
 :root{
   --bg:#000;--bg2:#16161c;--bg3:#1e1e26;--bg4:#292932;
@@ -1502,6 +1506,13 @@ function avc(n) { let h=0; for(let c of(n||'?')) h=c.charCodeAt(0)+((h<<5)-h); r
 function esc(s){
   return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+// Same rule applied to the third-party exercise DB (weekly review #5, 2026-10-26): its id
+// goes unescaped into onclick="fn('${id}')" (entities decode before that JS runs, so
+// escaping alone can't protect it -- same reasoning as _CODE_RE above), and images[0] goes
+// unescaped into an <img src="...">. Both are pattern-checked once, in loadDB, where the
+// untrusted data enters the app.
+const _EXID_RE=/^[A-Za-z0-9_-]+$/;
+const _EXIMG_RE=/^[A-Za-z0-9_\-./]+$/;
 const _cs=(v,n)=>typeof v==='string'?v.slice(0,n||80):(typeof v==='number'&&isFinite(v)?String(v):'');
 const _cn=v=>{ const x=Number(v); return isFinite(x)?x:0; };
 const _cnn=v=>v==null?null:_cn(v);                       // absent stays absent (set fields are optional)
@@ -1663,7 +1674,7 @@ function lbTxt(lb)    { return lbN(lb)+' '+uL(); }
 // Title-case a label for DISPLAY only (muscle/equipment/category come from the DB
 // lowercase). Underscores → spaces so "resistance_band" reads "Resistance Band".
 // Never use this on values compared in logic — those stay lowercase.
-function capW(s){ return String(s||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
+function capW(s){ return esc(String(s||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())); }
 const gBW = () => Number(S.g('bw'))||0;   // current body weight (kg) — kept in sync with the log
 const gBWlog = () => S.g('bwlog')||[];    // [{d:'YYYY-MM-DD', kg}] history
 // Single source of truth for body weight: sets current weight AND logs today's
@@ -1841,8 +1852,13 @@ async function loadDB() {
       const cat = (e.category||'').toLowerCase();
       const muscle = (e.primaryMuscles?.[0]||'').toLowerCase();
       if (EXCLUDED_CATS.has(cat)) return false;
+      if (!_EXID_RE.test(e.id||'')) return false;   // id goes unescaped into onclick(...); refuse anything that isn't a safe identifier
       return true; // keep everything that isn't explicitly excluded
-    }).map(e => MECH_FIX[e.id] ? { ...e, mechanic:MECH_FIX[e.id] } : e);
+    }).map(e => {
+      const fixed = MECH_FIX[e.id] ? { ...e, mechanic:MECH_FIX[e.id] } : e;
+      const images = (Array.isArray(fixed.images)?fixed.images:[]).filter(im=>typeof im==='string'&&_EXIMG_RE.test(im));
+      return { ...fixed, images };
+    });
     dbLoaded = true; dbLoading = false;
     if (typeof renderSuggest==='function') renderSuggest();   // secondary muscles now known
     if (el) el.innerHTML = `${allDB.length} loaded ✓`;
@@ -1893,7 +1909,7 @@ function deleteEx(id){
     const ov=gExOverride(); if(ov[id]){ delete ov[id]; S.s('exOverride',ov); }
     cm('exInfoModal'); renderEx(); toast('Exercise removed','ok');
   };
-  if(isCustomEx(id)){
+  if(isUserCustomEx(id)){
     showConfirm('Delete this custom exercise? It is removed from your library and routines. Logged history is kept.').then(ok=>{
       if(!ok) return;
       S.s('cex', gCEx().filter(e=>e.id!==id));
@@ -2575,7 +2591,7 @@ function openExInfo(exId){
     : `<div style="margin-bottom:14px;display:flex;align-items:center;justify-content:center;height:120px;border-radius:12px;background:var(--bg3)">${exIcon(ex.muscle,120)}</div>`;
   document.getElementById('exInfoContent').innerHTML=photo+meta+actions+chart+how;
   // Delete/Hide sits behind the header 3-dot (Mr. Roni, 2026-10-16); deleteEx keeps its confirm.
-  const del=isCustomEx(exId,ex)?'Delete Exercise':'Hide from Library';
+  const del=isUserCustomEx(exId,ex)?'Delete Exercise':'Hide from Library';
   setMoreBtn('exInfoMore',()=>openActMenu(ex.name,[{id:'edit',label:'Edit',icon:'pencil',fn:()=>openEditEx(exId)},{id:'del',label:del,icon:'trash',del:true,fn:()=>deleteEx(exId)}]));
   om('exInfoModal');
 }
@@ -2681,7 +2697,13 @@ function guessMuscle(name){
 
 async function addCurated(i) {
   const prog=CURATED[i]; if(!prog) return;
-  if(!dbLoaded) { toast('Loading exercises…'); await loadDB(); }
+  // await loadDB() alone isn't enough (weekly review #8, 2026-10-26): loadDB() returns
+  // immediately when a load from elsewhere is already in flight (dbLoading), so this used
+  // to resolve before allDB was populated and silently save routines with exercises
+  // dropped. Poll the in-flight load like every other caller does (see dbLoading), then
+  // block instead of saving a partial routine if it never finished.
+  if(!dbLoaded) { toast('Loading exercises…'); loadDB(); for(let j=0;j<50&&dbLoading;j++) await new Promise(r=>setTimeout(r,100)); }
+  if(!dbLoaded) { toast('Couldn’t load exercises — check your connection and try again','err'); return; }
   const rs=gR();
   let added=0;
   prog.routines.forEach(rt=>{
@@ -2717,7 +2739,11 @@ async function startCuratedRoutine(pi,ri){
   // still choose "Save as a new routine…" on the finish summary if they want to keep it.
   const existing=gR().find(r=>r.name===rt.name && r.desc===tag);
   if(existing){ startRW(existing.id); return; }
-  if(!dbLoaded) { toast('Loading exercises…'); await loadDB(); }
+  // Same fix as addCurated (weekly review #8, 2026-10-26): wait out an in-flight load
+  // instead of trusting an instantly-resolved loadDB(), and refuse to start an empty/
+  // partial workout rather than silently dropping exercises.
+  if(!dbLoaded) { toast('Loading exercises…'); loadDB(); for(let j=0;j<50&&dbLoading;j++) await new Promise(r=>setTimeout(r,100)); }
+  if(!dbLoaded) { toast('Couldn’t load exercises — check your connection and try again','err'); return; }
   const ids=rt.exercises.map(resolveExercise).filter(Boolean);
   cm('qsModal'); cm('crModal');
   awStart=Date.now();
@@ -2775,7 +2801,11 @@ function openCE(fromAe) {
 // their muscle group and tracking type are read-only, see MUSCLE_COARSE above.
 function openEditEx(id){
   const ex=byId(id);
-  const custom=isCustomEx(id,ex);
+  // isUserCustomEx, not isCustomEx (weekly review #6, 2026-10-26): a warm-up is isCustomEx
+  // (it needs the full form to open at all) but saveCE's override branch for it only
+  // persists equip/category/notes/assist, same as a built-in DB exercise -- showing the
+  // muscle/tracking fields as editable here let a warm-up edit silently discard them.
+  const custom=isUserCustomEx(id,ex);
   _ceReturn=null; _ceEditId=id;
   document.getElementById('ceTitle').textContent='Edit Exercise';
   document.getElementById('ceSaveBtn').textContent='Save Changes';
@@ -2911,7 +2941,7 @@ function saveCE() {
 
   if (_ceEditId) {
     const id=_ceEditId; _ceEditId=null;
-    if (isCustomEx(id)) {
+    if (isUserCustomEx(id)) {
       const c=gCEx(); const ent=c.find(e=>e.id===id);
       if (ent) {
         Object.assign(ent, { name:dispName, muscle:document.getElementById('ceMuscle').value,
@@ -2919,8 +2949,8 @@ function saveCE() {
           category:document.getElementById('ceCategory').value, notes, assist:!!assist, durUnit });
         S.s('cex',c);
       }
-      // Photo: real custom exercises only — a warm-up shares this branch (it's
-      // also isCustomEx) but _cePhotoEligible is false for it, so it's a no-op.
+      // Photo: real custom exercises only (warm-ups no longer reach this branch at all --
+      // isUserCustomEx above routes them to the override path, see weekly review #6).
       if (_cePhotoEligible) {
         if (_cePhotoRemoved) removeExPhoto(id);
         else if (_cePhotoData) setExPhoto(id,_cePhotoData);
@@ -3534,7 +3564,14 @@ function liveIn(w){
   if(!w||typeof w!=='object') return w;
   const tomb={}, exercises=[];
   (w.exercises||[]).forEach(e=>{
-    if(e.del){ if(e.lid) tomb[e.lid]={u:e.u||0,ud:e.ud||''}; return; }
+    if(e.del){
+      if(e.lid) tomb[e.lid]={u:e.u||0,ud:e.ud||''};
+      // Orphaned set tombstones ride along on the dead exercise's own marker (see liveOut) --
+      // read them back into .tomb too, or they vanish from the wire round-trip and every
+      // later sync re-adds them, triggering an endless CAS write (weekly review #9, 2026-10-26).
+      (e.sets||[]).forEach(s=>{ if(s.del&&s.sid) tomb[s.sid]={u:s.u||0,ud:s.ud||'',p:e.lid}; });
+      return;
+    }
     const sets=[];
     (e.sets||[]).forEach(s=>{ if(s.del){ if(s.sid) tomb[s.sid]={u:s.u||0,ud:s.ud||'',p:e.lid}; } else sets.push(s); });
     exercises.push({...e,sets});
@@ -3545,7 +3582,13 @@ function liveOut(doc){
   const {tomb,mu,_pairFrom,...w}=doc, t=tomb||{};
   w.exercises=(doc.exercises||[]).map(({imgUrl,...e})=>({...e, sets:[...(e.sets||[]),
     ...Object.entries(t).filter(([,s])=>s.p&&s.p===e.lid).map(([sid,s])=>({sid,del:true,u:s.u,ud:s.ud}))]}));
-  Object.entries(t).filter(([,s])=>!s.p).forEach(([lid,s])=>w.exercises.push({lid,del:true,u:s.u,ud:s.ud}));
+  // A removed/switched exercise's OWN sets were tombstoned with it (liveStamp), but once its
+  // lid is gone from doc.exercises those set tombstones had nowhere to attach and were simply
+  // dropped from the wire -- every later sync still carried them in aw.tomb, so the doc never
+  // matched and liveCas wrote again forever (weekly review #9, 2026-10-26). Nest them under
+  // the dead exercise's own marker instead, and liveIn reads them back out above.
+  Object.entries(t).filter(([,s])=>!s.p).forEach(([lid,s])=>w.exercises.push({lid,del:true,u:s.u,ud:s.ud,
+    sets:Object.entries(t).filter(([,ss])=>ss.p===lid).map(([sid,ss])=>({sid,del:true,u:ss.u,ud:ss.ud}))}));
   w.v=1;
   return w;
 }
@@ -4134,9 +4177,19 @@ function renderWS() {
     let mTierBadge=null;
     if(mKey){
       const pre=badgeTierForKey(mKey,gH());
-      const live=badgeTierForKey(mKey,[...gH(),{exercises:[ex]}]);
+      // The cardio branch of badgeTierForKey filters on w.date>=qS (current quarter); with
+      // no date, new Date(undefined) is NaN and the pseudo-workout was silently dropped, so
+      // the live tier could never differ from pre for a run (weekly review #10, 2026-10-26).
+      const live=badgeTierForKey(mKey,[...gH(),{exercises:[ex],date:new Date().toISOString()}]);
       if((TIER_RANK[live.tier]||0)>(TIER_RANK[pre.tier]||0)) mTierBadge={key:mKey,tier:live.tier,value:live.value};
     }
+    // esc() the WHOLE onclick string, not just the name inside it (weekly review #5,
+    // 2026-10-26): the name only had its single quotes JS-escaped, so a `"` in a
+    // third-party exercise name broke out of the onclick="..." attribute itself, before
+    // the JS string escaping even mattered. HTML entities decode back to the real
+    // characters before the browser evaluates this as JS, so escaping the whole thing is
+    // transparent to the structural quotes/commas and still catches a hostile name.
+    const mBadgeOnclick=mTierBadge?esc(`metricBadgeInfo('${mTierBadge.key}','${mTierBadge.tier}',${mTierBadge.value},'${String(ex.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')`):'';
     return `<div class="eb" id="eb${ei}" style="${paired?'border-left:3px solid var(--blue)':''}">
       ${paired?`<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--blue);font-weight:700;margin-bottom:6px">${uic('link','var(--blue)',13)} Superset with ${supersetPartnerName(ei)}<button class="btn bg ic xs" style="margin-left:auto" onclick="unlinkSuperset(${ei})" aria-label="Unlink">${uic('unlink',undefined,12)}</button></div>`:''}
       ${picking?`<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:6px">Tap another exercise's link icon to pair</div>`:''}
@@ -4154,7 +4207,7 @@ function renderWS() {
           </div>
           <div class="badge-row">
             ${exGotPR?`<span class="progress-chip" style="color:#ffd700;background:rgba(255,215,0,.12);border-color:rgba(255,215,0,.4)">★ PR</span>`:''}
-            ${mTierBadge?`<span class="progress-chip" style="color:${TIERC[mTierBadge.tier]};background:${TIERC[mTierBadge.tier]}22;border-color:${TIERC[mTierBadge.tier]}66" onclick="metricBadgeInfo('${mTierBadge.key}','${mTierBadge.tier}',${mTierBadge.value},'${(ex.name||'').replace(/'/g,"\\'")}')">${uic('trophy',TIERC[mTierBadge.tier],11)} ${capW(mTierBadge.tier)}</span>`:''}
+            ${mTierBadge?`<span class="progress-chip" style="color:${TIERC[mTierBadge.tier]};background:${TIERC[mTierBadge.tier]}22;border-color:${TIERC[mTierBadge.tier]}66" onclick="${mBadgeOnclick}">${uic('trophy',TIERC[mTierBadge.tier],11)} ${capW(mTierBadge.tier)}</span>`:''}
             ${progress.up?`<span class="progress-chip up" onclick="progressInfo('up')">▲ Go up</span>`
               :showDown?`<span class="progress-chip down" onclick="progressInfo('down')">▼ Lighter</span>`:''}
           </div>
@@ -5791,10 +5844,13 @@ function setRepairedHoldPR(hold, exId, at){
   hold[exId]={...(old||{}),sec:h.sec,date:old&&old.sec===h.sec&&old.date?old.date:h.date,repaired:at};
   return {old,now:hold[exId]};
 }
-// Cardio/hold exercises an Edit Workout save changed (sets, tracking, position, or the workout's date): saveWE repairs
-// only these. Weight lifts are not looked at -- their save path is unchanged.
+// Exercises an Edit Workout save (or a delete) changed (sets, tracking, position, or the
+// workout's date): saveWE/delW repair these via commitHistRepair, which already handles
+// weight/cardio/hold records generically by kind. Used to scope to cardio/hold only --
+// weight lifts fell through saveWE untouched, so a typo'd PR corrected later stayed
+// documented forever (weekly review #11, 2026-10-26).
 function chTouched(a, b){
-  const key=w=>{ const m=new Map(); (w&&w.exercises||[]).forEach((ex,ei)=>{ if(isCardio(ex)||isHold(ex)) m.set(ex.exId,(m.get(ex.exId)||'')+JSON.stringify([ei,ex.tracking,ex.sets])); }); return m; };
+  const key=w=>{ const m=new Map(); (w&&w.exercises||[]).forEach((ex,ei)=>{ m.set(ex.exId,(m.get(ex.exId)||'')+JSON.stringify([ei,ex.tracking,ex.sets])); }); return m; };
   const ka=key(a), kb=key(b), moved=!!a&&!!b&&a.date!==b.date, ids=new Set();
   new Set([...ka.keys(),...kb.keys()]).forEach(id=>{ if(id&&id!=='?'&&(moved||ka.get(id)!==kb.get(id))) ids.add(id); });
   return ids;
@@ -6411,7 +6467,8 @@ function saveWE(){
   weDraft.sets=ts; weDraft.totalVolume=Math.round(vol);
   const h=gH(); const idx=h.findIndex(x=>x.id===weId), old=idx>=0?h[idx]:null;
   if(idx>=0){ if(old.date===weDraft.date) h[idx]=weDraft; else { h.splice(idx,1); histInsert(h,weDraft); } }   // a new date moves it to its place in time
-  // Cardio/holds whose sets changed get their PR badge + record rebuilt from history (2026-10-08); weight lifts as before.
+  // Any exercise whose sets/tracking/position/date changed gets its PR badge + record
+  // rebuilt from history (2026-10-08 cardio/hold, broadened to weight lifts 2026-10-26).
   const ch=old?chTouched(old,weDraft):new Set();
   if(ch.size) commitHistRepair(h,ch,new Date().toISOString()); else S.s('hist',h);
   cm('weModal'); renderHome(); if(typeof syncMe==='function') syncMe();
@@ -8874,8 +8931,13 @@ async function refreshFriends() {
   const gen=++_frGen;
   try {
     const my=p.code;
-    const { data: reqs } = await SUPA.from('friend_requests').select('*')
+    // supabase-js returns {data:null,error} on a failed fetch instead of throwing, so a
+    // dropped `error` here silently emptied liveFriends/liveSent and overwrote the cache
+    // with [] on every offline/timeout poll (weekly review #12, 2026-10-26). Throw, like
+    // fetchFriendProfiles already does, so the catch below keeps whatever was loaded.
+    const { data: reqs, error: reqErr } = await SUPA.from('friend_requests').select('*')
       .or(`from_code.eq.${my},to_code.eq.${my}`);
+    if (reqErr) throw reqErr;
     const accepted=new Set(), pendingIn=[], sentOut=[];
     (reqs||[]).forEach(r=>{
       const other = r.from_code===my ? r.to_code : r.from_code;
@@ -9216,11 +9278,23 @@ async function cloudLogin() {
   toast('Logging in…');
   try {
     const st = byEmail ? await accountStatusByEmail(raw) : await accountStatus(normU(raw));
+    if (st.status === 'rate_limited') { loginMsg('Too many attempts from this connection — try again in a few minutes.'); return; }
     if (st.status === 'not_found') { toast(byEmail ? 'No account found with that email' : 'No account found with that username','err'); return; }
     // Only the username path can land here: an account only ever gets a user-supplied
     // email once register() has already given it a password (see logic.ts register()).
     if (st.status === 'unclaimed') { loginMsg(`${raw} doesn't have a password yet. Open Jacked on a device that's already signed in as ${raw} — it will ask you to set one.`); return; }
     const u = byEmail ? st.code : normU(raw);
+    // account_status_by_email no longer hands back the sign-in email itself (weekly review
+    // #13, 2026-10-26: it was a free, throttle-free email -> sign-in-email oracle) -- the
+    // email path resolves it the same way the username path always has, through
+    // account_status(code), spending a second (equally throttled) lookup.
+    let signInEmail = st.email;
+    if (byEmail) {
+      const st2 = await accountStatus(u);
+      if (st2.status === 'rate_limited') { loginMsg('Too many attempts from this connection — try again in a few minutes.'); return; }
+      if (st2.status !== 'claimed') { toast('Login failed — try again','err'); return; }
+      signInEmail = st2.email;
+    }
     const localHist = (S.g('hist')||[]).length;
     // What the device would lose. Workouts are the headline, but routines, custom
     // exercises, PRs and weight logs are just as unrecoverable, so they count too.
@@ -9228,7 +9302,7 @@ async function cloudLogin() {
                     + Object.keys(S.g('prs')||{}).length + (S.g('bwlog')||[]).length;
     // Confirm BEFORE signing in, so cancelling never swaps this device's session.
     if (localData && !(await showConfirm(`Logging in as ${u} will REPLACE the data on this device (${localHist} workout(s), ${(S.g('routines')||[]).length} routine(s)). Export a backup first if you want to keep it.\n\nContinue?`))) return;
-    if (!(await signInAs(st.email, pw))) { loginMsg('Wrong username or password.'); return; }
+    if (!(await signInAs(signInEmail, pw))) { loginMsg('Wrong username or password.'); return; }
     const [{ data:bkRow, error:bkErr }, { data:prof }] = await Promise.all([
       SUPA.from('profile_backups').select('backup').eq('code',u).maybeSingle(),
       SUPA.from('profiles').select('code,name').eq('code',u).maybeSingle()
@@ -9846,6 +9920,7 @@ if ('serviceWorker' in navigator) {
   });
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('sw.js').then(reg=>{
+      if(!reg) return;   // registration can resolve with no registration object (e.g. blocked)
       // When an updated SW is found and we're already controlled, activate it.
       reg.addEventListener('updatefound',()=>{
         const nw=reg.installing; if(!nw) return;
@@ -9855,19 +9930,36 @@ if ('serviceWorker' in navigator) {
           }
         });
       });
-      // RESIDENT-PAGE FIX: browsers only check sw.js on navigation, so an
-      // installed PWA kept alive for weeks never discovers new deploys — three
-      // family devices synced daily on months-old code this way. Check for
-      // updates on re-focus and hourly; retry a deferred update every minute
-      // (covers "workout just finished").
-      const check=()=>{ reg.update().catch(()=>{}); maybeApplyUpdate(); };
       document.addEventListener('visibilitychange',()=>{
-        if(document.visibilityState==='visible') check();
+        if(document.visibilityState==='visible') reg.update().catch(()=>{});
       });
-      setInterval(check, 60*60*1000);
-      setInterval(maybeApplyUpdate, 60*1000);
+      setInterval(()=>reg.update().catch(()=>{}), 60*60*1000);
     }).catch(e=>console.warn('SW:',e));
   });
+  // RESIDENT-PAGE FIX: browsers only check sw.js on navigation, so an installed PWA kept
+  // alive for weeks never discovers new deploys -- three family devices synced daily on
+  // months-old code this way. Check for updates on re-focus and hourly; retry a deferred
+  // update every minute (covers "workout just finished").
+  // CONTENT-VERSION CHECK (weekly review #3, 2026-10-26): reg.update() above only notices a
+  // new deploy if sw.js's own bytes changed, and that went unbumped for 74 releases because
+  // nothing forced it to -- so a resident tab can't rely on sw.js byte-diff alone. Poll the
+  // real index.html bytes directly (network-first via the SW's own isShell rule) and
+  // compare the BUILD string; a mismatch means a new deploy exists even if sw.js itself
+  // didn't change. Deliberately NOT nested inside the register().then() above: that
+  // callback can be skipped entirely (registration blocked/unavailable) without this check
+  // ever depending on it. Exposed on window so a test can trigger it without waiting for a
+  // real focus/hourly tick.
+  const checkContentVersion=()=>fetch('./index.html',{cache:'no-store'}).then(r=>r.text()).then(html=>{
+    const m=/const BUILD\s*=\s*'([^']+)'/.exec(html);
+    if(m && m[1]!==BUILD) _updateReady=true;
+  }).catch(()=>{});
+  const check=()=>checkContentVersion().then(maybeApplyUpdate);
+  window._checkForUpdate=check;
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible') check();
+  });
+  setInterval(check, 60*60*1000);
+  setInterval(maybeApplyUpdate, 60*1000);
 }
 let deferredPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;document.getElementById('installBanner').classList.remove('hidden');});
@@ -9878,7 +9970,7 @@ window.addEventListener('appinstalled',()=>{document.getElementById('installBann
 // BOOT
 // ============================================================
 // Display/build version shown at the bottom of the app. Bump on every release.
-const BUILD = 'v1.10.74';
+const BUILD = 'v1.11.0';
 // Data-reset stamp — bump ONLY to wipe all user data / force re-onboard. Kept at
 // v1.0.0 so the V2 update (additive schema) preserves existing user data.
 const APP_VERSION = 'v1.0.0';
