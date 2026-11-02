@@ -2152,7 +2152,9 @@ function sp(id) {
   else if (id==='routines')    renderRoutines();
   else if (id==='exercises')   { loadDB(); renderEx(); }
   else if (id==='metrics')     renderMetricsPage();
-  else if (id==='leaderboard') refreshFriends();
+  // Paint from local data first: his own row is computed locally (yourStats) and must never wait on the
+  // friends fetch, which on a dead gym connection used to leave a pre-workout number up indefinitely.
+  else if (id==='leaderboard') { renderLB(); refreshFriends(); }
   updateResumeBar();
   // Android hardware/gesture back on a non-home tab should return to Home, not exit the
   // app (in-app Feedback #9) -- give it a history entry to consume instead of the default.
@@ -8452,6 +8454,17 @@ let SUPA = null, liveFriends = null, liveSent = [], _authUid = null;
 // object entry), aborting the WHOLE render before the "Leaderboards" header or either placeholder
 // ever painted -- reported 2026-10-23 as the Friends tab going completely blank.
 try{ const c=JSON.parse(localStorage.getItem('jk_friendsCache')||'null'); if(Array.isArray(c)&&c.length){ const clean=c.map(cleanPerson).filter(Boolean); if(clean.length) liveFriends=clean; } }catch(_){}
+// No request may hang forever on a dropped connection (gym wifi, captive portal): abort after 10s so the
+// caller's existing error path runs. Avatar uploads and the full-history backup write are exempt, a slow
+// uplink can legitimately take longer than that.
+function supaFetch(url, opts){
+  opts=opts||{};
+  const b=opts.body, big=String(url).includes('/storage/v1/') || (typeof b==='string' && b.length>200000) || (b && typeof b!=='string');
+  if (big || typeof AbortController==='undefined') return fetch(url, opts);
+  const ac=new AbortController(), t=setTimeout(()=>ac.abort(), 10000);
+  if (opts.signal){ if (opts.signal.aborted) ac.abort(); else opts.signal.addEventListener('abort',()=>ac.abort(),{once:true}); }
+  return fetch(url, {...opts, signal:ac.signal}).finally(()=>clearTimeout(t));
+}
 let _signingOut = false;   // our own Sign out: its SIGNED_OUT event is expected, not a lost session
 function supaInit() {
   try {
@@ -8459,7 +8472,7 @@ function supaInit() {
       // Session lives in this device's storage only; never accept tokens from a URL,
       // so a copied link can't carry someone's login.
       SUPA = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY,
-        {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:false}});
+        {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:false}, global:{fetch:supaFetch}});
       SUPA.auth.onAuthStateChange((ev, session)=>{
         const had=_authUid; _authUid = session ? session.user.id : null;
         // The session ended without Sign out (refresh token expired or revoked, signed out in another tab): every
