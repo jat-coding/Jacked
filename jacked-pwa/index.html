@@ -9005,7 +9005,9 @@ function maybeCloudBackup(){
   if(!last){
     if(gH().length) om('cloudPromptModal');   // existing data, not yet backed up → ask
     else cloudBackupNow(true);                 // nothing to lose yet → enrol silently
-  } else if(last !== today){
+    return;
+  }
+  if(last !== today){
     // Daily cold boot: pull-merge the cloud into local FIRST so every island
     // converges, THEN back up the merged result. Pull-merge can't clobber
     // local-only data (it unions), and the backup itself re-merges, so this is
@@ -9014,7 +9016,20 @@ function maybeCloudBackup(){
       if(changed && typeof renderHome==='function') renderHome();
       cloudBackupNow(true);
     });
+    return;
   }
+  // Same-day reopen: the branch above already ran today, so this used to be a
+  // no-op. A watch-only workout updates total_volume directly and never
+  // recomputes `data.m` (the "since the 1st" figure) -- only syncMe() does
+  // that, and only the phone calls it. Pull the cloud history in on every
+  // open, same-day included, and self-heal `data.m` immediately if it brought
+  // in anything new, so opening the app is enough -- no manual sync needed.
+  cloudPullMerge().then(changed=>{
+    if(changed){
+      if(typeof renderHome==='function') renderHome();
+      if(typeof syncMe==='function') syncMe();
+    }
+  });
 }
 function cloudPromptYes(){ cloudBackupNow(false).then(ok=>{ if(ok) cm('cloudPromptModal'); }); }
 
