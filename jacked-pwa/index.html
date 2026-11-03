@@ -3432,7 +3432,7 @@ function liveSettle(p, ms=LIVE_FINISH_TIMEOUT_MS){
 }
 const LIVE_Q_KEY='jacked_liveFinishQ', LIVE_DECLINED_KEY='jacked_liveDeclined';   // device state, never in the blob
 const LIVE_Z={u:0,ud:''};
-let _liveShadow=null, _liveDirty=false, _livePushT=null, _liveBusy=null, _liveAgain=false, _livePollAt=0,
+let _liveShadow=null, _liveDirty=false, _livePushT=null, _liveBusy=null, _liveAgain=false, _livePollAt=0, _liveRT='',
     _liveChan=null, _liveSolo=null, _liveAsk=null, _liveHold=false, _finLock=null, _liveOffered=new Set(),
     _liveSeen=null, _liveSeenAt=0;   // the session id this device last saw ON the row (resumed, wrote or read it there), and when
 const _liveStats={writes:0, casMiss:0, commits:0, dupFinish:0, recomputes:0};
@@ -3947,10 +3947,13 @@ async function liveDiscard(id){
 }
 function liveSubscribe(){
   if(!liveOn()||_liveChan) return;
+  _liveRT='';
   try{
     _liveChan=SUPA.channel('jk_live_workouts')
       .on('postgres_changes',{event:'*',schema:'public',table:'live_workouts',filter:'code=eq.'+liveCode()},()=>liveSchedule(250))
-      .subscribe();
+      // Realtime state gates the 5s poll in updWT: quiet while SUBSCRIBED, back on for
+      // CHANNEL_ERROR / TIMED_OUT / CLOSED. A (re)join catches up on anything missed meanwhile.
+      .subscribe(st=>{ const was=_liveRT; _liveRT=st; if(st==='SUBSCRIBED'&&was!=='SUBSCRIBED') liveSchedule(250); });
   }catch(e){ console.warn('liveSubscribe',e); }
 }
 function liveBoot(){ if(!liveOn()) return; liveSubscribe(); liveFlushFinishQ().then(()=>liveSync()); }
@@ -4120,7 +4123,7 @@ function beginW() {
 
 function updWT() {
   if(awIsStale()){ autoFinishStale(); return; }
-  if(liveOn()&&Date.now()-_livePollAt>LIVE_POLL_MS){ _livePollAt=Date.now(); liveSync(); }   // Realtime fallback
+  if(liveOn()&&_liveRT!=='SUBSCRIBED'&&Date.now()-_livePollAt>LIVE_POLL_MS){ _livePollAt=Date.now(); liveSync(); }   // Realtime fallback: only while the channel is down
   ws=Math.max(0,Math.floor((Date.now()-awStart)/1000));
   const t=String(Math.floor(ws/60)).padStart(2,'0')+':'+String(ws%60).padStart(2,'0');
   document.getElementById('awTimer').textContent=t;
