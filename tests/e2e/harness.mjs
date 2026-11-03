@@ -15,6 +15,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const APP_DIR = path.resolve(HERE, '../../jacked-pwa');
 export const PORT = Number(process.env.JK_PORT || 8765);
 export const URL = `http://127.0.0.1:${PORT}/index.html`;
+export const MIRROR_RE = /\/storage\/v1\/object\/public\/exercise-images\//;
 
 // Standing-questions 2026-10-17 item 10 (memory/context/mistake-fix-queue.md "2026-09-26
 // 19:00", [[jacked-e2e-silently-tested-old-code-on-busy-port]]): an orphan python3
@@ -79,7 +80,10 @@ export async function phone({ width = 390, height = 844, seed = {}, now = null, 
     else { Object.defineProperty(window, 'orientation', { value: undefined, configurable: true });
       Object.defineProperty(screen, 'orientation', { value: { angle: a, type: 'landscape-primary', addEventListener() {} }, configurable: true }); }
   }, [angle, via]);
-  await ctx.route(/supabase/, r => r.abort());
+// Every Supabase call is cut off (no real account, no real writes) EXCEPT the public,
+  // read-only exercise-images bucket: the exercise DB and its photos live there since
+  // 2026-11-03 (they were on raw.githubusercontent.com before), and the suite checks real data.
+  await ctx.route(/supabase/, r => MIRROR_RE.test(r.request().url()) ? r.continue() : r.abort());
   // standing-questions 2026-10-20 item 11 (queue 2026-09-24 nightly, "Jacked mockups didn't
   // look like the app" -- real fonts were opt-in via JK_FONTS=1, so a mockup generated with
   // no flags rendered in a fallback font and looked wrong against the live app

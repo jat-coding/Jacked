@@ -1370,8 +1370,15 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 // CONSTANTS & HELPERS
 // ============================================================
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const IMG_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
-const DB_URL   = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
+// free-exercise-db's 1746 photos (resized to <=600px, jpg q82 like the avatar upload) and its
+// dist/exercises.json, mirrored once into our own public-read Supabase bucket (write is
+// service-role only), so phones never hit a third party's GitHub repo at runtime (2026-11-03).
+const IMG_BASE = 'https://qehlrwnumrjktujidabz.supabase.co/storage/v1/object/public/exercise-images/';
+const DB_URL   = IMG_BASE + 'exercises.json';
+// Workouts/routines saved before the move stored the full old image URL in imgUrl (jk_hist,
+// routines, the live row); point those at the mirror at render time so they keep showing.
+const _LEGACY_IMG_RE = /^https:\/\/[^/]+\/yuhonas\/free-exercise-db\/main\/exercises\//;
+const exImgSrc = u => (u && typeof u==='string') ? u.replace(_LEGACY_IMG_RE, IMG_BASE) : u;
 
 // Muscle colours (drive the line-icon colour per exIcon/uic — no emoji)
 const MCOL = {chest:'#5aa9ff',back:'#3ddc97',shoulders:'#ff9f4d',biceps:'#b07cff',triceps:'#ff5d6c',legs:'#20d3c2',quadriceps:'#20d3c2',hamstrings:'#5ce9da',glutes:'#ffca4d',core:'#4ad9d9',abdominals:'#4ad9d9',cardio:'#ff5d6c','full body':'#20d3c2',lats:'#3ddc97',traps:'#ff9f4d',forearms:'#b07cff','lower back':'#5aa9ff'};
@@ -2419,7 +2426,7 @@ function renderHome() {
   el.innerHTML=rec.map(w=>{
     const fx=w.exercises?.[0];
     const ic=fx?.imgUrl
-      ? `<img style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" src="${fx.imgUrl}" onerror="this.style.display='none'" loading="lazy">`
+      ? `<img style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" src="${exImgSrc(fx.imgUrl)}" onerror="this.style.display='none'" loading="lazy">`
       : `<div style="width:46px;height:46px;border-radius:8px;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0">${exIcon(fx?.muscle,46)}</div>`;
     const vol=w.totalVolume||0, dist=workoutDistance(w), pace=workoutPace(w);
     const isRun=vol<=0&&dist>0;
@@ -4141,7 +4148,7 @@ function renderWS() {
   h+=aw.exercises.map((ex,ei)=>{
     const pr=prs[ex.exId];
     const ih=ex.imgUrl
-      ?`<img class="ebi" src="${ex.imgUrl}" onerror="this.style.display='none'" loading="lazy">`
+      ?`<img class="ebi" src="${exImgSrc(ex.imgUrl)}" onerror="this.style.display='none'" loading="lazy">`
       :`<div class="ebi" style="display:flex;align-items:center;justify-content:center">${exIcon(ex.muscle,58)}</div>`;
     const cab=ex.cable||'pulley';
     const tracking=ex.tracking||'weight_reps';
@@ -6372,7 +6379,7 @@ function openWD(id) {
     }
     h+=`<div class="card-dark" style="margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        ${ex.imgUrl?`<img src="${ex.imgUrl}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'" loading="lazy">`:`<div style="width:44px;height:44px;border-radius:8px;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0">${exIcon(ex.muscle,44)}</div>`}
+        ${ex.imgUrl?`<img src="${exImgSrc(ex.imgUrl)}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'" loading="lazy">`:`<div style="width:44px;height:44px;border-radius:8px;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0">${exIcon(ex.muscle,44)}</div>`}
         <div><div style="font-family:var(--fh);font-size:17px;font-weight:700;color:var(--accent)">${esc(ex.name)}${ex.cable?` <span style="font-size:11px;color:var(--muted);font-weight:500">· ${ex.cable}</span>`:''}</div>${sub}</div>
       </div>
       ${ex.note?`<div style="font-size:12px;color:var(--text2);background:var(--bg3);border-radius:7px;padding:7px 9px;margin-bottom:8px">${ex.note.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`:''}

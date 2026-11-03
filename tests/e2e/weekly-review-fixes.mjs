@@ -43,7 +43,7 @@ async function swContentVersionCheckNoop() {
 // be breakable by a `"` in a name.
 async function exDbSanitizesHostilePayload() {
   const { page, ctx, errors } = await phone({});
-  await ctx.route(/raw\.githubusercontent\.com/, route => {
+  await ctx.route(/exercise-images\/exercises\.json/, route => {
     const payload = [
       { id: "evil');fetch('//evil", name: 'Evil Exercise', category: 'strength', primaryMuscles: ['chest'], equipment: 'barbell', images: ['x.jpg"><script>evil()</script>'] },
       { id: 'Mixed_Exercise', name: 'Mixed', category: 'strength', primaryMuscles: ['chest'], equipment: 'barbell', images: ['ok/0.jpg', 'bad".jpg'] },
@@ -136,6 +136,7 @@ const SYNTH_DB = [
 // dropped. They must wait it out, and refuse (not silently proceed empty) if it never ends.
 async function curatedWaitsForInFlightLoad() {
   const { page, ctx, errors } = await phone({});
+  await page.waitForFunction(() => dbLoaded, null, { timeout: 20000 });
   // The app preloads the real DB 500ms after boot (index.html: setTimeout(loadDB,500)), so
   // by now dbLoaded is already true -- reset it to actually simulate "a load from
   // elsewhere is in flight, this one hasn't finished yet".
@@ -151,6 +152,7 @@ async function curatedWaitsForInFlightLoad() {
   await ctx.close();
 
   const { page: page2, ctx: ctx2, errors: errors2 } = await phone({});
+  await page2.waitForFunction(() => dbLoaded, null, { timeout: 20000 });
   await page2.evaluate(db => {
     dbLoaded = false; allDB = [];
     dbLoading = true;
@@ -164,6 +166,9 @@ async function curatedWaitsForInFlightLoad() {
 }
 async function curatedBlocksWhenDBNeverLoads() {
   const { page, ctx, errors } = await phone({});
+  // Let the real boot preload land first, or it can finish inside the poll window and
+  // "rescue" the load this test is faking as stuck.
+  await page.waitForFunction(() => dbLoaded, null, { timeout: 20000 });
   await page.evaluate(() => { dbLoaded = false; allDB = []; dbLoading = true; });   // never resolves within the poll window
   await page.evaluate(() => addCurated(0));
   const routines = await page.evaluate(() => gR());

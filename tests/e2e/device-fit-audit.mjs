@@ -8,7 +8,7 @@
 // purpose, 631dd85) -- that is reported as a warning, not a failure.
 // Run: JK_PORT=8811 node tests/e2e/device-fit-audit.mjs [outdir-for-screenshots]
 import { createRequire } from 'module';
-import { startServer, stopServer, URL } from './harness.mjs';
+import { startServer, stopServer, URL, MIRROR_RE } from './harness.mjs';
 import fs from 'fs';
 const require = createRequire(import.meta.url);
 const { webkit, devices } = require(process.env.PW || 'playwright');
@@ -127,7 +127,7 @@ for (const [label, w, tabH, fullH, sat, sab] of PHONES) {
   for (const [mode, h, ins] of [['safari', tabH, [0, 0]], ['homescreen', fullH, [sat, sab]]]) {
     for (const [scr, open] of SCREENS) {
       const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: UA, timezoneId: 'America/Denver', serviceWorkers: 'block' });
-      await ctx.route(/supabase/, r => r.abort());
+      await ctx.route(/supabase/, r => MIRROR_RE.test(r.request().url()) ? r.continue() : r.abort());
       const page = await ctx.newPage();
       const errs = []; page.on('pageerror', e => errs.push(String(e))); page.on('dialog', dl => dl.dismiss());
       await page.clock.setFixedTime(now);

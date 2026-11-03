@@ -48,3 +48,10 @@ would be duplicated on disk every time. A Supabase bucket stores the set once, o
 git, no repo growth, no per-worktree duplication. Make the bucket PUBLIC READ, write
 restricted to service role only (images never change per-user, no need for authenticated
 upload policy like avatars has) — this is static reference data, not user content.
+
+**Status 2026-11-03: BUILT, committed to main (dev-sync push only, no Netlify deploy).**
+Bucket `exercise-images` (public read, no storage.objects policies so writes are service-role
+only) holds 1746 jpgs (longest edge 600px, q82, cache 1 year) + exercises.json; 64,437,358
+bytes total per storage.objects. Originals were 98,671,281 bytes (the 66MB above was an
+estimate). Old clients still read GitHub directly; saved workouts with the old imgUrl are
+rewritten to the mirror at render time (`exImgSrc`). Suite: tests/e2e/exercise-photos-mirror.mjs.
