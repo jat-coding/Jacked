@@ -564,7 +564,7 @@ export async function liveSugPromote() {
   await A.ctx.close(); await B.ctx.close();
 }
 
-export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale, liveEndedElsewhere, liveStartOverOpen, liveFinishStorageFull, liveSingleBoth, liveSugPromote];
+export const LIVE_SUITES = [liveWrites, liveConcurrent, liveFinishOnce, liveFinishLock, liveLateSets, liveLifecycle, liveFinishEdges, liveFinishClaimFails, liveConcurrentSwaps, liveFinishHungSync, liveFinishResumed, liveReorderStale, liveSwitchStale, liveTypingStale, liveEndedElsewhere, liveStartOverOpen, liveFinishStorageFull, liveSingleBoth, liveSugPromote, livePollFallback];
 
 // The app is killed (swiped away) right after tapping Finish: the Finish claim reached the
 // server and flipped the row to 'finished', but the local commit never ran. On reopening, the
@@ -747,4 +747,45 @@ export async function liveEndedElsewhere() {
   check('live ended elsewhere: when the replacement could be staleness it still offers', r3.res === 'solo' && r3.p.length === 1, JSON.stringify({ res: r3.res, p: r3.p }));
   check('live ended elsewhere: no console errors', A.errors.length === 0 && B.errors.length === 0, [...A.errors, ...B.errors].join(' | '));
   await A.ctx.close(); await B.ctx.close();
+}
+
+// The 5 s live_workouts poll is a FALLBACK for Realtime (task 2026-11-03-gate-live-workout-poll):
+// it must stay quiet while the jk_live_workouts channel reports SUBSCRIBED, and must come back on
+// its own the moment the channel errors, times out or closes mid-workout -- and keep running when
+// the subscribe never succeeds or throws outright. Written before the fix: the old code polled
+// every tick no matter what, so the "quiet while SUBSCRIBED" checks failed against it. updWT ticks
+// once a second, so each window is 2.6 s: the poll fires at least twice, or not at all.
+export async function livePollFallback() {
+  const db = makeDb(); const A = await device(db, 'phone-A');
+  const polls = async ms => { await ev(A, () => { window.__polls = 0; }); await wait(ms); return ev(A, () => window.__polls); };
+  const status = s => ev(A, s => window.__rtStatus(s), s);
+  await ev(A, () => {
+    window.__polls = 0;
+    const orig = liveSync; window.liveSync = function () { window.__polls++; return orig.apply(this, arguments); };
+    let cb = null;
+    const chan = { on() { return chan; }, subscribe(f) { cb = f; return chan; }, unsubscribe() {} };
+    SUPA.channel = () => chan;
+    window.__rtStatus = s => cb && cb(s, s === 'CHANNEL_ERROR' ? new Error('stub: realtime refused') : undefined);
+    _liveChan = null; LIVE_POLL_MS = 200;
+    startRW('r1'); liveSubscribe();
+  });
+  const never = await polls(2600);
+  check('live poll: subscribe never answered -> the poll runs', never >= 2, String(never));
+  await status('SUBSCRIBED'); await wait(1200);
+  const sub = await polls(2600);
+  check('live poll: Realtime SUBSCRIBED -> the 5s poll stops', sub === 0, String(sub));
+  for (const s of ['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED']) {
+    await status(s);
+    const n = await polls(2600);
+    check(`live poll: Realtime drops mid-workout (${s}) -> the poll resumes on its own`, n >= 2, String(n));
+    await status('SUBSCRIBED'); await wait(1200);
+    const q = await polls(2600);
+    check(`live poll: back to SUBSCRIBED after ${s} -> quiet again`, q === 0, String(q));
+  }
+  // A subscribe that throws: no channel, so the poll must keep carrying the sync.
+  await ev(A, () => { _liveChan = null; SUPA.channel = () => { throw new Error('stub: realtime unavailable'); }; liveSubscribe(); });
+  const thrown = await polls(2600);
+  check('live poll: subscribe throws -> the poll keeps running', thrown >= 2, String(thrown));
+  check('live poll: no console errors', A.errors.length === 0, A.errors.join(' | '));
+  await A.ctx.close();
 }
