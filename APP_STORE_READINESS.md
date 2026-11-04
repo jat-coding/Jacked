@@ -1,46 +1,56 @@
 # Jacked — App Store Readiness
 
-**Status as of 2026-08-09 · current build v1.5 · live at https://jacked-trainer.netlify.app**
+**Refreshed 2026-11-04** (previous full pass: 2026-08-09, v1.5) · live PWA at
+https://jacked-trainer.netlify.app · native iOS plan: [`IOS_REWRITE_PLAN.md`](./IOS_REWRITE_PLAN.md)
 
-Jacked today is a single-file PWA (`jacked-pwa/index.html`, ~225 KB) on Netlify, backed by
-Supabase project `qehlrwnumrjktujidabz`. A second client now exists — a standalone Galaxy
-Watch (Wear OS) app in the separate `jacked-wear` project — that talks to the SAME Supabase
-backend (see `watch-client/API.md` + `SPEC.md`). This file tracks everything standing between
-that and an App Store listing. Written to survive a lost session — anything a fresh Claude (or
-another dev) needs to pick this up should be here, not in chat.
+Jacked today is a single-file PWA (`jacked-pwa/index.html`, now ~830 KB) on Netlify, backed by
+Supabase project `qehlrwnumrjktujidabz`. Two watch clients (Wear OS `jacked-wear`, watchOS
+`jacked-watchos`) talk to the SAME Supabase backend (see `watch-client/API.md`,
+`watch-client/AUTH_HANDOFF.md`). This file tracks everything standing between that and an App
+Store listing. Written to survive a lost session.
 
-**None of the six 🔴 blockers below have moved since v1.2** — session work through v1.5 was
-data-integrity and features, not App Store gating. What changed: the cloud-sync data-loss bug
-class is now fixed (merge-safe backup, v1.5), and there's a second client to keep in mind when
-auth lands. See "Changes since v1.2" at the bottom.
+**What changed since 2026-08-09:** the two biggest blockers (#1 auth, #2 RLS) are done and live.
+Exercise assets (#3) moved off GitHub in the repo but the live site has not been redeployed yet.
+**In-app account deletion (#5) is NOT built**: an earlier memory note said a
+`delete_own_account()` RPC shipped; it never reached `main` (zero hits for it anywhere in git
+history, all branches, checked 2026-11-04). The App Store route is now a ground-up native
+SwiftUI app (#13), decided 2026-10-28, not a wrapper.
+
+How each status below was verified (2026-11-04): reading `supabase/migrations/` + `index.html`
+on `main` at `93b6ebf`, plus read-only anon-key probes of the live project (no writes, no
+schema calls): `GET /rest/v1/profiles` → `[]`; `profile_backups`, `friend_requests`,
+`live_workouts`, `feedback` → `42501 permission denied`; `rpc/account_status` →
+`{"status":"not_found"}` for a made-up username; `functions/v1/jacked-auth` with a bad body →
+`{"status":"invalid_username"}`; `storage/.../exercise-images/exercises.json` → 200, 1.0 MB;
+live `index.html` still has the GitHub `IMG_BASE`.
 
 ---
 
 ## The table
 
-| # | Item | Type | Effort | Why it matters |
+| # | Item | Type | Effort | Status / why it matters |
 |---|------|------|--------|----------------|
-| 1 | **No authentication at all** | 🔴 Blocker | L | Identity is an unverified username string. Anyone can claim any account. |
-| 2 | **RLS policies are `using (true)`** | 🔴 Blocker | M | Every row readable/writable by anyone with the anon key — including full backups. |
-| 3 | **Hotlinking `raw.githubusercontent.com`** | 🔴 Blocker | S | Violates GitHub ToS, rate-limited, breaks offline. Must vendor assets. |
-| 4 | **Guideline 4.2 — thin web wrapper** | 🔴 Blocker | M | A bare WKWebView of a PWA gets rejected. Needs real native capability. |
-| 5 | **In-app account deletion** | 🔴 Blocker | S | Guideline 5.1.1(v). Mandatory for any app with account creation. No exceptions. |
-| 6 | **Privacy policy URL** | 🔴 Blocker | S | Guideline 5.1.1. Must be publicly reachable before review. |
-| 7 | App Privacy "nutrition labels" | 🟠 Required | S | Declared in App Store Connect. Must match actual data collection. |
-| 8 | Apple Developer Program | 🟠 Required | — | $99/year. Gate for everything. |
-| 9 | Mac + Xcode | 🟠 Required | — | No Mac = no build. Cloud Mac is a workaround. |
-| 10 | Encryption export compliance | 🟠 Required | XS | `ITSAppUsesNonExemptEncryption` in Info.plist. HTTPS-only = exempt. |
-| 11 | Screenshots + listing copy | 🟠 Required | S | 6.9" and 6.5" required sizes. |
-| 12 | Age rating questionnaire | 🟠 Required | XS | Fitness app — straightforward. |
-| 13 | Native wrapper (Capacitor) | 🟠 Required | M | The actual iOS shell. Pairs with #4. |
-| 14 | **"Jacked" trademark search** | 🟡 Risk | S | Common fitness term. Check before committing to the name. |
+| 1 | **Authentication** | ✅ Done | — | Username + password on Supabase Auth since 2026-09-13 (`0d20216`, `20260913_password_auth.sql`, `jacked-auth` edge function). Optional login email added 2026-10-21/26 (`73f1abd`, `10f4508`). Login lookup rate-limited + hardened, applied live 2026-11-03 (`0aa28d5`, `ce59245`). |
+| 2 | **RLS lockdown** | ✅ Done | — | Every table now ownership/friendship-checked (`owns_code()`, `is_friend_of()`); see detail. Live probe confirms anon reads get nothing. Residual: `feedback` is still anon-insertable (write-only by design). |
+| 3 | **Vendored assets (off `raw.githubusercontent.com`)** | 🟡 Partial | XS | Fixed in repo 2026-11-03 (`93b6ebf`): own `exercise-images` bucket, serving live. **Not deployed to Netlify yet**, and `sw.js` still only caches GitHub URLs (offline cache won't cover the new host). Irrelevant to the native app, which fetches/bundles from the bucket directly. |
+| 4 | **Guideline 4.2 — thin web wrapper** | 🟢 Addressed by plan | — | Moot under #13: the iOS app is native SwiftUI, not a WebView. Still worth one clearly native feature (HealthKit/Live Activity) for review and for users. |
+| 5 | **In-app account deletion** | 🔴 Blocker | S–M | **Not built.** No delete RPC, no button, nothing in any branch. Guideline 5.1.1(v). Needs a new migration (Mr. Roni's go before it runs live) + UI in both PWA and iOS. See detail. |
+| 6 | **Privacy policy URL** | 🔴 Blocker | S | Still open. Must be publicly reachable before review. |
+| 7 | App Privacy "nutrition labels" | 🟠 Required | S | Still open. Declared in App Store Connect; must match real collection (username, optional email, workouts, body weight, birthday, sex, photo). |
+| 8 | Apple Developer Program | ✅ Done | — | Active (Mr. Roni, confirmed 2026-10-28 and 2026-11-04). |
+| 9 | Mac + Xcode | ✅ Done | — | Xcode installed on his Mac (2026-11-04). Builds/signing happen there; source is written on the desktop. |
+| 10 | Encryption export compliance | 🟠 Required | XS | `ITSAppUsesNonExemptEncryption = NO` already set in the iOS scaffold's Info.plist (HTTPS only = exempt). |
+| 11 | Screenshots + listing copy | 🟠 Required | S | Still open. 6.9" and 6.5" sizes. |
+| 12 | Age rating questionnaire | 🟠 Required | XS | Still open. |
+| 13 | **Native iOS app (SwiftUI rewrite)** | 🟠 In progress | L | Ground-up SwiftUI app talking to the same Supabase backend over its REST/Auth HTTP API, same tables/RPCs/blob format as the PWA and watches. **Not** a wrapper around the PWA. Kickoff 2026-11-04: plan in `IOS_REWRITE_PLAN.md`, project shell + login/signup screen in `ios/`. |
+| 14 | **"Jacked" trademark search** | 🟡 Risk | S | Still open. Common fitness term. Check before committing to the name. |
 | 15 | Supabase cost at scale | 🟡 Risk | — | Free tier is fine for now. See Capacity below. |
-| 16 | Face ID / biometric unlock | 🟢 Wanted | S | Also helps clear #4. **Depends on #1.** |
-| 17 | HealthKit sync | 🟢 Wanted | M | Strongest possible answer to #4. |
-| 18 | Push notifications | 🟢 Wanted | M | Native entitlement; helps #4. |
-| 19 | Offline support | 🟢 Wanted | S | Mostly there via `sw.js`. Blocked by #3. |
+| 16 | Face ID / biometric unlock | 🟢 Wanted | S | Unblocked (#1 done). Natural fit for the native app's Keychain-stored session. |
+| 17 | HealthKit sync | 🟢 Wanted | M | Strongest native feature; also the smart-scale path Mr. Roni asked for (2026-09-02). |
+| 18 | Push notifications | 🟢 Wanted | M | Native entitlement. Rest timer can use local notifications (no server) first. |
+| 19 | Offline support | 🟢 Wanted | S | PWA: see #3 `sw.js` gap. Native: local store + queued sync by design. |
 | 20 | Exercise DB licence | ✅ Clear | — | free-exercise-db is Unlicense/public domain. Data + images fine to ship. |
-| 21 | **Password-reset email** | 🟢 Wanted | S | Tabled 2026-09-21 (Mr. Roni: set up when we build the real app). See detail below. |
+| 21 | **Password-reset email** | 🟢 Wanted | S | Tabled 2026-09-21. Accounts can now carry an optional real email (#1), but no reset flow is built. See detail below. |
 
 Effort: XS < S < M < L.
 
@@ -49,79 +59,84 @@ Effort: XS < S < M < L.
 ## 21 — Password-reset email (tabled)
 
 Mr. Roni asked 2026-09-21 whether he could make an email address for this himself; answer below
-is recorded so it's not re-derived. **Real blocker, not a config step:** signup fabricates
-`{uuid}@users.jacked.example.com` (`supabase/functions/jacked-auth/logic.ts`) and never asks for a
-real email, so there's no address to send a reset link to yet. This has to be built (collect and
-verify a real email per account) before any reset email can work — it isn't just "add an email".
+is recorded so it's not re-derived. The Supabase Auth login id is still a synthetic
+`{uuid}@users.jacked.example.com` (`supabase/functions/jacked-auth/logic.ts`) that is never
+mailed. Since 2026-10-21/26 a profile can also carry an optional real `profiles.email`
+(signup field + Profile > Account), used only as an alternate login handle. A reset flow would
+send to that address, but it is not wired: Supabase's built-in `resetPasswordForEmail` targets
+the auth email (synthetic), so this needs a custom path (edge function that looks up
+`profiles.email`, mails a link via a transactional service, then sets the password with the
+admin API).
 
-Once that exists, sending is simple: a "noreply@" address needs no inbox, just a domain +
-verification with a transactional-email service (Resend, Postmark, SendGrid) via DNS records,
-then either Supabase's built-in `resetPasswordForEmail` (point its SMTP settings at the service)
-or a custom email from the `jacked-auth` function for full control of the wording. No domain is
-owned for Jacked yet; register one when this is picked up (`jackedapp.com` or similar).
-
-Sequence with #1/#2 (real auth/RLS): do the email-collection + verification step as part of that
-work, not before it, since it's the same "give accounts a real identity" effort.
+Sending needs a domain + a transactional-email service (Resend, Postmark, SendGrid) via DNS
+records. No domain is owned for Jacked yet; register one when this is picked up.
 
 ## Detail on the blockers
 
-### 1 + 2 — Auth and RLS (the big one)
+### 1 + 2 — Auth and RLS (DONE, live)
 
-`SUPABASE_SETUP.sql` says it outright:
+What is on `main` and live (each migration's header says it was applied by hand in the SQL
+editor; live behaviour confirmed by the anon probes above):
 
-> There is NO auth, so the policies below allow the anonymous key to read/write.
-> [...] anyone with your anon key can read/modify these two tables.
+- `20260913_password_auth.sql` (`0d20216`): `profiles.user_id → auth.users`; the full workout
+  blob moved out of `profiles` into owner-only `profile_backups` (`pb_*` policies,
+  `owns_code(code)`); `profiles` update = own row only; `friend_requests` = the two parties
+  only; avatar writes = owner only; `account_status()` and `rename_profile()` RPCs.
+- `20260924_profiles_data_private.sql`, `20260925_profiles_public_username_avatar_only.sql`
+  (`9cb6197`, `57f1768`): `profiles` SELECT is now `owns_code(code) or is_friend_of(code)` for
+  `authenticated` only. Strangers get name/username/avatar through `public_profiles()`;
+  friends' stats through `friend_profiles()`.
+- `20261006_live_workouts.sql`: `live_workouts` (shared phone↔watch session), owner-only.
+- `20261016_account_status_rate_limit.sql` + `20261026_account_status_hardening.sql`: per-IP
+  throttle on the username→login-id lookup; applied live 2026-11-03.
+- `20261026_friend_requests_lockdown.sql` (`4a4fd7f`): only the recipient can accept; inserts
+  must be `pending`. Applied live 2026-10-28.
+- `20261021_signup_email.sql`, `20261026_set_my_email.sql`: optional login email.
 
-The anon key ships in `index.html` (`SUPABASE_ANON_KEY`, ~line 3097) — it is public by
-definition. Identity is `code`, a normalised `@username`, with nothing proving you own it. Type
-someone's username and you are them. The `backup` column holds a user's **entire workout
-history**, readable the same way; the friend-visible `data.wd` (added v1.5) now also exposes a
-30-day richer workout summary to anyone with the key.
+Signup is `POST /functions/v1/jacked-auth {code, password, name, email?, proofIds?}` (service
+role creates the auth user + `profiles` row atomically, or claims a password-less legacy
+profile only with proof of its workout ids). Login is `rpc/account_status(code)` → synthetic
+email → `POST /auth/v1/token?grant_type=password`. The iOS app uses exactly this contract.
 
-**Now affects two clients.** The Wear OS app authenticates the same way (username + public
-key — see `watch-client/API.md` §0). Whatever auth replaces this must cover the watch too, so
-design the token/identity layer as a shared contract, not a PWA-only change.
+Residual, not blocking: `feedback` accepts anon inserts (no read-back for anyone);
+`SUPABASE_SETUP.sql` still starts with the old `using (true)` policies but every one is
+dropped and replaced further down the same file by the migrations above.
 
-For a friends app among people you know, fine. For a public App Store listing, it's a data
-breach with a queue. **This is the single largest piece of work on the list and most other
-items depend on it.**
+### 3 — Vendored assets (repo done, not deployed)
 
-Path: real Supabase Auth (email/passkey) → `auth.uid()` on every row → rewrite policies from
-`using (true)` to ownership checks → migrate existing username-keyed rows to real user IDs
-without data loss.
-
-**Do not ship to the App Store before this is done.** Face ID (#16) over unauthenticated
-data is a lock on an open door.
-
-### 3 — Vendored assets
-
-```js
-const IMG_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
-const DB_URL   = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
-```
-
-GitHub raw is not a CDN and their ToS says don't use it as one. It's rate-limited, can go
-down independently, and means the exercise library is broken offline — bad for a gym app
-where signal is often poor. The *licence* is fine (Unlicense, public domain); the *hosting*
-is not. Bundle `exercises.json` and the images into the app, or move them to Supabase
-Storage / a real CDN.
+`93b6ebf` (2026-11-03) points `IMG_BASE`/`DB_URL` at
+`https://qehlrwnumrjktujidabz.supabase.co/storage/v1/object/public/exercise-images/` and
+rewrites legacy GitHub URLs stored in old workouts (`_LEGACY_IMG_RE`). The bucket is live
+(`exercises.json` 200, images 200). Left: (a) a Netlify deploy (needs Mr. Roni's go, as every
+prod deploy does); (b) `jacked-pwa/sw.js` line ~81 still matches only
+`raw.githubusercontent.com` for its cache-first rule, so photos from the new host are no longer
+cached for offline use. Small follow-up fix, not done here.
 
 ### 4 — Guideline 4.2, Minimum Functionality
 
-Apple rejects apps that are "simply a web site bundled as an app." A Capacitor shell around
-the current PWA is exactly that shape. Clearing it means genuine native integration — Face
-ID (#16), HealthKit (#17), and push (#18) each help. **Pick at least one and do it properly.**
-HealthKit is the most persuasive for a fitness app and the most useful to users.
+Was the reason a WebView wrapper was risky. The native rewrite (#13) removes the premise. One
+genuinely native feature (HealthKit, Live Activity for the rest timer, Face ID) still helps the
+review and is planned in `IOS_REWRITE_PLAN.md`.
 
-### 5 — Account deletion
+### 5 — Account deletion (NOT built)
 
 Guideline 5.1.1(v): any app that lets you create an account must let you delete it **from
-inside the app**. Not an email link, not a web form. Currently there's "sign out = leave this
-profile" but no delete. Needs to remove the `profiles` row, `friend_requests` on both sides,
-and the avatar in Storage. Small once auth exists; do it in the same pass.
+inside the app**. Not an email link, not a web form. Today there is only "Sign Out", which
+clears the device. Needs:
+
+1. A migration with a `security definer` RPC (`delete_own_account()`) that, for `auth.uid()`:
+   deletes `live_workouts`, `friend_requests` (both directions), `profile_backups`,
+   `profiles_history` rows for the user's code, the `profiles` row, and the avatar object; then
+   the `auth.users` row. Deleting from `auth.users` needs the service role, so the clean shape
+   is an edge-function action (like `jacked-auth`) rather than a plain SQL RPC.
+2. A confirm-twice UI in the PWA (Profile > Account) and in the iOS app (Settings).
+3. Watch clients: a deleted account's refresh token dies; they already handle that (AUTH_HANDOFF
+   §3d) by returning to sign-in.
+
+Runs against live data, so the migration/function deploy needs Mr. Roni's explicit go.
+Must land before App Store submission, not before TestFlight.
 
 ---
-
 ## Capacity — where Supabase actually stands
 
 Measured against the real June backup (226 workouts):
@@ -160,19 +175,23 @@ Unknown: which plan the account is currently on.
 
 ---
 
-## Suggested order
+## Suggested order (refreshed 2026-11-04)
 
-1. **Auth + RLS** (#1, #2) — everything else depends on it; nothing ships without it.
-2. **Account deletion** (#5) — same pass as auth, cheap then.
-3. **Vendor assets** (#3) — independent, do anytime, also fixes offline.
-4. **Trademark check** (#14) — do early; a rename after launch is expensive.
-5. **Pick a native hook** (#16/#17/#18) — clears 4.2.
-6. **Capacitor wrapper** (#13) — only once there's something native to wrap.
-7. **Privacy policy, labels, screenshots, ratings** (#6, #7, #11, #12) — last mile.
+Done: auth + RLS (#1, #2), developer program (#8), Mac + Xcode (#9).
 
----
+1. **Native app vertical slices** (#13) — sequence in `IOS_REWRITE_PLAN.md`.
+2. **Account deletion** (#5) — server function + PWA button + iOS screen. Hard App Store blocker.
+3. **Trademark check** (#14) — do early; a rename after launch is expensive.
+4. **Deploy #3 + fix `sw.js` caching** — PWA-side tidy-up, independent.
+5. **One native hook** (#16/#17/#18) — HealthKit first.
+6. **Privacy policy, labels, screenshots, age rating** (#6, #7, #11, #12) — last mile, before
+   the first App Store (not TestFlight) submission.
 
 ## Context a fresh session needs
+
+*(Historical, from the 2026-08-09 pass. Windows paths and the zip routine are out of date: the
+desktop clone is `projects/Jacked` under the agent repo; pushes go through
+`scripts/jacked-worktree-merge.sh` / `jacked-push.sh`.)*
 
 - **Source of truth is now GitHub**: `https://github.com/jat-coding/Jacked` (branch `main`).
   Git root is the `C:\Users\jackb\Claude` workspace; the app is `jacked-pwa/index.html`. Commit +
