@@ -110,6 +110,10 @@ safe once the merge/CAS layer and the stat math are ported and parity-tested.
 
 TestFlight can start after slice 4 (Mr. Roni and Phil using it for real), well before App Store.
 
+**Where it stands is in `ios/REWRITE_STATUS.json`**, shown as a flow chart on JatBot OS > Status >
+Jacked. Every job that finishes, starts or blocks a slice updates that file (status, summary,
+`updated`) in the same commit. It groups slices 5-7 and 9-10 into one stage each.
+
 ## Open questions for Mr. Roni (asked in the 2026-11-04 kickoff report)
 
 1. Raw REST vs `supabase-swift` (recommend raw REST).

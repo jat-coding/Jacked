@@ -2,6 +2,8 @@
 
 Ground-up SwiftUI app on the same Supabase backend as the PWA and the watches.
 Plan and screen inventory: [`../IOS_REWRITE_PLAN.md`](../IOS_REWRITE_PLAN.md).
+Stage-by-stage status: [`REWRITE_STATUS.json`](REWRITE_STATUS.json), shown on JatBot OS > Status >
+Jacked. Update it in the same commit whenever a stage moves.
 
 **State (2026-11-04): first slice only.** Login / sign-up screen in the PWA's dark/teal style,
 wired to the live auth contract, plus a placeholder signed-in screen that reads your own

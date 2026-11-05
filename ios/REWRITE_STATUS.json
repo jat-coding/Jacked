@@ -1,0 +1,127 @@
+{
+  "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
+  "updated": "2026-11-04T19:10:00-07:00",
+  "stages": [
+    {
+      "id": "kickoff",
+      "title": "Kickoff and first screen",
+      "status": "done",
+      "summary": "Xcode project with the login and sign-up screen, written on the desktop.",
+      "detail": [
+        "Login and sign-up in Jacked's dark and teal look, session kept in the Keychain, a placeholder signed-in screen that reads your own profile to prove the login works.",
+        "Talks to Supabase with plain web calls, no extra package.",
+        "The networking part compiles on the desktop and passes 16 of 16 live read-only checks (re-run 2026-11-04 evening).",
+        "The screens and the Xcode project file have only been read through, never built in Xcode."
+      ],
+      "commits": ["69c132b", "db0e8c7"]
+    },
+    {
+      "id": "decisions",
+      "title": "Decisions locked",
+      "status": "done",
+      "summary": "iOS 17 and up, one App Store listing with the watch app, plain web calls.",
+      "detail": [
+        "Oldest supported: iOS 17, iPhone XS and newer.",
+        "One App Store listing for the iPhone app and Phil's Apple Watch app. The bundle id and team in the project are still a placeholder.",
+        "Plain web calls to Supabase, not the supabase-swift package (your final answer, twice).",
+        "Account deletion waits until the basics below work."
+      ]
+    },
+    {
+      "id": "first-xcode-build",
+      "title": "First build in Xcode",
+      "status": "gate",
+      "owner": "you",
+      "summary": "Your turn: open it on the Mac, run it in a simulator, try logging in.",
+      "detail": [
+        "Steps are on your Home page: Build the first Jacked iPhone app in Xcode.",
+        "If it builds: log in, check your name, workout count and streak show, then sign out.",
+        "If it fails: send me the first red error. Nothing below gets built until this works."
+      ]
+    },
+    {
+      "id": "home-read-only",
+      "title": "Your workout history on the Home screen",
+      "status": "todo",
+      "summary": "Read-only: your real history, calendar and streak on the iPhone Home screen, plus the tab bar.",
+      "detail": [
+        "Reads your saved data and keeps a copy on the phone for offline.",
+        "Writes nothing yet.",
+        "Mac check: your real history shows on Home."
+      ]
+    },
+    {
+      "id": "safe-saving",
+      "title": "Safe saving",
+      "status": "todo",
+      "summary": "The careful save layer, ported before anything can write.",
+      "detail": [
+        "Same merge-then-save rules the web app uses, so a save from the iPhone can never wipe data from the web app or the watch.",
+        "Done on purpose before logging: a bad save wiped real data twice in August, before the web app had this layer.",
+        "Mac check: rename a workout on the iPhone, the web app shows the new name."
+      ]
+    },
+    {
+      "id": "workout-logging",
+      "title": "Workout logging",
+      "status": "todo",
+      "summary": "Log a full workout: sets, rest timer, PRs, plate math, routines.",
+      "detail": [
+        "Mac check: log a real workout, it shows on the web app and the watch.",
+        "TestFlight testing for you and Phil can start once this works, long before the App Store."
+      ]
+    },
+    {
+      "id": "rest-of-app",
+      "title": "Library, stats and friends",
+      "status": "todo",
+      "summary": "Exercise library offline, metrics and badges, friends and leaderboard.",
+      "detail": [
+        "The stats math is checked number for number against the web app.",
+        "Friends tested between two test accounts."
+      ]
+    },
+    {
+      "id": "account-deletion",
+      "title": "Settings and account deletion",
+      "status": "todo",
+      "summary": "Profile and settings, and the delete-my-account button Apple requires.",
+      "detail": [
+        "App Store blocker: Apple rejects apps that let you sign up but not delete the account.",
+        "Needs a small server change, which waits for your go before it runs live.",
+        "Waiting until the basics above work, your call."
+      ]
+    },
+    {
+      "id": "native-extras",
+      "title": "iPhone-only extras and the watch",
+      "status": "todo",
+      "summary": "Rest timer on the Lock Screen, Apple Health, Face ID, live workout with the Apple Watch.",
+      "detail": [
+        "At least one real native feature helps with Apple's review and is the reason to have an app at all.",
+        "Apple Health is also the smart-scale path you asked about."
+      ]
+    },
+    {
+      "id": "app-store-items",
+      "title": "App Store paperwork",
+      "status": "todo",
+      "summary": "Privacy policy, privacy labels, screenshots, age rating, trademark check on the name Jacked.",
+      "detail": [
+        "The trademark check is better done early: renaming after launch is expensive.",
+        "Privacy labels must match what the app really collects: username, optional email, workouts, body weight, birthday, sex, photo."
+      ]
+    },
+    {
+      "id": "submit",
+      "title": "Submit to the App Store",
+      "status": "todo",
+      "owner": "you",
+      "summary": "Signing, TestFlight upload, Apple review.",
+      "detail": [
+        "Needs everything above.",
+        "The signing team and final bundle id, the upload and the review are steps only you can do on the Mac and in App Store Connect."
+      ]
+    }
+  ]
+}
