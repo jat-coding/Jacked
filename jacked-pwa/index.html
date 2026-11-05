@@ -4069,8 +4069,11 @@ function seedSets(exId){
       // Seed the LAYOUT only: inputs stay blank (so they render greyed, like any
       // other to-be-filled set) while each set remembers its previous numbers in
       // pw/pr. Those show as the greyed placeholder and are adopted on check-off
-      // if the user leaves them untouched.
-      return src.map(s=>({weight:0,reps:0,done:false,pw:s.weight||0,pr:s.reps||0}));
+      // if the user leaves them untouched. Single/Both carries over the same way
+      // (Mr. Roni, 2026-11-04: a re-added exercise always opened on the SINGLE_DEFAULT_IDS/
+      // SINGLE_BOTH_IDS fallback because the seeded set never carried last time's
+      // s.single, so exSingleUI's "last set" cascade had nothing real to read).
+      return src.map(s=>({weight:0,reps:0,done:false,pw:s.weight||0,pr:s.reps||0,...(typeof s.single==='boolean'?{single:s.single}:{})}));
     }
   }
   return [{weight:0,reps:0,done:false}];
