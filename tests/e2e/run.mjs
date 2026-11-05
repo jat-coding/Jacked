@@ -4590,18 +4590,23 @@ async function singleBoth() {
   check('single/both: effWeight (PRs, e1rm, badges, standards) ignores the flag', vw.eff === 1, JSON.stringify(vw));
 
   // A set that arrives with no flag (the watch adds one, or an old open workout) gets its default on the next draw.
+  // The seeded first set is NOT flagless, though: Concentration Curls was last logged Both (the
+  // exercise-level tap above), so seedSets (Mr. Roni, 2026-11-04) carries that real choice over --
+  // only the freshly-pushed, truly flagless second set falls back to the hardcoded default.
   await page.evaluate(() => { startEmpty(); addExToWorkout('Concentration_Curls'); aw.exercises[0].sets.push({ weight: 0, reps: 0, done: false }); renderWS(); });
-  check('single/both: a set added without a flag is stamped with the default when drawn', await page.evaluate(() => aw.exercises[0].sets.every(s => s.single === true)));
+  const drawnFlags = await page.evaluate(() => aw.exercises[0].sets.map(s => s.single));
+  check('single/both: a set added without a flag is stamped with the default when drawn, but a seeded set keeps last time\'s real choice', JSON.stringify(drawnFlags) === '[false,true]', JSON.stringify(drawnFlags));
   // Adversarial: the screen still shows an old layout (another device removed the first exercise; the redraw is held back
   // mid-typing) and he taps Both on what is drawn as exercise 1. It must land on that exercise, not the one now at index 1.
-  // (hammer curls seed 2 sets from the workout finished above)
+  // (hammer curls seed 2 sets from the workout finished above -- logged Single there, so seedSets now carries
+  // that real choice over instead of Hammer Curls' hardcoded Both default, same 2026-11-04 fix as above)
   const stale = await page.evaluate(() => { addExToWorkout('Hammer_Curls'); addExToWorkout('One-Arm_Dumbbell_Row');   // drawn: 0 conc, 1 hammer, 2 row
     aw.exercises.splice(0, 1);                                                                                      // now: 0 hammer, 1 row (not redrawn)
     setSingleArm(2, 0, false); setSingleArm(1, 0, false); setSingleArm(9, 0, true);                               // drawn row -> Both, again on the redraw, then a bogus index
     return aw.exercises.map(e => e.exId + ':' + e.sets.map(s => s.single).join()); });
-  check('single/both: a tap on a stale layout lands on the drawn exercise; a repeat tap or an out-of-range index is harmless', stale.join('|') === 'Hammer_Curls:false,false|One-Arm_Dumbbell_Row:false', stale.join('|'));
+  check('single/both: a tap on a stale layout lands on the drawn exercise; a repeat tap or an out-of-range index is harmless', stale.join('|') === 'Hammer_Curls:true,true|One-Arm_Dumbbell_Row:false', stale.join('|'));
   const gone = await page.evaluate(() => { _wsDrawn = [{ lid: 'gone', sids: ['x'] }]; setSingleArm(0, 0, true); return aw.exercises.map(e => e.sets.map(s => s.single).join()).join('|'); });
-  check('single/both: a tap on an exercise that no longer exists changes nothing', gone === 'false,false|false', gone);
+  check('single/both: a tap on an exercise that no longer exists changes nothing', gone === 'true,true|false', gone);
   check('single/both: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
