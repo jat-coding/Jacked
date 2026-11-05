@@ -228,7 +228,7 @@ Done: auth + RLS (#1, #2), developer program (#8), Mac + Xcode (#9).
 
 1. **Native app vertical slices** (#13) — sequence in `IOS_REWRITE_PLAN.md`.
 2. **Account deletion** (#5) — server function + PWA button + iOS screen. Hard App Store blocker.
-3. **Trademark check** (#14) — informal pass done 2026-11-04 (moderate risk, see detail); decide the App Store name before the listing.
+3. **Trademark check** (#14) — informal pass done 2026-11-04 (moderate risk, see detail); decide the App Store name before the listing. Decided 2026-11-05: App Store listing name is **"Jacked: Strength Tracker"**.
 4. **Deploy #3 + fix `sw.js` caching** — PWA-side tidy-up, independent.
 5. **One native hook** (#16/#17/#18) — HealthKit first.
 6. **Privacy policy, labels, screenshots, age rating** (#6, #7, #11, #12) — policy + label answers drafted 2026-11-04 (`PRIVACY_POLICY.md`); last mile, before
