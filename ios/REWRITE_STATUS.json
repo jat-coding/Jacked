@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-04T19:10:00-07:00",
+  "updated": "2026-11-04T18:50:58-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -32,7 +32,7 @@
       "title": "First build in Xcode",
       "status": "gate",
       "owner": "you",
-      "summary": "Your turn: open it on the Mac, run it in a simulator, try logging in.",
+      "summary": "Open it on the Mac, run it in a simulator, try logging in.",
       "detail": [
         "Steps are on your Home page: Build the first Jacked iPhone app in Xcode.",
         "If it builds: log in, check your name, workout count and streak show, then sign out.",
