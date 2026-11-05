@@ -21,17 +21,19 @@ final class AuthStore: ObservableObject {
         return nil
     }
 
-    /// App launch: reuse the saved session, refreshing it if it is about to expire.
+    /// App launch: reuse the Keychain session, refreshing it if it is about to expire.
     /// A network failure keeps the session (offline is not signed out, AUTH_HANDOFF.md 3d).
     func restore() async {
-        guard let saved = api.storedSession() else { phase = .signedOut; return }
+        guard let saved = KeychainStore.load() else { phase = .signedOut; return }
         guard saved.needsRefresh else { phase = .signedIn(saved); return }
         do {
-            phase = .signedIn(try await api.refresh(saved))
+            let fresh = try await api.refresh(saved)
+            KeychainStore.save(fresh)
+            phase = .signedIn(fresh)
         } catch let e as SupabaseError where e.isNetwork || e.status >= 500 {
             phase = .signedIn(saved)
         } catch {
-            await api.forgetLocal()
+            KeychainStore.clear()
             phase = .signedOut
         }
     }
@@ -70,7 +72,9 @@ final class AuthStore: ObservableObject {
             case .notFound: message = "No account found with that username"; return
             default: message = "Login failed, try again"; return
             }
-            phase = .signedIn(try await api.signIn(email: signInEmail, password: password, code: code))
+            let s = try await api.signIn(email: signInEmail, password: password, code: code)
+            KeychainStore.save(s)
+            phase = .signedIn(s)
         } catch let e as SupabaseError {
             message = Self.describe(e, wrongPassword: "Wrong username or password.")
         } catch {
@@ -97,7 +101,9 @@ final class AuthStore: ObservableObject {
             guard r.status == "ok", let signInEmail = r.email else {
                 message = Self.registerMessage(r.status); return
             }
-            phase = .signedIn(try await api.signIn(email: signInEmail, password: password, code: code))
+            let s = try await api.signIn(email: signInEmail, password: password, code: code)
+            KeychainStore.save(s)
+            phase = .signedIn(s)
         } catch let e as SupabaseError {
             message = Self.describe(e, wrongPassword: "Could not create account, try again")
         } catch {
@@ -106,27 +112,26 @@ final class AuthStore: ObservableObject {
     }
 
     func logOut() async {
-        await api.signOut()
+        if let s = session { await api.signOut(s) }
+        KeychainStore.clear()
         message = nil
         phase = .signedOut
     }
 
-    /// Hand out a usable session, refreshing first if needed. Reads the SDK's copy, which its
-    /// own auto-refresh may have rotated since `phase` was set. A dead refresh token (400/401)
-    /// means the session is gone: back to sign-in.
+    /// Hand out a usable access token, refreshing first if needed. A dead refresh token
+    /// (400/401) means the session is gone: back to sign-in.
     func validSession() async -> AuthSession? {
-        guard session != nil else { return nil }
-        guard let s = api.storedSession() else { phase = .signedOut; return nil }
-        if s != session { phase = .signedIn(s) }
+        guard let s = session else { return nil }
         guard s.needsRefresh else { return s }
         do {
             let fresh = try await api.refresh(s)
+            KeychainStore.save(fresh)
             phase = .signedIn(fresh)
             return fresh
         } catch let e as SupabaseError where e.isNetwork || e.status >= 500 {
             return s
         } catch {
-            await api.forgetLocal()
+            KeychainStore.clear()
             phase = .signedOut
             return nil
         }

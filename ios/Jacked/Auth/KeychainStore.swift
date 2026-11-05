@@ -1,52 +1,46 @@
-#if canImport(Security)
 import Foundation
 import Security
-import Supabase
 
-/// Where `supabase-swift` keeps the session (and where AuthAPI keeps the username next to it).
-/// The SDK's own `KeychainLocalStorage` would also work, but it stores items as
-/// `AfterFirstUnlock`, which lets a live refresh token ride an encrypted backup onto another
-/// phone. This keeps the scaffold's `AfterFirstUnlockThisDeviceOnly`: readable after first
-/// unlock so a background refresh can still reach it, never migrated off this device.
-struct KeychainStore: AuthLocalStorage {
-    private let service = "app.jacked.session"
+/// Stores the session in the Keychain (this device only, readable after first unlock so a
+/// background refresh can still reach it).
+enum KeychainStore {
+    private static let service = "app.jacked.session"
+    private static let account = "current"
 
-    private func query(_ key: String) -> [String: Any] {
+    private static var baseQuery: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
          kSecAttrService as String: service,
-         kSecAttrAccount as String: key]
+         kSecAttrAccount as String: account]
     }
 
-    func store(key: String, value: Data) throws {
-        let attrs: [String: Any] = [
-            kSecValueData as String: value,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
-        var st = SecItemUpdate(query(key) as CFDictionary, attrs as CFDictionary)
-        if st == errSecItemNotFound {
-            var add = query(key)
-            add.merge(attrs) { _, new in new }
-            st = SecItemAdd(add as CFDictionary, nil)
-        }
-        guard st == errSecSuccess else { throw KeychainError(status: st) }
-    }
-
-    func retrieve(key: String) throws -> Data? {
-        var q = query(key)
+    static func load() -> AuthSession? {
+        var q = baseQuery
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var out: CFTypeRef?
-        let st = SecItemCopyMatching(q as CFDictionary, &out)
-        if st == errSecItemNotFound { return nil }
-        guard st == errSecSuccess else { throw KeychainError(status: st) }
-        return out as? Data
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess,
+              let data = out as? Data else { return nil }
+        return try? JSONDecoder().decode(AuthSession.self, from: data)
     }
 
-    func remove(key: String) throws {
-        let st = SecItemDelete(query(key) as CFDictionary)
-        guard st == errSecSuccess || st == errSecItemNotFound else { throw KeychainError(status: st) }
+    /// Refresh tokens rotate (AUTH_HANDOFF.md 3d): the new pair must be saved before it is used.
+    @discardableResult
+    static func save(_ s: AuthSession) -> Bool {
+        guard let data = try? JSONEncoder().encode(s) else { return false }
+        let attrs: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        let st = SecItemUpdate(baseQuery as CFDictionary, attrs as CFDictionary)
+        if st == errSecItemNotFound {
+            var add = baseQuery
+            add.merge(attrs) { _, new in new }
+            return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+        }
+        return st == errSecSuccess
     }
 
-    struct KeychainError: Error { let status: OSStatus }
+    static func clear() {
+        SecItemDelete(baseQuery as CFDictionary)
+    }
 }
-#endif

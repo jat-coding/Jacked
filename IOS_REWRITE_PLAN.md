@@ -48,13 +48,7 @@ stat formulas), `watch-client/AUTH_HANDOFF.md` (auth contract), `watch-client/SY
 | Realtime | not included (websocket we'd write) | included |
 | Who else uses it | both watch apps use raw HTTP | nobody in this project yet |
 
-**DECIDED 2026-11-04: `supabase-swift`.** Mr. Roni picked the SDK (asked more than once,
-same answer; final). `ios/` was moved onto it the same day: one `SupabaseClient` in
-`Backend/Backend.swift`, the SDK owns session refresh/rotation, our `KeychainStore` is its
-storage (this-device-only). The package is added once in Xcode (see `ios/README.md`).
-The original recommendation is kept below for the record.
-
-**Original recommendation: raw REST.** The contract is small, fixed and already written down for the
+**Recommendation: raw REST.** The contract is small, fixed and already written down for the
 watches, so we'd be wrapping a dozen calls, not reinventing a client. Realtime is used in exactly
 one place (`jk_live_workouts`, the live phone↔watch workout), and the PWA already falls back to a
 5 s poll when Realtime is down, so the app works without it. If Realtime is wanted later, it can
@@ -118,7 +112,7 @@ TestFlight can start after slice 4 (Mr. Roni and Phil using it for real), well b
 
 ## Open questions for Mr. Roni (asked in the 2026-11-04 kickoff report)
 
-1. Raw REST vs `supabase-swift` (recommend raw REST). **Answered: `supabase-swift`.**
+1. Raw REST vs `supabase-swift` (recommend raw REST).
 2. Minimum iOS (recommend 17).
 3. Ship the iPhone app and Phil's Apple Watch TestFlight app (`jacked-watchos`, under the
    Incline Institute developer account) as **one** App Store app. Recommended: yes; the watch
