@@ -1,8 +1,10 @@
 import Foundation
+import Supabase
 
-/// A signed-in Supabase Auth session for one Jacked account.
-/// Persisted in the Keychain; the password is never stored.
-struct AuthSession: Codable, Equatable {
+/// A signed-in Supabase Auth session for one Jacked account, as the views see it.
+/// The SDK owns and persists the real session; this is a snapshot plus the Jacked username.
+/// The password is never stored.
+struct AuthSession: Equatable {
     var accessToken: String
     var refreshToken: String
     var expiresAt: Date
@@ -12,21 +14,18 @@ struct AuthSession: Codable, Equatable {
 
     /// Refresh a minute early so a call never leaves with a token that dies in flight.
     var needsRefresh: Bool { expiresAt.timeIntervalSinceNow < 60 }
-}
 
-/// Wire shape of `POST /auth/v1/token` (password and refresh_token grants).
-struct TokenResponse: Decodable {
-    struct User: Decodable { let id: String }
-    let access_token: String
-    let refresh_token: String
-    let expires_in: Double?
-    let expires_at: Double?
-    let user: User
+    init(accessToken: String, refreshToken: String, expiresAt: Date, userId: String, code: String) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.expiresAt = expiresAt
+        self.userId = userId
+        self.code = code
+    }
 
-    func session(code: String) -> AuthSession {
-        let exp = expires_at.map { Date(timeIntervalSince1970: $0) }
-            ?? Date().addingTimeInterval(expires_in ?? 3600)
-        return AuthSession(accessToken: access_token, refreshToken: refresh_token,
-                           expiresAt: exp, userId: user.id, code: code)
+    init(_ s: Session, code: String) {
+        self.init(accessToken: s.accessToken, refreshToken: s.refreshToken,
+                  expiresAt: Date(timeIntervalSince1970: s.expiresAt),
+                  userId: s.user.id.uuidString.lowercased(), code: code)
     }
 }
