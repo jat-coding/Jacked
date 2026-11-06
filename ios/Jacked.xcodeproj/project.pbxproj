@@ -3,21 +3,48 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 56;
 	objects = {
+
+/* Begin PBXBuildFile section */
+		D78A9629B021614E7BD67FFF /* JackedApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4D14EBA2DD238DE7CEFEA9 /* JackedApp.swift */; };
+		372455A986FD3E7944B64D52 /* AuthAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770223322E33B441C3453E5F /* AuthAPI.swift */; };
+		A97221FC5F6BBA4D8F38BD0D /* AuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B3698649731C4A40901BB85 /* AuthSession.swift */; };
+		9EDAB90D821E4C78699151BF /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394BF49A78B7660F923B0A35 /* AuthStore.swift */; };
+		E053BA95B7B191F58F9BAD7B /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C81DA0D75E1EE07E37186A8 /* KeychainStore.swift */; };
+		66252D11242E019198242770 /* Username.swift in Sources */ = {isa = PBXBuildFile; fileRef = 839EDABCDF7AA41B96FC215A /* Username.swift */; };
+		9355730CDC1A19D0D62BD1E4 /* SupabaseConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971B6EA0A3402618A82660AE /* SupabaseConfig.swift */; };
+		58AD1C57346BEB9BB656ED7D /* SupabaseHTTP.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD3B603ED6DFCD51DB3C0B5 /* SupabaseHTTP.swift */; };
+		E4C7ECAB3777B68994DF6278 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DF8CAD4FFBC408695BE1AE4 /* Theme.swift */; };
+		DFAD9D8399ACA01EAE4DC6BF /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5FA9DF9998D23312EFBCE7 /* AuthView.swift */; };
+		564D9CB78AC0BE43E97EC6B1 /* SignedInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0CE557228C9FD84BEA426DC /* SignedInView.swift */; };
+		AB664B3B3243D663BE912C40 /* BarlowCondensed-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = FBC1AE161B9EE9E3197BD3F5 /* BarlowCondensed-Black.ttf */; };
+		E2CABC81EDCFA1CB5A230903 /* BarlowCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 488153A8708E1C9142975955 /* BarlowCondensed-Bold.ttf */; };
+		883F59FA2C41AB6B933333C1 /* BarlowCondensed-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9ECF19311CB5F6DD4C4ACC82 /* BarlowCondensed-ExtraBold.ttf */; };
+		5CF551676B9C5477E09BF919 /* OFL-BarlowCondensed.txt in Resources */ = {isa = PBXBuildFile; fileRef = 7D632E30A6B4FAB463F73872 /* OFL-BarlowCondensed.txt */; };
+		0B7170E70CE1CF65DA155847 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB40B1222749C0710F5794F2 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		635474939060C983BBF3D182 /* Jacked.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jacked.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB6A848336EBAD6D3BE00A14 /* Jacked-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Jacked-Info.plist"; sourceTree = "<group>"; };
+		FB4D14EBA2DD238DE7CEFEA9 /* JackedApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JackedApp.swift; sourceTree = "<group>"; };
+		770223322E33B441C3453E5F /* AuthAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthAPI.swift; sourceTree = "<group>"; };
+		7B3698649731C4A40901BB85 /* AuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSession.swift; sourceTree = "<group>"; };
+		394BF49A78B7660F923B0A35 /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
+		5C81DA0D75E1EE07E37186A8 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		839EDABCDF7AA41B96FC215A /* Username.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Username.swift; sourceTree = "<group>"; };
+		971B6EA0A3402618A82660AE /* SupabaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseConfig.swift; sourceTree = "<group>"; };
+		EDD3B603ED6DFCD51DB3C0B5 /* SupabaseHTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseHTTP.swift; sourceTree = "<group>"; };
+		8DF8CAD4FFBC408695BE1AE4 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		BC5FA9DF9998D23312EFBCE7 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		B0CE557228C9FD84BEA426DC /* SignedInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignedInView.swift; sourceTree = "<group>"; };
+		FBC1AE161B9EE9E3197BD3F5 /* BarlowCondensed-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = BarlowCondensed-Black.ttf; sourceTree = "<group>"; };
+		488153A8708E1C9142975955 /* BarlowCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = BarlowCondensed-Bold.ttf; sourceTree = "<group>"; };
+		9ECF19311CB5F6DD4C4ACC82 /* BarlowCondensed-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = BarlowCondensed-ExtraBold.ttf; sourceTree = "<group>"; };
+		7D632E30A6B4FAB463F73872 /* OFL-BarlowCondensed.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL-BarlowCondensed.txt; sourceTree = "<group>"; };
+		AB40B1222749C0710F5794F2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		52FAE548F631AC5D1DACC51C /* Jacked */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Jacked;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		D6C8644557B5B13291AC152C /* Frameworks */ = {
@@ -33,10 +60,89 @@
 		3B9CA89FDB22CD5D062FDD7F = {
 			isa = PBXGroup;
 			children = (
-				52FAE548F631AC5D1DACC51C /* Jacked */,
+				EEC889EE9AE22DB59B338063 /* Jacked */,
 				DB6A848336EBAD6D3BE00A14 /* Jacked-Info.plist */,
 				8C292BCF2EC5DC91FEB02EAA /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		EEC889EE9AE22DB59B338063 /* Jacked */ = {
+			isa = PBXGroup;
+			children = (
+				8ADCA1107C17DEAE4CA2C43F /* App */,
+				63AB4956D60D62C13E02D9E2 /* Auth */,
+				7D17356140351DAD8AE8A2B3 /* Backend */,
+				D4D3C67EEDF2B296331A4E06 /* Resources */,
+				7E5C7084BED80FB89B624295 /* Theme */,
+				4BE43130E63E6223C39B0FA6 /* Views */,
+				AB40B1222749C0710F5794F2 /* Assets.xcassets */,
+			);
+			path = Jacked;
+			sourceTree = "<group>";
+		};
+		8ADCA1107C17DEAE4CA2C43F /* App */ = {
+			isa = PBXGroup;
+			children = (
+				FB4D14EBA2DD238DE7CEFEA9 /* JackedApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		63AB4956D60D62C13E02D9E2 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				770223322E33B441C3453E5F /* AuthAPI.swift */,
+				7B3698649731C4A40901BB85 /* AuthSession.swift */,
+				394BF49A78B7660F923B0A35 /* AuthStore.swift */,
+				5C81DA0D75E1EE07E37186A8 /* KeychainStore.swift */,
+				839EDABCDF7AA41B96FC215A /* Username.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		7D17356140351DAD8AE8A2B3 /* Backend */ = {
+			isa = PBXGroup;
+			children = (
+				971B6EA0A3402618A82660AE /* SupabaseConfig.swift */,
+				EDD3B603ED6DFCD51DB3C0B5 /* SupabaseHTTP.swift */,
+			);
+			path = Backend;
+			sourceTree = "<group>";
+		};
+		7E5C7084BED80FB89B624295 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				8DF8CAD4FFBC408695BE1AE4 /* Theme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		4BE43130E63E6223C39B0FA6 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				BC5FA9DF9998D23312EFBCE7 /* AuthView.swift */,
+				B0CE557228C9FD84BEA426DC /* SignedInView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		D4D3C67EEDF2B296331A4E06 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				021307FEA9633120DD28001C /* Fonts */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		021307FEA9633120DD28001C /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				FBC1AE161B9EE9E3197BD3F5 /* BarlowCondensed-Black.ttf */,
+				488153A8708E1C9142975955 /* BarlowCondensed-Bold.ttf */,
+				9ECF19311CB5F6DD4C4ACC82 /* BarlowCondensed-ExtraBold.ttf */,
+				7D632E30A6B4FAB463F73872 /* OFL-BarlowCondensed.txt */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 		8C292BCF2EC5DC91FEB02EAA /* Products */ = {
@@ -62,9 +168,6 @@
 			);
 			dependencies = (
 			);
-			fileSystemSynchronizedGroups = (
-				52FAE548F631AC5D1DACC51C /* Jacked */,
-			);
 			name = Jacked;
 			packageProductDependencies = (
 			);
@@ -79,11 +182,11 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1600;
-				LastUpgradeCheck = 1600;
+				LastSwiftUpdateCheck = 1520;
+				LastUpgradeCheck = 1520;
 				TargetAttributes = {
 					A8C2956D5A96270E8EAE45C9 = {
-						CreatedOnToolsVersion = 16.0;
+						CreatedOnToolsVersion = 15.2;
 					};
 				};
 			};
@@ -96,7 +199,6 @@
 			);
 			mainGroup = 3B9CA89FDB22CD5D062FDD7F;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			productRefGroup = 8C292BCF2EC5DC91FEB02EAA /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -111,6 +213,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AB664B3B3243D663BE912C40 /* BarlowCondensed-Black.ttf in Resources */,
+				E2CABC81EDCFA1CB5A230903 /* BarlowCondensed-Bold.ttf in Resources */,
+				883F59FA2C41AB6B933333C1 /* BarlowCondensed-ExtraBold.ttf in Resources */,
+				5CF551676B9C5477E09BF919 /* OFL-BarlowCondensed.txt in Resources */,
+				0B7170E70CE1CF65DA155847 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,6 +228,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D78A9629B021614E7BD67FFF /* JackedApp.swift in Sources */,
+				372455A986FD3E7944B64D52 /* AuthAPI.swift in Sources */,
+				A97221FC5F6BBA4D8F38BD0D /* AuthSession.swift in Sources */,
+				9EDAB90D821E4C78699151BF /* AuthStore.swift in Sources */,
+				E053BA95B7B191F58F9BAD7B /* KeychainStore.swift in Sources */,
+				66252D11242E019198242770 /* Username.swift in Sources */,
+				9355730CDC1A19D0D62BD1E4 /* SupabaseConfig.swift in Sources */,
+				58AD1C57346BEB9BB656ED7D /* SupabaseHTTP.swift in Sources */,
+				E4C7ECAB3777B68994DF6278 /* Theme.swift in Sources */,
+				DFAD9D8399ACA01EAE4DC6BF /* AuthView.swift in Sources */,
+				564D9CB78AC0BE43E97EC6B1 /* SignedInView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
