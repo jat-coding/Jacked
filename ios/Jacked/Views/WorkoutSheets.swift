@@ -81,16 +81,17 @@ struct DaySheet: View {
     }
 }
 
-/// #wdModal: every exercise and set of one finished workout, plus Rename (saveWE for a
-/// name-only edit) and Save as Routine. Not yet: the full Edit Workout and Delete Workout, which
-/// rebuild PR records across the rest of history (commitHistRepair) and need that ported first.
+/// #wdModal: every exercise and set of one finished workout, plus Edit Workout (saveWE), Save as
+/// Routine and Delete Workout (delW, behind the menu like the web app's 3-dot), all through
+/// merge+CAS. Edit and Delete rebuild the PR records of the exercises they touch (HistRepair).
 struct WorkoutDetailSheet: View {
     let opened: Workout
     let settings: Settings
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
-    @State private var renaming = false
-    @State private var draft = ""
+    @State private var editing = false
+    @State private var confirmDelete = false
+    @Environment(\.dismiss) private var dismiss
     @State private var saveNote: String?
     @State private var savingRoutine = false
     @State private var routineName = ""
@@ -105,15 +106,24 @@ struct WorkoutDetailSheet: View {
             HStack {
                 if let saveNote { Text(saveNote).font(Theme.body(12)).foregroundStyle(store.dirty ? Theme.orange : Theme.muted) }
                 Spacer()
-                Button { draft = workout.name; renaming = true } label: {
-                    Label("Rename", systemImage: "pencil").font(Theme.body(13, .semibold))
+                Button { editing = true } label: {
+                    Label("Edit", systemImage: "pencil").font(Theme.body(13, .semibold))
                 }
                 .tint(Theme.accent)
-                .disabled(opened.rawId == nil)
+                .disabled(rawWorkout == nil)
                 Button { routineName = workout.name; savingRoutine = true } label: {
                     Label("Save as Routine", systemImage: "square.grid.2x2").font(Theme.body(13, .semibold))
                 }
                 .tint(Theme.accent)
+                Menu {
+                    Button { editing = true } label: { Label("Edit Workout", systemImage: "pencil") }
+                    Button { routineName = workout.name; savingRoutine = true } label: { Label("Save as Routine", systemImage: "square.grid.2x2") }
+                    Button(role: .destructive) { confirmDelete = true } label: { Label("Delete Workout", systemImage: "trash") }
+                } label: {
+                    Image(systemName: "ellipsis").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text2)
+                        .frame(width: 30, height: 30).background(Theme.bg4, in: Circle())
+                }
+                .disabled(rawWorkout == nil)
             }
             HStack(spacing: 8) {
                 stat(JackedDate.short(workout.date), "Date")
@@ -151,18 +161,37 @@ struct WorkoutDetailSheet: View {
             if let n = DevHooks.saveRoutine { try? await Task.sleep(nanoseconds: 800_000_000); await saveAsRoutine(n) }
             #endif
         }
-        .alert("Rename workout", isPresented: $renaming) {
-            TextField("Name", text: $draft)
-            Button("Cancel", role: .cancel) {}
-            Button("Save") {
-                guard let id = opened.rawId else { return }
-                let name = draft
-                Task {
-                    let ok = await store.renameWorkout(id: id, to: name, auth: auth)
-                    saveNote = ok ? "Saved" : "Saved on this phone, will sync when online"
+        .sheet(isPresented: $editing) {
+            if let w = rawWorkout, let id = opened.rawId {
+                EditWorkoutSheet(id: id, original: w, settings: settings) { ok in
+                    saveNote = ok ? "Workout updated \u{2713}" : "Saved on this phone, will sync when online"
                 }
+                .presentationBackground(Theme.bg2)
             }
         }
+        .confirmationDialog("Delete this workout?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { Task { await deleteWorkout() } }
+            Button("Cancel", role: .cancel) {}
+        }
+        .task {
+            #if DEBUG
+            if DevHooks.editW != nil { try? await Task.sleep(nanoseconds: 800_000_000); editing = true }
+            if DevHooks.delW { try? await Task.sleep(nanoseconds: 800_000_000); await deleteWorkout() }
+            #endif
+        }
+    }
+
+    /// This workout as stored in jk_hist (every field, including ones this app does not know).
+    private var rawWorkout: [String: JSONValue]? {
+        guard let id = opened.rawId else { return nil }
+        return store.backup.raw["jk_hist"]?.array?.first { $0["id"] == id }?.object
+    }
+
+    private func deleteWorkout() async {
+        guard let id = opened.rawId else { return }
+        let ok = await store.deleteWorkout(id: id, auth: auth)
+        DevHooks.log("dev delete workout ok=\(ok) \(id)")
+        dismiss()
     }
 
     /// saveWorkoutAsRoutine(id): this workout's exercises (each once, in order) as a new routine.
@@ -190,6 +219,167 @@ struct WorkoutDetailSheet: View {
         .frame(maxWidth: .infinity).padding(.vertical, 10)
         .card(fill: Theme.bg3, radius: Theme.radius)
     }
+}
+
+/// #weModal (openWE / renderWE / saveWE): edit a finished workout on a copy, written only on Save.
+/// Name, date, each set's numbers and check, + Add Set / - Set, remove an exercise. Saving rebuilds the
+/// PRs of every exercise whose sets moved (HistRepair.saveEdit) and bumps lrev (BackupStore.editWorkout).
+struct EditWorkoutSheet: View {
+    let id: JSONValue
+    let original: [String: JSONValue]
+    let settings: Settings
+    var onSaved: (Bool) -> Void
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var store: BackupStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: [String: JSONValue] = [:]
+    @State private var name = ""
+    @State private var day = Date()
+    @State private var removing: Int?
+    @State private var saving = false
+
+    init(id: JSONValue, original: [String: JSONValue], settings: Settings, onSaved: @escaping (Bool) -> Void) {
+        self.id = id; self.original = original; self.settings = settings; self.onSaved = onSaved
+        _draft = State(initialValue: original)
+        _name = State(initialValue: original["name"]?.string ?? "")
+        _day = State(initialValue: (original["date"]?.string).flatMap(JackedDate.parse) ?? Date())
+    }
+
+    private var exercises: [JSONValue] { draft["exercises"]?.array ?? [] }
+
+    var body: some View {
+        SheetScaffold(title: "Edit Workout") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Name").font(Theme.body(11, .semibold)).foregroundStyle(Theme.muted)
+                TextField("Workout", text: $name)
+                    .font(Theme.body(15, .semibold)).foregroundStyle(Theme.text)
+                    .padding(10).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 9))
+                DatePicker("Date", selection: $day, displayedComponents: .date)
+                    .font(Theme.body(14, .semibold)).foregroundStyle(Theme.text2).tint(Theme.accent)
+            }
+            if exercises.isEmpty {
+                Text("No exercises left \u{2014} saving will keep an empty workout, or delete it instead.")
+                    .font(Theme.body(12)).foregroundStyle(Theme.muted).padding(.vertical, 8)
+            }
+            ForEach(Array(exercises.enumerated()), id: \.offset) { ei, exv in
+                exerciseCard(ei, LogExercise(json: exv.object ?? [:]))
+            }
+            Button(saving ? "Saving\u{2026}" : "Save Changes") { Task { await save() } }
+                .buttonStyle(AccentButtonStyle()).disabled(saving).padding(.top, 6)
+        }
+        .confirmationDialog("Remove this exercise from the workout?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { if let ei = removing { mutateExercises { $0.remove(at: ei) } }; removing = nil }
+            Button("Cancel", role: .cancel) { removing = nil }
+        }
+        .task {
+            #if DEBUG
+            if let script = DevHooks.editW { try? await Task.sleep(nanoseconds: 600_000_000); runDev(script); await save() }
+            #endif
+        }
+    }
+
+    private func exerciseCard(_ ei: Int, _ ex: LogExercise) -> some View {
+        let tr = ex.tracking, isW = tr == "weight_reps" || tr == "bodyweight_reps", isDur = tr == "duration"
+        let u = WorkoutMath.durUnit(ex)
+        let c3 = tr == "distance" ? "Miles" : isDur ? (u == "min" ? "Min" : u == "hr" ? "Hr" : "Sec") : tr == "reps_only" ? "\u{2014}" : settings.unitLabel
+        let c4 = tr == "distance" ? "Min" : isDur ? "\u{2014}" : "Reps"
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(ex.name).font(Theme.heading(16, .bold)).foregroundStyle(Theme.accent).lineLimit(1)
+                Spacer()
+                Button { removing = ei } label: {
+                    Image(systemName: "trash").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.red)
+                        .frame(width: 30, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .accessibilityLabel("Remove exercise")
+            }
+            HStack {
+                Text("SET").frame(width: 30, alignment: .leading)
+                Text(c3.uppercased()).frame(maxWidth: .infinity)
+                Text(c4.uppercased()).frame(maxWidth: .infinity)
+                Text("\u{2713}").frame(width: 40)
+            }
+            .font(Theme.body(10)).foregroundStyle(Theme.muted)
+            ForEach(Array(ex.sets.enumerated()), id: \.offset) { si, st in
+                HStack {
+                    Text("\(si + 1)").font(Theme.body(13, .bold)).foregroundStyle(Theme.text2).frame(width: 30, alignment: .leading)
+                    if tr == "reps_only" { Text("\u{2014}").frame(maxWidth: .infinity).foregroundStyle(Theme.muted) }
+                    else if isDur {
+                        NumberField(value: st.weight, placeholder: 0, format: { WorkoutMath.toDispDur($0, u) }, parse: { WorkoutMath.fromDispDur($0, u) }) { setField(ei, si, "weight", $0) }
+                    } else if isW {
+                        NumberField(value: (settings.display(st.weight) * 10).rounded() / 10, placeholder: 0) { setField(ei, si, "weight", max(0, settings.isLb ? $0 / 2.20462 : $0)) }
+                    } else {
+                        NumberField(value: st.weight, placeholder: 0) { setField(ei, si, "weight", max(0, $0)) }
+                    }
+                    if isDur { Text("\u{2014}").frame(maxWidth: .infinity).foregroundStyle(Theme.muted) }
+                    else if tr == "distance" {
+                        NumberField(value: st.reps, placeholder: 0, format: WorkoutMath.minToClock, parse: WorkoutMath.clockToMin) { setField(ei, si, "reps", max(0, $0)) }
+                    } else {
+                        NumberField(value: st.reps, placeholder: 0, keyboard: .numberPad) { setField(ei, si, "reps", max(0, $0)) }
+                    }
+                    Button { toggleDone(ei, si) } label: {
+                        Image(systemName: "checkmark").font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(st.done ? Color(hex: 0x4DFF91) : Theme.muted).frame(width: 40, height: 32)
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                Button("+ Add Set") { mutateSets(ei) { $0.append(.object(["weight": .number(0), "reps": .number(0), "done": .bool(true)])) } }
+                    .buttonStyle(GhostButtonStyle())
+                if ex.sets.count > 1 { Button("\u{2212} Set") { mutateSets(ei) { _ = $0.popLast() } }.buttonStyle(GhostButtonStyle()).frame(width: 90) }
+            }
+        }
+        .padding(12)
+        .card(fill: Theme.bg3, radius: Theme.radius)
+    }
+
+    // MARK: draft edits (weUpd / weTogDone / weAddSet / weRemoveSet / weRemoveEx), in place on the raw copy
+
+    private func mutateExercises(_ f: (inout [JSONValue]) -> Void) {
+        var exs = exercises; f(&exs); draft["exercises"] = .array(exs)
+    }
+    private func mutateSets(_ ei: Int, _ f: @escaping (inout [JSONValue]) -> Void) {
+        mutateExercises { exs in
+            guard exs.indices.contains(ei), var o = exs[ei].object else { return }
+            var sets = o["sets"]?.array ?? []; f(&sets); o["sets"] = .array(sets); exs[ei] = .object(o)
+        }
+    }
+    private func setField(_ ei: Int, _ si: Int, _ k: String, _ v: Double) {
+        mutateSets(ei) { sets in
+            guard sets.indices.contains(si), var s = sets[si].object else { return }
+            s[k] = .number(v.isFinite ? v : 0); sets[si] = .object(s)
+        }
+    }
+    private func toggleDone(_ ei: Int, _ si: Int) {
+        mutateSets(ei) { sets in
+            guard sets.indices.contains(si), var s = sets[si].object else { return }
+            s["done"] = .bool(!(s["done"]?.truthy ?? false)); sets[si] = .object(s)
+        }
+    }
+
+    private func save() async {
+        saving = true
+        let origDay = (original["date"]?.string).flatMap(JackedDate.parse).map { JackedDate.dayKey($0) }
+        let dk = JackedDate.dayKey(day)
+        let ok = await store.editWorkout(id: id, draft: draft, name: name, dayKey: dk == origDay ? nil : dk, auth: auth)
+        DevHooks.log("dev edit workout ok=\(ok) \(id)")
+        saving = false
+        onSaved(ok)
+        dismiss()
+    }
+
+    #if DEBUG
+    private func runDev(_ script: String) {
+        for part in script.split(separator: ";").map(String.init) {
+            if part.hasPrefix("name=") { name = String(part.dropFirst(5)); continue }
+            if part.hasPrefix("day="), let d = JackedDate.parse(String(part.dropFirst(4))) { day = d; continue }
+            let n = part.split(separator: ",").compactMap { Double($0) }
+            guard n.count >= 3 else { continue }
+            setField(Int(n[0]), Int(n[1]), "weight", n[2])
+            if n.count >= 4 { setField(Int(n[0]), Int(n[1]), "reps", n[3]) }
+        }
+    }
+    #endif
 }
 
 /// How a stored set reads, per tracking type (watch-client/API.md "Set").
