@@ -82,7 +82,8 @@ struct DaySheet: View {
 }
 
 /// #wdModal: every exercise and set of one finished workout, plus Rename (saveWE for a
-/// name-only edit). Full edit / delete / save-as-routine come with workout logging.
+/// name-only edit) and Save as Routine. Not yet: the full Edit Workout and Delete Workout, which
+/// rebuild PR records across the rest of history (commitHistRepair) and need that ported first.
 struct WorkoutDetailSheet: View {
     let opened: Workout
     let settings: Settings
@@ -91,6 +92,8 @@ struct WorkoutDetailSheet: View {
     @State private var renaming = false
     @State private var draft = ""
     @State private var saveNote: String?
+    @State private var savingRoutine = false
+    @State private var routineName = ""
 
     init(workout: Workout, settings: Settings) { opened = workout; self.settings = settings }
 
@@ -107,6 +110,10 @@ struct WorkoutDetailSheet: View {
                 }
                 .tint(Theme.accent)
                 .disabled(opened.rawId == nil)
+                Button { routineName = workout.name; savingRoutine = true } label: {
+                    Label("Save as Routine", systemImage: "square.grid.2x2").font(Theme.body(13, .semibold))
+                }
+                .tint(Theme.accent)
             }
             HStack(spacing: 8) {
                 stat(JackedDate.short(workout.date), "Date")
@@ -134,6 +141,16 @@ struct WorkoutDetailSheet: View {
                 .card(fill: Theme.bg3, radius: Theme.radius)
             }
         }
+        .alert("Name this routine:", isPresented: $savingRoutine) {
+            TextField("Name", text: $routineName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") { Task { await saveAsRoutine(routineName) } }
+        }
+        .task {
+            #if DEBUG
+            if let n = DevHooks.saveRoutine { try? await Task.sleep(nanoseconds: 800_000_000); await saveAsRoutine(n) }
+            #endif
+        }
         .alert("Rename workout", isPresented: $renaming) {
             TextField("Name", text: $draft)
             Button("Cancel", role: .cancel) {}
@@ -146,6 +163,23 @@ struct WorkoutDetailSheet: View {
                 }
             }
         }
+    }
+
+    /// saveWorkoutAsRoutine(id): this workout's exercises (each once, in order) as a new routine.
+    private func saveAsRoutine(_ nm: String) async {
+        var seen = Set<String>(), ids: [String] = []
+        for e in workout.exercises where !e.exId.isEmpty && e.exId != "?" && seen.insert(e.exId).inserted { ids.append(e.exId) }
+        guard !ids.isEmpty else { saveNote = "No exercises to save"; return }
+        let name = nm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Saved Workout" : nm.trimmingCharacters(in: .whitespacesAndNewlines)
+        let desc = "Saved from " + MetricsMath.fmtD(workout.date.map { $0.timeIntervalSince1970 * 1000 })
+        let rid = "r\(Int(Date().timeIntervalSince1970 * 1000))"
+        let ok = await store.edit(auth: auth) { raw in
+            var rs = raw["jk_routines"]?.array ?? []
+            rs.append(.object(["id": .string(rid), "name": .string(name), "desc": .string(desc), "exercises": .array(ids.map(JSONValue.string))]))
+            raw["jk_routines"] = .array(rs)
+        }
+        saveNote = ok ? "Saved as routine \u{2713}" : "Saved on this phone, will sync when online"
+        DevHooks.log("dev save as routine ok=\(ok) \(name) \(ids)")
     }
 
     private func stat(_ v: String, _ k: String) -> some View {
