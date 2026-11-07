@@ -26,7 +26,7 @@ try {
   await p.evaluate(() => { document.querySelectorAll('.modal.open,.mo.open').forEach(m => m.classList.remove('open')); });
   if (open.startsWith('day:')) await p.evaluate(d => openDay(d), open.slice(4));
   if (open.startsWith('workout:')) await p.evaluate(i => { const h = gH(); openWD(h[h.length - 1 - i].id); }, +open.slice(8));
-  if (open === 'routines') { await p.evaluate(() => sp('routines')); await p.waitForTimeout(1500); }
+  if (open === 'routines') { await p.evaluate(() => sp('routines')); await p.waitForTimeout(1500); console.log(await p.evaluate(() => [...document.querySelectorAll('#page-routines')].map(e => e.innerText.includes('iPhone saved routine') ? 'shown: iPhone saved routine' : 'not shown').join() + ' / ' + gR().map(r => r.name + ' [' + (r.desc || '') + ']').join(', '))); }
   if (open === 'lib' || open.startsWith('exinfo:') || open.startsWith('libq:')) { await p.evaluate(() => sp('exercises')); await p.waitForTimeout(2500); }
   if (open.startsWith('libq:')) await p.evaluate(q => { document.getElementById('exSearch').value = q; renderEx(); }, open.slice(5));
   if (open.startsWith('exinfo:')) await p.evaluate(id => openExInfo(id), open.slice(7));
