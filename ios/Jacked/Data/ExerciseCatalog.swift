@@ -47,9 +47,10 @@ final class ExerciseCatalog: ObservableObject {
     private struct DBRow: Decodable {
         let id: String?; let name: String?; let equipment: String?; let category: String?
         let primaryMuscles: [String]?; let images: [String]?; let instructions: [String]?
+        let mechanic: String?; let secondaryMuscles: [String]?
     }
 
-    private static func parse(_ d: Data) -> [CatalogExercise] {
+    static func parse(_ d: Data) -> [CatalogExercise] {
         guard let rows = try? JSONDecoder().decode([DBRow].self, from: d) else { return [] }
         let idOK = try! NSRegularExpression(pattern: #"^[A-Za-z0-9_-]+$"#)
         return rows.compactMap { r in
@@ -60,7 +61,8 @@ final class ExerciseCatalog: ObservableObject {
                                    equip: PWATables.EQUIP_FIX[id] ?? r.equipment ?? "",
                                    tracking: PWATables.TIMED_HOLDS.contains(id) ? "duration" : "weight_reps",
                                    assist: false, image: r.images?.first, custom: false,
-                                   images: r.images ?? [], instructions: r.instructions ?? [])
+                                   images: r.images ?? [], instructions: r.instructions ?? [],
+                                   mechanic: PWATables.MECH_FIX[id] ?? r.mechanic ?? "", secondary: r.secondaryMuscles ?? [], dbEquip: r.equipment ?? "")
         }
     }
 

@@ -62,6 +62,12 @@ struct CatalogExercise: Codable, Equatable, Identifiable {
     var category = ""
     var images: [String] = []
     var instructions: [String] = []
+    /// exercise-db `mechanic` / built-ins' own (compound | isolation), and secondary muscles: the
+    /// Metrics strength and credit math (exCredits) reads them. `dbEquip` is exercise-db's raw
+    /// equipment (strEquip reads it before EQUIP_FIX).
+    var mechanic = ""
+    var secondary: [String] = []
+    var dbEquip = ""
 }
 
 // MARK: - JSON (blob) shape
