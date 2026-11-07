@@ -37,6 +37,8 @@
 		8A503434F8D790C940101B8A /* WorkoutSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB515C9976E9D70D89DF7356 /* WorkoutSession.swift */; };
 		EE2AA99D973E1BBB58ACD880 /* ActiveWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777EEAA7560F5B8ED9A1DE60 /* ActiveWorkoutView.swift */; };
 		BA2C2C32B27C27203C5A37F9 /* RoutinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8135359F6DED927A98346B /* RoutinesView.swift */; };
+		75EC7D6C19333B7B6657EFE6 /* LibraryMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B802B75FC11BDA0C9416CD /* LibraryMath.swift */; };
+		DE0F418F3A62F6C353BA586D /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 208A502B9172126234A57B5C /* LibraryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -72,6 +74,8 @@
 		BB515C9976E9D70D89DF7356 /* WorkoutSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutSession.swift; sourceTree = "<group>"; };
 		777EEAA7560F5B8ED9A1DE60 /* ActiveWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveWorkoutView.swift; sourceTree = "<group>"; };
 		7E8135359F6DED927A98346B /* RoutinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutinesView.swift; sourceTree = "<group>"; };
+		84B802B75FC11BDA0C9416CD /* LibraryMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMath.swift; sourceTree = "<group>"; };
+		208A502B9172126234A57B5C /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -150,6 +154,7 @@
 		4BE43130E63E6223C39B0FA6 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				208A502B9172126234A57B5C /* LibraryView.swift */,
 				7E8135359F6DED927A98346B /* RoutinesView.swift */,
 				777EEAA7560F5B8ED9A1DE60 /* ActiveWorkoutView.swift */,
 				8A8A89E3E7F91072A1A66A7A /* WorkoutSheets.swift */,
@@ -190,6 +195,7 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				84B802B75FC11BDA0C9416CD /* LibraryMath.swift */,
 				BB515C9976E9D70D89DF7356 /* WorkoutSession.swift */,
 				1CEC90B399EDBC94D1D70658 /* ExerciseCatalog.swift */,
 				0A95E972229275FD818990D0 /* PWATables.swift */,
@@ -278,6 +284,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DE0F418F3A62F6C353BA586D /* LibraryView.swift in Sources */,
+				75EC7D6C19333B7B6657EFE6 /* LibraryMath.swift in Sources */,
 				BA2C2C32B27C27203C5A37F9 /* RoutinesView.swift in Sources */,
 				EE2AA99D973E1BBB58ACD880 /* ActiveWorkoutView.swift in Sources */,
 				8A503434F8D790C940101B8A /* WorkoutSession.swift in Sources */,

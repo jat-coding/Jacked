@@ -29,8 +29,10 @@ final class ExerciseCatalog: ObservableObject {
             return CatalogExercise(id: id, name: o["name"]?.string ?? id, muscle: o["muscle"]?.string ?? "", equip: o["equip"]?.string ?? "",
                                    tracking: o["tracking"]?.string ?? "weight_reps", assist: o["assist"]?.truthy ?? false, image: nil, custom: true)
         }
-        let warm = PWATables.builtIns.filter { $0.id.hasPrefix("wu_") }
+        let warm = PWATables.builtIns.filter { $0.id.hasPrefix("wu_") }.map { e -> CatalogExercise in var e = e; e.category = "warmup"; return e }
+        // allEx(): only the built-in runs carry a category ("cardio"); exercise-db rows are listed without one.
         let rest = PWATables.builtIns.filter { !$0.id.hasPrefix("wu_") }
+            .map { e -> CatalogExercise in var e = e; if e.tracking == "distance" { e.category = "cardio" }; return e }
         return (cust + rest + db + warm).map(rn)
     }
 
@@ -43,7 +45,7 @@ final class ExerciseCatalog: ObservableObject {
 
     private struct DBRow: Decodable {
         let id: String?; let name: String?; let equipment: String?; let category: String?
-        let primaryMuscles: [String]?; let images: [String]?
+        let primaryMuscles: [String]?; let images: [String]?; let instructions: [String]?
     }
 
     private static func parse(_ d: Data) -> [CatalogExercise] {
@@ -56,7 +58,8 @@ final class ExerciseCatalog: ObservableObject {
             return CatalogExercise(id: id, name: prettyDB(r.name ?? id, r.equipment ?? ""), muscle: m == "abdominals" ? "core" : m,
                                    equip: PWATables.EQUIP_FIX[id] ?? r.equipment ?? "",
                                    tracking: PWATables.TIMED_HOLDS.contains(id) ? "duration" : "weight_reps",
-                                   assist: false, image: r.images?.first, custom: false)
+                                   assist: false, image: r.images?.first, custom: false,
+                                   images: r.images ?? [], instructions: r.instructions ?? [])
         }
     }
 

@@ -1,6 +1,6 @@
 // Screenshot the LOCAL PWA (python http.server over jacked-pwa/) logged in as the THROWAWAY
 // iOS test account. Live Supabase, same account as the simulator, so both sides show the same data.
-// node pwa_shot.mjs <out.png> [day:YYYY-MM-DD|workout:0|active:<exId>=<lb>x<reps>,...;<exId>=...]
+// node pwa_shot.mjs <out.png> [day:YYYY-MM-DD|workout:0|lib|exinfo:<exId>|active:<exId>=<lb>x<reps>,...;<exId>=...]
 // active: starts an empty workout and logs those sets through uSet/togSet (never finished, never saved).
 import { createRequire } from 'module'; import { spawn } from 'child_process'; import fs from 'fs';
 const require = createRequire('/home/roni/agent/projects/Jacked/tests/e2e/');
@@ -22,6 +22,8 @@ try {
   await p.evaluate(() => { document.querySelectorAll('.modal.open,.mo.open').forEach(m => m.classList.remove('open')); });
   if (open.startsWith('day:')) await p.evaluate(d => openDay(d), open.slice(4));
   if (open.startsWith('workout:')) await p.evaluate(i => { const h = gH(); openWD(h[h.length - 1 - i].id); }, +open.slice(8));
+  if (open === 'lib' || open.startsWith('exinfo:')) { await p.evaluate(() => sp('exercises')); await p.waitForTimeout(2500); }
+  if (open.startsWith('exinfo:')) await p.evaluate(id => openExInfo(id), open.slice(7));
   if (open.startsWith('active:')) await p.evaluate(script => {
     startEmpty();
     for (const part of script.split(';')) {
