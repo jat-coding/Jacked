@@ -27,15 +27,37 @@ final class WorkoutSession: ObservableObject {
         active = (try? Data(contentsOf: Self.fileURL(code))).flatMap { try? JSONDecoder().decode(ActiveWorkout.self, from: $0) }
     }
 
-    // MARK: start (startEmpty / startRW)
+    // MARK: start (startEmpty / startEmptyOn / startRW)
+
+    /// awBusy: a start while another workout is open waits for "Discard & start" (busyStart).
+    @Published var busyStart: (() -> Void)?
+    var busySets: Int { active?.exercises.reduce(0) { $0 + $1.sets.filter(\.done).count } ?? 0 }
+    private func ifFree(_ f: @escaping () -> Void) -> Bool {
+        guard active != nil else { return true }
+        busyStart = { [weak self] in self?.active = nil; f() }
+        return false
+    }
 
     func startEmpty() {
+        guard ifFree({ [weak self] in self?.startEmpty() }) else { return }
         active = ActiveWorkout(id: "w\(Self.nowMs)", routineId: nil, name: "Quick Workout", date: Self.isoNow(),
                                exercises: [], startedAt: Double(Self.nowMs))
         presented = true
     }
 
+    /// startEmptyOn: a workout dated noon local time on a past calendar day ("YYYY-MM-DD").
+    func startEmpty(on dayKey: String) {
+        guard ifFree({ [weak self] in self?.startEmpty(on: dayKey) }) else { return }
+        let p = dayKey.split(separator: "-").compactMap { Int($0) }
+        guard p.count == 3, let d = Calendar.current.date(from: DateComponents(year: p[0], month: p[1], day: p[2], hour: 12)) else { return }
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        active = ActiveWorkout(id: "w\(Self.nowMs)", routineId: nil, name: "Workout", date: f.string(from: d),
+                               exercises: [], startedAt: Double(Self.nowMs))
+        presented = true
+    }
+
     func start(routine r: [String: JSONValue], catalog: ExerciseCatalog, raw: [String: JSONValue]) {
+        guard ifFree({ [weak self] in self?.start(routine: r, catalog: catalog, raw: raw) }) else { return }
         let ids = (r["exercises"]?.array ?? []).compactMap(\.string)
         active = ActiveWorkout(id: "w\(Self.nowMs)", routineId: r["id"]?.string, name: r["name"]?.string ?? "Workout",
                                date: Self.isoNow(), exercises: ids.map { exercise(for: catalog.byId($0, raw: raw), raw: raw) },

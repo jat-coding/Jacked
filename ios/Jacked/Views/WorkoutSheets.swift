@@ -6,6 +6,7 @@ struct DaySheet: View {
     let workouts: [Workout]
     let settings: Settings
     var onOpen: (Workout) -> Void
+    var onLog: () -> Void = {}
 
     var body: some View {
         SheetScaffold(title: JackedDate.dayTitle(dayKey)) {
@@ -48,6 +49,8 @@ struct DaySheet: View {
                     .card(fill: Theme.bg3, radius: Theme.radius)
                 }
             }
+            Button("+ Log a workout for this day") { onLog() }
+                .buttonStyle(AccentButtonStyle()).padding(.top, 10)
         }
     }
 
