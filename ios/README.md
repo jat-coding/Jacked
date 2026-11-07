@@ -5,7 +5,7 @@ Plan and screen inventory: [`../IOS_REWRITE_PLAN.md`](../IOS_REWRITE_PLAN.md).
 Stage-by-stage status: [`REWRITE_STATUS.json`](REWRITE_STATUS.json), shown on JatBot OS > Status >
 Jacked. Update it in the same commit whenever a stage moves.
 
-**State (2026-11-07): see REWRITE_STATUS.json.** Home, safe saving, workout logging, Library and Routines are in; Metrics, Friends and Settings are next.
+**State (2026-11-07): see REWRITE_STATUS.json.** Home, safe saving, workout logging, Library, Routines and Metrics are in; badges, Friends and Settings are next.
 wired to the live auth contract, plus a placeholder signed-in screen that reads your own
 profile row to prove the session works. No workout screens yet. No writes to any table from
 the app itself (sign-up creates the account through the `jacked-auth` edge function, exactly
