@@ -31,7 +31,9 @@ try {
       const ei = aw.exercises.length - 1;
       sets.split(',').forEach((st, si) => { const [w, r] = st.split('x');
         while (aw.exercises[ei].sets.length <= si) addSet(ei);
-        if (+w > 0) uSet(ei, si, 'weight', w, true); uSet(ei, si, 'reps', r); togSet(ei, si); });
+        const t = aw.exercises[ei].tracking;
+        if (+w > 0) uSet(ei, si, 'weight', w, t === 'duration' ? 'dur' : t === 'distance' ? false : true);
+        uSet(ei, si, 'reps', r, t === 'distance' ? 'clock' : undefined); togSet(ei, si); });
     }
     renderWS();
   }, open.slice(7));

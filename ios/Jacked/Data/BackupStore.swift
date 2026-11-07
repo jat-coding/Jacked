@@ -24,7 +24,7 @@ final class BackupStore: ObservableObject {
     @Published private(set) var dirty = false
 
     /// Exercise ids whose note this phone edited since its last landed write (the PWA's
-    /// jacked_exNotesPending). Nothing on the iPhone edits notes yet; wired for when it does.
+    /// jacked_exNotesPending), set by setExNote.
     private var pendingNotes: [String] = []
     private var pushing = false
     private var pushAgain = false
@@ -95,6 +95,19 @@ final class BackupStore: ObservableObject {
         dirty = true
         saveToDisk(code: code)
         return await push(auth: auth)
+    }
+
+    /// setExNote: the per-exercise note ("remembered next time"), blank removes it. Marked pending
+    /// so the merge keeps this phone's version over the cloud's until the write lands.
+    @discardableResult
+    func setExNote(_ exId: String, _ text: String, auth: AuthStore) async -> Bool {
+        let v = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !pendingNotes.contains(exId) { pendingNotes.append(exId) }
+        return await edit(auth: auth) { raw in
+            var n = raw["jk_exNotes"]?.object ?? [:]
+            n[exId] = v.isEmpty ? nil : .string(v)
+            raw["jk_exNotes"] = .object(n)
+        }
     }
 
     /// saveWE() for a name-only edit: trimmed, blank keeps the old name. Every other field of
