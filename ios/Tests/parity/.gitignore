@@ -1,7 +1,9 @@
-fixtures.json
-swift-out.json
+badges-fixtures.json
+badges-swift-out.json
+exercises.json
 finish-fixtures.json
 finish-swift-out.json
+fixtures.json
 metrics-fixtures.json
 metrics-swift-out.json
-exercises.json
+swift-out.json
