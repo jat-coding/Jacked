@@ -3,7 +3,7 @@ import Foundation
 /// Any JSON value, kept exactly as it came. The backup blob is stored and round-tripped as
 /// this, so keys the iPhone app doesn't understand (yet) are never dropped
 /// (SYNC_PLAYBOOK.md section 5, "extras preservation").
-enum JSONValue: Codable, Equatable {
+enum JSONValue: Codable, Hashable {
     case null
     case bool(Bool)
     case number(Double)
@@ -53,4 +53,38 @@ enum JSONValue: Codable, Equatable {
         }
     }
     var int: Int? { double.flatMap { $0.isFinite ? Int($0) : nil } }
+}
+
+extension JSONValue {
+    /// JavaScript truthiness (`if (x)`): null, false, 0, NaN and "" are falsy; every array and
+    /// object, even an empty one, is truthy. The merge port leans on this to match index.html.
+    var truthy: Bool {
+        switch self {
+        case .null: return false
+        case .bool(let b): return b
+        case .number(let n): return n != 0 && !n.isNaN
+        case .string(let s): return !s.isEmpty
+        case .array, .object: return true
+        }
+    }
+
+    /// `Number(x)` for the cases the blob actually holds (numbers, numeric strings, bools, null).
+    var jsNumber: Double {
+        switch self {
+        case .number(let n): return n
+        case .bool(let b): return b ? 1 : 0
+        case .null: return 0
+        case .string(let s):
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? 0 : (Double(t) ?? .nan)
+        default: return .nan
+        }
+    }
+}
+
+/// JavaScript `x || 0` on an optional JSON number.
+func jsNum(_ v: JSONValue?) -> Double {
+    guard let v, v.truthy else { return 0 }
+    let n = v.jsNumber
+    return n.isNaN ? 0 : n
 }
