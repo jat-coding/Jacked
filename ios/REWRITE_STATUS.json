@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-07T09:00:00-07:00",
+  "updated": "2026-11-07T09:35:00-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -101,8 +101,8 @@
     {
       "id": "rest-of-app",
       "title": "Library, stats and friends",
-      "status": "active",
-      "summary": "Nearly done: username change, profile photo and adding an exercise to a past workout are in and checked. Left: Import (a Jacked backup or a Hevy file).",
+      "status": "done",
+      "summary": "Done: every screen of the web app is on the iPhone, checked side by side on the throwaway test account. Last piece: Import (a Jacked backup or a Hevy file).",
       "detail": [
         "Library done: search, the muscle chips, favourites first then what you've used, the PR on each row, and the exercise page with photos, your suggested PR, recent top weights and the how-to steps. Favourite, hide and create a custom exercise all save through the careful save layer.",
         "Routines done: your routines in their sections like the web app, new, edit and delete a routine (it files itself into a section the same way), and Trusted Programs with + Add to Routines.",
@@ -136,7 +136,7 @@
         "Edit Workout can now add an exercise you forgot (+ Add Exercise, its first set already ticked, the same one twice is refused). Checked on the test account: Hammer Curls added to a past workout on the iPhone, and the web app showed the same 2 sets, 661 lb and the new Hammer Curls record with its star.",
         "Profile photo: Add Photo, or Edit Photo with Edit and Delete behind it, like the web app. The picture is cropped square and small before upload. Checked on the test account: the web app showed the iPhone's photo, and Delete removed it on both sides.",
         "Username change on My Profile: refuses one that's taken, then moves the account, its saved data and its friend links to the new name in one server step. Checked on the test account: changed it, signed in again by the new name with all 19 workouts there, then changed it back.",
-        "Still to do: Import (a Jacked backup file or a Hevy file)."
+        "Import on My Profile: a Jacked backup file or a Hevy CSV export (Strong-style files too), with the web app's same questions (replace your data? pounds or kilograms?). The import math is copied from the web app and checked on the Mac: 660 of 660 random files and dates gave the same result on both sides, exercise matching included. Checked on the test account: a Hevy file with a push day, a run and a leg day came in exactly as the web app would save it, same sets, records and stars on the day view; importing it again added nothing; a backup file with one extra workout added it and the web app showed it."
       ],
       "commits": [
         "9c3cee0",
@@ -165,14 +165,16 @@
         "d204e62",
         "f330df1",
         "4496d1a",
-        "749b84c"
+        "749b84c",
+        "e010d83",
+        "975558f"
       ]
     },
     {
       "id": "account-deletion",
       "title": "Settings and account deletion",
-      "status": "active",
-      "summary": "Profile and settings are in. The Delete Account screen is built, but the part that actually deletes waits for your go.",
+      "status": "gate",
+      "summary": "Built on the iPhone. The part that actually deletes an account waits for your go.",
       "detail": [
         "My Profile works like the web app: name, units, default rest, rep range, auto rest timer, your username with Copy (and changing it), your photo, and Body Metrics (body, body weight, birthday with your age). Saved through the careful save layer; the web app showed the same values after an iPhone save on the test account.",
         "Also on Profile: Export a backup file, Sync now, add or change the email on file, Sign Out.",
