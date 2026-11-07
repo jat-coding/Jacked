@@ -1,6 +1,7 @@
 // Screenshot the LOCAL PWA (python http.server over jacked-pwa/) logged in as the THROWAWAY
 // iOS test account. Live Supabase, same account as the simulator, so both sides show the same data.
-// node pwa_shot.mjs <out.png> [day:YYYY-MM-DD|workout:0]
+// node pwa_shot.mjs <out.png> [day:YYYY-MM-DD|workout:0|active:<exId>=<lb>x<reps>,...;<exId>=...]
+// active: starts an empty workout and logs those sets through uSet/togSet (never finished, never saved).
 import { createRequire } from 'module'; import { spawn } from 'child_process'; import fs from 'fs';
 const require = createRequire('/home/roni/agent/projects/Jacked/tests/e2e/');
 const { chromium } = require('playwright');
@@ -21,6 +22,19 @@ try {
   await p.evaluate(() => { document.querySelectorAll('.modal.open,.mo.open').forEach(m => m.classList.remove('open')); });
   if (open.startsWith('day:')) await p.evaluate(d => openDay(d), open.slice(4));
   if (open.startsWith('workout:')) await p.evaluate(i => { const h = gH(); openWD(h[h.length - 1 - i].id); }, +open.slice(8));
+  if (open.startsWith('active:')) await p.evaluate(script => {
+    startEmpty();
+    for (const part of script.split(';')) {
+      const [id, sets] = part.split('='); const ex = byId(id);
+      aw.exercises.push({ exId: id, name: ex.name, muscle: ex.muscle || '', equip: ex.equip || '', assist: ex.assist || false,
+        tracking: ex.tracking || 'weight_reps', imgUrl: imgUrl(ex) || null, sets: seedSets(id) });
+      const ei = aw.exercises.length - 1;
+      sets.split(',').forEach((st, si) => { const [w, r] = st.split('x');
+        while (aw.exercises[ei].sets.length <= si) addSet(ei);
+        if (+w > 0) uSet(ei, si, 'weight', w, true); uSet(ei, si, 'reps', r); togSet(ei, si); });
+    }
+    renderWS();
+  }, open.slice(7));
   await p.waitForTimeout(800);
   await p.screenshot({ path: out });
   console.log(out, await p.evaluate(() => JSON.parse(localStorage.getItem('jk_hist')).length + ' workouts'));
