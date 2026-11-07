@@ -66,6 +66,35 @@ final class WorkoutSession: ObservableObject {
         presented = true
     }
 
+    /// copyFriendWorkout / _copyFriendWorkoutNow: a friend's shared workout as a fresh session of your own,
+    /// their numbers seeded as greyed targets (pw / pr). Exercises not in your library are skipped
+    /// (resolveSharedEx: by id, else by name). Returns the toast text, or nil when nothing could be copied.
+    func start(copying w: SharedWorkout, catalog: ExerciseCatalog, raw: [String: JSONValue]) -> String? {
+        let all = catalog.all(custom: raw)
+        var exs: [LogExercise] = [], skipped = 0
+        for e in w.ex {
+            guard let c = all.first(where: { !e.id.isEmpty && $0.id == e.id })
+                    ?? all.first(where: { !e.n.isEmpty && $0.name.lowercased() == e.n.lowercased() }) else { skipped += 1; continue }
+            var x = exercise(for: c, raw: raw)
+            x.tracking = c.tracking.isEmpty ? (e.t.isEmpty ? "weight_reps" : e.t) : c.tracking
+            let sets = e.sets.map { s -> LogSet in
+                var l = LogSet(pw: s.w ?? s.mi ?? 0, pr: s.r ?? s.min ?? s.sec ?? 0)
+                if PWATables.SINGLE_BOTH_IDS.contains(c.id) { l.single = PWATables.SINGLE_DEFAULT_IDS.contains(c.id) }
+                return l
+            }
+            x.sets = sets.isEmpty ? [LogSet()] : sets
+            exs.append(x)
+        }
+        if exs.isEmpty { return nil }
+        let begin: () -> Void = { [weak self] in
+            self?.active = ActiveWorkout(id: "w\(Self.nowMs)", routineId: nil, name: w.name.isEmpty ? "Copied Workout" : w.name,
+                                         date: Self.isoNow(), exercises: exs, startedAt: Double(Self.nowMs))
+            self?.presented = true
+        }
+        if ifFree(begin) { begin() }
+        return skipped > 0 ? "Copied \u{2713} \u{00B7} \(skipped) exercise\(skipped > 1 ? "s" : "") skipped (not in your library)" : "Workout copied \u{2713}"
+    }
+
     func exercise(for c: CatalogExercise, raw: [String: JSONValue]) -> LogExercise {
         var e = LogExercise(exId: c.id, name: c.name, muscle: c.muscle, equip: c.equip, assist: c.assist, tracking: c.tracking,
                     imgUrl: c.image.map { ExerciseImages.base + $0 },
