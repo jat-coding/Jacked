@@ -20,6 +20,8 @@ struct RoutinesView: View {
                 }
                 Button { session.startEmpty() } label: { Label("Empty Workout", systemImage: "plus").font(Theme.body(15, .semibold)) }
                     .buttonStyle(GhostButtonStyle())
+                TrustedPrograms()
+                BlockTitle(text: "My Routines").padding(.top, 8)
                 if blocks.isEmpty {
                     VStack(spacing: 4) {
                         Text("No routines").font(Theme.heading(22, .bold)).foregroundStyle(Theme.text2)
@@ -28,7 +30,8 @@ struct RoutinesView: View {
                     .padding(.vertical, 30)
                 }
                 ForEach(blocks, id: \.name) { b in
-                    BlockTitle(text: b.name).padding(.top, 8)
+                    Text(b.name.uppercased()).font(Theme.heading(17, .extraBold)).foregroundStyle(Theme.text)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 4)
                     if b.routines.isEmpty {
                         Text("No routines yet — edit a routine to move it here.").font(Theme.body(12)).foregroundStyle(Theme.muted)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -57,6 +60,67 @@ struct RoutinesView: View {
     }
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var catalog: ExerciseCatalog
+}
+
+/// The Trusted Programs strip (renderCurated): each program's workouts and "+ Add to Routines" (addCurated).
+struct TrustedPrograms: View {
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var store: BackupStore
+    @EnvironmentObject private var catalog: ExerciseCatalog
+    @State private var added: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "star.fill").foregroundStyle(Color(hex: 0xFFD700))
+                Text("TRUSTED PROGRAMS").font(Theme.heading(24, .extraBold)).foregroundStyle(Theme.text)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(Array(Curated.programs.enumerated()), id: \.offset) { i, p in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(p.name).font(Theme.heading(18, .extraBold)).foregroundStyle(Theme.text)
+                            Text(p.desc).font(Theme.body(11)).foregroundStyle(Theme.muted)
+                            ForEach(p.routines, id: \.name) { r in Text(r.name).font(Theme.body(12)).foregroundStyle(Theme.text2).padding(.top, 2) }
+                            Text("\(p.routines.count) workout\(p.routines.count == 1 ? "" : "s") · \(p.source)")
+                                .font(Theme.body(10)).foregroundStyle(Theme.muted).padding(.top, 4)
+                            Spacer(minLength: 6)
+                            Button(added == p.name ? "Added ✓" : "+ Add to Routines") { Task { await add(i) } }
+                                .font(Theme.body(12, .bold)).foregroundStyle(Theme.onAccent)
+                                .padding(.horizontal, 12).padding(.vertical, 6)
+                                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 8))
+                                .disabled(added == p.name)
+                        }
+                        .frame(width: 210, alignment: .leading).frame(minHeight: 150)
+                        .padding(14).card(fill: Theme.bg3)
+                    }
+                }
+            }
+        }
+        .padding(14).card()
+        .task {
+            #if DEBUG
+            if let i = DevHooks.addProgram, Curated.programs.indices.contains(i) { await add(i); DevHooks.log("dev program added \(i)") }
+            #endif
+        }
+    }
+
+    /// addCurated: every workout of the program becomes one of your routines, desc "<program> · <source>".
+    private func add(_ i: Int) async {
+        let p = Curated.programs[i]
+        await catalog.load()
+        let base = Int64(Date().timeIntervalSince1970 * 1000)
+        _ = await store.edit(auth: auth) { raw in
+            var rs = raw["jk_routines"]?.array ?? []
+            for (n, r) in p.routines.enumerated() {
+                let secId = RoutineMath.sectionId(for: r.ids, raw: &raw, catalog: catalog)
+                rs.append(.object(["id": .string("r\(base)_\(n)"), "name": .string(r.name), "desc": .string("\(p.name) · \(p.source)"),
+                                   "exercises": .array(r.ids.map(JSONValue.string)), "sectionId": .string(secId)]))
+            }
+            raw["jk_routines"] = .array(rs)
+        }
+        added = p.name
+    }
 }
 
 struct RoutineRow: View {
@@ -196,6 +260,21 @@ enum RoutineMath {
         return top.key
     }
 
+    /// suggestSectionId + findOrCreateSection: the majority group's section, else "Unsorted", made if missing.
+    @MainActor
+    static func sectionId(for ids: [String], raw: inout [String: JSONValue], catalog: ExerciseCatalog?) -> String {
+        let r = raw
+        let g = majorityGroup(ids) { id in catalog?.byId(id, raw: r)
+            ?? CatalogExercise(id: id, name: id, muscle: "", equip: "", tracking: "weight_reps", assist: false, image: nil, custom: false) }
+        let label = g.flatMap { sectionLabel[$0] } ?? "Unsorted"
+        var secs = raw["jk_routineSections"]?.array ?? []
+        if let hit = secs.first(where: { ($0["name"]?.string ?? "").lowercased() == label.lowercased() }), let id = hit["id"]?.string { return id }
+        let id = "sec\(Int64(Date().timeIntervalSince1970 * 1000))" + String(UUID().uuidString.lowercased().prefix(5))
+        secs.append(.object(["id": .string(id), "name": .string(label), "order": .null]))
+        raw["jk_routineSections"] = .array(secs)
+        return id
+    }
+
     /// saveR(): new routine "r<ms>" or merged into the existing one; section picked or auto-filed.
     @MainActor
     static func save(_ d: RoutineDraft, store: BackupStore, auth: AuthStore, catalog: ExerciseCatalog? = nil) async -> Bool {
@@ -203,20 +282,7 @@ enum RoutineMath {
         guard !n.isEmpty else { return false }
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         return await store.edit(auth: auth) { raw in
-            var secId = d.sectionId
-            if secId.isEmpty {
-                let g = majorityGroup(d.exercises) { id in catalog?.byId(id, raw: raw)
-                    ?? CatalogExercise(id: id, name: id, muscle: "", equip: "", tracking: "weight_reps", assist: false, image: nil, custom: false) }
-                let label = g.flatMap { sectionLabel[$0] } ?? "Unsorted"
-                var secs = raw["jk_routineSections"]?.array ?? []
-                if let hit = secs.first(where: { ($0["name"]?.string ?? "").lowercased() == label.lowercased() }), let id = hit["id"]?.string {
-                    secId = id
-                } else {
-                    secId = "sec\(now)" + String(UUID().uuidString.lowercased().prefix(5))
-                    secs.append(.object(["id": .string(secId), "name": .string(label), "order": .null]))
-                    raw["jk_routineSections"] = .array(secs)
-                }
-            }
+            let secId = d.sectionId.isEmpty ? sectionId(for: d.exercises, raw: &raw, catalog: catalog) : d.sectionId
             var rs = raw["jk_routines"]?.array ?? []
             let obj: [String: JSONValue] = ["name": .string(n), "desc": .string(d.desc.trimmingCharacters(in: .whitespacesAndNewlines)),
                                             "exercises": .array(d.exercises.map(JSONValue.string)), "sectionId": .string(secId)]
