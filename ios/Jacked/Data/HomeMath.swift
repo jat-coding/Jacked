@@ -7,6 +7,13 @@ enum JackedDate {
     }()
     private static let iso = ISO8601DateFormatter()
 
+    /// toLocaleDateString('en-US', {month:'numeric', day:'numeric'}): "11/7".
+    static func shortMD(_ s: String) -> String {
+        guard let d = parse(s) else { return "" }
+        let c = Calendar.current.dateComponents([.month, .day], from: d)
+        return "\(c.month!)/\(c.day!)"
+    }
+
     static func isDayKey(_ s: String) -> Bool {
         s.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
     }

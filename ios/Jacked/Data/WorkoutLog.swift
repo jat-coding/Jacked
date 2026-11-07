@@ -58,6 +58,10 @@ struct CatalogExercise: Codable, Equatable, Identifiable {
     var assist: Bool
     var image: String?
     var custom: Bool
+    /// exercise-db extras for the Library: category ("strength", "warmup"...), every photo, how-to steps.
+    var category = ""
+    var images: [String] = []
+    var instructions: [String] = []
 }
 
 // MARK: - JSON (blob) shape
