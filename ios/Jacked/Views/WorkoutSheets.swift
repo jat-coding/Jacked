@@ -59,14 +59,33 @@ struct DaySheet: View {
     }
 }
 
-/// #wdModal, read-only for now: every exercise and set of one finished workout.
-/// Edit / delete / save-as-routine come once saving is safe.
+/// #wdModal: every exercise and set of one finished workout, plus Rename (saveWE for a
+/// name-only edit). Full edit / delete / save-as-routine come with workout logging.
 struct WorkoutDetailSheet: View {
-    let workout: Workout
+    let opened: Workout
     let settings: Settings
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var store: BackupStore
+    @State private var renaming = false
+    @State private var draft = ""
+    @State private var saveNote: String?
+
+    init(workout: Workout, settings: Settings) { opened = workout; self.settings = settings }
+
+    /// Re-read from the store so a rename (or a sync) shows straight away.
+    private var workout: Workout { store.backup.history.first { $0.rawId == opened.rawId && $0.id == opened.id } ?? opened }
 
     var body: some View {
         SheetScaffold(title: workout.name) {
+            HStack {
+                if let saveNote { Text(saveNote).font(Theme.body(12)).foregroundStyle(store.dirty ? Theme.orange : Theme.muted) }
+                Spacer()
+                Button { draft = workout.name; renaming = true } label: {
+                    Label("Rename", systemImage: "pencil").font(Theme.body(13, .semibold))
+                }
+                .tint(Theme.accent)
+                .disabled(opened.rawId == nil)
+            }
             HStack(spacing: 8) {
                 stat(JackedDate.short(workout.date), "Date")
                 stat(workout.duration.isEmpty ? "-" : workout.duration, "Time")
@@ -91,6 +110,18 @@ struct WorkoutDetailSheet: View {
                 }
                 .padding(12)
                 .card(fill: Theme.bg3, radius: Theme.radius)
+            }
+        }
+        .alert("Rename workout", isPresented: $renaming) {
+            TextField("Name", text: $draft)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                guard let id = opened.rawId else { return }
+                let name = draft
+                Task {
+                    let ok = await store.renameWorkout(id: id, to: name, auth: auth)
+                    saveNote = ok ? "Saved" : "Saved on this phone, will sync when online"
+                }
             }
         }
     }
@@ -175,7 +206,8 @@ struct AccountSheet: View {
             }
             .padding(14)
             .card(fill: Theme.bg3, radius: Theme.radius)
-            Text("This preview only reads your data. Nothing is saved from the iPhone yet.")
+            Text(store.dirty ? "Some changes are only on this phone so far. They go out on the next sync."
+                             : "Renaming a workout is saved. Logging new workouts is the next build step.")
                 .font(Theme.body(12)).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, alignment: .leading)
             Button("Sync now") { Task { await store.refresh(auth: auth) } }.buttonStyle(GhostButtonStyle())
             Button("Sign Out") {
