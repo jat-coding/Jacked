@@ -50,6 +50,8 @@ try {
   if (open === 'ach' || open.startsWith('badge:')) { await p.evaluate(() => sp('metrics')); await p.waitForTimeout(1500); await p.evaluate(() => openAch()); }
   if (open.startsWith('badge:')) await p.evaluate(n => badgeInfo(n), open.slice(6));
   // TIERXP=bronze,all: open those tier rows' logged-set lines (toggleTierXp) and print them.
+  // BADGEPLAN=1: print what the badge page's start button would build (badgePlan; never started).
+  if (open.startsWith('badge:') && process.env.BADGEPLAN) console.log(await p.evaluate(n => JSON.stringify(badgePlan(computeBadges().find(b => b.name === n))), open.slice(6)));
   if (open.startsWith('badge:') && process.env.TIERXP) console.log(await p.evaluate(([n, ks]) => ks.split(',').map(k => { const id = (k === 'all' ? 'allxp-' : 'tierxp-') + BADGE_KEY[n] + (k === 'all' ? '' : '-' + k);
     const el = document.getElementById(id); if (!el) return k + ': (not tappable)'; toggleTierXp(id); return k + ': ' + el.innerText; }).join(' | '), [open.slice(6), process.env.TIERXP]));
   if (open === 'ach' || open.startsWith('badge:')) console.log(JSON.stringify(await p.evaluate(() => computeBadges().map(b => [b.name, !!b.earned, b.tier || null, String(b.desc).replace(/<[^>]*>/g, '')]))));
