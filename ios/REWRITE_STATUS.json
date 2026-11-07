@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-07T01:00:00-07:00",
+  "updated": "2026-11-07T01:08:00-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -94,18 +94,24 @@
         "62d887a",
         "c6f56b7",
         "dfa89e2",
-        "5c41e57"
+        "5c41e57",
+        "50350ba"
       ]
     },
     {
       "id": "rest-of-app",
       "title": "Library, stats and friends",
       "status": "active",
-      "summary": "Next: the exercise library, then metrics and badges, then friends and the leaderboard.",
+      "summary": "In progress: the Library tab is in and checked against the web app. Metrics and badges, then friends and the leaderboard, come next.",
       "detail": [
-        "The stats math gets checked number for number against the web app.",
-        "Friends get tested between two throwaway test accounts.",
-        "Also brings what needs that math: the Suggested today card and monthly recap on Home, Gym years, and updating the leaderboard numbers after each saved workout."
+        "Library done: search, the muscle chips, favourites first then what you've used, the PR on each row, and the exercise page with photos, your suggested PR, recent top weights and the how-to steps.",
+        "Favourite, hide and create a custom exercise all save through the careful save layer. Checked on the test account: a favourite and a new custom exercise made on the iPhone showed up in the web app.",
+        "Checked side by side with the web app on the same account: same order, same PRs and suggested PRs, same chart numbers.",
+        "Not in the Library yet: editing an exercise, resetting a PR, a photo for a custom exercise, and the Trusted Programs list. The exercise list needs one online open to download, then works offline.",
+        "Still to do in this step: Metrics and badges (the stats math gets checked number for number against the web app), friends and the leaderboard (tested between two throwaway accounts), the routine editor, and the Home extras that need that math: Suggested today, monthly recap, Gym years, and updating the leaderboard numbers after each saved workout."
+      ],
+      "commits": [
+        "9c3cee0"
       ]
     },
     {
