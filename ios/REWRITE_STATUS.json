@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-07T03:55:00-07:00",
+  "updated": "2026-11-07T07:45:00-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -102,7 +102,7 @@
       "id": "rest-of-app",
       "title": "Library, stats and friends",
       "status": "active",
-      "summary": "Almost done: Library, Routines, Metrics, badges, Friends and the Home extras are in and checked against the web app. Four smaller pieces are left.",
+      "summary": "Nearly done: everything on the earlier list is in and checked against the web app. Left: editing and deleting a past workout, changing your username or photo, and importing a backup.",
       "detail": [
         "Library done: search, the muscle chips, favourites first then what you've used, the PR on each row, and the exercise page with photos, your suggested PR, recent top weights and the how-to steps. Favourite, hide and create a custom exercise all save through the careful save layer.",
         "Routines done: your routines in their sections like the web app, new, edit and delete a routine (it files itself into a section the same way), and Trusted Programs with + Add to Routines.",
@@ -123,7 +123,14 @@
         "Routines: Today's pick is marked on Trusted Programs, a section folds away when you tap its name, a long press renames it, and Reorder moves sections and the routines inside them, plus + Section. All of it showed the same in the web app.",
         "Exercise page: Edit (the full form for your own exercises, name, category, equipment, notes and assist for built-in ones), Reset PR with the web app's warning, and a photo for your own exercises that stays on the phone, like the web app's.",
         "Monthly recap: the tiered badge grid, the Leaderboard crown when you topped last month, and Share, which sends the recap as a picture with a one-line caption. The October recap matched the web app line for line.",
-        "Still to do in this step: the front and back body drawing on Metrics, the dumbbell and Smith machine how-to sections on a badge page, the crown next to a month in the Monthly Recaps list, and the gold PR lines on very old workouts saved before the app kept a PR record (the web app works those out by replaying all history; on the test account it shows only the count there too)."
+        "Muscle Map now has the front and back body drawing, coloured by the same strength levels. It uses the web app's own artwork, and the colours matched region for region on the test account.",
+        "Monthly Recaps list: the crown next to last month when you topped your board. October 2026 shows it on both sides.",
+        "Badge pages: the dumbbell and Smith machine sections on Bench, the dumbbell section on Shoulder and the two run types on Cardio, with the web app's exact words.",
+        "Badge pages: tap a tier you reached, or Highest ever, to see the exact set that earned it. Bench and Cardio showed the same date, exercise and numbers as the web app.",
+        "Badge pages: the start button (Start a bench workout, Start a big-3 workout, Train your challenge muscle now, and so on). It picks the same exercises as the web app, and adds them to an open workout if you already have one.",
+        "Gold PR lines on old workouts saved before the app kept a PR record: worked out by replaying your whole history like the web app. Checked on the Mac: 300 of 300 random histories gave the same stars. On the test account both apps show the count only on those days, because the saved count there disagrees with the replay.",
+        "A past workout can be saved as a routine. The web app showed the new routine.",
+        "Still to do: Edit Workout and Delete Workout on a past workout. In the web app both also rebuild your records across the rest of your history, and that part has to be copied and checked before it can be trusted with your data. Also not in yet: changing your username, changing your profile photo, and Import (a Jacked backup or a Hevy file)."
       ],
       "commits": [
         "9c3cee0",
@@ -144,18 +151,28 @@
         "1efcdbe",
         "a7c396c",
         "16cc24c",
-        "dc95f68"
+        "dc95f68",
+        "a65b1ed",
+        "fc772f6",
+        "b73626c",
+        "6e51124",
+        "d204e62"
       ]
     },
     {
       "id": "account-deletion",
       "title": "Settings and account deletion",
-      "status": "todo",
-      "summary": "Profile and settings, and the delete-my-account button Apple requires.",
+      "status": "active",
+      "summary": "Profile and settings are in. The Delete Account screen is built, but the part that actually deletes waits for your go.",
       "detail": [
-        "App Store blocker: Apple rejects apps that let you sign up but not delete the account.",
-        "Needs a small server change, which waits for your go before it runs live.",
-        "Waiting until the basics above work, your call."
+        "My Profile works like the web app: name, units, default rest, rep range, auto rest timer, your username with Copy, and Body Metrics (body, body weight, birthday with your age). Saved through the careful save layer; the web app showed the same values after an iPhone save on the test account.",
+        "Also on Profile: Export a backup file, Sync now, add or change the email on file, Sign Out.",
+        "Delete Account (Apple requires it): a warning page, type your username to confirm, then Delete. Right now that last button deletes nothing and says so, because the server side is switched off.",
+        "Tested on the test account: the delete steps ran to the end, and the account still had all 19 workouts afterwards.",
+        "Next, after your go: a small server function that removes the account, its saved data and its friendships. The iPhone side is already wired to call it."
+      ],
+      "commits": [
+        "514bcf6"
       ]
     },
     {
