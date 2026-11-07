@@ -20,7 +20,11 @@ def call(method, path, body=None, tok=K, extra=None):
     try:
         with urllib.request.urlopen(r) as resp: t = resp.read(); return json.loads(t) if t else None
     except urllib.error.HTTPError as e: print("HTTP", e.code, e.read()[:300].decode()); sys.exit(1)
-st = call("POST", "/rest/v1/rpc/account_status", {"p_code": me})
+import os  # the sign-in id never changes; caching it keeps repeated runs under account_status's rate limit
+_cf = os.path.expanduser("~/.cache/jacked-ios-test-emails.json"); _c = json.load(open(_cf)) if os.path.exists(_cf) else {}
+st = {"email": _c[me]} if me in _c else call("POST", "/rest/v1/rpc/account_status", {"p_code": me})
+if "email" not in st: print("account_status:", st); sys.exit(1)
+_c[me] = st["email"]; json.dump(_c, open(_cf, "w"))
 tok = call("POST", "/auth/v1/token?grant_type=password", {"email": st["email"], "password": json.load(open(CFG[who]))["password"]})["access_token"]
 q = urllib.parse.quote
 pair = f"or=(and(from_code.eq.{q(me)},to_code.eq.{q(other)}),and(from_code.eq.{q(other)},to_code.eq.{q(me)}))"
