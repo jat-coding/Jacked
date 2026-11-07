@@ -10,6 +10,8 @@ struct MetricsView: View {
     @State private var showOrder = false
     @State private var recap: MetricsMath.Recap?
     @State private var showScoring = false
+    @State private var showAch = false
+    @State private var devBadge: Badge?
 
     var body: some View {
         let raw = store.backup.raw
@@ -58,6 +60,12 @@ struct MetricsView: View {
         .sheet(isPresented: $showOrder) { CardOrderSheet() }
         .sheet(item: $recap) { RecapSheet(r: $0, settings: store.backup.settings) }
         .sheet(isPresented: $showScoring) { MuscleScoringSheet(sex: m.sex) }
+        .sheet(isPresented: $showAch) { AchievementsSheet(result: m.computeBadges(), m: m, openBadge: devBadge) }
+        .task(id: "\(store.loadedCode ?? "")|\(catalog.db.count)|\(store.backup.history.count)") {
+            guard store.loadedCode != nil, store.lastSynced != nil else { return }
+            let (st, au, db) = (store, auth, catalog.db)
+            Task { await Self.saveMonthBadges(store: st, auth: au, db: db) }
+        }
         .task(id: store.loadedCode) {
             #if DEBUG
             guard store.loadedCode != nil, !Self.devRan else { return }
@@ -67,6 +75,12 @@ struct MetricsView: View {
                 let p = o.dropFirst(6).split(separator: "-").compactMap { Int($0) }
                 let fresh = MetricsMath(raw: store.backup.raw, lib: ExLib(db: catalog.db, raw: store.backup.raw))
                 if p.count == 2 { recap = fresh.recapData(p[0], p[1] - 1) }
+            }
+            if let o = DevHooks.open, o == "ach" || o.hasPrefix("badge:") {
+                for _ in 0..<40 where catalog.db.isEmpty { try? await Task.sleep(nanoseconds: 250_000_000) }
+                let fresh = MetricsMath(raw: store.backup.raw, lib: ExLib(db: catalog.db, raw: store.backup.raw))
+                devBadge = o.hasPrefix("badge:") ? fresh.computeBadges().list.first { $0.name == String(o.dropFirst(6)) } : nil
+                showAch = true
             }
             // Unstructured, like the buttons: a view's own .task is cancelled with the view, and its write with it.
             let (st, au) = (store, auth)
@@ -142,12 +156,7 @@ struct MetricsView: View {
                 Divider().overlay(Theme.border)
             }
         case "badges":
-            HStack(spacing: 10) {
-                Image(systemName: "medal.fill").foregroundStyle(Color(hex: 0xFFCA4D))
-                Text("Badges earned").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
-                Spacer()
-                Text("Coming in the next build").font(Theme.body(12)).foregroundStyle(Theme.muted)
-            }
+            BadgesCardRow(badges: m.computeBadges().list) { devBadge = nil; showAch = true }
         default: EmptyView()
         }
     }
