@@ -13,6 +13,9 @@ import Foundation
 ///                                         log those sets through the same calls the buttons make
 ///   SIMCTL_CHILD_JACKED_DEV_ROUTINE       start the LOG workout from the routine with this name
 ///   SIMCTL_CHILD_JACKED_DEV_LOGDAY        YYYY-MM-DD: start the LOG workout dated to that past day
+///   SIMCTL_CHILD_JACKED_DEV_SUPERSET      <i>,<j>: pair those two exercises of the LOG workout
+///   SIMCTL_CHILD_JACKED_DEV_NOTE          <exId>|<text>: save an exercise note through the real save path
+///   SIMCTL_CHILD_JACKED_DEV_DURUNIT       sec|min|hr for every hold in the LOG workout
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
@@ -36,6 +39,12 @@ enum DevHooks {
     static var finish: Bool { env["JACKED_DEV_FINISH"] == "1" }
     static var cancel: Bool { env["JACKED_DEV_CANCEL"] == "1" }
     static var logDay: String? { env["JACKED_DEV_LOGDAY"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var note: (exId: String, text: String)? {
+        guard let r = env["JACKED_DEV_NOTE"], let bar = r.firstIndex(of: "|") else { return nil }
+        return (String(r[..<bar]), String(r[r.index(after: bar)...]))
+    }
+    static var durUnit: String? { env["JACKED_DEV_DURUNIT"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var superset: [Int] { (env["JACKED_DEV_SUPERSET"] ?? "").split(separator: ",").compactMap { Int($0) } }
     static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
     static var casDelay: Double { 0 }
@@ -49,5 +58,8 @@ enum DevHooks {
     static var finish: Bool { false }
     static var cancel: Bool { false }
     static var logDay: String? { nil }
+    static var superset: [Int] { [] }
+    static var note: (exId: String, text: String)? { nil }
+    static var durUnit: String? { nil }
     #endif
 }

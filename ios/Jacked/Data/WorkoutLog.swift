@@ -27,6 +27,10 @@ struct LogExercise: Codable, Equatable, Identifiable {
     var bwMode: String?
     /// Exercise-level Single / Both choice once tapped on the card (setSingleArmEx).
     var single: Bool?
+    /// Two exercises paired as a superset share this id (grouping only).
+    var supersetId: String?
+    /// Hold display unit picked on the card: sec | min | hr (stored values stay seconds).
+    var durUnit: String?
     var sets: [LogSet] = []
     var id: String { uid }
 }
@@ -78,6 +82,7 @@ extension LogExercise {
         muscle = o["muscle"]?.string ?? ""; equip = o["equip"]?.string ?? ""
         assist = o["assist"]?.truthy ?? false; tracking = o["tracking"]?.string ?? "weight_reps"
         imgUrl = o["imgUrl"]?.string; bwMode = o["bwMode"]?.string; single = o["single"]?.bool
+        supersetId = o["supersetId"]?.string; durUnit = o["durUnit"]?.string
         sets = (o["sets"]?.array ?? []).compactMap { $0.object.map(LogSet.init(json:)) }
     }
     var json: [String: JSONValue] {
@@ -86,6 +91,8 @@ extension LogExercise {
                                       "imgUrl": imgUrl.map(JSONValue.string) ?? .null, "sets": .array(sets.map(\.json))]
         if let bwMode { o["bwMode"] = .string(bwMode) }
         if let single { o["single"] = .bool(single) }
+        if let supersetId { o["supersetId"] = .string(supersetId) }
+        if let durUnit { o["durUnit"] = .string(durUnit) }
         return o
     }
 }
@@ -346,6 +353,45 @@ enum WorkoutMath {
         if si < e.sets.count { let s = e.sets[si]; if (s.pw ?? 0) > 0 { w = s.pw! }; if (s.pr ?? 0) > 0 { r = s.pr! } }
         return (w, r)
     }
+
+    // MARK: stopwatch notation (minToClock / clockToMin / toDispDur / fromDispDur)
+    // The digits after the dot are the next-smaller unit, typed as on a stopwatch: 5.30 = 5m30s.
+
+    private static func splitClock(_ v: String) -> (Int, Int) {
+        let t = v.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        let p = t.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
+        func pi(_ s: Substring?) -> Int { Int(String((s ?? "").prefix { $0.isNumber || $0 == "-" })) ?? 0 }
+        var whole = pi(p.first), sub = p.count > 1 ? pi(p[1]) : 0
+        if sub >= 60 { whole += sub / 60; sub %= 60 }
+        return (whole, sub)
+    }
+    static func minToClock(_ min: Double) -> String {
+        guard min > 0 else { return "" }
+        let m = Int(min.rounded(.down)), s = Int(((min - Double(m)) * 60).rounded(.toNearestOrAwayFromZero))
+        return s > 0 ? "\(m).\(String(format: "%02d", s))" : "\(m)"
+    }
+    static func clockToMin(_ v: String) -> Double {
+        guard !v.trimmingCharacters(in: .whitespaces).isEmpty else { return 0 }
+        let (m, s) = splitClock(v); return Double(m) + Double(s) / 60
+    }
+    static func toDispDur(_ sec: Double, _ u: String) -> String {
+        guard sec > 0 else { return "" }
+        if u == "sec" { return String(Int(sec.rounded(.toNearestOrAwayFromZero))) }
+        if u == "min" {
+            let m = Int((sec / 60).rounded(.down)), s = Int(sec.truncatingRemainder(dividingBy: 60).rounded(.toNearestOrAwayFromZero))
+            return s > 0 ? "\(m).\(String(format: "%02d", s))" : "\(m)"
+        }
+        let h = Int((sec / 3600).rounded(.down)), m = Int((sec.truncatingRemainder(dividingBy: 3600) / 60).rounded(.toNearestOrAwayFromZero))
+        return m > 0 ? "\(h).\(String(format: "%02d", m))" : "\(h)"
+    }
+    static func fromDispDur(_ v: String, _ u: String) -> Double {
+        let t = v.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return 0 }
+        if u == "sec" { return (Double(t.replacingOccurrences(of: ",", with: ".")) ?? 0).rounded(.toNearestOrAwayFromZero) }
+        let (w, s) = splitClock(t)
+        return Double(u == "min" ? w * 60 + s : w * 3600 + s * 60)
+    }
+    static func durUnit(_ e: LogExercise) -> String { e.durUnit ?? "sec" }
 
     // MARK: live card badges (renderWS / evaluateProgress)
 

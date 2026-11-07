@@ -96,7 +96,15 @@ extension MainTabView {
                 }
                 _ = i
             }
+            for i in DevHooks.superset { session.tapSuperset(i) }
+            if let u = DevHooks.durUnit {
+                for (i, e) in (session.active?.exercises ?? []).enumerated() where e.tracking == "duration" { session.setDurUnit(i, u) }
+            }
             DevHooks.log("dev workout started: \(session.active?.exercises.count ?? 0) exercises")
+        }
+        if let n = DevHooks.note {
+            let ok = await store.setExNote(n.exId, n.text, auth: auth)
+            DevHooks.log("dev note saved=\(ok)")
         }
         if DevHooks.finish, session.active != nil {
             session.presented = true
