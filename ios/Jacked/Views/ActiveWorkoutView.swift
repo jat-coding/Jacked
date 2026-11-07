@@ -60,6 +60,9 @@ struct ActiveWorkoutView: View {
             .toolbarBackground(.visible, for: .navigationBar)
         }
         .sheet(isPresented: $showAdd) { AddExerciseSheet() }
+        .alert(session.notice ?? "", isPresented: Binding(get: { session.notice != nil }, set: { if !$0 { session.notice = nil } })) {
+            Button("OK", role: .cancel) {}
+        }
         .sheet(isPresented: $showPlates) { PlateCalcSheet(settings: settings).presentationDetents([.medium]) }
         .confirmationDialog(finishPrompt, isPresented: $confirmFinish, titleVisibility: .visible) {
             Button("Finish and save") { Task { finishing = true; await session.finish(store: store, auth: auth); finishing = false } }
@@ -122,11 +125,26 @@ struct ExerciseCard: View {
     let settings: Settings
     @State private var confirmRemove = false
     @State private var showSwitch = false
+    @State private var showReorder = false
     @State private var info: String?
 
     var body: some View {
         let prIdx = WorkoutMath.prIndex(ex, raw: store.backup.raw)
+        let paired = ex.supersetId != nil, picking = session.pairFrom == ei
         VStack(alignment: .leading, spacing: 8) {
+            if paired {
+                HStack(spacing: 6) {
+                    Image(systemName: "link").font(.system(size: 11, weight: .bold))
+                    Text("Superset with \(session.supersetPartner(ei))").font(Theme.body(11, .bold))
+                    Spacer()
+                    Button { session.unlinkSuperset(ei) } label: { Image(systemName: "xmark.circle") }
+                        .accessibilityLabel("Unlink")
+                }
+                .foregroundStyle(Theme.blue)
+            }
+            if picking {
+                Text("Tap another exercise's link icon to pair").font(Theme.body(11, .bold)).foregroundStyle(Theme.accent)
+            }
             HStack(spacing: 10) {
                 LogThumb(url: ex.imgUrl.map(ExerciseImages.rewrite).flatMap(URL.init(string:)), muscle: ex.muscle)
                 VStack(alignment: .leading, spacing: 2) {
@@ -134,7 +152,12 @@ struct ExerciseCard: View {
                     if let pr = prLine { Text(pr).font(Theme.body(11)).foregroundStyle(Theme.muted) }
                 }
                 Spacer()
+                Button { session.tapSuperset(ei) } label: {
+                    Image(systemName: "link").foregroundStyle(picking ? Theme.accent : paired ? Theme.blue : Theme.text2).frame(width: 32, height: 32)
+                }
+                .accessibilityLabel("Superset")
                 Menu {
+                    Button { showReorder = true } label: { Label("Reorder exercises", systemImage: "arrow.up.arrow.down") }
                     Button { showSwitch = true } label: { Label("Switch exercise", systemImage: "arrow.left.arrow.right") }
                     Button("Remove exercise", role: .destructive) {
                         if ex.sets.contains(where: \.done) { confirmRemove = true } else { session.removeExercise(ei) }
@@ -163,6 +186,12 @@ struct ExerciseCard: View {
                 OptionRow(label: "Load", options: [("Bodyweight", "body"), ("+ Added", "added"), ("− Assist", "assist")],
                           selected: WorkoutMath.bwMode(ex)) { session.setBWMode(ei, $0) }
             }
+            if ex.tracking == "duration" {
+                OptionRow(label: "Unit", options: [("Sec", "sec"), ("Min", "min"), ("Hr", "hr")], selected: WorkoutMath.durUnit(ex)) {
+                    session.setDurUnit(ei, $0)
+                }
+            }
+            NoteField(exId: ex.exId)
             HStack {
                 Text("SET").frame(width: 34, alignment: .leading)
                 Text("PREV").frame(width: 62)
@@ -173,6 +202,11 @@ struct ExerciseCard: View {
             .font(Theme.body(10, .bold)).foregroundStyle(Theme.muted)
             ForEach(Array(ex.sets.enumerated()), id: \.offset) { si, s in
                 SetRow(ei: ei, si: si, ex: ex, set: s, settings: settings, star: prIdx == si)
+                if ex.tracking == "distance" && s.weight > 0 && s.reps > 0 {
+                    Text("Pace \(WorkoutMath.fmtPace(WorkoutMath.pacePerMile(s.weight, s.reps)))")
+                        .font(Theme.body(11)).foregroundStyle(Theme.accent)
+                        .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 44)
+                }
             }
             HStack(spacing: 8) {
                 Button { session.addSet(ei) } label: {
@@ -190,6 +224,10 @@ struct ExerciseCard: View {
         }
         .padding(14)
         .card()
+        .overlay(alignment: .leading) {
+            if paired { RoundedRectangle(cornerRadius: 2).fill(Theme.blue).frame(width: 3).padding(.vertical, 10) }
+        }
+        .sheet(isPresented: $showReorder) { ReorderSheet() }
         .confirmationDialog(removePrompt, isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { session.removeExercise(ei) }
         }
@@ -228,7 +266,7 @@ struct ExerciseCard: View {
     private var col1: String {
         switch ex.tracking {
         case "distance": return "MILES"
-        case "duration": return "SECONDS"
+        case "duration": return ["sec": "SECS", "min": "MINS", "hr": "HRS"][WorkoutMath.durUnit(ex)] ?? "SECS"
         case "reps_only": return "—"
         default:
             guard WorkoutMath.bwCapable(ex) else { return settings.unitLabel.uppercased() }
@@ -239,7 +277,7 @@ struct ExerciseCard: View {
             }
         }
     }
-    private var col2: String { ex.tracking == "distance" ? "MINUTES" : ex.tracking == "duration" ? "—" : "REPS" }
+    private var col2: String { ex.tracking == "distance" ? "MIN" : ex.tracking == "duration" ? "—" : "REPS" }
 
     /// "PR: 205lb × 5 · Suggested 239.2lb" (sugStands / sugText), or "No PR yet".
     private var prLine: String? {
@@ -285,12 +323,25 @@ struct SetRow: View {
                 Text(bw > 0 ? "\(WorkoutMath.n(settings.display(bw).rounded()))\(settings.unitLabel)" : "set BW")
                     .font(Theme.body(14, .semibold)).foregroundStyle(Theme.text2).frame(maxWidth: .infinity)
             } else if ex.tracking != "reps_only" {
-                NumberField(value: shown(set.weight, weightLike: true), placeholder: shown(sug.w, weightLike: true)) {
-                    session.set(ei, si, weight: stored($0, weightLike: true))
+                if ex.tracking == "duration" {
+                    let u = WorkoutMath.durUnit(ex)
+                    NumberField(value: set.weight, placeholder: sug.w, format: { WorkoutMath.toDispDur($0, u) },
+                                parse: { WorkoutMath.fromDispDur($0, u) }) { session.set(ei, si, weight: $0) }
+                        .id(u)
+                } else {
+                    NumberField(value: shown(set.weight, weightLike: true), placeholder: shown(sug.w, weightLike: true)) {
+                        session.set(ei, si, weight: stored($0, weightLike: true))
+                    }
                 }
             } else { Text("—").frame(maxWidth: .infinity).foregroundStyle(Theme.muted) }
             if ex.tracking != "duration" {
-                NumberField(value: set.reps, placeholder: sug.r) { session.set(ei, si, reps: $0) }
+                if ex.tracking == "distance" {
+                    NumberField(value: set.reps, placeholder: sug.r, format: WorkoutMath.minToClock, parse: WorkoutMath.clockToMin) {
+                        session.set(ei, si, reps: $0)
+                    }
+                } else {
+                    NumberField(value: set.reps, placeholder: sug.r, keyboard: .numberPad) { session.set(ei, si, reps: $0) }
+                }
             } else { Text("—").frame(maxWidth: .infinity).foregroundStyle(Theme.muted) }
             Button { session.toggle(ei, si, raw: store.backup.raw, settings: settings) } label: {
                 Image(systemName: "checkmark").font(.system(size: 14, weight: .bold))
@@ -308,7 +359,10 @@ struct SetRow: View {
     /// The PREV column: last session's numbers for this set, else the PR, else a dash.
     private var prev: String {
         let isW = WorkoutMath.isWT(ex)
-        func w(_ v: Double) -> String { isW ? WorkoutMath.n((settings.display(v) * 10).rounded() / 10) : WorkoutMath.n(v) }
+        func w(_ v: Double) -> String {
+            if ex.tracking == "duration" { let t = WorkoutMath.toDispDur(v, WorkoutMath.durUnit(ex)); return t.isEmpty ? "0" : t }
+            return isW ? WorkoutMath.n((settings.display(v) * 10).rounded() / 10) : WorkoutMath.n(v)
+        }
         func r(_ v: Double) -> String {
             guard ex.tracking == "distance" else { return WorkoutMath.n(v) }
             guard v > 0 else { return "" }
@@ -333,13 +387,16 @@ struct SetRow: View {
 struct NumberField: View {
     let value: Double
     let placeholder: Double
+    var format: ((Double) -> String)? = nil
+    var parse: ((String) -> Double)? = nil
+    var keyboard: UIKeyboardType = .decimalPad
     let commit: (Double) -> Void
     @State private var text = ""
     @FocusState private var focused: Bool
 
     var body: some View {
         TextField(fmt(placeholder), text: $text)
-            .keyboardType(.decimalPad)
+            .keyboardType(keyboard)
             .multilineTextAlignment(.center)
             .font(Theme.body(15, .semibold)).monospacedDigit()
             .foregroundStyle(Theme.text)
@@ -349,10 +406,11 @@ struct NumberField: View {
             .focused($focused)
             .onAppear { text = value > 0 ? fmt(value) : "" }
             .onChange(of: value) { _, v in if !focused { text = v > 0 ? fmt(v) : "" } }
-            .onChange(of: text) { _, t in if focused { commit(Double(t.replacingOccurrences(of: ",", with: ".")) ?? 0) } }
+            .onChange(of: text) { _, t in if focused { commit(parse?(t) ?? (Double(t.replacingOccurrences(of: ",", with: ".")) ?? 0)) } }
     }
 
     private func fmt(_ v: Double) -> String {
+        if let format { return v > 0 ? format(v) : "—" }
         guard v > 0 else { return "0" }
         let r = (v * 10).rounded() / 10
         return r == r.rounded() ? String(Int(r)) : String(format: "%.1f", r)
@@ -387,6 +445,48 @@ struct RestBar: View {
 }
 
 /// Add an exercise (the picker over allEx()), searchable.
+/// .ex-note: the per-exercise note, shown as the placeholder; typing a new one replaces it.
+struct NoteField: View {
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var store: BackupStore
+    let exId: String
+    @State private var text = ""
+    var body: some View {
+        let note = store.backup.raw["jk_exNotes"]?[exId]?.string ?? ""
+        TextField(note.isEmpty ? "Add note (remembered next time)…" : note, text: $text)
+            .font(Theme.body(13)).foregroundStyle(Theme.text)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(Theme.bg3, in: RoundedRectangle(cornerRadius: 9))
+            .submitLabel(.done)
+            .onSubmit {
+                let v = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !v.isEmpty else { return }
+                text = ""
+                Task { await store.setExNote(exId, v, auth: auth) }
+            }
+    }
+}
+
+/// #reorderModal: drag exercises into a new order.
+struct ReorderSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: WorkoutSession
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(session.active?.exercises ?? []) { e in
+                    Text(e.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text).listRowBackground(Theme.bg2)
+                }
+                .onMove { session.moveExercises(from: $0, to: $1) }
+            }
+            .environment(\.editMode, .constant(.active))
+            .scrollContentBackground(.hidden).background(Theme.bg)
+            .navigationTitle("Reorder").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
 /// The PWA's .cable-row: a small label and a pill per option (Single / Both, Load).
 struct OptionRow<V: Equatable>: View {
     let label: String

@@ -15,6 +15,7 @@ enum Theme {
     static let onAccent = Color(hex: 0x04140A)    // --on-accent
     static let red = Color(hex: 0xFF5D6C)         // --red
     static let green = Color(hex: 0x3DDC97)       // --green
+    static let blue = Color(hex: 0x5AA9FF)        // --blue
     static let orange = Color(hex: 0xFF9F4D)      // --orange
     static let muted = Color(hex: 0x70707F)       // --muted
     static let text = Color(hex: 0xF3F3F8)        // --text
