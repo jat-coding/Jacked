@@ -437,19 +437,31 @@ extension MetricsMath {
         }
     }
 
+    /// BADGE_DETAIL's per-exercise "how to earn it" sections (exHow): the dumbbell / Smith substitutes and the two run types.
+    func badgeExHow(_ name: String) -> [(t: String, body: String)] {
+        switch name {
+        case "Bench-Maxing": return [("No barbell bench? Dumbbell counts too", "Flat Dumbbell Bench Press, both hands. Log both dumbbells added together; it gets +15% (two 50 lb dumbbells = 100 lb logged, credited 115 lb)."),
+                                     ("Smith machine counts too", "Flat Smith Machine Bench Press, credited at -15% (100 lb logged = 85 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.")]
+        case "Shoulder-Maxing": return [("Dumbbells count too", "Standing Dumbbell Press, both hands. Log both dumbbells added together; it gets +15% (two 50 lb dumbbells = 100 lb logged, credited 115 lb). Whichever lift reaches the higher tier sets the badge. The credit only counts here; your logged weight and PRs stay as lifted.")]
+        case "Cardio-Maxing": return [("Running (outdoor)", "Log miles and minutes; placed on the ladder below."),
+                                      ("Running (treadmill)", "Same ladder, no conversion \u{2014} whichever run is faster sets the badge.")]
+        default: return []
+        }
+    }
+
     /// BADGE_HOW / BADGE_DETAIL text for the badge page, ported (plain text).
     func badgeHow(_ name: String, _ T: BadgeLadders) -> (how: String, tiers: [(String, String)], note: String?) {
         let three = "Your tier follows your best in the last 3 months."
         let lbt: ([Double]) -> [(String, String)] = { t in [("Bronze", self.lbTxt(t[0])), ("Silver", self.lbTxt(t[1])), ("Gold", self.lbTxt(t[2]))] }
         let rt: ([Double]) -> [(String, String)] = { t in [("Bronze", "\(Int(t[0])) reps"), ("Silver", "\(Int(t[1])) reps"), ("Gold", "\(Int(t[2])) reps")] }
         switch name {
-        case "Bench-Maxing": return ("Barbell flat bench press (Barbell Bench Press, medium grip), 1 rep. Incline, decline, close-grip, other bench variations and custom exercises don't count. Flat dumbbell bench counts at +15% (both dumbbells added together), flat Smith machine bench at -15%. Whichever lift reaches the higher tier sets the badge. " + benchHowNote(), lbt(T.bench), three)
-        case "Shoulder-Maxing": return ("Standing barbell overhead press (Standing Military Press), 1 rep, measured against sourced strength standards for your sex and body weight, set in Profile. Standing dumbbell press counts at +15% (both dumbbells together). Seated presses, push press and custom exercises don't count.", lbt(T.ohp), three)
-        case "Leg-Maxing": return ("Barbell back squat (Barbell Squat), 1 rep, measured against sourced strength standards for your sex and body weight, set in Profile. Front squats, Smith machine and custom exercises don't count.", lbt(T.squat), three)
-        case "1000lb Club": return ("Your best barbell flat bench press + barbell back squat + conventional barbell deadlift, all from the same workout, added together to 1000 lb or more. The bench can also be a flat dumbbell bench (+15%) or a flat Smith machine bench (-15%).", [], nil)
-        case "Pull-up-Maxing": return ("Most reps in one set of strict pull-ups (Pullups, palms facing away). Chin-ups, assisted, band, scapular and custom exercises don't count.", rt(T.pullup), three)
-        case "Push-up-Maxing": return ("Most reps in one set of standard push-ups (Pushups), not summed across sets. Incline, knee, other variations and custom exercises don't count.", rt(T.pushup), three)
-        case "Cardio-Maxing": return ("Your best mile pace from Running (outdoor) or Running (treadmill), endurance-adjusted for distance. Bike, elliptical, rower, walking and custom exercises don't count.",
+        case "Bench-Maxing": return ("Barbell flat bench press (Barbell Bench Press, medium grip), 1 rep. Incline, decline, close-grip, other bench variations and custom exercises don't count. " + benchHowNote(), lbt(T.bench), three)
+        case "Shoulder-Maxing": return ("Standing barbell overhead press (Standing Military Press), 1 rep, measured against sourced strength standards for your sex and body weight \u{2014} set it in Profile. Seated presses (Barbell Shoulder Press and Smith Machine Overhead Shoulder Press are seated too, whatever the name), push press, behind-the-neck, other variations and custom exercises don't count.", lbt(T.ohp), three + badgeAdjNote())
+        case "Leg-Maxing": return ("Barbell back squat (Barbell Squat), 1 rep, measured against sourced strength standards for your sex and body weight \u{2014} set it in Profile. Front squats, Smith machine and custom exercises don't count.", lbt(T.squat), three + badgeAdjNote())
+        case "1000lb Club": return ("Your best barbell flat bench press + barbell back squat + conventional barbell deadlift, all from the same workout, added together to 1000 lb or more. The bench can also be a flat dumbbell bench (both dumbbells together +15%) or a flat Smith machine bench (-15%). No front squat, Smith squat, sumo or custom exercises.", [], nil)
+        case "Pull-up-Maxing": return ("Most reps in one set of strict pull-ups (Pullups, palms facing away). Chin-ups, assisted, band, scapular and custom exercises don't count." + stdHowNote("pullup"), rt(T.pullup), three)
+        case "Push-up-Maxing": return ("Most reps in one set of standard push-ups (Pushups), not summed across sets. Incline, knee, other variations and custom exercises don't count." + stdHowNote("pushup"), rt(T.pushup), three)
+        case "Cardio-Maxing": return ("Your best mile pace from Running (outdoor) or Running (treadmill), endurance-adjusted for distance. Bike, elliptical, rower, walking and custom exercises don't count." + stdHowNote("cardio"),
                                      [("Bronze", Self.fmtClock(T.cardio[0]) + " per mile"), ("Silver", Self.fmtClock(T.cardio[1]) + " per mile"), ("Gold", Self.fmtClock(T.cardio[2]) + " per mile")],
                                      "Your tier follows your best pace in the last 3 months.")
         case "Challenge-Maxing": return ("Your weakest muscle group each month (glutes excluded, never repeated). Train it in the target number of different workouts.", [], "Resets monthly with a new muscle group.")
