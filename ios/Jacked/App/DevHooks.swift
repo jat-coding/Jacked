@@ -12,6 +12,7 @@ import Foundation
 ///   SIMCTL_CHILD_JACKED_DEV_LOG           <exId>=<lb>x<reps>,<lb>x<reps>;<exId>=...: start a workout and
 ///                                         log those sets through the same calls the buttons make
 ///   SIMCTL_CHILD_JACKED_DEV_ROUTINE       start the LOG workout from the routine with this name
+///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
 /// (ios/REWRITE_BUILD_BRIEF.md guardrail 2).
@@ -32,6 +33,7 @@ enum DevHooks {
     static var logScript: String? { env["JACKED_DEV_LOG"].flatMap { $0.isEmpty ? nil : $0 } }
     static var routine: String? { env["JACKED_DEV_ROUTINE"].flatMap { $0.isEmpty ? nil : $0 } }
     static var finish: Bool { env["JACKED_DEV_FINISH"] == "1" }
+    static var cancel: Bool { env["JACKED_DEV_CANCEL"] == "1" }
     static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
     static var casDelay: Double { 0 }
@@ -43,5 +45,6 @@ enum DevHooks {
     static var logScript: String? { nil }
     static var routine: String? { nil }
     static var finish: Bool { false }
+    static var cancel: Bool { false }
     #endif
 }

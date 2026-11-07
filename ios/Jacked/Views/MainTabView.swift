@@ -70,6 +70,7 @@ extension MainTabView {
     func runDevLog() async {
         guard store.loadedCode != nil else { return }
         let raw = store.backup.raw
+        if DevHooks.cancel, session.active != nil { session.cancel() }
         if let script = DevHooks.logScript, session.active == nil {
             if let rid = DevHooks.routine,
                let r = (raw["jk_routines"]?.array ?? []).compactMap(\.object).first(where: { $0["name"]?.string == rid }) {
@@ -84,7 +85,7 @@ extension MainTabView {
                 for (si, st) in kv[1].split(separator: ",").enumerated() {
                     let wr = st.split(separator: "x").map { Double($0.trimmingCharacters(in: .whitespaces)) ?? 0 }
                     while (session.active?.exercises[ei].sets.count ?? 0) <= si { session.addSet(ei) }
-                    let lb = store.backup.settings.isLb
+                    let lb = store.backup.settings.isLb && WorkoutMath.isWT(session.active!.exercises[ei])
                     session.set(ei, si, weight: (wr.first ?? 0) / (lb ? 2.20462 : 1), reps: wr.count > 1 ? wr[1] : 0)
                     session.toggle(ei, si, raw: raw, settings: store.backup.settings)
                 }
