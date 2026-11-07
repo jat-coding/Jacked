@@ -166,6 +166,8 @@ struct ExerciseInfoSheet: View {
     @EnvironmentObject private var store: BackupStore
     let ex: CatalogExercise
     @State private var confirmHide = false
+    @State private var resetText: String?
+    @State private var toast: String?
 
     var body: some View {
         let raw = store.backup.raw, settings = store.backup.settings
@@ -181,6 +183,10 @@ struct ExerciseInfoSheet: View {
                     }
                     .buttonStyle(GhostButtonStyle())
                     sugBlock(raw: raw, settings: settings)
+                    if let txt = Self.storedPRText(ex.id, raw: raw, settings: settings) {
+                        Button { resetText = txt } label: { Text("Reset PR (\(txt))").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity) }
+                            .buttonStyle(GhostButtonStyle())
+                    }
                     chart(raw: raw, settings: settings)
                     if ex.instructions.isEmpty {
                         Text("No instructions available.").font(Theme.body(13)).foregroundStyle(Theme.muted).padding(.top, 6)
@@ -207,6 +213,22 @@ struct ExerciseInfoSheet: View {
                         } label: { Image(systemName: "ellipsis") }
                     }
                 }
+            }
+            .alert("Reset PR", isPresented: Binding(get: { resetText != nil }, set: { if !$0 { resetText = nil } })) {
+                Button("Reset PR", role: .destructive) { Task { await Self.resetPR(ex.id, store: store, auth: auth); toast = "PR reset" } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Reset your PR for \(ex.name) (\(resetText ?? ""))? The next set you log becomes your new PR, whatever the weight. Your logged sets and workouts stay as they are. This can't be undone.")
+            }
+            .overlay(alignment: .top) { ToastView(text: $toast) }
+            .task {
+                #if DEBUG
+                if DevHooks.resetPR == ex.id {
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    await Self.resetPR(ex.id, store: store, auth: auth); toast = "PR reset"
+                    DevHooks.log("dev reset PR \(ex.id)")
+                }
+                #endif
             }
             .confirmationDialog("Hide this exercise from your library? Built-in exercises can't be deleted, but this removes it from all lists.",
                                 isPresented: $confirmHide, titleVisibility: .visible) {
@@ -275,6 +297,30 @@ struct ExerciseInfoSheet: View {
                 }
             }
             .frame(height: 120, alignment: .bottom)
+        }
+    }
+
+    /// storedPRText: the record Reset PR would clear (hold, else cardio pace, else weight x reps), nil when none.
+    static func storedPRText(_ id: String, raw: [String: JSONValue], settings: Settings) -> String? {
+        if let h = raw["jk_holdPR"]?[id]?.object, jsNum(h["sec"]) > 0 { return WorkoutMath.fmtHold(jsNum(h["sec"])) }
+        if let c = raw["jk_cardioPR"]?[id]?.object, jsNum(c["dist"]) > 0, jsNum(c["time"]) > 0 {
+            return "\(WorkoutMath.fmtPace(WorkoutMath.pacePerMile(jsNum(c["dist"]), jsNum(c["time"])))) \u{00B7} \(WorkoutMath.jsNumberString(jsNum(c["dist"]))) mi"
+        }
+        if let p = raw["jk_prs"]?[id]?.object, jsNum(p["weight"]) > 0 || jsNum(p["reps"]) > 0 {
+            return "\(WorkoutMath.n((settings.display(jsNum(p["weight"])) * 10).rounded() / 10))\(settings.unitLabel) \u{00D7} \(WorkoutMath.jsNumberString(jsNum(p["reps"])))"
+        }
+        return nil
+    }
+
+    /// resetPR: stamp jk_prReset[id] = now and clear that exercise's stored records (clearPRsBefore). History and
+    /// everything computed from it stay. The merge keeps the latest reset and drops any record dated before it.
+    static func resetPR(_ id: String, store: BackupStore, auth: AuthStore) async {
+        let at = WorkoutSession.isoNow()
+        _ = await store.edit(auth: auth) { r in
+            var cut = r["jk_prReset"]?.object ?? [:]; cut[id] = .string(at); r["jk_prReset"] = .object(cut)
+            for k in ["jk_prs", "jk_cardioPR", "jk_holdPR", "jk_prSug"] {
+                if var m = r[k]?.object, m[id] != nil { m[id] = nil; r[k] = .object(m) }
+            }
         }
     }
 
