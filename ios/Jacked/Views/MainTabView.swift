@@ -14,7 +14,7 @@ struct MainTabView: View {
         TabView(selection: $tab) {
             RoutinesView()
                 .tabItem { Label("Routines", systemImage: "square.grid.2x2") }.tag(Tab.routines)
-            PlaceholderTab(title: "Library", note: "The exercise library is a later build step.")
+            LibraryView()
                 .tabItem { Label("Library", systemImage: "books.vertical") }.tag(Tab.library)
             HomeView()
                 .tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)
