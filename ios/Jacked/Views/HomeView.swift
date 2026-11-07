@@ -45,7 +45,18 @@ struct HomeView: View {
         .background(Theme.bg.ignoresSafeArea())
         .refreshable { await store.refresh(auth: auth) }
         .onChange(of: store.loadedCode) { _, code in
-            guard code != nil, let o = DevHooks.open else { return }
+            guard code != nil else { return }
+            if let r = DevHooks.rename {
+                let rec = Array(h.reversed())
+                if rec.indices.contains(r.index), let id = rec[r.index].rawId {
+                    Task {
+                        await store.renameWorkout(id: id, to: r.name, auth: auth)
+                        workout = store.backup.history.reversed().dropFirst(r.index).first
+                    }
+                }
+                return
+            }
+            guard let o = DevHooks.open else { return }
             if o == "profile" { showAccount = true }
             else if o.hasPrefix("day:") {
                 let d = String(o.dropFirst(4)); dayKey = DayKey(id: d == "today" ? JackedDate.dayKey(Date()) : d)
@@ -64,7 +75,7 @@ struct HomeView: View {
         .alert("Workout logging is the next build step", isPresented: $showStartNote) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("This preview reads your history but doesn't save anything yet.")
+            Text("This preview can rename a past workout but can't log a new one yet.")
         }
     }
 

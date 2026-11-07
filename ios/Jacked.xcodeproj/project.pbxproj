@@ -30,6 +30,7 @@
 		97293DC602BC3F60705C697F /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0221DA0560DC99BDB5189717 /* HomeView.swift */; };
 		3AB706BF4E9E28EDD419B146 /* WorkoutSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A8A89E3E7F91072A1A66A7A /* WorkoutSheets.swift */; };
 		611D177D99866B77656B3BB0 /* DevHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D3087738D22635CB92ACC7 /* DevHooks.swift */; };
+		3FA9CF4FD473AF65DE97FAF6 /* BackupMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FE4AB70CD5D0E793A9BF58 /* BackupMerge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -58,6 +59,7 @@
 		0221DA0560DC99BDB5189717 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		8A8A89E3E7F91072A1A66A7A /* WorkoutSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutSheets.swift; sourceTree = "<group>"; };
 		D2D3087738D22635CB92ACC7 /* DevHooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevHooks.swift; sourceTree = "<group>"; };
+		37FE4AB70CD5D0E793A9BF58 /* BackupMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupMerge.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -174,6 +176,7 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				37FE4AB70CD5D0E793A9BF58 /* BackupMerge.swift */,
 				87D0BC24FED64F4F404EEA57 /* BackupStore.swift */,
 				375CFA8F58F4EB017AF56316 /* HomeMath.swift */,
 				FB5BE9D731D907BC94A8786C /* Backup.swift */,
@@ -257,6 +260,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3FA9CF4FD473AF65DE97FAF6 /* BackupMerge.swift in Sources */,
 				611D177D99866B77656B3BB0 /* DevHooks.swift in Sources */,
 				3AB706BF4E9E28EDD419B146 /* WorkoutSheets.swift in Sources */,
 				97293DC602BC3F60705C697F /* HomeView.swift in Sources */,
