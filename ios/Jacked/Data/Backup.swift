@@ -26,11 +26,25 @@ struct Settings {
     var wUnit: String
     var restDefault: Int
     var autoRest: Bool
+    /// The go-up / consider-lighter rep range (progMin / progMax).
+    var repMin: Int
+    var repMax: Int
 
     init(_ o: [String: JSONValue]) {
         wUnit = o["wUnit"]?.string ?? "lb"
         restDefault = o["restDefault"]?.int ?? 90
         autoRest = o["autoRest"]?.bool ?? true
+        let mn = Settings.parseInt(o["repMin"]).flatMap { $0 >= 1 ? $0 : nil } ?? 5
+        repMin = mn
+        repMax = Settings.parseInt(o["repMax"]).flatMap { $0 > mn ? $0 : nil } ?? max(12, mn + 1)
+    }
+
+    /// parseInt(v, 10) for a number or a numeric string.
+    private static func parseInt(_ v: JSONValue?) -> Int? {
+        if let d = v?.double, d.isFinite { return Int(d) }
+        guard let s = v?.string?.trimmingCharacters(in: .whitespaces) else { return nil }
+        let digits = s.prefix { $0.isNumber || $0 == "-" }
+        return Int(digits)
     }
 
     var isLb: Bool { wUnit == "lb" }
