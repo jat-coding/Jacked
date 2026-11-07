@@ -46,6 +46,12 @@ const src = names.map(extract).join('\n').replace(/^async function askImportUnit
 vm.runInContext('var dbLoaded=true, dbLoading=false, allDB=[], _cexMemo={};\n' + src + '\nglobalThis.__setDB=d=>{allDB=d;};', ctx);
 ctx.__setDB(JSON.parse(fs.readFileSync(dbPath, 'utf8')));
 
+// ONE_RAW=<blob.json> ONE_CSV=<file> [ONE_UNIT=lb|kg] ONE_OUT=<out.json>: the PWA's result for one real file instead.
+if (process.env.ONE_CSV) {
+  const raw = JSON.parse(fs.readFileSync(process.env.ONE_RAW, 'utf8')); seedStore(raw); toasts = []; unitAnswer = process.env.ONE_UNIT || null;
+  await ctx.importWorkoutCsv(fs.readFileSync(process.env.ONE_CSV, 'utf8'));
+  fs.writeFileSync(process.env.ONE_OUT, JSON.stringify({ blob: blob(), toast: toasts.join(' | ') })); console.log(toasts.join(' | ')); process.exit(0);
+}
 let seed = 20261107; const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
 const pick = a => a[Math.floor(rnd() * a.length)], maybe = (p = 0.5) => rnd() < p, int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 const EXN = ['Bench Press (Barbell)', 'Squat (Barbell)', 'Deadlift (Barbell)', 'Overhead Press (Barbell)', 'Bicep Curl (Dumbbell)', 'Hammer Curl (Dumbbell)',
