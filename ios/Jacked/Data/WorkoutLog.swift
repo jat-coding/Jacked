@@ -250,6 +250,12 @@ enum WorkoutMath {
         return (list, suggested)
     }
 
+    /// A weight/plate for display: at most one decimal, no trailing ".0".
+    static func n(_ v: Double) -> String {
+        let r = (v * 10).rounded() / 10
+        return r == r.rounded() ? String(Int(r)) : String(format: "%.1f", r)
+    }
+
     /// JS `${n}` for a number (125 not 125.0).
     static func jsNumberString(_ n: Double) -> String {
         n == n.rounded() && abs(n) < 1e15 ? String(Int(n)) : String(n)
