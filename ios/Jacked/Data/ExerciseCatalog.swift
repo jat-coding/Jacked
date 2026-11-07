@@ -27,7 +27,8 @@ final class ExerciseCatalog: ObservableObject {
         let cust = (raw["jk_cex"]?.array ?? []).compactMap { $0.object }.compactMap { o -> CatalogExercise? in
             guard let id = o["id"]?.string else { return nil }
             return CatalogExercise(id: id, name: o["name"]?.string ?? id, muscle: o["muscle"]?.string ?? "", equip: o["equip"]?.string ?? "",
-                                   tracking: o["tracking"]?.string ?? "weight_reps", assist: o["assist"]?.truthy ?? false, image: nil, custom: true)
+                                   tracking: o["tracking"]?.string ?? "weight_reps", assist: o["assist"]?.truthy ?? false, image: nil, custom: true,
+                                   category: o["category"]?.string ?? "")
         }
         let warm = PWATables.builtIns.filter { $0.id.hasPrefix("wu_") }.map { e -> CatalogExercise in var e = e; e.category = "warmup"; return e }
         // allEx(): only the built-in runs carry a category ("cardio"); exercise-db rows are listed without one.
