@@ -162,11 +162,13 @@ struct LibraryRow: View {
 /// "Hide from Library" (built-ins) sits behind the 3-dot, like the PWA. Saves go through merge + CAS.
 struct ExerciseInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var catalogObj: ExerciseCatalog
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
     let ex: CatalogExercise
     @State private var confirmHide = false
     @State private var resetText: String?
+    @State private var editing = false
     @State private var toast: String?
 
     var body: some View {
@@ -178,10 +180,14 @@ struct ExerciseInfoSheet: View {
                     photos
                     Text([ex.muscle, ex.equip, ex.category].filter { !$0.isEmpty }.map(LibraryMath.capW).joined(separator: " · "))
                         .font(Theme.body(12)).foregroundStyle(Theme.muted)
-                    Button { Task { await toggleFav() } } label: {
-                        Text(fav ? "★ Favorited" : "☆ Favorite").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity)
+                    HStack(spacing: 8) {
+                        Button { Task { await toggleFav() } } label: {
+                            Text(fav ? "★ Favorited" : "☆ Favorite").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(GhostButtonStyle())
+                        Button { editing = true } label: { Text("Edit").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity) }
+                            .buttonStyle(GhostButtonStyle())
                     }
-                    .buttonStyle(GhostButtonStyle())
                     sugBlock(raw: raw, settings: settings)
                     if let txt = Self.storedPRText(ex.id, raw: raw, settings: settings) {
                         Button { resetText = txt } label: { Text("Reset PR (\(txt))").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity) }
@@ -221,8 +227,21 @@ struct ExerciseInfoSheet: View {
                 Text("Reset your PR for \(ex.name) (\(resetText ?? ""))? The next set you log becomes your new PR, whatever the weight. Your logged sets and workouts stay as they are. This can't be undone.")
             }
             .overlay(alignment: .top) { ToastView(text: $toast) }
+            .sheet(isPresented: $editing) { CreateExerciseSheet(editing: ex, onSaved: { dismiss() }) }
             .task {
                 #if DEBUG
+                if DevHooks.editEx == ex.id { try? await Task.sleep(nanoseconds: 800_000_000); editing = true }
+                if let e = DevHooks.editEx, e.hasPrefix(ex.id + "|") {
+                    // <exId>|<new name>|<equip>|<notes>: saveCE's edit path, as the form's Save Changes would
+                    let p = e.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    let cex = (store.backup.raw["jk_cex"]?.array ?? []).compactMap(\.object).first { $0["id"]?.string == ex.id }
+                    await CreateExerciseSheet.update(ex, fullForm: CreateExerciseSheet.isUserCustom(ex.id, raw: store.backup.raw), name: p[1],
+                        muscle: cex?["muscle"]?.string ?? ex.muscle, category: ex.category.isEmpty ? "strength" : ex.category, equip: p.count > 2 ? p[2] : ex.equip,
+                        tracking: ex.tracking, notes: p.count > 3 ? p[3] : "", assist: ex.assist, durUnit: cex?["durUnit"]?.string ?? "sec",
+                        store: store, auth: auth, catalog: catalogObj)
+                    DevHooks.log("dev edit ex \(e)")
+                }
                 if DevHooks.resetPR == ex.id {
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     await Self.resetPR(ex.id, store: store, auth: auth); toast = "PR reset"
@@ -353,6 +372,14 @@ struct CreateExerciseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
+    /// openEditEx: the exercise being edited (nil = create). A built-in or warm-up exercise only gets the
+    /// web app's locked-down subset (name, category, equipment, notes, assist); muscle and tracking stay put.
+    var editing: CatalogExercise? = nil
+    var onSaved: () -> Void = {}
+    @EnvironmentObject private var catalog: ExerciseCatalog
+    @State private var loaded = false
+    @State private var assist = false
+    @State private var durUnit = "sec"
     @State private var name = ""
     @State private var muscle = "Chest"
     @State private var category = "strength"
@@ -374,29 +401,101 @@ struct CreateExerciseSheet: View {
             Form {
                 Section { TextField("Exercise name", text: $name) }
                 Section {
-                    Picker("Muscle", selection: $muscle) { ForEach(Self.muscles, id: \.self) { Text($0) } }
+                    if fullForm {
+                        Picker("Muscle", selection: $muscle) { ForEach(Self.muscles, id: \.self) { Text($0) } }
+                    } else {
+                        LabeledContent("Muscle", value: editing.map { LibraryMath.capW($0.muscle) } ?? "")
+                    }
                     Picker("Category", selection: $category) { ForEach(Self.categories, id: \.0) { Text($0.1).tag($0.0) } }
                     Toggle("Bodyweight exercise", isOn: $bodyweight).tint(Theme.accent)
                     if !bodyweight { Picker("Equipment", selection: $equip) { ForEach(Self.equips, id: \.0) { Text($0.1).tag($0.0) } } }
-                    Picker("Tracking", selection: $tracking) { ForEach(Self.trackings, id: \.0) { Text($0.1).tag($0.0) } }
+                    if fullForm { Picker("Tracking", selection: $tracking) { ForEach(Self.trackings, id: \.0) { Text($0.1).tag($0.0) } } }
+                    if fullForm && tracking == "duration" {
+                        Picker("Hold unit", selection: $durUnit) { Text("Seconds").tag("sec"); Text("Minutes").tag("min"); Text("Hours").tag("hr") }
+                    }
+                    if editing != nil && (bodyweight || tracking == "bodyweight_reps" || equip == "machine") {
+                        Toggle("Add assist/band weight?", isOn: $assist).tint(Theme.accent)
+                    }
                 }
                 Section { TextField("Notes (optional)", text: $notes, axis: .vertical) }
             }
             .scrollContentBackground(.hidden).background(Theme.bg2)
-            .navigationTitle("Create Exercise").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(editing == nil ? "Create Exercise" : "Edit Exercise").navigationBarTitleDisplayMode(.inline)
+            .onAppear { if !loaded { loaded = true; prefill() } }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { Task { saving = true; await save(); dismiss() } }
+                    Button(editing == nil ? "Add" : "Save Changes") { Task { saving = true; await save(); onSaved(); dismiss() } }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || saving)
                 }
             }
         }
     }
 
+    /// isUserCustomEx: your own custom exercise (not a built-in warm-up) gets the full form.
+    private var fullForm: Bool { editing.map { Self.isUserCustom($0.id, raw: store.backup.raw) } ?? true }
+    static func isUserCustom(_ id: String, raw: [String: JSONValue]) -> Bool {
+        (raw["jk_cex"]?.array ?? []).contains { $0.object?["id"]?.string == id && $0.object?["_w"]?.bool != true }
+    }
+    private static let coarse = ["chest": "Chest", "back": "Back", "lats": "Back", "lower back": "Back", "shoulders": "Shoulders",
+        "biceps": "Biceps", "triceps": "Triceps", "legs": "Legs", "quadriceps": "Legs", "hamstrings": "Legs", "calves": "Legs",
+        "glutes": "Glutes", "core": "Core", "abdominals": "Core", "forearms": "Forearms", "traps": "Back", "cardio": "Cardio", "full body": "Full Body"]
+
+    /// openEditEx's prefill: the saved values (custom entry, else the override layer over the built-in).
+    private func prefill() {
+        guard let ex = editing else { return }
+        let raw = store.backup.raw
+        let cex = (raw["jk_cex"]?.array ?? []).compactMap(\.object).first { $0["id"]?.string == ex.id }
+        let ov = raw["jk_exOverride"]?[ex.id]?.object
+        name = ex.name
+        notes = cex?["notes"]?.string ?? ov?["notes"]?.string ?? ""
+        muscle = Self.coarse[ex.muscle.lowercased()] ?? "Chest"
+        category = (cex?["category"]?.string ?? ov?["category"]?.string).flatMap { $0.isEmpty ? nil : $0 } ?? (ex.category.isEmpty ? "strength" : ex.category)
+        let e = cex?["equip"]?.string ?? ov?["equip"]?.string ?? ex.equip
+        bodyweight = e == "body only"
+        equip = bodyweight ? "bodyweight" : (Self.equips.map(\.0).contains(e) ? e : "other")
+        tracking = ex.tracking.isEmpty ? "weight_reps" : ex.tracking
+        durUnit = cex?["durUnit"]?.string ?? "sec"
+        assist = ex.assist
+        if !Self.categories.map(\.0).contains(category) { category = "strength" }
+    }
+
     private func save() async {
+        if let ex = editing {
+            await Self.update(ex, fullForm: fullForm, name: name, muscle: muscle, category: category, equip: bodyweight ? "body only" : equip,
+                              tracking: tracking, notes: notes, assist: assist, durUnit: durUnit, store: store, auth: auth, catalog: catalog)
+            return
+        }
         await Self.create(name: name, muscle: muscle, category: category, equip: bodyweight ? "body only" : equip,
                           tracking: tracking, notes: notes, store: store, auth: auth)
+    }
+
+    /// saveCE() editing: a custom exercise is updated in place (jk_cex); a built-in keeps its dataset entry, the
+    /// name goes in jk_exRename (dropped when it's back to the original) and the rest in jk_exOverride.
+    static func update(_ ex: CatalogExercise, fullForm: Bool, name: String, muscle: String, category: String, equip: String,
+                       tracking: String, notes: String, assist: Bool, durUnit: String, store: BackupStore, auth: AuthStore,
+                       catalog: ExerciseCatalog?) async {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines), nt = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty else { return }
+        var noRename = store.backup.raw; noRename["jk_exRename"] = nil
+        let base = catalog?.byId(ex.id, raw: noRename).name ?? ex.name
+        _ = await store.edit(auth: auth) { raw in
+            if fullForm {
+                var c = raw["jk_cex"]?.array ?? []
+                if let i = c.firstIndex(where: { $0.object?["id"]?.string == ex.id }), var o = c[i].object {
+                    o["name"] = .string(n); o["muscle"] = .string(muscle); o["equip"] = .string(equip); o["tracking"] = .string(tracking)
+                    o["category"] = .string(category); o["notes"] = .string(nt); o["assist"] = .bool(assist); o["durUnit"] = .string(durUnit)
+                    c[i] = .object(o); raw["jk_cex"] = .array(c)
+                }
+            } else {
+                var rn = raw["jk_exRename"]?.object ?? [:]
+                if n != base { rn[ex.id] = .string(n) } else { rn[ex.id] = nil }
+                raw["jk_exRename"] = .object(rn)
+                var ov = raw["jk_exOverride"]?.object ?? [:]
+                ov[ex.id] = .object(["equip": .string(equip), "category": .string(category), "notes": .string(nt), "assist": .bool(assist)])
+                raw["jk_exOverride"] = .object(ov)
+            }
+        }
     }
 
     /// saveCE() for a new exercise: the same object shape the PWA writes.
