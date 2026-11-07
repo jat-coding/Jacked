@@ -11,6 +11,8 @@ struct FriendProfileSheet: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
     @EnvironmentObject private var friends: FriendsStore
+    @EnvironmentObject private var session: WorkoutSession
+    @EnvironmentObject private var catalog: ExerciseCatalog
     @Environment(\.dismiss) private var dismiss
     @State private var workout: Int?
     @State private var showBadges = false
@@ -43,7 +45,10 @@ struct FriendProfileSheet: View {
         .task {
             #if DEBUG
             if let o = DevHooks.open, o.hasPrefix("friend:"), let r = o.split(separator: "/").dropFirst().first {
-                if r == "badges" { showBadges = true } else if let i = Int(r) { workout = i }
+                if r == "badges" { showBadges = true } else if let i = Int(r) {
+                    workout = i
+                    if DevHooks.copyFriend, p.wd.indices.contains(i) { try? await Task.sleep(nanoseconds: 1_500_000_000); copy(p.wd[i]) }
+                }
             }
             #endif
         }
@@ -120,6 +125,22 @@ struct FriendProfileSheet: View {
         .padding(.vertical, 12).overlay(alignment: .top) { Rectangle().fill(Color(hex: 0x23232B)).frame(height: 1) }.contentShape(Rectangle())
     }
 
+    private func copy(_ w: SharedWorkout) {
+        let all = catalog.all(custom: store.backup.raw)
+        guard w.ex.contains(where: { e in all.contains { $0.id == e.id || (!e.n.isEmpty && $0.name.lowercased() == e.n.lowercased()) } }) else {
+            friends.toast = "None of these exercises are in your library"; return
+        }
+        dismiss()
+        let raw = store.backup.raw, s = session, c = catalog, f = friends
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 450_000_000)   // let the sheet close before the workout screen opens
+            f.toast = s.start(copying: w, catalog: c, raw: raw)
+            #if DEBUG
+            DevHooks.log("dev copy: \(f.toast ?? "nil") active=\(s.active?.name ?? "none") ex=\(s.active?.exercises.map(\.exId) ?? []) pw=\(s.active?.exercises.first?.sets.map { $0.pw ?? -1 } ?? [])")
+            #endif
+        }
+    }
+
     /// openFriendWorkout(): every exercise and every set, weights in YOUR unit.
     @ViewBuilder private func workoutDetail(_ w: SharedWorkout) -> some View {
         let run = isRun(w.vol, w.dist)
@@ -133,6 +154,8 @@ struct FriendProfileSheet: View {
             StatTile(v: "\(w.ex.count)", l: "Exercises")
         }
         .padding(.bottom, 14)
+        Button { copy(w) } label: { Label("Copy to my workout", systemImage: "doc.on.clipboard").frame(maxWidth: .infinity) }
+            .buttonStyle(AccentButtonStyle()).padding(.bottom, 14)
         BlockTitle(text: "Exercises & sets")
         if w.ex.isEmpty { Text("No exercise detail shared.").font(Theme.body(13)).foregroundStyle(Theme.muted) }
         ForEach(Array(w.ex.enumerated()), id: \.offset) { _, e in
@@ -237,7 +260,7 @@ struct FriendBadgesSheet: View {
                             .frame(width: 28)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(shown).font(Theme.body(14, .bold)).foregroundStyle(Theme.text)
-                            Text(m.badgeHow(shown, ladders).how).font(Theme.body(12)).foregroundStyle(Theme.muted)
+                            Text(m.badgeShortHow(shown, ladders)).font(Theme.body(12)).foregroundStyle(Theme.muted)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         let tc = BadgeUI.tierColor[b.t] ?? (b.n == "Jacked" ? Color(hex: 0xFFD700) : Theme.green)
