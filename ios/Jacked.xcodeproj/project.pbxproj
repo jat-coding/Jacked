@@ -55,6 +55,7 @@
 		07AC3D53BB0D93BD457BCC6B /* BodyArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC402D334E27BD7AD83D1BBE /* BodyArt.swift */; };
 		F9B9B363034B9D0143BB64CE /* BodyFigure.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4C709E0264039E5608B927 /* BodyFigure.swift */; };
 		890A6279BC7CF45A367B38FA /* PRReplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF0E9B800DCE2D8892A7A86 /* PRReplay.swift */; };
+		0BFCF441D3A64F8167DCD709 /* ProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D226DB47C0EFF500E11B22CE /* ProfileSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -108,6 +109,7 @@
 		DC402D334E27BD7AD83D1BBE /* BodyArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyArt.swift; sourceTree = "<group>"; };
 		6F4C709E0264039E5608B927 /* BodyFigure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyFigure.swift; sourceTree = "<group>"; };
 		DDF0E9B800DCE2D8892A7A86 /* PRReplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRReplay.swift; sourceTree = "<group>"; };
+		D226DB47C0EFF500E11B22CE /* ProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -186,6 +188,7 @@
 		4BE43130E63E6223C39B0FA6 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				D226DB47C0EFF500E11B22CE /* ProfileSheet.swift */,
 				6F4C709E0264039E5608B927 /* BodyFigure.swift */,
 				03B37106CEAD7C8ECA99D38E /* SuggestCard.swift */,
 				9541312805A08C30F3273763 /* FriendProfileView.swift */,
@@ -332,6 +335,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0BFCF441D3A64F8167DCD709 /* ProfileSheet.swift in Sources */,
 				890A6279BC7CF45A367B38FA /* PRReplay.swift in Sources */,
 				F9B9B363034B9D0143BB64CE /* BodyFigure.swift in Sources */,
 				07AC3D53BB0D93BD457BCC6B /* BodyArt.swift in Sources */,
