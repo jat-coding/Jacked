@@ -8,6 +8,7 @@ struct MetricsView: View {
     @EnvironmentObject private var store: BackupStore
     @EnvironmentObject private var catalog: ExerciseCatalog
     @EnvironmentObject private var friends: FriendsStore
+    @EnvironmentObject private var session: WorkoutSession
     @State private var showOrder = false
     @State private var recap: MetricsMath.Recap?
     @State private var showScoring = false
@@ -61,7 +62,7 @@ struct MetricsView: View {
         .sheet(isPresented: $showOrder) { CardOrderSheet() }
         .sheet(item: $recap) { RecapSheet(r: $0, settings: store.backup.settings) }
         .sheet(isPresented: $showScoring) { MuscleScoringSheet(sex: m.sex) }
-        .sheet(isPresented: $showAch) { AchievementsSheet(result: m.computeBadges(), m: m, openBadge: devBadge) }
+        .sheet(isPresented: $showAch) { AchievementsSheet(result: m.computeBadges(), m: m, openBadge: devBadge, onStart: badgeStart) }
         .task(id: "\(store.loadedCode ?? "")|\(catalog.db.count)|\(store.backup.history.count)") {
             guard store.loadedCode != nil, store.lastSynced != nil else { return }
             let (st, au, db) = (store, auth, catalog.db)
@@ -188,6 +189,20 @@ struct MetricsView: View {
             if let i = h.firstIndex(of: id) { h.remove(at: i) } else { h.append(id) }
             s["hiddenCards"] = .array(h.map(JSONValue.string)); raw["jk_settings"] = .object(s)
         }
+    }
+
+    /// badgeStart(): close the badge pages first (a workout can't open over them), then go.
+    private func badgeStart(_ plan: MetricsMath.BadgePlan) {
+        showAch = false
+        let (session, catalog, raw) = (session, catalog, store.backup.raw)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            if plan.page != nil { NotificationCenter.default.post(name: .jackedOpenTab, object: plan.page); return }
+            if session.active == nil { session.start(name: plan.title, ids: plan.ids, catalog: catalog, raw: raw); return }
+            let have = Set(session.active?.exercises.map(\.exId) ?? [])
+            for id in plan.ids where !have.contains(id) { session.add(catalog.byId(id, raw: raw), raw: raw) }
+            session.presented = true
+        }
+        DevHooks.log("dev badge start: \(plan.title) \(plan.ids)")
     }
 
     /// logWeight(kg): current body weight AND today's jk_bwlog entry, sorted by day.
@@ -589,4 +604,9 @@ struct HomeRecapCard: View {
             .sheet(item: $open) { RecapSheet(r: $0, settings: s) }
         }
     }
+}
+
+extension Notification.Name {
+    /// Asks MainTabView to switch tabs (object: the tab's raw value), e.g. Variety-Maxing's Browse the library.
+    static let jackedOpenTab = Notification.Name("jackedOpenTab")
 }
