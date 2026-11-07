@@ -18,6 +18,7 @@ import Foundation
 ///   SIMCTL_CHILD_JACKED_DEV_NOTE          <exId>|<text>: save an exercise note through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_DURUNIT       sec|min|hr for every hold in the LOG workout
 ///   SIMCTL_CHILD_JACKED_DEV_FAV           <exId>: toggle that exercise's favourite through the real save path
+///   SIMCTL_CHILD_JACKED_DEV_CREATEEX      <name>: create a custom exercise (Biceps, cable) through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
@@ -42,6 +43,7 @@ enum DevHooks {
     static var cancel: Bool { env["JACKED_DEV_CANCEL"] == "1" }
     static var search: String? { env["JACKED_DEV_SEARCH"].flatMap { $0.isEmpty ? nil : $0 } }
     static var fav: String? { env["JACKED_DEV_FAV"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var createEx: String? { env["JACKED_DEV_CREATEEX"].flatMap { $0.isEmpty ? nil : $0 } }
     static var logDay: String? { env["JACKED_DEV_LOGDAY"].flatMap { $0.isEmpty ? nil : $0 } }
     static var note: (exId: String, text: String)? {
         guard let r = env["JACKED_DEV_NOTE"], let bar = r.firstIndex(of: "|") else { return nil }
@@ -63,6 +65,7 @@ enum DevHooks {
     static var cancel: Bool { false }
     static var search: String? { nil }
     static var fav: String? { nil }
+    static var createEx: String? { nil }
     static var logDay: String? { nil }
     static var superset: [Int] { [] }
     static var note: (exId: String, text: String)? { nil }
