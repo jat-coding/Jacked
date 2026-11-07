@@ -44,9 +44,14 @@ final class WorkoutSession: ObservableObject {
     }
 
     func exercise(for c: CatalogExercise, raw: [String: JSONValue]) -> LogExercise {
-        LogExercise(exId: c.id, name: c.name, muscle: c.muscle, equip: c.equip, assist: c.assist, tracking: c.tracking,
+        var e = LogExercise(exId: c.id, name: c.name, muscle: c.muscle, equip: c.equip, assist: c.assist, tracking: c.tracking,
                     imgUrl: c.image.map { ExerciseImages.base + $0 },
                     sets: WorkoutMath.seedSets(exId: c.id, tracking: c.tracking, history: raw["jk_hist"]?.array ?? []))
+        // stampSingle: a Single / Both lift's sets carry an explicit choice from the moment they are drawn.
+        if PWATables.SINGLE_BOTH_IDS.contains(c.id) {
+            for i in e.sets.indices where e.sets[i].single == nil { e.sets[i].single = PWATables.SINGLE_DEFAULT_IDS.contains(c.id) }
+        }
+        return e
     }
 
     // MARK: edits (addSet / togSet / uSet / rmEx)
@@ -55,9 +60,34 @@ final class WorkoutSession: ObservableObject {
 
     func addSet(_ ei: Int) {
         guard var a = active, a.exercises.indices.contains(ei) else { return }
-        a.exercises[ei].sets.append(LogSet(single: a.exercises[ei].sets.last?.single))
+        let ex = a.exercises[ei]
+        // The exercise's own choice, else the lift's default (addSet + stampSingle).
+        let single = ex.single
+            ?? (PWATables.SINGLE_BOTH_IDS.contains(ex.exId) ? PWATables.SINGLE_DEFAULT_IDS.contains(ex.exId) : nil)
+        a.exercises[ei].sets.append(LogSet(single: single))
         active = a
     }
+
+    /// replaceExAt: switch an exercise for another (its logged sets go, like the PWA).
+    @discardableResult
+    func replace(_ ei: Int, with c: CatalogExercise, raw: [String: JSONValue]) -> Bool {
+        guard var a = active, a.exercises.indices.contains(ei), a.exercises[ei].exId != c.id else { return true }
+        if a.exercises.indices.contains(where: { $0 != ei && a.exercises[$0].exId == c.id }) { return false }
+        a.exercises[ei] = exercise(for: c, raw: raw)
+        active = a
+        return true
+    }
+
+    /// setSingleArmEx: the Single / Both pair applies to the exercise and every set on it.
+    func setSingle(_ ei: Int, _ v: Bool) {
+        guard var a = active, a.exercises.indices.contains(ei) else { return }
+        a.exercises[ei].single = v
+        for j in a.exercises[ei].sets.indices { a.exercises[ei].sets[j].single = v }
+        active = a
+    }
+
+    /// setBWMode: Bodyweight / + Added / - Assist.
+    func setBWMode(_ ei: Int, _ m: String) { if active?.exercises.indices.contains(ei) == true { active!.exercises[ei].bwMode = m } }
 
     func removeExercise(_ ei: Int) { if active?.exercises.indices.contains(ei) == true { active?.exercises.remove(at: ei) } }
 
