@@ -41,6 +41,8 @@ struct Settings {
 
 struct Workout: Identifiable {
     let id: String
+    /// The stored `id` exactly as it is in the blob (number or string): edits match on this.
+    let rawId: JSONValue?
     let name: String
     let date: Date?
     let rawDate: String?
@@ -52,6 +54,7 @@ struct Workout: Identifiable {
 
     init(_ o: [String: JSONValue]) {
         id = o["id"]?.string ?? o["id"]?.double.map { String(Int($0)) } ?? UUID().uuidString
+        rawId = o["id"]
         name = o["name"]?.string ?? "Workout"
         rawDate = o["date"]?.string
         date = rawDate.flatMap(JackedDate.parse)
