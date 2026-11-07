@@ -86,7 +86,7 @@ struct HomeView: View {
             })
         }
         .sheet(item: $workout) { WorkoutDetailSheet(workout: $0, settings: settings) }
-        .sheet(isPresented: $showAccount) { AccountSheet() }
+        .sheet(isPresented: $showAccount) { ProfileSheet() }
         .fullScreenCover(isPresented: $showGymYears) { GymYearsView(who: "You", days: Set(h.map(\.dayKey).filter { !$0.isEmpty })) }
         .sheet(isPresented: $showStartNote) { StartWorkoutSheet().presentationDetents([.medium, .large]) }
     }
