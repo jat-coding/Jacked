@@ -77,7 +77,7 @@ struct HomeView: View {
             }
         }
         .sheet(item: $dayKey) { d in
-            DaySheet(dayKey: d.id, workouts: h.filter { $0.dayKey == d.id }, settings: settings, onOpen: { w in
+            DaySheet(dayKey: d.id, workouts: h.filter { $0.dayKey == d.id }, settings: settings, replay: PRReplay.map(raw: store.backup.raw), onOpen: { w in
                 dayKey = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { workout = w }
             }, onLog: {
