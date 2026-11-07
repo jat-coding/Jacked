@@ -25,6 +25,8 @@ struct LogExercise: Codable, Equatable, Identifiable {
     var tracking = "weight_reps"
     var imgUrl: String?
     var bwMode: String?
+    /// Exercise-level Single / Both choice once tapped on the card (setSingleArmEx).
+    var single: Bool?
     var sets: [LogSet] = []
     var id: String { uid }
 }
@@ -75,7 +77,7 @@ extension LogExercise {
         exId = o["exId"]?.string ?? "?"; name = o["name"]?.string ?? "Exercise"
         muscle = o["muscle"]?.string ?? ""; equip = o["equip"]?.string ?? ""
         assist = o["assist"]?.truthy ?? false; tracking = o["tracking"]?.string ?? "weight_reps"
-        imgUrl = o["imgUrl"]?.string; bwMode = o["bwMode"]?.string
+        imgUrl = o["imgUrl"]?.string; bwMode = o["bwMode"]?.string; single = o["single"]?.bool
         sets = (o["sets"]?.array ?? []).compactMap { $0.object.map(LogSet.init(json:)) }
     }
     var json: [String: JSONValue] {
@@ -83,6 +85,7 @@ extension LogExercise {
                                       "equip": .string(equip), "assist": .bool(assist), "tracking": .string(tracking),
                                       "imgUrl": imgUrl.map(JSONValue.string) ?? .null, "sets": .array(sets.map(\.json))]
         if let bwMode { o["bwMode"] = .string(bwMode) }
+        if let single { o["single"] = .bool(single) }
         return o
     }
 }
@@ -343,6 +346,63 @@ enum WorkoutMath {
         if si < e.sets.count { let s = e.sets[si]; if (s.pw ?? 0) > 0 { w = s.pw! }; if (s.pr ?? 0) > 0 { r = s.pr! } }
         return (w, r)
     }
+
+    // MARK: live card badges (renderWS / evaluateProgress)
+
+    static let progressStreak = 3
+    static func progressTrackable(_ t: String) -> Bool { t == "weight_reps" || t == "bodyweight_reps" }
+
+    struct Progress: Equatable { var up = false; var down = false }
+
+    /// evaluateProgress: newest -> oldest saved workouts with this lift. Down = no set in the last one
+    /// reached Min; up = the last 3 at one weight with every set at or above Max.
+    static func evaluateProgress(exId: String, history: [JSONValue], settings: Settings, bw: Double) -> Progress {
+        var occ: [(w: Double, reps: [Double])] = []
+        for h in history.reversed() where occ.count < progressStreak {
+            guard let wo = (h["exercises"]?.array ?? []).first(where: { $0["exId"]?.string == exId })?.object else { continue }
+            let wex = LogExercise(json: wo)
+            if !progressTrackable(wex.tracking) { return Progress() }
+            if wex.tracking == "bodyweight_reps" && bwMode(wex) != "added" { continue }
+            let done = wex.sets.filter(\.done)
+            if done.isEmpty { continue }
+            occ.append((done.reduce(0) { max($0, effWeight(wex, $1, bw: bw)) }, done.map { $0.reps }))
+        }
+        guard let first = occ.first else { return Progress() }
+        var p = Progress()
+        p.down = !first.reps.isEmpty && first.reps.allSatisfy { $0 < Double(settings.repMin) }
+        if occ.count >= progressStreak, occ.allSatisfy({ abs($0.w - first.w) < 0.01 }) {
+            p.up = occ.allSatisfy { !$0.reps.isEmpty && $0.reps.allSatisfy { $0 >= Double(settings.repMax) } }
+        }
+        return p
+    }
+
+    /// renderWS prIdx: the ONE set that gets the gold star. Weight lifts use the finish rule itself
+    /// (prWeightStep's documented PR); runs and holds use the single best set beating the record.
+    static func prIndex(_ e: LogExercise, raw: [String: JSONValue]) -> Int? {
+        let bw = jsNum(raw["jk_bw"])
+        if isWT(e) {
+            return prWeightStep(e, prev: raw["jk_prs"]?[e.exId]?.object, sug: raw["jk_prSug"]?[e.exId]?.object, bw: bw).doc?.si
+        }
+        var idx: Int?, best = -Double.infinity
+        if isCardio(e) {
+            let c = raw["jk_cardioPR"]?[e.exId]?.object
+            let cBest = mileEquiv(jsNum(c?["dist"]), jsNum(c?["time"]))
+            for (i, s) in e.sets.enumerated() where s.done && s.weight > 0 && s.reps > 0 && mileEquiv(s.weight, s.reps) < cBest {
+                let sc = -mileEquiv(s.weight, s.reps); if sc > best { best = sc; idx = i }
+            }
+        } else if isHold(e) {
+            let hBest = jsNum(raw["jk_holdPR"]?[e.exId]?["sec"])
+            for (i, s) in e.sets.enumerated() where s.done && s.weight > hBest && s.weight > best { best = s.weight; idx = i }
+        }
+        return idx
+    }
+
+    /// exSingleUI: the card's Single / Both state.
+    static func exSingleUI(_ e: LogExercise) -> Bool {
+        if let s = e.single { return s }
+        return e.sets.last.map { $0.single == true } ?? PWATables.SINGLE_DEFAULT_IDS.contains(e.exId)
+    }
+
 
     /// Plate calculator (openPlate): plates per side for a target, in the display unit.
     static func plates(target: Double, bar: Double, isLb: Bool) -> (perSide: [Double], leftover: Double) {
