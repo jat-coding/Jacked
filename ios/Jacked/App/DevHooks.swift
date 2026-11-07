@@ -6,6 +6,9 @@ import Foundation
 ///   SIMCTL_CHILD_JACKED_DEV_OPEN          day:<YYYY-MM-DD|today> | workout:<index from newest> | profile
 ///   SIMCTL_CHILD_JACKED_DEV_RENAME        <index from newest>|<new name>: rename through the real
 ///                                         save path (merge + compare-and-swap), then open it
+///   SIMCTL_CHILD_JACKED_DEV_CAS_DELAY     seconds to wait between the pre-write read and the
+///                                         conditional write, so a test can land a write from
+///                                         "another device" in that gap and prove the retry
 /// Compiled out of Release builds entirely. Never point these at a real person's account
 /// (ios/REWRITE_BUILD_BRIEF.md guardrail 2).
 enum DevHooks {
@@ -21,7 +24,11 @@ enum DevHooks {
         guard let r = env["JACKED_DEV_RENAME"], let bar = r.firstIndex(of: "|"), let i = Int(r[..<bar]) else { return nil }
         return (i, String(r[r.index(after: bar)...]))
     }
+    static var casDelay: Double { Double(env["JACKED_DEV_CAS_DELAY"] ?? "") ?? 0 }
+    static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
+    static var casDelay: Double { 0 }
+    static func log(_ s: String) {}
     static var login: (user: String, pass: String)? { nil }
     static var tab: String? { nil }
     static var open: String? { nil }
