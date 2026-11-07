@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-07T07:45:00-07:00",
+  "updated": "2026-11-07T08:40:00-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -102,7 +102,7 @@
       "id": "rest-of-app",
       "title": "Library, stats and friends",
       "status": "active",
-      "summary": "Nearly done: everything on the earlier list is in and checked against the web app. Left: editing and deleting a past workout, changing your username or photo, and importing a backup.",
+      "summary": "Nearly done: Edit Workout and Delete Workout are in and checked. Left: changing your username or photo, and importing a backup.",
       "detail": [
         "Library done: search, the muscle chips, favourites first then what you've used, the PR on each row, and the exercise page with photos, your suggested PR, recent top weights and the how-to steps. Favourite, hide and create a custom exercise all save through the careful save layer.",
         "Routines done: your routines in their sections like the web app, new, edit and delete a routine (it files itself into a section the same way), and Trusted Programs with + Add to Routines.",
@@ -130,7 +130,10 @@
         "Badge pages: the start button (Start a bench workout, Start a big-3 workout, Train your challenge muscle now, and so on). It picks the same exercises as the web app, and adds them to an open workout if you already have one.",
         "Gold PR lines on old workouts saved before the app kept a PR record: worked out by replaying your whole history like the web app. Checked on the Mac: 300 of 300 random histories gave the same stars. On the test account both apps show the count only on those days, because the saved count there disagrees with the replay.",
         "A past workout can be saved as a routine. The web app showed the new routine.",
-        "Still to do: Edit Workout and Delete Workout on a past workout. In the web app both also rebuild your records across the rest of your history, and that part has to be copied and checked before it can be trusted with your data. Also not in yet: changing your username, changing your profile photo, and Import (a Jacked backup or a Hevy file)."
+        "Edit Workout and Delete Workout on a past workout: name, date, every set's numbers and check, add or remove a set, remove an exercise, or delete the whole workout (behind the ... button, with the web app's confirm). Both rebuild your records for the exercises they touch, the same way the web app does. Checked on the Mac: 300 of 300 random edits and deletes gave the same history and records as the web app's own code.",
+        "Fixed first, from the second-opinion review: an iPhone edit to an old workout could be undone by the web app's next save. Every edit (renames too) now marks the workout as the newer version. Checked for real on the test account with the web app already open and holding its own older copy: the iPhone changed a set to 66 lb x 6, the web app then finished a workout and saved, and the iPhone and the server both still had 66 lb x 6. A delete on the iPhone also stuck and removed that workout's record.",
+        "Not yet on Edit Workout: adding a new exercise to a finished workout. Still to do: changing your username, changing your profile photo, and Import (a Jacked backup or a Hevy file).",
+        "Known and not fixable from the iPhone alone: settings, routines, profile, favourites and hidden cards are saved as a whole, so a change made on one app can be undone by the other app's next save while both are in use."
       ],
       "commits": [
         "9c3cee0",
