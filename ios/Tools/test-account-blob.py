@@ -14,7 +14,11 @@ def call(method, path, body=None, tok=K, extra=None):
     h.update(extra or {})
     r = urllib.request.Request(U + path, method=method, headers=h, data=json.dumps(body).encode() if body is not None else None)
     with urllib.request.urlopen(r) as resp: t = resp.read(); return json.loads(t) if t else None
-st = call("POST", "/rest/v1/rpc/account_status", {"p_code": code})
+import os  # the sign-in id never changes; caching it keeps repeated runs under account_status's rate limit
+_cf = os.path.expanduser("~/.cache/jacked-ios-test-emails.json"); _c = json.load(open(_cf)) if os.path.exists(_cf) else {}
+st = {"email": _c[code]} if code in _c else call("POST", "/rest/v1/rpc/account_status", {"p_code": code})
+if "email" not in st: print("account_status:", st); sys.exit(1)
+_c[code] = st["email"]; json.dump(_c, open(_cf, "w"))
 tok = call("POST", "/auth/v1/token?grant_type=password", {"email": st["email"], "password": acct["password"]})["access_token"]
 q = "/rest/v1/profile_backups?code=eq." + urllib.parse.quote(code)
 row = call("GET", q + "&select=backup,updated_at", tok=tok)[0]

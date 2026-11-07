@@ -66,6 +66,14 @@ final class WorkoutSession: ObservableObject {
         presented = true
     }
 
+    /// startGroupWorkout / startCuratedRoutine's ad-hoc path: a named workout from exercise ids, not saved as a routine.
+    func start(name: String, ids: [String], catalog: ExerciseCatalog, raw: [String: JSONValue]) {
+        guard ifFree({ [weak self] in self?.start(name: name, ids: ids, catalog: catalog, raw: raw) }) else { return }
+        active = ActiveWorkout(id: "w\(Self.nowMs)", routineId: nil, name: name, date: Self.isoNow(),
+                               exercises: ids.map { exercise(for: catalog.byId($0, raw: raw), raw: raw) }, startedAt: Double(Self.nowMs))
+        presented = true
+    }
+
     /// copyFriendWorkout / _copyFriendWorkoutNow: a friend's shared workout as a fresh session of your own,
     /// their numbers seeded as greyed targets (pw / pr). Exercises not in your library are skipped
     /// (resolveSharedEx: by id, else by name). Returns the toast text, or nil when nothing could be copied.
