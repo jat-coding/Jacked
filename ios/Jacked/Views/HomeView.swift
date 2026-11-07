@@ -17,6 +17,7 @@ struct HomeView: View {
     var body: some View {
         let h = store.backup.history
         let settings = store.backup.settings
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(spacing: 0) {
                 PageHeader(title: "JACKED") {
@@ -35,6 +36,7 @@ struct HomeView: View {
                 }
                 .buttonStyle(AccentButtonStyle())
                 .padding(.bottom, 22)
+                SuggestCard().id("suggest")
                 RecentWorkouts(history: h, settings: settings) { workout = $0 }
                 Text("Jacked for iPhone, preview build")
                     .font(Theme.body(11))
@@ -44,6 +46,12 @@ struct HomeView: View {
             .padding(.horizontal, 16)
         }
         .scrollIndicators(.hidden)
+        .task(id: store.lastSynced) {
+            #if DEBUG
+            if DevHooks.open == "suggest", store.lastSynced != nil { try? await Task.sleep(nanoseconds: 800_000_000); proxy.scrollTo("suggest", anchor: .center) }
+            #endif
+        }
+        }
         .background(Theme.bg.ignoresSafeArea())
         .refreshable { await store.refresh(auth: auth) }
         .onChange(of: store.loadedCode) { _, code in
