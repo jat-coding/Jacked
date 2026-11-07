@@ -157,6 +157,8 @@ final class BackupStore: ObservableObject {
             if let cloud, BackupMerge.canonical(.object(merged)) == BackupMerge.canonical(.object(cloud)) {
                 landed(local: local, merged: merged, watermark: ts0, notes: notes, code: s.code); return true
             }
+            DevHooks.log("read ok, watermark \(ts0 ?? "none"), \(merged["jk_hist"]?.array?.count ?? 0) workouts after merge")
+            if DevHooks.casDelay > 0 { try? await Task.sleep(nanoseconds: UInt64(DevHooks.casDelay * 1e9)) }
             let now = Self.isoNow()
             do {
                 if row != nil, let ts0 {
@@ -169,7 +171,10 @@ final class BackupStore: ObservableObject {
                                                    bearer: s.accessToken,
                                                    headers: ["Prefer": "return=representation"])
                     let rows = try JSONDecoder().decode([Landed].self, from: data)
-                    guard let r = rows.first else { continue }   // watermark moved: re-read, re-merge, retry
+                    guard let r = rows.first else {   // watermark moved: re-read, re-merge, retry
+                        DevHooks.log("write refused, watermark moved: re-reading"); continue
+                    }
+                    DevHooks.log("write landed, new watermark \(r.updated_at ?? "?")")
                     landed(local: local, merged: merged, watermark: r.updated_at, notes: notes, code: s.code); return true
                 }
                 // 5) First write for this account (no row yet): plain upsert, like the PWA.
