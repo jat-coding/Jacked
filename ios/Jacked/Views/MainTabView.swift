@@ -6,6 +6,7 @@ struct MainTabView: View {
     @StateObject private var store = BackupStore()
     @StateObject private var session = WorkoutSession()
     @StateObject private var catalog = ExerciseCatalog()
+    @StateObject private var friends = FriendsStore()
     @State private var tab: Tab = Tab(rawValue: DevHooks.tab ?? "") ?? .home
 
     enum Tab: String, Hashable { case routines, library, home, metrics, friends }
@@ -20,8 +21,9 @@ struct MainTabView: View {
                 .tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)
             MetricsView()
                 .tabItem { Label("Metrics", systemImage: "waveform.path.ecg") }.tag(Tab.metrics)
-            PlaceholderTab(title: "Friends", note: "Friends and the leaderboard are a later build step.")
+            FriendsView()
                 .tabItem { Label("Friends", systemImage: "person.2") }.tag(Tab.friends)
+                .badge(friends.friends.filter(\.pending).count)
         }
         .safeAreaInset(edge: .bottom) {
             if session.active != nil && !session.presented {
@@ -50,6 +52,15 @@ struct MainTabView: View {
         .environmentObject(store)
         .environmentObject(session)
         .environmentObject(catalog)
+        .environmentObject(friends)
+        .task(id: "\(store.updatedAt ?? "")|\(catalog.db.count)|\(store.backup.history.count)") {
+            // syncMe(): publish this phone's stats for friends' boards once the server copy and the
+            // exercise library are in, and again after every landed save (FriendsStore skips no-ops).
+            guard let code = auth.session?.code, store.loadedCode == code, store.lastSynced != nil, !catalog.db.isEmpty else { return }
+            let raw = store.backup.raw, m = MetricsMath(raw: raw, lib: ExLib(db: catalog.db, raw: raw))
+            let (f, a, cols) = (friends, auth, m.publishColumns(badges: m.computeBadges().list))
+            Task { await f.publish(cols, auth: a) }
+        }
         .task(id: auth.session?.code) {
             if let code = auth.session?.code {
                 session.load(code: code)
