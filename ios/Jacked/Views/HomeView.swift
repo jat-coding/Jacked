@@ -5,6 +5,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
+    @EnvironmentObject private var session: WorkoutSession
     @State private var month = Calendar.current.dateComponents([.year, .month], from: Date())
     @State private var dayKey: DayKey?
     @State private var workout: Workout?
@@ -28,7 +29,7 @@ struct HomeView: View {
                 StreakBanner(history: h).padding(.bottom, 20)
                 CalendarCard(history: h, month: $month) { dayKey = DayKey(id: $0) }
                     .padding(.bottom, 20)
-                Button { showStartNote = true } label: {
+                Button { if session.active != nil { session.presented = true } else { showStartNote = true } } label: {
                     Label("Start Workout", systemImage: "play.fill").font(Theme.body(16, .semibold))
                 }
                 .buttonStyle(AccentButtonStyle())
@@ -72,11 +73,7 @@ struct HomeView: View {
         }
         .sheet(item: $workout) { WorkoutDetailSheet(workout: $0, settings: settings) }
         .sheet(isPresented: $showAccount) { AccountSheet() }
-        .alert("Workout logging is the next build step", isPresented: $showStartNote) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("This preview can rename a past workout but can't log a new one yet.")
-        }
+        .sheet(isPresented: $showStartNote) { StartWorkoutSheet().presentationDetents([.medium, .large]) }
     }
 
     @ViewBuilder private var syncLine: some View {

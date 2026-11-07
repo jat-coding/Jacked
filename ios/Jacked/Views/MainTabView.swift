@@ -4,13 +4,15 @@ import SwiftUI
 struct MainTabView: View {
     @EnvironmentObject private var auth: AuthStore
     @StateObject private var store = BackupStore()
+    @StateObject private var session = WorkoutSession()
+    @StateObject private var catalog = ExerciseCatalog()
     @State private var tab: Tab = Tab(rawValue: DevHooks.tab ?? "") ?? .home
 
     enum Tab: String, Hashable { case routines, library, home, metrics, friends }
 
     var body: some View {
         TabView(selection: $tab) {
-            PlaceholderTab(title: "Routines", note: "Your routines and the trusted programs come with workout logging.")
+            RoutinesView()
                 .tabItem { Label("Routines", systemImage: "square.grid.2x2") }.tag(Tab.routines)
             PlaceholderTab(title: "Library", note: "The exercise library is a later build step.")
                 .tabItem { Label("Library", systemImage: "books.vertical") }.tag(Tab.library)
@@ -21,9 +23,35 @@ struct MainTabView: View {
             PlaceholderTab(title: "Friends", note: "Friends and the leaderboard are a later build step.")
                 .tabItem { Label("Friends", systemImage: "person.2") }.tag(Tab.friends)
         }
+        .safeAreaInset(edge: .bottom) {
+            if session.active != nil && !session.presented {
+                Button { session.presented = true } label: {
+                    Label("Return to workout", systemImage: "arrow.uturn.left").font(Theme.body(14, .bold))
+                        .foregroundStyle(Theme.onAccent).padding(.horizontal, 18).padding(.vertical, 10)
+                        .background(Theme.accent, in: Capsule())
+                }
+                .padding(.bottom, 56)
+            }
+        }
+        .fullScreenCover(isPresented: $session.presented) {
+            ActiveWorkoutView()
+                .environmentObject(auth).environmentObject(store).environmentObject(session).environmentObject(catalog)
+                .preferredColorScheme(.dark)
+        }
+        .sheet(item: $session.summary) { s in
+            FinishSummarySheet(s: s)
+                .environmentObject(auth).environmentObject(store).environmentObject(session)
+        }
         .environmentObject(store)
+        .environmentObject(session)
+        .environmentObject(catalog)
         .task(id: auth.session?.code) {
-            if let code = auth.session?.code { await store.start(for: code, auth: auth) }
+            if let code = auth.session?.code {
+                session.load(code: code)
+                await store.start(for: code, auth: auth)
+                await catalog.load()
+                await runDevLog()
+            }
         }
         .onAppear {
             let a = UITabBarAppearance()
@@ -32,6 +60,45 @@ struct MainTabView: View {
             a.shadowColor = UIColor(Theme.border)
             UITabBar.appearance().standardAppearance = a
             UITabBar.appearance().scrollEdgeAppearance = a
+        }
+    }
+}
+
+extension MainTabView {
+    /// DEBUG DevHooks: log a scripted workout through the same session calls the buttons use,
+    /// then (JACKED_DEV_FINISH) finish it through the real save path.
+    func runDevLog() async {
+        guard store.loadedCode != nil else { return }
+        let raw = store.backup.raw
+        if let script = DevHooks.logScript, session.active == nil {
+            if let rid = DevHooks.routine,
+               let r = (raw["jk_routines"]?.array ?? []).compactMap(\.object).first(where: { $0["name"]?.string == rid }) {
+                session.start(routine: r, catalog: catalog, raw: raw)
+            } else { session.startEmpty() }
+            for (i, part) in script.split(separator: ";").enumerated() {
+                let kv = part.split(separator: "=", maxSplits: 1)
+                guard kv.count == 2 else { continue }
+                let exId = String(kv[0])
+                var ei = session.active?.exercises.firstIndex { $0.exId == exId } ?? -1
+                if ei < 0 { session.add(catalog.byId(exId, raw: raw), raw: raw); ei = (session.active?.exercises.count ?? 1) - 1 }
+                for (si, st) in kv[1].split(separator: ",").enumerated() {
+                    let wr = st.split(separator: "x").map { Double($0.trimmingCharacters(in: .whitespaces)) ?? 0 }
+                    while (session.active?.exercises[ei].sets.count ?? 0) <= si { session.addSet(ei) }
+                    let lb = store.backup.settings.isLb
+                    session.set(ei, si, weight: (wr.first ?? 0) / (lb ? 2.20462 : 1), reps: wr.count > 1 ? wr[1] : 0)
+                    session.toggle(ei, si, raw: raw, settings: store.backup.settings)
+                }
+                _ = i
+            }
+            DevHooks.log("dev workout started: \(session.active?.exercises.count ?? 0) exercises")
+        }
+        if DevHooks.finish, session.active != nil {
+            session.presented = true
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            await session.finish(store: store, auth: auth)
+            DevHooks.log("dev workout finished, saved to server: \(session.summary?.savedToServer ?? false), prs \(session.summary?.prs.count ?? -1)")
+        } else if session.active != nil && DevHooks.logScript != nil {
+            session.presented = true
         }
     }
 }
