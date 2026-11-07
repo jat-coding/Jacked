@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-07T00:25:00-07:00",
+  "updated": "2026-11-07T00:45:00-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -77,11 +77,18 @@
       "id": "workout-logging",
       "title": "Workout logging",
       "status": "active",
-      "summary": "Log a full workout: sets, rest timer, PRs, plate math, routines.",
+      "summary": "Logging works: the iPhone logged a workout and the web app shows it with the same sets, volume and PRs. Watch check and extras still to do.",
       "detail": [
-        "Mac check: log a real workout, it shows on the web app and the watch.",
-        "TestFlight testing for you and Phil can start once this works, long before the App Store.",
-        "Also brings the Suggested today card on Home and logging a past day from the calendar."
+        "Done and checked in the simulator on the throwaway test account: start an empty workout or one of your routines, add exercises from the full library, type weight and reps, check sets off, rest timer with -15/+15/skip, plate calculator, finish summary with new and suggested PRs, save as a new routine.",
+        "Finish saves through the careful save layer. The web app, signed in to the same test account, showed the iPhone's workout with the same name, sets, volume and the same 2 PRs.",
+        "The finish math (volume, PRs, suggested PRs, cardio and hold records, the auto name) is copied from the web app and checked on the Mac: 600 of 600 random workouts came out identical in both.",
+        "A workout in progress is kept on the phone, so closing the app doesn't lose it. A Return to workout button shows while one is open.",
+        "Still to do in this step: check it on the watch, the Suggested today card on Home, logging a past day from the calendar, switching and supersets, the Single/Both and added-weight buttons, the progress notes, and updating the leaderboard numbers after a save.",
+        "Small difference found: the iPhone stars every checked set that beats your old record, the web app stars only the record set. Next job fixes it."
+      ],
+      "commits": [
+        "d1475f6",
+        "62d887a"
       ]
     },
     {
