@@ -165,6 +165,7 @@ struct ExerciseCard: View {
             }
             HStack {
                 Text("SET").frame(width: 34, alignment: .leading)
+                Text("PREV").frame(width: 62)
                 Text(col1).frame(maxWidth: .infinity)
                 Text(col2).frame(maxWidth: .infinity)
                 Image(systemName: "checkmark").frame(width: 40)
@@ -173,10 +174,19 @@ struct ExerciseCard: View {
             ForEach(Array(ex.sets.enumerated()), id: \.offset) { si, s in
                 SetRow(ei: ei, si: si, ex: ex, set: s, settings: settings, star: prIdx == si)
             }
-            Button { session.addSet(ei) } label: {
-                Label("Add Set", systemImage: "plus").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity).padding(.vertical, 8)
+            HStack(spacing: 8) {
+                Button { session.addSet(ei) } label: {
+                    Label("Add Set", systemImage: "plus").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity).padding(.vertical, 8)
+                }
+                .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+                if ex.sets.count > 1 {
+                    Button { session.removeSet(ei, ex.sets.count - 1) } label: {
+                        Text("− Set").font(Theme.body(13, .semibold)).padding(.horizontal, 14).padding(.vertical, 8)
+                    }
+                    .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+                    .accessibilityLabel("Remove last set")
+                }
             }
-            .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
         }
         .padding(14)
         .card()
@@ -269,6 +279,7 @@ struct SetRow: View {
                 if star { Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(Color(hex: 0xFFD700)) }
             }
             .frame(width: 34, alignment: .leading).foregroundStyle(set.done ? Theme.accent : Theme.text2)
+            Text(prev).font(Theme.body(11)).foregroundStyle(Theme.muted).lineLimit(1).minimumScaleFactor(0.7).frame(width: 62)
             if WorkoutMath.bwCapable(ex) && WorkoutMath.bwMode(ex) == "body" {
                 let bw = jsNum(store.backup.raw["jk_bw"])
                 Text(bw > 0 ? "\(WorkoutMath.n(settings.display(bw).rounded()))\(settings.unitLabel)" : "set BW")
@@ -292,6 +303,22 @@ struct SetRow: View {
         .padding(.vertical, 2)
         .background(set.done ? Theme.accent.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 9))
         .contextMenu { Button("Delete set", role: .destructive) { session.removeSet(ei, si) } }
+    }
+
+    /// The PREV column: last session's numbers for this set, else the PR, else a dash.
+    private var prev: String {
+        let isW = WorkoutMath.isWT(ex)
+        func w(_ v: Double) -> String { isW ? WorkoutMath.n((settings.display(v) * 10).rounded() / 10) : WorkoutMath.n(v) }
+        func r(_ v: Double) -> String {
+            guard ex.tracking == "distance" else { return WorkoutMath.n(v) }
+            guard v > 0 else { return "" }
+            let m = Int(v.rounded(.down)), sec = Int(((v - Double(m)) * 60).rounded())
+            return sec > 0 ? "\(m).\(String(format: "%02d", sec))" : "\(m)"
+        }
+        let sw = set.pw ?? 0, sr = set.pr ?? 0
+        if sw > 0 || sr > 0 { return "\(w(sw))×\(r(sr))" }
+        if let pr = store.backup.raw["jk_prs"]?[ex.exId]?.object { return "\(w(jsNum(pr["weight"])))×\(r(jsNum(pr["reps"])))" }
+        return "—"
     }
 
     /// Weight is kg on disk and lb/kg on screen; miles and seconds are shown as stored.
