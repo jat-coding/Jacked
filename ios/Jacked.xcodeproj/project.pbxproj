@@ -56,6 +56,7 @@
 		F9B9B363034B9D0143BB64CE /* BodyFigure.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4C709E0264039E5608B927 /* BodyFigure.swift */; };
 		890A6279BC7CF45A367B38FA /* PRReplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF0E9B800DCE2D8892A7A86 /* PRReplay.swift */; };
 		0BFCF441D3A64F8167DCD709 /* ProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D226DB47C0EFF500E11B22CE /* ProfileSheet.swift */; };
+		6A188260C20711F3B322FEE9 /* HistRepair.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0F1F889BB16911B97495C2 /* HistRepair.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -110,6 +111,7 @@
 		6F4C709E0264039E5608B927 /* BodyFigure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyFigure.swift; sourceTree = "<group>"; };
 		DDF0E9B800DCE2D8892A7A86 /* PRReplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRReplay.swift; sourceTree = "<group>"; };
 		D226DB47C0EFF500E11B22CE /* ProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSheet.swift; sourceTree = "<group>"; };
+		DE0F1F889BB16911B97495C2 /* HistRepair.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistRepair.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -236,6 +238,7 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				DE0F1F889BB16911B97495C2 /* HistRepair.swift */,
 				DDF0E9B800DCE2D8892A7A86 /* PRReplay.swift */,
 				DC402D334E27BD7AD83D1BBE /* BodyArt.swift */,
 				783EC9D8526ED4E6DBC03BE5 /* ExPhotoStore.swift */,
@@ -335,6 +338,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6A188260C20711F3B322FEE9 /* HistRepair.swift in Sources */,
 				0BFCF441D3A64F8167DCD709 /* ProfileSheet.swift in Sources */,
 				890A6279BC7CF45A367B38FA /* PRReplay.swift in Sources */,
 				F9B9B363034B9D0143BB64CE /* BodyFigure.swift in Sources */,
