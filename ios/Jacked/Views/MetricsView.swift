@@ -433,13 +433,55 @@ struct RecapSheet: View {
     static let md: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.dateFormat = "MMM d"; return f }()
     let r: MetricsMath.Recap
     let settings: Settings
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var store: BackupStore
+    @EnvironmentObject private var catalog: ExerciseCatalog
+    @EnvironmentObject private var friends: FriendsStore
+    static let tierShort = ["Bench-Maxing": "Bench", "Shoulder-Maxing": "Shoulder", "Leg-Maxing": "Leg", "Pull-up-Maxing": "Pull-up",
+                            "Push-up-Maxing": "Push-up", "Cardio-Maxing": "Cardio"]
 
     var body: some View {
         let s = settings
+        let raw = store.backup.raw, m = MetricsMath(raw: raw, lib: ExLib(db: catalog.db, raw: raw))
+        let badges = m.computeBadges().list
+        let tiered = badges.filter(\.tiered)
+        // recapData's crown: only on last month's recap, when you topped last month's weight on your board.
+        let now = Calendar.current.dateComponents([.year, .month], from: Date())
+        let isPrev = r.y * 12 + (r.m + 1) == now.year! * 12 + now.month! - 1
+        let you = m.yourStats(code: auth.session?.code ?? "", badges: badges)
+        let crown = isPrev && m.crownCodes([you] + friends.friends.filter { !$0.pending }).contains(you.code)
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("MONTHLY RECAP").font(Theme.body(11, .bold)).tracking(2.5).foregroundStyle(Theme.accent)
-                Text("\(r.label) \(String(r.y))").font(Theme.heading(30, .extraBold)).foregroundStyle(Theme.text)
+            content(crown: crown, tiered: tiered).padding(20)
+            // shareRecap: the recap as a picture plus a one-line caption, through the share sheet.
+            if let img = ImageRenderer(content: content(crown: crown, tiered: tiered).padding(24).frame(width: 400).background(Theme.bg)
+                                        .environment(\.colorScheme, .dark)).uiImage.map(Image.init(uiImage:)) {
+                ShareLink(item: img, message: Text(shareText), preview: SharePreview("\(r.label) recap", image: img)) {
+                    Text("Share").font(Theme.body(15, .semibold)).foregroundStyle(Theme.bg).frame(maxWidth: 220).padding(.vertical, 12)
+                        .background(Color(hex: 0xEDEDED), in: RoundedRectangle(cornerRadius: 12))
+                }
+                .padding(.bottom, 24)
+            }
+        }
+        .background(Theme.bg2.ignoresSafeArea())
+        .presentationDragIndicator(.visible)
+    }
+
+    /// shareRecap's caption.
+    private var shareText: String {
+        let s = settings
+        var t = "My \(r.label) on Jacked: \(r.sessions) sessions, \(HomeMath.fmtV(s.display(r.vol))) \(s.unitLabel) lifted, \(r.prs) PRs."
+        if let b = r.best { t += " Best lift: \(b.name) \(MetricsView.dW(b.w, s)) \(s.unitLabel) x \(WorkoutMath.n(b.r))." }
+        return t
+    }
+
+    private func content(crown: Bool, tiered: [Badge]) -> some View {
+        let s = settings
+        return VStack(alignment: .leading, spacing: 10) {
+                VStack(spacing: 2) {
+                    Text("MONTHLY RECAP").font(Theme.body(11, .bold)).tracking(2.5).foregroundStyle(Theme.accent)
+                    Text("\(r.label) \(String(r.y))").font(Theme.heading(30, .extraBold)).foregroundStyle(Theme.text)
+                }
+                .frame(maxWidth: .infinity)
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())], spacing: 8) {
                     StatTile(v: "\(r.sessions)", l: "Sessions", color: Theme.text); StatTile(v: "\(HomeMath.fmtV(s.display(r.vol))) \(s.unitLabel)", l: "Weight lifted", color: Theme.text)
                     StatTile(v: "\(r.prs)", l: "PRs", color: Theme.text); StatTile(v: "\(r.days)", l: "Days trained", color: Theme.text)
@@ -450,15 +492,39 @@ struct RecapSheet: View {
                 if let w = r.bestWeek {
                     row("calendar", Theme.accent, "Best week", "Week of \(Self.md.string(from: w.start)) \u{2014} \(HomeMath.fmtV(s.display(w.vol))) \(s.unitLabel) in \(w.n) session\(w.n != 1 ? "s" : "")")
                 }
-                let chips = [r.challenge.flatMap { $0.done ? "Challenge: " + (MetricsMath.MGNAME[$0.group] ?? $0.group) : nil }, r.comeback ? "Comeback" : nil].compactMap { $0 }
+                let chips: [(String, String)] = [crown ? ("crown.fill", "Leaderboard crown") : nil,
+                    r.challenge.flatMap { $0.done ? ("dumbbell.fill", "Challenge: " + (MetricsMath.MGNAME[$0.group] ?? $0.group)) : nil },
+                    r.comeback ? ("arrow.up.circle.fill", "Comeback") : nil].compactMap { $0 }
                 if !chips.isEmpty {
-                    HStack { ForEach(chips, id: \.self) { Text($0).font(Theme.body(12, .bold)).foregroundStyle(Color(hex: 0xFFD700)).padding(.horizontal, 10).padding(.vertical, 6).background(Theme.bg3, in: Capsule()) } }
+                    HStack(spacing: 6) {
+                        ForEach(chips, id: \.1) { c in
+                            HStack(spacing: 5) { Image(systemName: c.0).font(.system(size: 12)); Text(c.1.uppercased()).font(Theme.body(11, .heavy)).tracking(0.5) }
+                                .foregroundStyle(Color(hex: 0xFFD700)).padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(Color(hex: 0xFFD700).opacity(0.08), in: Capsule())
+                                .overlay(Capsule().stroke(Color(hex: 0xFFD700).opacity(0.4), lineWidth: 1))
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                // .rc-grid: the tiered badges as they stand now, three across.
+                Text("TIERED BADGES").font(Theme.heading(13, .extraBold)).tracking(1.5).foregroundStyle(Theme.muted).padding(.top, 6)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                    ForEach(tiered) { b in
+                        let tc = b.tier.flatMap { BadgeUI.tierColor[$0] }
+                        VStack(spacing: 2) {
+                            // The recap colours every tiered badge's icon (uic(b.icon, b.color)), earned or not.
+                            Image(systemName: BadgeUI.symbols[b.icon] ?? "rosette").font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(BadgeUI.color(b.color)).frame(width: 22, height: 22)
+                            Text(Self.tierShort[b.name] ?? b.name).font(Theme.body(13, .heavy)).foregroundStyle(Theme.text).lineLimit(1).padding(.top, 2)
+                            Text((b.tier ?? "\u{2014}").uppercased()).font(Theme.body(10, .heavy)).tracking(0.8).foregroundStyle(tc ?? Theme.muted)
+                            Text(b.curV ?? " ").font(Theme.body(11)).foregroundStyle(Theme.muted).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity).padding(.vertical, 8).padding(.horizontal, 4)
+                        .background(Theme.bg3, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(tc.map { $0.opacity(0.4) } ?? Theme.border2, lineWidth: 1))
+                    }
                 }
             }
-            .padding(20)
-        }
-        .background(Theme.bg2.ignoresSafeArea())
-        .presentationDragIndicator(.visible)
     }
     private func row(_ icon: String, _ c: Color, _ t: String, _ sub: String) -> some View {
         HStack(spacing: 12) {
