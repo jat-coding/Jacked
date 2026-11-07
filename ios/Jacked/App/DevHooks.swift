@@ -24,6 +24,12 @@ import Foundation
 ///   SIMCTL_CHILD_JACKED_DEV_WEIGHT        <kg>: log today's body weight from Metrics through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_HIDECARD      <card id>: hide / show that Metrics card through the real save path
 ///   (OPEN also takes recap:<YYYY-MM>, card:<card id>, ach and badge:<badge name> on the Metrics tab)
+///   SIMCTL_CHILD_JACKED_DEV_CMP           <volume|prs|workouts|streak|consistency|badges>|<month|all>: the Leaderboards filter
+///   SIMCTL_CHILD_JACKED_DEV_CB            <code>: toggle that friend's close-buddy star through the real save path
+///   SIMCTL_CHILD_JACKED_DEV_ACCEPT        <code>: accept that person's friend request (real call)
+///   SIMCTL_CHILD_JACKED_DEV_RMFRIEND      <code>: remove / decline / cancel with that person (real call)
+///   SIMCTL_CHILD_JACKED_DEV_ADDFRIEND     <username>: open Add Friend prefilled; with ADDFRIEND_SEND=1 also tap Add Friend
+///   (OPEN also takes friend:<code|me>, friend:<code>/<workout index> and friend:<code>/badges on the Friends tab)
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
@@ -60,8 +66,20 @@ enum DevHooks {
     static var superset: [Int] { (env["JACKED_DEV_SUPERSET"] ?? "").split(separator: ",").compactMap { Int($0) } }
     static var logWeight: Double? { env["JACKED_DEV_WEIGHT"].flatMap { Double($0) } }
     static var hideCard: String? { env["JACKED_DEV_HIDECARD"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var cmp: String? { env["JACKED_DEV_CMP"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var toggleCB: String? { env["JACKED_DEV_CB"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var acceptFriend: String? { env["JACKED_DEV_ACCEPT"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var removeFriend: String? { env["JACKED_DEV_RMFRIEND"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var addFriend: String? { env["JACKED_DEV_ADDFRIEND"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var addFriendSend: Bool { env["JACKED_DEV_ADDFRIEND_SEND"] == "1" }
     static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
+    static var cmp: String? { nil }
+    static var toggleCB: String? { nil }
+    static var acceptFriend: String? { nil }
+    static var removeFriend: String? { nil }
+    static var addFriend: String? { nil }
+    static var addFriendSend: Bool { false }
     static var casDelay: Double { 0 }
     static func log(_ s: String) {}
     static var login: (user: String, pass: String)? { nil }

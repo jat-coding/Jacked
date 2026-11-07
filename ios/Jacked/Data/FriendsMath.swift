@@ -69,14 +69,33 @@ struct Person: Identifiable {
 }
 
 enum FriendsMath {
-    /// cleanCode(): a username-shaped code, the only thing allowed into a request filter.
-    static func cleanCode(_ c: String) -> Bool { c.range(of: #"^@[a-z0-9_]{1,40}$"#, options: .regularExpression) != nil }
+    /// cleanCode(): @username or a legacy JCKD-XXXXXX code, the only thing allowed into a request filter.
+    static func cleanCode(_ c: String) -> Bool { c.range(of: #"^[A-Za-z0-9@_-]{1,32}$"#, options: .regularExpression) != nil }
 
-    /// cleanAvatar(): only this project's own avatars bucket, for this person's own file.
+    /// cleanAvatar(): never a stored URL. Only the "?v=<digits>" version stamp is read; the URL is rebuilt
+    /// from this project's avatars bucket and the person's own code.
     static func cleanAvatar(_ u: String?, _ code: String) -> String {
-        guard let u, !u.isEmpty else { return "" }
-        let base = SupabaseConfig.url.absoluteString + "/storage/v1/object/public/avatars/"
-        return u.hasPrefix(base) ? u : ""
+        guard let u, cleanCode(code), let r = u.range(of: #"[?&]v=(\d{1,15})$"#, options: .regularExpression) else { return "" }
+        let v = u[r].split(separator: "=").last.map(String.init) ?? ""
+        let c = code.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))) ?? code
+        return SupabaseConfig.url.absoluteString + "/storage/v1/object/public/avatars/\(c).jpg?v=\(v)"
+    }
+
+    /// avc(): the initials disc colour, hashed from the name like the web app.
+    static let AVC: [UInt32] = [0x20d3c2, 0x3ddc97, 0x5aa9ff, 0xff9f4d, 0xb07cff, 0xff5d6c, 0x4ad9d9, 0xffca4d]
+    static func avc(_ n: String) -> UInt32 {
+        var h = 0.0   // a JS number: only `h<<5` goes through int32
+        for ch in (n.isEmpty ? "?" : n) {
+            let u = Double(String(ch).utf16.first ?? 0)
+            let sh = Int32(truncatingIfNeeded: Int64(h.truncatingRemainder(dividingBy: 4294967296))) << 5
+            h = u + (Double(sh) - h)
+        }
+        return AVC[Int(abs(h).truncatingRemainder(dividingBy: Double(AVC.count)))]
+    }
+    /// avi(): up to two initials.
+    static func avi(_ n: String) -> String {
+        let s = (n.isEmpty ? "?" : n).split(separator: " ", omittingEmptySubsequences: false).map { $0.first.map(String.init) ?? "" }.joined().uppercased()
+        return s.isEmpty ? "??" : String(s.prefix(2))
     }
 
     /// normU(): "@" + lowercase letters, digits and underscore.

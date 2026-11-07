@@ -1,7 +1,7 @@
 // Screenshot the LOCAL PWA (python http.server over jacked-pwa/) logged in as the THROWAWAY
 // iOS test account. Live Supabase, same account as the simulator, so both sides show the same data.
 // node pwa_shot.mjs <out.png> [day:YYYY-MM-DD|workout:0|routines|lib|libq:<search>|exinfo:<exId>|active:<exId>=<lb>x<reps>,...;<exId>=...]
-// metrics (full page) | recap:YYYY-MM | ach (achievements page) | badge:<name> (one badge's page)
+// friends | friends:<cmp>|<month|all> | friend:<code|me>[/<workout index>|/badges] | metrics (full page) | recap:YYYY-MM | ach (achievements page) | badge:<name> (one badge's page)
 // active: starts an empty workout and logs those sets through uSet/togSet (never finished, never saved).
 import { createRequire } from 'module'; import { spawn } from 'child_process'; import fs from 'fs';
 const require = createRequire('/home/roni/agent/projects/Jacked/tests/e2e/');
@@ -47,6 +47,10 @@ try {
   if (open === 'ach' || open.startsWith('badge:')) { await p.evaluate(() => sp('metrics')); await p.waitForTimeout(1500); await p.evaluate(() => openAch()); }
   if (open.startsWith('badge:')) await p.evaluate(n => badgeInfo(n), open.slice(6));
   if (open === 'ach' || open.startsWith('badge:')) console.log(JSON.stringify(await p.evaluate(() => computeBadges().map(b => [b.name, !!b.earned, b.tier || null, String(b.desc).replace(/<[^>]*>/g, '')]))));
+  if (open.startsWith('friends') || open.startsWith('friend:')) { await p.evaluate(() => sp('leaderboard')); await p.waitForTimeout(3500); }
+  if (open.startsWith('friends:')) { const [k, r] = open.slice(8).split('|'); await p.evaluate(([k, r]) => { cmpM = k; if (r) cmpRange = r; renderLB(); }, [k, r]); }
+  if (open.startsWith('friend:')) await p.evaluate(o => { const [c, sub] = o.split('/'); openFriend(c === 'me' ? gProf().code : c);
+    if (sub === 'badges') showFriendBadges(c === 'me' ? gProf().code : c); else if (sub) openFriendWorkout(c, +sub); }, open.slice(7));
   await p.waitForTimeout(800);
   await p.screenshot({ path: out, fullPage: open === 'metrics' });
   console.log(out, await p.evaluate(() => JSON.parse(localStorage.getItem('jk_hist')).length + ' workouts'));
