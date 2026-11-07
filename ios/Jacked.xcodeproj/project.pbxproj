@@ -52,6 +52,8 @@
 		F3761F403F81764A1306D84A /* SuggestMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3C9A73CCF739F1B886FC77 /* SuggestMath.swift */; };
 		8191AEAFBD0711677C052662 /* SuggestCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B37106CEAD7C8ECA99D38E /* SuggestCard.swift */; };
 		905FF08113E94FE0BE60699A /* ExPhotoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 783EC9D8526ED4E6DBC03BE5 /* ExPhotoStore.swift */; };
+		07AC3D53BB0D93BD457BCC6B /* BodyArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC402D334E27BD7AD83D1BBE /* BodyArt.swift */; };
+		F9B9B363034B9D0143BB64CE /* BodyFigure.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4C709E0264039E5608B927 /* BodyFigure.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -102,6 +104,8 @@
 		FC3C9A73CCF739F1B886FC77 /* SuggestMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestMath.swift; sourceTree = "<group>"; };
 		03B37106CEAD7C8ECA99D38E /* SuggestCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestCard.swift; sourceTree = "<group>"; };
 		783EC9D8526ED4E6DBC03BE5 /* ExPhotoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExPhotoStore.swift; sourceTree = "<group>"; };
+		DC402D334E27BD7AD83D1BBE /* BodyArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyArt.swift; sourceTree = "<group>"; };
+		6F4C709E0264039E5608B927 /* BodyFigure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyFigure.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -180,6 +184,7 @@
 		4BE43130E63E6223C39B0FA6 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				6F4C709E0264039E5608B927 /* BodyFigure.swift */,
 				03B37106CEAD7C8ECA99D38E /* SuggestCard.swift */,
 				9541312805A08C30F3273763 /* FriendProfileView.swift */,
 				B16A8FA0D8F3FE39DFC6618D /* FriendsView.swift */,
@@ -226,6 +231,7 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				DC402D334E27BD7AD83D1BBE /* BodyArt.swift */,
 				783EC9D8526ED4E6DBC03BE5 /* ExPhotoStore.swift */,
 				FC3C9A73CCF739F1B886FC77 /* SuggestMath.swift */,
 				7BBDFDE1BC965F4464FD1F6F /* FriendsStore.swift */,
@@ -323,6 +329,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F9B9B363034B9D0143BB64CE /* BodyFigure.swift in Sources */,
+				07AC3D53BB0D93BD457BCC6B /* BodyArt.swift in Sources */,
 				905FF08113E94FE0BE60699A /* ExPhotoStore.swift in Sources */,
 				8191AEAFBD0711677C052662 /* SuggestCard.swift in Sources */,
 				F3761F403F81764A1306D84A /* SuggestMath.swift in Sources */,
