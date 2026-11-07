@@ -42,6 +42,8 @@
 		C30E6BA52205F2780D56219A /* Curated.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFF9B8EFEF1F114D1C369587 /* Curated.swift */; };
 		1C261B3E46FDE08F4786AFCD /* MetricsMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951A26D480BCC5591A952E7F /* MetricsMath.swift */; };
 		293D228F5B9E5C34488C1464 /* MetricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917BD0FC690B83DAB01F18E6 /* MetricsView.swift */; };
+		A0AC69881CBA7555B3D191B6 /* BadgeMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C822E8F580B0F96F0D70E79 /* BadgeMath.swift */; };
+		4C69B9B16858BDA69199C9AB /* BadgeTables.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BA21A4EDE6D6843C287BED /* BadgeTables.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -82,6 +84,8 @@
 		BFF9B8EFEF1F114D1C369587 /* Curated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Curated.swift; sourceTree = "<group>"; };
 		951A26D480BCC5591A952E7F /* MetricsMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsMath.swift; sourceTree = "<group>"; };
 		917BD0FC690B83DAB01F18E6 /* MetricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsView.swift; sourceTree = "<group>"; };
+		2C822E8F580B0F96F0D70E79 /* BadgeMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeMath.swift; sourceTree = "<group>"; };
+		B9BA21A4EDE6D6843C287BED /* BadgeTables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeTables.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -202,6 +206,8 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				B9BA21A4EDE6D6843C287BED /* BadgeTables.swift */,
+				2C822E8F580B0F96F0D70E79 /* BadgeMath.swift */,
 				951A26D480BCC5591A952E7F /* MetricsMath.swift */,
 				BFF9B8EFEF1F114D1C369587 /* Curated.swift */,
 				84B802B75FC11BDA0C9416CD /* LibraryMath.swift */,
@@ -293,6 +299,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4C69B9B16858BDA69199C9AB /* BadgeTables.swift in Sources */,
+				A0AC69881CBA7555B3D191B6 /* BadgeMath.swift in Sources */,
 				293D228F5B9E5C34488C1464 /* MetricsView.swift in Sources */,
 				1C261B3E46FDE08F4786AFCD /* MetricsMath.swift in Sources */,
 				C30E6BA52205F2780D56219A /* Curated.swift in Sources */,
