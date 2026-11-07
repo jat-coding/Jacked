@@ -3,7 +3,8 @@ import Foundation
 /// DEBUG-only hooks so the simulator can be driven over SSH (no keyboard there):
 ///   SIMCTL_CHILD_JACKED_DEV_USER / _PASS  sign in as the throwaway TEST account on launch
 ///   SIMCTL_CHILD_JACKED_DEV_TAB           routines | library | home | metrics | friends
-///   SIMCTL_CHILD_JACKED_DEV_OPEN          day:<YYYY-MM-DD|today> | workout:<index from newest> | profile
+///   SIMCTL_CHILD_JACKED_DEV_OPEN          day:<YYYY-MM-DD|today> | workout:<index from newest> | profile | ex:<exId>
+///   SIMCTL_CHILD_JACKED_DEV_SEARCH        text typed into the Library search
 ///   SIMCTL_CHILD_JACKED_DEV_RENAME        <index from newest>|<new name>: rename through the real
 ///                                         save path (merge + compare-and-swap), then open it
 ///   SIMCTL_CHILD_JACKED_DEV_CAS_DELAY     seconds to wait between the pre-write read and the
@@ -16,6 +17,7 @@ import Foundation
 ///   SIMCTL_CHILD_JACKED_DEV_SUPERSET      <i>,<j>: pair those two exercises of the LOG workout
 ///   SIMCTL_CHILD_JACKED_DEV_NOTE          <exId>|<text>: save an exercise note through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_DURUNIT       sec|min|hr for every hold in the LOG workout
+///   SIMCTL_CHILD_JACKED_DEV_FAV           <exId>: toggle that exercise's favourite through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
@@ -38,6 +40,8 @@ enum DevHooks {
     static var routine: String? { env["JACKED_DEV_ROUTINE"].flatMap { $0.isEmpty ? nil : $0 } }
     static var finish: Bool { env["JACKED_DEV_FINISH"] == "1" }
     static var cancel: Bool { env["JACKED_DEV_CANCEL"] == "1" }
+    static var search: String? { env["JACKED_DEV_SEARCH"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var fav: String? { env["JACKED_DEV_FAV"].flatMap { $0.isEmpty ? nil : $0 } }
     static var logDay: String? { env["JACKED_DEV_LOGDAY"].flatMap { $0.isEmpty ? nil : $0 } }
     static var note: (exId: String, text: String)? {
         guard let r = env["JACKED_DEV_NOTE"], let bar = r.firstIndex(of: "|") else { return nil }
@@ -57,6 +61,8 @@ enum DevHooks {
     static var routine: String? { nil }
     static var finish: Bool { false }
     static var cancel: Bool { false }
+    static var search: String? { nil }
+    static var fav: String? { nil }
     static var logDay: String? { nil }
     static var superset: [Int] { [] }
     static var note: (exId: String, text: String)? { nil }
