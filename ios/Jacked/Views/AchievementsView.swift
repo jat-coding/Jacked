@@ -147,9 +147,13 @@ struct BadgeDetailSheet: View {
     let b: Badge
     let m: MetricsMath
     let T: MetricsMath.BadgeLadders
+    @State private var open: Set<String> = []
 
     var body: some View {
         let how = m.badgeHow(b.name, T)
+        // Tap a tier you've reached (or Highest ever) for the exact logged set that earned it (toggleTierXp).
+        let xKey = MetricsMath.BADGE_KEY[b.name]
+        let cross = xKey.map { m.tierCrossingDetail($0, m.last3mo(), T) } ?? [:]
         let teal = b.earned && b.tier == nil && b.name != "Coward-Maxing" && b.name != "Jacked"
         let col: Color = b.tier.flatMap { BadgeUI.tierColor[$0] } ?? (b.name == "Jacked" && b.earned ? Color(hex: 0xFFD700) : teal ? BadgeUI.teal : b.earned ? Theme.green : BadgeUI.lockedGrey)
         let status = b.tier ?? (b.earned ? "earned" : "locked")
@@ -172,17 +176,26 @@ struct BadgeDetailSheet: View {
                     h("Tiers")
                     ForEach(how.tiers, id: \.0) { t, v in
                         let k = t.lowercased(), on = b.tier == k, c = BadgeUI.tierColor[k]!
+                        let reached = xKey != nil && (MetricsMath.TIER_RANK[k] ?? 0) <= (MetricsMath.TIER_RANK[b.tier ?? ""] ?? 0)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text(t).font(Theme.body(14, .heavy)).foregroundStyle(c)
                                 if on { Text("You").font(Theme.body(11, .bold)).foregroundStyle(Theme.bg).padding(.horizontal, 6).padding(.vertical, 2).background(c, in: Capsule()) }
                                 Spacer()
                                 Text(v).font(Theme.body(14, on ? .heavy : .semibold)).foregroundStyle(Theme.text)
+                                if reached { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
+                                    .rotationEffect(.degrees(open.contains(k) ? 90 : 0)) }
                             }
                             ForEach(b.lifts.filter { $0.tier == k }, id: \.key) { l in liftRow(l) }
                         }
                         .padding(12).background(on ? c.opacity(0.08) : Theme.bg3, in: RoundedRectangle(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(on ? c.opacity(0.55) : .clear, lineWidth: 1))
+                        .contentShape(Rectangle())
+                        .onTapGesture { if reached { toggle(k) } }
+                        if reached && open.contains(k) {
+                            xp(cross[k].map { (MetricsMath.fmtD($0.ms), $0.ex, m.tierCrossStat(xKey!, $0)) },
+                               none: "No logged set found for this tier -- it may predate your history.")
+                        }
                     }
                     let below = b.lifts.filter { $0.tier == nil }
                     if !below.isEmpty {
@@ -208,7 +221,15 @@ struct BadgeDetailSheet: View {
                         Spacer()
                         if a.hasTier { Text(a.tier?.capitalized ?? "No tier").font(Theme.body(13, .bold)).foregroundStyle(Theme.muted) }
                     }
-                    .padding(12).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 12)).opacity(0.55)
+                    .overlay(alignment: .trailing) { if xKey != nil { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted).padding(.trailing, -18)
+                        .rotationEffect(.degrees(open.contains("all") ? 90 : 0)) } }
+                    .padding(12).padding(.trailing, xKey != nil ? 18 : 0).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 12)).opacity(0.55)
+                    .contentShape(Rectangle())
+                    .onTapGesture { if xKey != nil { toggle("all") } }
+                    if let k = xKey, open.contains("all") {
+                        xp(m.allTimeBestDetail(k, m.hist).map { (MetricsMath.fmtD($0.ms), $0.ex, m.tierCrossStat(k, $0)) },
+                           none: "No logged set found for this -- it may predate your history.")
+                    }
                     Text("Your best in all of history. It never resets. The badge above only counts the last 3 months.").font(Theme.body(12)).foregroundStyle(Theme.muted)
                 }
                 if b.name == "Jacked", let ym = b.everYM, let mo = Int(ym.suffix(2)) {
@@ -223,8 +244,17 @@ struct BadgeDetailSheet: View {
         }
         .background(Theme.bg2.ignoresSafeArea())
         .presentationDragIndicator(.visible)
+        .onAppear { open.formUnion(DevHooks.tierXp) }
     }
 
+    private func toggle(_ k: String) { withAnimation(.easeOut(duration: 0.15)) { if open.contains(k) { open.remove(k) } else { open.insert(k) } } }
+    /// .bf-tier-xp: "Nov 7, 2026 — **Bench Press (barbell)**: 185lb × 3 reps".
+    private func xp(_ e: (String, String, String)?, none: String) -> some View {
+        Group {
+            if let e { Text("\(e.0) \u{2014} ") + Text(e.1).bold() + Text(": \(e.2)") } else { Text(none).foregroundStyle(Theme.muted) }
+        }
+        .font(Theme.body(13)).foregroundStyle(Theme.text2).padding(.horizontal, 12).padding(.bottom, 4).frame(maxWidth: .infinity, alignment: .leading)
+    }
     private func h(_ t: String) -> some View {
         Text(t.uppercased()).font(Theme.body(11, .bold)).tracking(1.5).foregroundStyle(Theme.muted).padding(.top, 10)
     }

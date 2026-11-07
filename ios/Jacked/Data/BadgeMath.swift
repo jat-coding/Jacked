@@ -475,3 +475,78 @@ extension MetricsMath {
         }
     }
 }
+
+// MARK: Tap-a-tier detail (tierCrossingEntries / firstCross / tierCrossingDetail / allTimeBestDetail / tierCrossStat)
+
+extension MetricsMath {
+    static let BADGE_KEY = ["Bench-Maxing": "bench", "Shoulder-Maxing": "ohp", "Leg-Maxing": "squat", "Pull-up-Maxing": "pullup",
+                            "Push-up-Maxing": "pushup", "Cardio-Maxing": "cardio"]
+    struct TierEntry { let ms: Double?; let ex: String; let reps: Double; let weight: Double; let value: Double; let variant: String? }
+
+    /// Every ticked set a tiered badge scans, flattened (not reduced to a best yet).
+    func tierCrossingEntries(_ key: String, _ h: [HWorkout]) -> [TierEntry] {
+        var out: [TierEntry] = []
+        for w in h { for ex in w.exercises {
+            if key == "bench" || key == "ohp" {
+                let V = Self.LIFT_VARIANTS[key]!
+                guard let i = V.firstIndex(where: { isStdEx(ex, $0.key) }) else { continue }
+                for s in ex.log.sets where s.done && s.reps >= 1 {
+                    out.append(TierEntry(ms: w.ms, ex: ex.name, reps: s.reps, weight: s.weight, value: s.weight * 2.20462 * V[i].mult, variant: V[i].label))
+                }
+            } else if key == "squat" {
+                guard isStdEx(ex, "squat") else { continue }
+                for s in ex.log.sets where s.done && s.reps >= 1 { out.append(TierEntry(ms: w.ms, ex: ex.name, reps: s.reps, weight: s.weight, value: s.weight * 2.20462, variant: nil)) }
+            } else if key == "pullup" || key == "pushup" {
+                guard repBadgeEx(ex, key) else { continue }
+                for s in ex.log.sets where s.done { out.append(TierEntry(ms: w.ms, ex: ex.name, reps: s.reps, weight: 0, value: s.reps, variant: nil)) }
+            } else if key == "cardio" {
+                guard stdRun(ex) else { continue }
+                for s in ex.log.sets where s.done && s.weight > 0 && s.reps > 0 {
+                    out.append(TierEntry(ms: w.ms, ex: ex.name, reps: s.reps, weight: s.weight, value: WorkoutMath.mileEquiv(s.weight, s.reps), variant: nil))
+                }
+            }
+        } }
+        return out
+    }
+
+    /// The first logged set (by date) that reached each tier of the current ladder.
+    func tierCrossingDetail(_ key: String, _ h: [HWorkout], _ T: BadgeLadders) -> [String: TierEntry] {
+        let lower = key == "cardio"
+        let thr = ["bench": T.bench, "ohp": T.ohp, "squat": T.squat, "pullup": T.pullup, "pushup": T.pushup, "cardio": T.cardio][key] ?? []
+        var res: [String: TierEntry] = [:]
+        let sorted = tierCrossingEntries(key, h).enumerated().sorted { a, b in
+            if let x = a.element.ms, let y = b.element.ms, x != y { return x < y }
+            return a.offset < b.offset
+        }.map(\.element)
+        for e in sorted { for (i, t) in ["bronze", "silver", "gold"].enumerated() where res[t] == nil && i < thr.count {
+            if lower ? e.value <= thr[i] : e.value >= thr[i] { res[t] = e }
+        } }
+        return res
+    }
+
+    func allTimeBestDetail(_ key: String, _ h: [HWorkout]) -> TierEntry? {
+        let lower = key == "cardio"
+        return tierCrossingEntries(key, h).reduce(nil) { best, e in
+            guard let b = best else { return e }
+            return (lower ? e.value < b.value : e.value > b.value) ? e : b
+        }
+    }
+
+    func tierCrossStat(_ key: String, _ e: TierEntry) -> String {
+        let r = WorkoutMath.jsNumberString(e.reps), rs = e.reps != 1 ? "s" : ""
+        if key == "pullup" || key == "pushup" { return "\(r) rep\(rs)" }
+        if key == "cardio" {
+            return "\(WorkoutMath.jsNumberString(jsRound(e.weight * 100) / 100)) mi in \(Self.fmtClock(e.reps)) (\(WorkoutMath.fmtPace(WorkoutMath.pacePerMile(e.weight, e.reps))))"
+        }
+        let base = "\(WorkoutMath.n(jsRound(settings.display(e.weight) * 10) / 10))\(settings.unitLabel) \u{00D7} \(r) rep\(rs)"
+        if let v = e.variant, v != "Barbell bench", v != "Barbell overhead press" { return "\(base) (\(v))" }
+        return base
+    }
+
+    /// fmtD: "Nov 7, 2026".
+    static func fmtD(_ ms: Double?) -> String {
+        guard let ms else { return "" }
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.dateFormat = "MMM d, yyyy"
+        return f.string(from: Date(timeIntervalSince1970: ms / 1000))
+    }
+}

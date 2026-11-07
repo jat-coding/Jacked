@@ -49,6 +49,9 @@ try {
   if (open.startsWith('recap:')) await p.evaluate(k => openRecap(+k.slice(0, 4), +k.slice(5, 7) - 1), open.slice(6));
   if (open === 'ach' || open.startsWith('badge:')) { await p.evaluate(() => sp('metrics')); await p.waitForTimeout(1500); await p.evaluate(() => openAch()); }
   if (open.startsWith('badge:')) await p.evaluate(n => badgeInfo(n), open.slice(6));
+  // TIERXP=bronze,all: open those tier rows' logged-set lines (toggleTierXp) and print them.
+  if (open.startsWith('badge:') && process.env.TIERXP) console.log(await p.evaluate(([n, ks]) => ks.split(',').map(k => { const id = (k === 'all' ? 'allxp-' : 'tierxp-') + BADGE_KEY[n] + (k === 'all' ? '' : '-' + k);
+    const el = document.getElementById(id); if (!el) return k + ': (not tappable)'; toggleTierXp(id); return k + ': ' + el.innerText; }).join(' | '), [open.slice(6), process.env.TIERXP]));
   if (open === 'ach' || open.startsWith('badge:')) console.log(JSON.stringify(await p.evaluate(() => computeBadges().map(b => [b.name, !!b.earned, b.tier || null, String(b.desc).replace(/<[^>]*>/g, '')]))));
   if (open.startsWith('friends') || open.startsWith('friend:')) { await p.evaluate(() => sp('leaderboard')); await p.waitForTimeout(3500); }
   if (open.startsWith('friends:')) { const [k, r] = open.slice(8).split('|'); await p.evaluate(([k, r]) => { cmpM = k; if (r) cmpRange = r; renderLB(); }, [k, r]); }
