@@ -108,8 +108,45 @@ final class WorkoutSession: ObservableObject {
         active = a
     }
 
+    /// setDurUnit: Sec / Min / Hr for a hold.
+    func setDurUnit(_ ei: Int, _ u: String) { if active?.exercises.indices.contains(ei) == true { active!.exercises[ei].durUnit = u } }
+
     /// setBWMode: Bodyweight / + Added / - Assist.
     func setBWMode(_ ei: Int, _ m: String) { if active?.exercises.indices.contains(ei) == true { active!.exercises[ei].bwMode = m } }
+
+    // MARK: supersets + order (tapSuperset / unlinkSuperset / reorder)
+
+    /// The exercise waiting for its superset partner (aw._pairFrom); never saved.
+    @Published var pairFrom: Int?
+    @Published var notice: String?
+
+    func tapSuperset(_ ei: Int) {
+        guard var a = active, a.exercises.indices.contains(ei) else { return }
+        if a.exercises[ei].supersetId != nil { unlinkSuperset(ei); return }
+        guard let other = pairFrom, other != ei, a.exercises.indices.contains(other) else {
+            pairFrom = pairFrom == ei ? nil : ei; return
+        }
+        pairFrom = nil
+        if a.exercises[other].supersetId != nil { notice = "That exercise is already paired"; return }
+        let id = "ss\(Self.nowMs)"
+        a.exercises[ei].supersetId = id; a.exercises[other].supersetId = id
+        let lo = min(ei, other), hi = max(ei, other)
+        if hi - lo > 1 { let m = a.exercises.remove(at: hi); a.exercises.insert(m, at: lo + 1) }
+        active = a
+    }
+
+    func unlinkSuperset(_ ei: Int) {
+        guard var a = active, a.exercises.indices.contains(ei), let id = a.exercises[ei].supersetId else { return }
+        for i in a.exercises.indices where a.exercises[i].supersetId == id { a.exercises[i].supersetId = nil }
+        active = a
+    }
+
+    func supersetPartner(_ ei: Int) -> String {
+        guard let a = active, a.exercises.indices.contains(ei), let id = a.exercises[ei].supersetId else { return "" }
+        return a.exercises.enumerated().first { $0.offset != ei && $0.element.supersetId == id }?.element.name ?? ""
+    }
+
+    func moveExercises(from: IndexSet, to: Int) { pairFrom = nil; active?.exercises.move(fromOffsets: from, toOffset: to) }
 
     func removeExercise(_ ei: Int) { if active?.exercises.indices.contains(ei) == true { active?.exercises.remove(at: ei) } }
 
