@@ -35,6 +35,7 @@ import Foundation
 ///                                         card (pick = the trusted pick), or its dismiss button
 ///   SIMCTL_CHILD_JACKED_DEV_SECTION       collapse:<name> | rename:<name>|<new name>: on the Routines tab, through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_RESETPR       <exId>: with OPEN=ex:<exId>, Reset PR through the real save path
+///   SIMCTL_CHILD_JACKED_DEV_EDITEX        <exId>|<name>|<equip>|<notes>: with OPEN=ex:<exId>, save an exercise edit through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
@@ -81,11 +82,13 @@ enum DevHooks {
     static var suggest: String? { env["JACKED_DEV_SUGGEST"].flatMap { $0.isEmpty ? nil : $0 } }
     static var section: String? { env["JACKED_DEV_SECTION"].flatMap { $0.isEmpty ? nil : $0 } }
     static var resetPR: String? { env["JACKED_DEV_RESETPR"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var editEx: String? { env["JACKED_DEV_EDITEX"].flatMap { $0.isEmpty ? nil : $0 } }
     static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
     static var suggest: String? { nil }
     static var section: String? { nil }
     static var resetPR: String? { nil }
+    static var editEx: String? { nil }
     static var cmp: String? { nil }
     static var toggleCB: String? { nil }
     static var acceptFriend: String? { nil }
