@@ -9,6 +9,10 @@ import Foundation
 ///   SIMCTL_CHILD_JACKED_DEV_CAS_DELAY     seconds to wait between the pre-write read and the
 ///                                         conditional write, so a test can land a write from
 ///                                         "another device" in that gap and prove the retry
+///   SIMCTL_CHILD_JACKED_DEV_LOG           <exId>=<lb>x<reps>,<lb>x<reps>;<exId>=...: start a workout and
+///                                         log those sets through the same calls the buttons make
+///   SIMCTL_CHILD_JACKED_DEV_ROUTINE       start the LOG workout from the routine with this name
+///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
 /// (ios/REWRITE_BUILD_BRIEF.md guardrail 2).
 enum DevHooks {
@@ -25,6 +29,9 @@ enum DevHooks {
         return (i, String(r[r.index(after: bar)...]))
     }
     static var casDelay: Double { Double(env["JACKED_DEV_CAS_DELAY"] ?? "") ?? 0 }
+    static var logScript: String? { env["JACKED_DEV_LOG"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var routine: String? { env["JACKED_DEV_ROUTINE"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var finish: Bool { env["JACKED_DEV_FINISH"] == "1" }
     static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
     static var casDelay: Double { 0 }
@@ -33,5 +40,8 @@ enum DevHooks {
     static var tab: String? { nil }
     static var open: String? { nil }
     static var rename: (index: Int, name: String)? { nil }
+    static var logScript: String? { nil }
+    static var routine: String? { nil }
+    static var finish: Bool { false }
     #endif
 }
