@@ -17,6 +17,7 @@ final class WorkoutSession: ObservableObject {
         let exerciseIds: [String]
         /// The routine the workout came from, when its exercise list ended up different.
         let routine: (id: String, name: String)?
+        var notes: [WorkoutMath.Note] = []
         var savedToServer: Bool
     }
 
@@ -194,6 +195,12 @@ final class WorkoutSession: ObservableObject {
         if store.backup.history.contains(where: { $0.id == a.id }) { active = nil; presented = false; return }
         var result: WorkoutMath.Finished?
         var routine: (id: String, name: String)?
+        let settings = store.backup.settings
+        var pre: [String: WorkoutMath.Progress] = [:]
+        for e in a.exercises where WorkoutMath.progressTrackable(e.tracking) {
+            pre[e.exId] = WorkoutMath.evaluateProgress(exId: e.exId, history: store.backup.raw["jk_hist"]?.array ?? [],
+                                                       settings: settings, bw: jsNum(store.backup.raw["jk_bw"]))
+        }
         let ok = await store.edit(auth: auth) { raw in
             let f = WorkoutMath.buildFinishRec(a, endMs: endMs ?? Double(Self.nowMs), raw: &raw, now: Self.isoNow())
             raw["jk_hist"] = .array(WorkoutMath.histInsert(raw["jk_hist"]?.array ?? [], f.rec))
@@ -205,9 +212,11 @@ final class WorkoutSession: ObservableObject {
             }
         }
         guard let f = result else { return }
+        let notes = WorkoutMath.progressNotes(exercises: a.exercises, pre: pre, postHistory: store.backup.raw["jk_hist"]?.array ?? [],
+                                              prNames: Set(f.prs.map(\.name)), settings: settings, bw: jsNum(store.backup.raw["jk_bw"]))
         summary = Summary(name: f.rec["name"]?.string ?? a.name, duration: f.duration, sets: f.sets, volume: f.volume,
                           prs: f.prs, suggested: f.suggested, exerciseIds: a.exercises.map(\.exId), routine: routine,
-                          savedToServer: ok)
+                          notes: notes, savedToServer: ok)
         active = nil
         presented = false
     }
