@@ -19,6 +19,7 @@ struct ActiveWorkoutView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     if let a = session.active {
+                        LiveStats(workout: a, settings: settings, bw: jsNum(store.backup.raw["jk_bw"]))
                         ForEach(Array(a.exercises.enumerated()), id: \.element.uid) { ei, ex in
                             ExerciseCard(ei: ei, ex: ex, settings: settings)
                         }
@@ -74,6 +75,33 @@ struct ActiveWorkoutView: View {
     }
 }
 
+/// The .wstats card at the top of the live workout: volume lifted so far and sets done.
+struct LiveStats: View {
+    let workout: ActiveWorkout
+    let settings: Settings
+    let bw: Double
+    var body: some View {
+        let exs = workout.exercises
+        let done = exs.reduce(0) { $0 + $1.sets.filter(\.done).count }
+        let vol = exs.reduce(0.0) { acc, e in
+            WorkoutMath.isWT(e) ? acc + e.sets.filter(\.done).reduce(0.0) { $0 + WorkoutMath.volWeight(e, $1, workoutId: workout.id, bw: bw) * $1.reps } : acc
+        }
+        HStack(spacing: 0) {
+            stat(HomeMath.fmtV(settings.display(vol)), "\(settings.unitLabel) lifted")
+            Rectangle().fill(Theme.border).frame(width: 1, height: 36)
+            stat("\(done)", "sets done")
+        }
+        .padding(.vertical, 14).frame(maxWidth: .infinity).card()
+    }
+    private func stat(_ v: String, _ l: String) -> some View {
+        VStack(spacing: 2) {
+            Text(v).font(Theme.heading(26, .extraBold)).foregroundStyle(Theme.accent)
+            Text(l.uppercased()).font(Theme.body(11, .semibold)).foregroundStyle(Theme.muted)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
 struct ElapsedClock: View {
     let start: Double
     var body: some View {
@@ -93,8 +121,11 @@ struct ExerciseCard: View {
     let ex: LogExercise
     let settings: Settings
     @State private var confirmRemove = false
+    @State private var showSwitch = false
+    @State private var info: String?
 
     var body: some View {
+        let prIdx = WorkoutMath.prIndex(ex, raw: store.backup.raw)
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 LogThumb(url: ex.imgUrl.map(ExerciseImages.rewrite).flatMap(URL.init(string:)), muscle: ex.muscle)
@@ -104,8 +135,33 @@ struct ExerciseCard: View {
                 }
                 Spacer()
                 Menu {
-                    Button("Remove exercise", role: .destructive) { confirmRemove = true }
+                    Button { showSwitch = true } label: { Label("Switch exercise", systemImage: "arrow.left.arrow.right") }
+                    Button("Remove exercise", role: .destructive) {
+                        if ex.sets.contains(where: \.done) { confirmRemove = true } else { session.removeExercise(ei) }
+                    }
                 } label: { Image(systemName: "ellipsis").foregroundStyle(Theme.text2).frame(width: 32, height: 32) }
+            }
+            if !chips.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(chips, id: \.text) { c in
+                        Button { if let m = c.info { info = m } } label: {
+                            Text(c.text).font(Theme.body(11, .bold)).foregroundStyle(c.color)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(c.color.opacity(0.12), in: Capsule())
+                                .overlay(Capsule().stroke(c.color.opacity(0.4), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain).disabled(c.info == nil)
+                    }
+                }
+            }
+            if PWATables.SINGLE_BOTH_IDS.contains(ex.exId) && ex.tracking == "weight_reps" {
+                OptionRow(label: "Arm", options: [("Single", true), ("Both", false)], selected: WorkoutMath.exSingleUI(ex)) {
+                    session.setSingle(ei, $0)
+                }
+            }
+            if WorkoutMath.bwCapable(ex) {
+                OptionRow(label: "Load", options: [("Bodyweight", "body"), ("+ Added", "added"), ("− Assist", "assist")],
+                          selected: WorkoutMath.bwMode(ex)) { session.setBWMode(ei, $0) }
             }
             HStack {
                 Text("SET").frame(width: 34, alignment: .leading)
@@ -115,7 +171,7 @@ struct ExerciseCard: View {
             }
             .font(Theme.body(10, .bold)).foregroundStyle(Theme.muted)
             ForEach(Array(ex.sets.enumerated()), id: \.offset) { si, s in
-                SetRow(ei: ei, si: si, ex: ex, set: s, settings: settings, star: beatsPR(si))
+                SetRow(ei: ei, si: si, ex: ex, set: s, settings: settings, star: prIdx == si)
             }
             Button { session.addSet(ei) } label: {
                 Label("Add Set", systemImage: "plus").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity).padding(.vertical, 8)
@@ -124,9 +180,39 @@ struct ExerciseCard: View {
         }
         .padding(14)
         .card()
-        .confirmationDialog("Remove \(ex.name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
+        .confirmationDialog(removePrompt, isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { session.removeExercise(ei) }
         }
+        .alert(info ?? "", isPresented: Binding(get: { info != nil }, set: { if !$0 { info = nil } })) {
+            Button("Got it", role: .cancel) {}
+        }
+        .sheet(isPresented: $showSwitch) { AddExerciseSheet(replacing: ei) }
+    }
+
+    private var removePrompt: String {
+        let n = ex.sets.filter(\.done).count
+        return "Remove \(ex.name) and its \(n) logged set\(n != 1 ? "s" : "") from this workout?"
+    }
+
+    private struct Chip { let text: String; let color: Color; let info: String? }
+
+    /// The badge row: ★ PR once a set beats the record, then Go up / Lighter from saved history
+    /// (never tonight's numbers). A PR tonight hides Lighter, like the PWA.
+    private var chips: [Chip] {
+        let raw = store.backup.raw
+        let gotPR = WorkoutMath.prIndex(ex, raw: raw) != nil
+        var out: [Chip] = []
+        if gotPR { out.append(Chip(text: "★ PR", color: Color(hex: 0xFFD700), info: nil)) }
+        guard WorkoutMath.progressTrackable(ex.tracking) else { return out }
+        let p = WorkoutMath.evaluateProgress(exId: ex.exId, history: raw["jk_hist"]?.array ?? [], settings: settings, bw: jsNum(raw["jk_bw"]))
+        if p.up {
+            out.append(Chip(text: "▲ Go up", color: Theme.accent,
+                            info: "Ready to go up: you've hit \(settings.repMax)+ reps on every set, \(WorkoutMath.progressStreak) workouts in a row, at the same weight."))
+        } else if p.down && !gotPR {
+            out.append(Chip(text: "▼ Lighter", color: Color(hex: 0xFFA94D),
+                            info: "Consider lighter: no set reached \(settings.repMin) reps in your last workout. If you can't hit the minimum, the weight is too heavy."))
+        }
+        return out
     }
 
     private var col1: String {
@@ -134,26 +220,35 @@ struct ExerciseCard: View {
         case "distance": return "MILES"
         case "duration": return "SECONDS"
         case "reps_only": return "—"
-        default: return settings.unitLabel.uppercased()
+        default:
+            guard WorkoutMath.bwCapable(ex) else { return settings.unitLabel.uppercased() }
+            switch WorkoutMath.bwMode(ex) {
+            case "added": return "+ " + settings.unitLabel.uppercased()
+            case "assist": return "− " + settings.unitLabel.uppercased()
+            default: return "BODY"
+            }
         }
     }
     private var col2: String { ex.tracking == "distance" ? "MINUTES" : ex.tracking == "duration" ? "—" : "REPS" }
 
+    /// "PR: 205lb × 5 · Suggested 239.2lb" (sugStands / sugText), or "No PR yet".
     private var prLine: String? {
-        guard WorkoutMath.isWT(ex), let pr = store.backup.raw["jk_prs"]?[ex.exId]?.object, jsNum(pr["weight"]) > 0 else { return nil }
-        return "PR \(WorkoutMath.n(settings.display(jsNum(pr["weight"])).rounded())) \(settings.unitLabel) × \(Int(jsNum(pr["reps"])))"
+        let raw = store.backup.raw
+        if WorkoutMath.isCardio(ex) {
+            guard let c = raw["jk_cardioPR"]?[ex.exId]?.object, jsNum(c["time"]) > 0 else { return "No cardio PR yet" }
+            let longest = jsNum(c["maxDist"])
+            return "Best \(WorkoutMath.fmtPace(WorkoutMath.pacePerMile(jsNum(c["dist"]), jsNum(c["time"]))))"
+                + (longest > 0 ? " · Longest \(WorkoutMath.n(longest)) mi" : "")
+        }
+        let pr = raw["jk_prs"]?[ex.exId]?.object, sug = raw["jk_prSug"]?[ex.exId]?.object
+        var t = pr.map { "PR: \(dW($0["weight"]))\(settings.unitLabel) × \(WorkoutMath.n(jsNum($0["reps"])))" } ?? "No PR yet"
+        if WorkoutMath.isWT(ex), let sug, WorkoutMath.prE1rm(sug) > jsNum(pr?["weight"]) + WorkoutMath.sugEps {
+            t += " · Suggested \(WorkoutMath.n((settings.display(WorkoutMath.prE1rm(sug)) * 10).rounded() / 10))\(settings.unitLabel)"
+        }
+        return t
     }
+    private func dW(_ v: JSONValue?) -> String { WorkoutMath.n((settings.display(jsNum(v)) * 10).rounded() / 10) }
 
-    /// The ★ on a done set that beats the stored record (beatsPR; PRs are only committed on finish).
-    private func beatsPR(_ si: Int) -> Bool {
-        guard WorkoutMath.isWT(ex), ex.sets.indices.contains(si), ex.sets[si].done else { return false }
-        let bw = jsNum(store.backup.raw["jk_bw"]), s = ex.sets[si]
-        let prev = store.backup.raw["jk_prs"]?[ex.exId]?.object
-        let w = WorkoutMath.effWeight(ex, s, bw: bw)
-        guard s.reps > 0, w > 0 else { return false }
-        let pw = jsNum(prev?["weight"]), pr = jsNum(prev?["reps"])
-        return w > pw || (w == pw && s.reps > pr)
-    }
 }
 
 /// One set: number fields in the display unit, greyed with the suggestion, and the done check.
@@ -174,7 +269,11 @@ struct SetRow: View {
                 if star { Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(Color(hex: 0xFFD700)) }
             }
             .frame(width: 34, alignment: .leading).foregroundStyle(set.done ? Theme.accent : Theme.text2)
-            if ex.tracking != "reps_only" {
+            if WorkoutMath.bwCapable(ex) && WorkoutMath.bwMode(ex) == "body" {
+                let bw = jsNum(store.backup.raw["jk_bw"])
+                Text(bw > 0 ? "\(WorkoutMath.n(settings.display(bw).rounded()))\(settings.unitLabel)" : "set BW")
+                    .font(Theme.body(14, .semibold)).foregroundStyle(Theme.text2).frame(maxWidth: .infinity)
+            } else if ex.tracking != "reps_only" {
                 NumberField(value: shown(set.weight, weightLike: true), placeholder: shown(sug.w, weightLike: true)) {
                     session.set(ei, si, weight: stored($0, weightLike: true))
                 }
@@ -261,12 +360,39 @@ struct RestBar: View {
 }
 
 /// Add an exercise (the picker over allEx()), searchable.
+/// The PWA's .cable-row: a small label and a pill per option (Single / Both, Load).
+struct OptionRow<V: Equatable>: View {
+    let label: String
+    let options: [(String, V)]
+    let selected: V
+    let pick: (V) -> Void
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(label.uppercased()).font(Theme.body(10, .bold)).foregroundStyle(Theme.muted).frame(width: 40, alignment: .leading)
+            ForEach(options.indices, id: \.self) { i in
+                let on = options[i].1 == selected
+                Button { pick(options[i].1) } label: {
+                    Text(options[i].0).font(Theme.body(12, .semibold))
+                        .foregroundStyle(on ? Theme.onAccent : Theme.text2)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(on ? Theme.accent : Theme.bg3, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 struct AddExerciseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: BackupStore
     @EnvironmentObject private var session: WorkoutSession
     @EnvironmentObject private var catalog: ExerciseCatalog
     @State private var q = ""
+    @State private var already = false
+    /// Switch mode (switchEx): the index of the exercise being replaced.
+    var replacing: Int? = nil
 
     var body: some View {
         let all = catalog.all(custom: store.backup.raw)
@@ -275,7 +401,9 @@ struct AddExerciseSheet: View {
         NavigationStack {
             List(shown.prefix(200)) { e in
                 Button {
-                    session.add(e, raw: store.backup.raw); dismiss()
+                    if let ei = replacing {
+                        if session.replace(ei, with: e, raw: store.backup.raw) { dismiss() } else { already = true }
+                    } else { session.add(e, raw: store.backup.raw); dismiss() }
                 } label: {
                     HStack(spacing: 10) {
                         LogThumb(url: e.image.map { URL(string: ExerciseImages.base + $0) } ?? nil, muscle: e.muscle)
@@ -290,7 +418,8 @@ struct AddExerciseSheet: View {
             .scrollContentBackground(.hidden)
             .background(Theme.bg)
             .searchable(text: $q, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search exercises")
-            .navigationTitle("Add Exercise").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(replacing == nil ? "Add Exercise" : "Switch Exercise").navigationBarTitleDisplayMode(.inline)
+            .alert("Already in workout", isPresented: $already) { Button("OK", role: .cancel) {} }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
             .overlay { if all.count <= PWATables.builtIns.count { ProgressView().tint(Theme.accent) } }
         }
