@@ -64,6 +64,8 @@ struct Workout: Identifiable {
     let sets: Int
     let totalVolume: Double
     let prCount: Int
+    /// prCount as stored (nil when the workout has none): prsOfDoc treats "absent" differently from 0.
+    let prCountStored: Int?
     let exercises: [WorkoutExercise]
     /// The PR record finish saved (prSets / sugSets), for the day view's gold lines.
     let prSets: [JSONValue]?
@@ -81,6 +83,7 @@ struct Workout: Identifiable {
         sets = o["sets"]?.int ?? 0
         totalVolume = o["totalVolume"]?.double ?? 0
         prCount = o["prCount"]?.int ?? 0
+        prCountStored = o["prCount"]?.double.map { Int($0) }
         exercises = (o["exercises"]?.array ?? []).compactMap { $0.object.map(WorkoutExercise.init) }
     }
 
@@ -106,11 +109,12 @@ struct Workout: Identifiable {
 extension Workout {
     struct ShownPR { let ei: Int; let si: Int; let weight: Double; let reps: Double; let cardio: Bool; let hold: Bool }
 
-    /// prsOf(w) for display: PR stars from the saved prSets when every entry still resolves against the
-    /// exercises and agrees with prCount, else no per-exercise stars (the count alone, never a guess).
-    /// Suggested PRs come from sugSets the same way. Workouts saved before prSets existed need the web app's
-    /// full history replay (prReplay), not ported yet: those show the count only.
-    var shownPRs: (list: [ShownPR], sug: [ShownPR]) {
+    /// prsOf(w) / prsOfDoc(w) for display. Nothing shown may disagree with the stored prCount:
+    ///  - prSets (saved by finish) is trusted for the stars when every entry still resolves and the count agrees;
+    ///  - no prSets: the full-history replay (PRReplay), when prCount is absent or equals the replay's count;
+    ///  - anything else shows the count alone, never a guess at which sets.
+    /// Suggested PRs: sugSets when they still resolve, else the replay's.
+    func shownPRs(replay: [String: PRReplay.Entry]) -> (list: [ShownPR], sug: [ShownPR]) {
         func resolve(_ a: [JSONValue]?) -> [ShownPR]? {
             guard let a else { return nil }
             var out: [ShownPR] = []
@@ -123,9 +127,15 @@ extension Workout {
             }
             return out
         }
-        var list = resolve(prSets) ?? []
-        if list.count != prCount { list = [] }
-        return (list, resolve(sugSets) ?? [])
+        let r = replay[id] ?? PRReplay.Entry()
+        let conv: (PRReplay.Hit) -> ShownPR = { ShownPR(ei: $0.ei, si: $0.si, weight: $0.weight, reps: $0.reps, cardio: $0.cardio, hold: $0.hold) }
+        var list: [ShownPR] = []
+        if prSets != nil {
+            if let l = resolve(prSets), prCountStored == nil || prCountStored == l.count { list = l }
+        } else if prCountStored == nil || prCountStored == r.list.count {
+            list = r.list.map(conv)
+        }
+        return (list, resolve(sugSets) ?? r.sug.map(conv))
     }
 
     /// prSetText
