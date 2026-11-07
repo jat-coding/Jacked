@@ -44,6 +44,7 @@
 		293D228F5B9E5C34488C1464 /* MetricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917BD0FC690B83DAB01F18E6 /* MetricsView.swift */; };
 		A0AC69881CBA7555B3D191B6 /* BadgeMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C822E8F580B0F96F0D70E79 /* BadgeMath.swift */; };
 		4C69B9B16858BDA69199C9AB /* BadgeTables.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BA21A4EDE6D6843C287BED /* BadgeTables.swift */; };
+		A860FB2C47B934CC0929192D /* AchievementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CDE94620CF16338890B81C2 /* AchievementsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -86,6 +87,7 @@
 		917BD0FC690B83DAB01F18E6 /* MetricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsView.swift; sourceTree = "<group>"; };
 		2C822E8F580B0F96F0D70E79 /* BadgeMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeMath.swift; sourceTree = "<group>"; };
 		B9BA21A4EDE6D6843C287BED /* BadgeTables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeTables.swift; sourceTree = "<group>"; };
+		1CDE94620CF16338890B81C2 /* AchievementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -164,6 +166,7 @@
 		4BE43130E63E6223C39B0FA6 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				1CDE94620CF16338890B81C2 /* AchievementsView.swift */,
 				917BD0FC690B83DAB01F18E6 /* MetricsView.swift */,
 				208A502B9172126234A57B5C /* LibraryView.swift */,
 				7E8135359F6DED927A98346B /* RoutinesView.swift */,
@@ -299,6 +302,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A860FB2C47B934CC0929192D /* AchievementsView.swift in Sources */,
 				4C69B9B16858BDA69199C9AB /* BadgeTables.swift in Sources */,
 				A0AC69881CBA7555B3D191B6 /* BadgeMath.swift in Sources */,
 				293D228F5B9E5C34488C1464 /* MetricsView.swift in Sources */,

@@ -390,13 +390,19 @@ extension MetricsMath {
     /// String(n) for a JS number with at most one decimal ("2", "2.3").
     static func jsStr(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : String(v) }
 
+    /// benchHowNote(): where the bench numbers come from, for this profile.
+    func benchHowNote() -> String {
+        let ag = Self.mccullochFactor(age) != 1 ? ", eased for age \(age!)" : ""
+        return benchOK ? "Set for your sex and \(lbTxt(bwLb)) body weight\(ag)." : "Standard numbers\(ag): set your sex and body weight in Profile to get your own."
+    }
+
     /// BADGE_HOW / BADGE_DETAIL text for the badge page, ported (plain text).
     func badgeHow(_ name: String, _ T: BadgeLadders) -> (how: String, tiers: [(String, String)], note: String?) {
         let three = "Your tier follows your best in the last 3 months."
         let lbt: ([Double]) -> [(String, String)] = { t in [("Bronze", self.lbTxt(t[0])), ("Silver", self.lbTxt(t[1])), ("Gold", self.lbTxt(t[2]))] }
         let rt: ([Double]) -> [(String, String)] = { t in [("Bronze", "\(Int(t[0])) reps"), ("Silver", "\(Int(t[1])) reps"), ("Gold", "\(Int(t[2])) reps")] }
         switch name {
-        case "Bench-Maxing": return ("Barbell flat bench press (Barbell Bench Press, medium grip), 1 rep. Incline, decline, close-grip, other bench variations and custom exercises don't count. Flat dumbbell bench counts at +15% (both dumbbells added together), flat Smith machine bench at -15%. Whichever lift reaches the higher tier sets the badge.", lbt(T.bench), three)
+        case "Bench-Maxing": return ("Barbell flat bench press (Barbell Bench Press, medium grip), 1 rep. Incline, decline, close-grip, other bench variations and custom exercises don't count. Flat dumbbell bench counts at +15% (both dumbbells added together), flat Smith machine bench at -15%. Whichever lift reaches the higher tier sets the badge. " + benchHowNote(), lbt(T.bench), three)
         case "Shoulder-Maxing": return ("Standing barbell overhead press (Standing Military Press), 1 rep, measured against sourced strength standards for your sex and body weight, set in Profile. Standing dumbbell press counts at +15% (both dumbbells together). Seated presses, push press and custom exercises don't count.", lbt(T.ohp), three)
         case "Leg-Maxing": return ("Barbell back squat (Barbell Squat), 1 rep, measured against sourced strength standards for your sex and body weight, set in Profile. Front squats, Smith machine and custom exercises don't count.", lbt(T.squat), three)
         case "1000lb Club": return ("Your best barbell flat bench press + barbell back squat + conventional barbell deadlift, all from the same workout, added together to 1000 lb or more. The bench can also be a flat dumbbell bench (+15%) or a flat Smith machine bench (-15%).", [], nil)
