@@ -5,6 +5,8 @@ struct DaySheet: View {
     let dayKey: String
     let workouts: [Workout]
     let settings: Settings
+    /// PRReplay.map over the whole history, for workouts saved before finish kept prSets.
+    var replay: [String: PRReplay.Entry] = [:]
     var onOpen: (Workout) -> Void
     var onLog: () -> Void = {}
 
@@ -31,7 +33,7 @@ struct DaySheet: View {
                             Spacer()
                             Text(summary(w)).font(Theme.body(11)).foregroundStyle(Theme.muted)
                         }
-                        let pr = w.shownPRs
+                        let pr = w.shownPRs(replay: replay)
                         ForEach(Array(w.exercises.enumerated()), id: \.offset) { ei, e in
                             // Gold star line on an exercise that set a PR; a suggested PR shows its set and the tag.
                             let p = pr.list.first { $0.ei == ei }
