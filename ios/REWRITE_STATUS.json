@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-07T03:30:00-07:00",
+  "updated": "2026-11-07T03:55:00-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -102,7 +102,7 @@
       "id": "rest-of-app",
       "title": "Library, stats and friends",
       "status": "active",
-      "summary": "In progress: Library, Routines, Metrics, badges, Friends and the Home extras are in and checked against the web app. A short list of smaller missing pieces is next.",
+      "summary": "Almost done: Library, Routines, Metrics, badges, Friends and the Home extras are in and checked against the web app. Four smaller pieces are left.",
       "detail": [
         "Library done: search, the muscle chips, favourites first then what you've used, the PR on each row, and the exercise page with photos, your suggested PR, recent top weights and the how-to steps. Favourite, hide and create a custom exercise all save through the careful save layer.",
         "Routines done: your routines in their sections like the web app, new, edit and delete a routine (it files itself into a section the same way), and Trusted Programs with + Add to Routines.",
@@ -115,14 +115,15 @@
         "Checked side by side on the throwaway test account: every badge line on the iPhone matched the web app (Bench Bronze, Cardio Bronze at 8:17 a mile, this month's challenge Triceps 0 of 4, and the rest locked with the same numbers).",
         "This month's Challenge muscle is saved the same way the web app saves it, through the careful save layer, so both always show the same one.",
         "Small web app quirk, not copied: the web app's weight chart shows each date one day early (Oct 26 for an Oct 27 entry). The iPhone shows the real date.",
-        "Not on the iPhone yet from earlier: editing an exercise, resetting a PR, a photo for a custom exercise, Today's pick on Trusted Programs, renaming and reordering sections.",
-        "Not on Metrics yet: the front and back body drawing above the rankings, the badge grid on a recap, the leaderboard crown on a recap, sharing a recap as a picture, and the extra how-to sections on the dumbbell and Smith machine versions of a badge.",
         "Friends done: the friends list, add / accept / remove and close buddies, the leaderboards, a friend's profile with their stats, calendar and last 30 days of workouts down to every set, their badges, and Copy to my workout. Checked between two throwaway accounts: the friends list, the this-month weight and all-time PR boards, the friend's profile, workout and badges, and the copied workout all matched the web app.",
-        "Your leaderboard numbers now update after every saved workout, like the web app.",
         "Suggested today on Home: the same three muscle groups with the same days-since, the same trusted pick of the day, and each Start button builds the same workout as the web app (checked all four on the test account). Closing the card hides it on the web app too.",
         "Gym years: tap the month name on Home (or Gym years on a friend's profile) for every trained day, one square per day. Same squares lit as the web app.",
         "The calendar day view now shows the gold PR lines (the exercise with a star and the record set), matching the web app on every test day.",
-        "Still to do in this step: editing an exercise, resetting a PR, a photo for a custom exercise, Today's pick on Trusted Programs, renaming and reordering routine sections, the body drawing on Metrics, the badge grid, crown and share picture on a recap, and the gold PR lines on very old workouts saved before the app kept a PR record (the web app works those out by replaying all history)."
+        "Your leaderboard numbers update after every saved workout: logged one on the test account, and the friend account saw 19 workouts straight away.",
+        "Routines: Today's pick is marked on Trusted Programs, a section folds away when you tap its name, a long press renames it, and Reorder moves sections and the routines inside them, plus + Section. All of it showed the same in the web app.",
+        "Exercise page: Edit (the full form for your own exercises, name, category, equipment, notes and assist for built-in ones), Reset PR with the web app's warning, and a photo for your own exercises that stays on the phone, like the web app's.",
+        "Monthly recap: the tiered badge grid, the Leaderboard crown when you topped last month, and Share, which sends the recap as a picture with a one-line caption. The October recap matched the web app line for line.",
+        "Still to do in this step: the front and back body drawing on Metrics, the dumbbell and Smith machine how-to sections on a badge page, the crown next to a month in the Monthly Recaps list, and the gold PR lines on very old workouts saved before the app kept a PR record (the web app works those out by replaying all history; on the test account it shows only the count there too)."
       ],
       "commits": [
         "9c3cee0",
@@ -137,7 +138,13 @@
         "d35f9ac",
         "51b0e6e",
         "c583c61",
-        "a07ced8"
+        "a07ced8",
+        "3782c55",
+        "9b3e658",
+        "1efcdbe",
+        "a7c396c",
+        "16cc24c",
+        "dc95f68"
       ]
     },
     {
