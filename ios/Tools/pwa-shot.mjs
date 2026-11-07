@@ -1,7 +1,7 @@
 // Screenshot the LOCAL PWA (python http.server over jacked-pwa/) logged in as the THROWAWAY
 // iOS test account. Live Supabase, same account as the simulator, so both sides show the same data.
 // node pwa_shot.mjs <out.png> [day:YYYY-MM-DD|workout:0|routines|lib|libq:<search>|exinfo:<exId>|active:<exId>=<lb>x<reps>,...;<exId>=...]
-// metrics (full page) | recap:YYYY-MM
+// metrics (full page) | recap:YYYY-MM | ach (achievements page) | badge:<name> (one badge's page)
 // active: starts an empty workout and logs those sets through uSet/togSet (never finished, never saved).
 import { createRequire } from 'module'; import { spawn } from 'child_process'; import fs from 'fs';
 const require = createRequire('/home/roni/agent/projects/Jacked/tests/e2e/');
@@ -44,6 +44,9 @@ try {
   }, open.slice(7));
   if (open === 'metrics' || open.startsWith('recap:')) { await p.evaluate(() => sp('metrics')); await p.waitForTimeout(1500); }
   if (open.startsWith('recap:')) await p.evaluate(k => openRecap(+k.slice(0, 4), +k.slice(5, 7) - 1), open.slice(6));
+  if (open === 'ach' || open.startsWith('badge:')) { await p.evaluate(() => sp('metrics')); await p.waitForTimeout(1500); await p.evaluate(() => openAch()); }
+  if (open.startsWith('badge:')) await p.evaluate(n => badgeInfo(n), open.slice(6));
+  if (open === 'ach' || open.startsWith('badge:')) console.log(JSON.stringify(await p.evaluate(() => computeBadges().map(b => [b.name, !!b.earned, b.tier || null, String(b.desc).replace(/<[^>]*>/g, '')]))));
   await p.waitForTimeout(800);
   await p.screenshot({ path: out, fullPage: open === 'metrics' });
   console.log(out, await p.evaluate(() => JSON.parse(localStorage.getItem('jk_hist')).length + ' workouts'));
