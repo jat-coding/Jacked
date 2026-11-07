@@ -398,7 +398,7 @@ enum WorkoutMath {
     static let progressStreak = 3
     static func progressTrackable(_ t: String) -> Bool { t == "weight_reps" || t == "bodyweight_reps" }
 
-    struct Progress: Equatable { var up = false; var down = false }
+    struct Progress: Equatable { var up = false; var down = false; var weight = 0.0 }
 
     /// evaluateProgress: newest -> oldest saved workouts with this lift. Down = no set in the last one
     /// reached Min; up = the last 3 at one weight with every set at or above Max.
@@ -414,12 +414,34 @@ enum WorkoutMath {
             occ.append((done.reduce(0) { max($0, effWeight(wex, $1, bw: bw)) }, done.map { $0.reps }))
         }
         guard let first = occ.first else { return Progress() }
-        var p = Progress()
+        var p = Progress(weight: first.w)
         p.down = !first.reps.isEmpty && first.reps.allSatisfy { $0 < Double(settings.repMin) }
         if occ.count >= progressStreak, occ.allSatisfy({ abs($0.w - first.w) < 0.01 }) {
             p.up = occ.allSatisfy { !$0.reps.isEmpty && $0.reps.allSatisfy { $0 >= Double(settings.repMax) } }
         }
         return p
+    }
+
+    struct Note: Equatable { let up: Bool; let text: String }
+
+    /// buildProgressNotes: "moved up" when a go-up signal was followed tonight, else "consider
+    /// lighter" from history including tonight (skipped for a lift that set a PR).
+    static func progressNotes(exercises: [LogExercise], pre: [String: Progress], postHistory: [JSONValue],
+                              prNames: Set<String>, settings: Settings, bw: Double) -> [Note] {
+        func dW(_ kg: Double) -> String { n((settings.display(kg) * 10).rounded() / 10) + settings.unitLabel }
+        var out: [Note] = []
+        for ex in exercises where progressTrackable(ex.tracking) {
+            let done = ex.sets.filter(\.done); if done.isEmpty { continue }
+            let todayW = done.reduce(0) { max($0, effWeight(ex, $1, bw: bw)) }
+            if let p = pre[ex.exId], p.up, todayW > p.weight + 0.01 {
+                out.append(Note(up: true, text: "Nice — you moved up on \(ex.name): \(dW(p.weight)) → \(dW(todayW)).")); continue
+            }
+            let post = evaluateProgress(exId: ex.exId, history: postHistory, settings: settings, bw: bw)
+            if post.down && !prNames.contains(ex.name) {
+                out.append(Note(up: false, text: "\(ex.name) — no set reached \(settings.repMin) reps at \(dW(post.weight)), consider lighter."))
+            }
+        }
+        return out
     }
 
     /// renderWS prIdx: the ONE set that gets the gold star. Weight lifts use the finish rule itself
