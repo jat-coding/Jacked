@@ -1,15 +1,17 @@
 import SwiftUI
 import UIKit
 import PhotosUI
+import UniformTypeIdentifiers
 
 /// #profModal (openProf / saveProf): name, the Profile and Body Metrics tabs (units, default rest,
 /// progress rep range, auto rest timer, your username; body, body weight, birthday), Save Profile
-/// through the careful save layer, Data & Backup (Export, Sync now), the email on file
+/// through the careful save layer, Data & Backup (Export, Import, Sync now), the email on file
 /// (my_email / set_my_email), Sign Out and, new for the App Store, Delete Account. The photo
 /// (uploadAvatar / removeAvatar) and a username change (rename_profile) work like the web app's.
 struct ProfileSheet: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
+    @EnvironmentObject private var catalog: ExerciseCatalog
     @Environment(\.dismiss) private var dismiss
 
     @State private var loaded = false
@@ -38,6 +40,14 @@ struct ProfileSheet: View {
     @State private var pickingPhoto = false
     @State private var photoMenu = false
     @State private var photoBusy = false
+    @State private var importing = false
+    @State private var importBusy = false
+    /// importJsonBackup's "REPLACE all current data" confirm, holding the file's jk_ keys.
+    @State private var pendingBundle: [String: JSONValue]?
+    /// askImportUnit: a CSV whose weights don't say lb or kg waits here for the answer.
+    @State private var pendingCSV: ImportMath.CSVPlan?
+    @State private var confirmReplace = false
+    @State private var askUnit = false
 
     var body: some View {
         SheetScaffold(title: "My Profile") {
@@ -81,9 +91,10 @@ struct ProfileSheet: View {
                 .padding(14).card(fill: Theme.bg3, radius: Theme.radius)
 
                 sep(); BlockTitle(text: "Data & Backup")
-                note("Changes sync to the cloud automatically, and your watch picks them up from there. Export any time for an offline copy.")
+                note("Changes sync to the cloud automatically, and your watch picks them up from there. Export any time for an offline copy. Import a Jacked backup, or a Hevy CSV export (.csv/.txt) to bring in your history.")
                 HStack(spacing: 10) {
                     if let u = exportURL { ShareLink(item: u) { Text("Export") }.buttonStyle(GhostButtonStyle()) }
+                    Button(importBusy ? "Importing\u{2026}" : "Import") { importing = true }.buttonStyle(GhostButtonStyle()).disabled(importBusy)
                     Button("Sync now") { Task { await store.refresh(auth: auth) } }.buttonStyle(GhostButtonStyle())
                 }
                 Text(store.dirty ? "Some changes are only on this phone so far. They go out on the next sync."
@@ -113,6 +124,22 @@ struct ProfileSheet: View {
             photoItem = nil
             Task { if let d = try? await item.loadTransferable(type: Data.self) { await uploadAvatar(d) } else { message = ("Pick an image file", false) } }
         }
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.json, .commaSeparatedText, .plainText, .text, .data]) { r in
+            guard case .success(let url) = r else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            guard let d = try? Data(contentsOf: url) else { message = ("Could not read that file", false); return }
+            Task { await importText(String(decoding: d, as: UTF8.self)) }
+        }
+        .alert("Import will REPLACE all current data on this device. Continue?", isPresented: $confirmReplace) {
+            Button("Cancel", role: .cancel) { pendingBundle = nil }
+            Button("OK") { if let b = pendingBundle { pendingBundle = nil; Task { await applyBackup(b) } } }
+        }
+        .alert("This file doesn't say whether its weights are in pounds or kilograms. Which are they?", isPresented: $askUnit) {
+            Button("Pounds (lb)") { if let p = pendingCSV { pendingCSV = nil; Task { await importCSV(p, unit: .lb) } } }
+            Button("Kilograms (kg)") { if let p = pendingCSV { pendingCSV = nil; Task { await importCSV(p, unit: .kg) } } }
+            Button("Cancel", role: .cancel) { pendingCSV = nil; message = ("Import cancelled", false) }
+        }
         .confirmationDialog("Profile photo", isPresented: $photoMenu, titleVisibility: .visible) {
             Button("Edit") { pickingPhoto = true }
             Button("Delete", role: .destructive) { Task { await removeAvatar() } }
@@ -125,6 +152,7 @@ struct ProfileSheet: View {
             #if DEBUG
             if let p = DevHooks.profile { await devApply(p) }
             if DevHooks.deleteAccount != nil { try? await Task.sleep(nanoseconds: 800_000_000); showDelete = true }
+            if let path = DevHooks.importFile { await devImport(path) }
             #endif
         }
     }
@@ -384,7 +412,70 @@ struct ProfileSheet: View {
         return url
     }
 
+    // MARK: Import (importData / importJsonBackup / importWorkoutCsv)
+
+    /// importData(): a Jacked backup or a workout-log CSV, told apart by the text, not the file name.
+    private func importText(_ text: String) async {
+        message = nil
+        if ImportMath.isJSON(text) {
+            switch ImportMath.parseBackup(text) {
+            case .invalid: message = ("Invalid backup file", false)
+            case .noData: message = ("No Jacked data found in file", false)
+            case .bundle(let b): pendingBundle = b; confirmReplace = !DevHooks.headless
+            }
+            return
+        }
+        switch ImportMath.plan(text) {
+        case .failure(let e): message = (e.message, false)
+        case .success(let p):
+            if p.needsUnit { pendingCSV = p; askUnit = !DevHooks.headless } else { await importCSV(p, unit: nil) }
+        }
+    }
+
+    /// The file's keys laid over this account's copy, then saved through merge + CAS like the web app's next sync.
+    private func applyBackup(_ bundle: [String: JSONValue]) async {
+        importBusy = true; defer { importBusy = false }
+        var res: (written: [String], rejected: [String]) = ([], [])
+        let sent = await store.edit(auth: auth) { raw in res = ImportMath.applyBundle(&raw, bundle) }
+        if res.written.isEmpty { message = ("Nothing importable in that file \u{2014} nothing was changed.", false); return }
+        load()
+        let base = res.rejected.isEmpty ? "Data imported" : "Imported \u{2014} skipped \(res.rejected.count) malformed section(s)"
+        message = (base + (sent ? "" : ". Saved on this phone, it goes out on the next sync."), res.rejected.isEmpty)
+    }
+
+    private func importCSV(_ p: ImportMath.CSVPlan, unit: ImportMath.CSVPlan.Unit?) async {
+        importBusy = true; defer { importBusy = false }
+        message = ("Reading workouts\u{2026}", true)
+        if catalog.db.isEmpty { await catalog.load() }   // loadDB(): the matcher needs the exercise library
+        guard !catalog.db.isEmpty else { message = ("The exercise library hasn't loaded yet. Try again when you're online.", false); return }
+        var result: Result<ImportMath.CSVResult, ImportMath.CSVError> = .failure(.noNew)
+        let sent = await store.edit(auth: auth) { raw in
+            result = ImportMath.importCSV(p, unit: unit, raw: raw, lib: catalog.all(custom: raw))
+            if case .success(let r) = result { raw = r.raw }
+        }
+        switch result {
+        case .failure(let e): message = (e.message, false)
+        case .success(let r):
+            message = (ImportMath.doneMessage(r) + (sent ? "" : ". Saved on this phone, it goes out on the next sync."), r.badDate == 0)
+            DevHooks.log("import: \(r.imported) workouts, \(r.badDate) bad dates, saved=\(sent)")
+        }
+    }
+
     #if DEBUG
+    /// IMPORT=<file path>: read it and import it through the same path as the picker; the replace confirm is
+    /// answered OK and the pounds/kilograms question with IMPORT_UNIT (lb | kg, unset = cancel).
+    private func devImport(_ path: String) async {
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        guard let d = FileManager.default.contents(atPath: path) else { DevHooks.log("import: can't read \(path)"); return }
+        await importText(String(decoding: d, as: UTF8.self))
+        if let b = pendingBundle { pendingBundle = nil; await applyBackup(b) }
+        if let p = pendingCSV {
+            pendingCSV = nil
+            if let u = DevHooks.importUnit.flatMap(ImportMath.CSVPlan.Unit.init(rawValue:)) { await importCSV(p, unit: u) } else { message = ("Import cancelled", false) }
+        }
+        DevHooks.log("import done: \(message?.text ?? "")")
+    }
+
     /// PROFILE=<field>=<value>,...: set those fields (name, unit, rest, repMin, repMax, autoRest, sex, bw, birthday) and Save.
     private func devApply(_ spec: String) async {
         try? await Task.sleep(nanoseconds: 1_000_000_000)
