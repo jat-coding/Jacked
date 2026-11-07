@@ -43,6 +43,9 @@ import Foundation
 ///                                         photo=<letters> uploads a generated picture, photo=remove deletes it (no Save)
 ///   SIMCTL_CHILD_JACKED_DEV_DELETEACCT    with OPEN=profile: open Delete Account and type this; "confirm" types the right
 ///                                         username and taps Delete (the server call is not live: nothing is deleted)
+///   SIMCTL_CHILD_JACKED_DEV_IMPORT        with OPEN=profile: import this file (a path on the Mac) through Import's real path;
+///                                         a backup's replace confirm is answered OK
+///   SIMCTL_CHILD_JACKED_DEV_IMPORT_UNIT   lb | kg: the answer when a CSV doesn't say its weight unit (unset = cancel)
 ///   SIMCTL_CHILD_JACKED_DEV_TIERXP        with OPEN=badge:<name>: open these rows' logged-set lines (bronze,silver,gold,all)
 ///   SIMCTL_CHILD_JACKED_DEV_BADGESTART    1: with OPEN=badge:<name>, tap the badge page's start button (never finished, never saved)
 ///   SIMCTL_CHILD_JACKED_DEV_SAVEROUTINE   <name>: with OPEN=workout:<i>, Save as Routine through the real save path
@@ -105,8 +108,15 @@ enum DevHooks {
     static var tierXp: [String] { (env["JACKED_DEV_TIERXP"] ?? "").split(separator: ",").map(String.init) }
     static var profile: String? { env["JACKED_DEV_PROFILE"].flatMap { $0.isEmpty ? nil : $0 } }
     static var deleteAccount: String? { env["JACKED_DEV_DELETEACCT"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var importFile: String? { env["JACKED_DEV_IMPORT"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var importUnit: String? { env["JACKED_DEV_IMPORT_UNIT"].flatMap { $0.isEmpty ? nil : $0 } }
+    /// True while the IMPORT hook drives the import itself (it answers the questions, no alert is shown).
+    static var headless: Bool { importFile != nil }
     static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
+    static var importFile: String? { nil }
+    static var importUnit: String? { nil }
+    static var headless: Bool { false }
     static var saveRoutine: String? { nil }
     static var editW: String? { nil }
     static var delW: Bool { false }
