@@ -1,11 +1,12 @@
 import SwiftUI
 import UIKit
+import PhotosUI
 
 /// #profModal (openProf / saveProf): name, the Profile and Body Metrics tabs (units, default rest,
 /// progress rep range, auto rest timer, your username; body, body weight, birthday), Save Profile
 /// through the careful save layer, Data & Backup (Export, Sync now), the email on file
-/// (my_email / set_my_email), Sign Out and, new for the App Store, Delete Account.
-/// Not here yet: changing the photo or the username (both need their own server steps).
+/// (my_email / set_my_email), Sign Out and, new for the App Store, Delete Account. The photo
+/// (uploadAvatar / removeAvatar) and a username change (rename_profile) work like the web app's.
 struct ProfileSheet: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
@@ -32,6 +33,11 @@ struct ProfileSheet: View {
     @State private var emailIn = ""
     @State private var showDelete = false
     @State private var exportURL: URL?
+    @State private var username = ""
+    @State private var photoItem: PhotosPickerItem?
+    @State private var pickingPhoto = false
+    @State private var photoMenu = false
+    @State private var photoBusy = false
 
     var body: some View {
         SheetScaffold(title: "My Profile") {
@@ -46,11 +52,20 @@ struct ProfileSheet: View {
                         }
                     }
                     .frame(width: 58, height: 58)
-                    Text("Friends can see this.").font(Theme.body(11)).foregroundStyle(Theme.muted)
+                    VStack(alignment: .leading, spacing: 6) {
+                        // One "Edit Photo" button with a photo (Edit / Delete behind it), the plain picker without.
+                        Button(photoBusy ? "Uploading\u{2026}" : store.backup.avatarURL == nil ? "Add Photo" : "Edit Photo") {
+                            if store.backup.avatarURL == nil { pickingPhoto = true } else { photoMenu = true }
+                        }
+                        .font(Theme.body(13, .semibold)).foregroundStyle(Theme.text2).padding(.horizontal, 14).padding(.vertical, 7)
+                        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.border2, lineWidth: 1))
+                        .disabled(photoBusy)
+                        Text("Friends can see this.").font(Theme.body(11)).foregroundStyle(Theme.muted)
+                    }
                 }
                 field("Display Name") { TextField("", text: $name).textInputAutocapitalization(.words) }
                 field("Username (unique handle)") {
-                    Text(auth.session?.code ?? "\u{2014}").foregroundStyle(Theme.text2)
+                    TextField("@username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
                 note("This is your friend handle and the key for all your data.")
 
@@ -92,6 +107,17 @@ struct ProfileSheet: View {
         }
         .presentationDetents([.large])
         .sheet(isPresented: $showDelete) { DeleteAccountSheet() }
+        .photosPicker(isPresented: $pickingPhoto, selection: $photoItem, matching: .images)
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            photoItem = nil
+            Task { if let d = try? await item.loadTransferable(type: Data.self) { await uploadAvatar(d) } else { message = ("Pick an image file", false) } }
+        }
+        .confirmationDialog("Profile photo", isPresented: $photoMenu, titleVisibility: .visible) {
+            Button("Edit") { pickingPhoto = true }
+            Button("Delete", role: .destructive) { Task { await removeAvatar() } }
+            Button("Cancel", role: .cancel) {}
+        }
         .onAppear(perform: load)
         .task { await loadEmail() }
         .task(id: store.updatedAt) { exportURL = Self.writeExport(store.backup.raw) }
@@ -182,6 +208,7 @@ struct ProfileSheet: View {
         loaded = true
         let raw = store.backup.raw, s = store.backup.settings, p = raw["jk_prof"]?.object ?? [:]
         name = p["name"]?.string ?? ""
+        username = auth.session?.code ?? p["code"]?.string ?? ""
         unit = s.wUnit == "kg" ? "kg" : "lb"
         rest = String(s.restDefault); repMin = String(s.repMin); repMax = String(s.repMax); autoRest = s.autoRest
         sex = p["sex"]?.string == "female" ? "female" : "male"
@@ -195,6 +222,8 @@ struct ProfileSheet: View {
     private func save() async {
         let n = name.trimmingCharacters(in: .whitespaces)
         guard !n.isEmpty else { message = ("Enter a display name", false); return }
+        let oldU = auth.session?.code ?? "", newU = FriendsMath.normU(username)
+        if let e = FriendsMath.validU(newU) { message = (e, false); return }
         let restV = min(600, max(5, Int(rest.trimmingCharacters(in: .whitespaces)) ?? 90))
         let mn = Int(repMin) ?? 5, mx = Int(repMax) ?? 12
         guard mn >= 1, mn <= 30, mx <= 50, mx > mn else { message = ("Rep range: Min must be lower than Max (Min 1-30, Max up to 50)", false); return }
@@ -205,13 +234,17 @@ struct ProfileSheet: View {
         let bday = hasBirthday ? Self.dayFmt.string(from: birthday) : ""
         let (u, a, sx) = (unit, autoRest, sex)
         saving = true; defer { saving = false }
+        if newU != oldU {
+            guard await changeUsername(from: oldU, to: newU) else { return }
+            username = newU
+        }
         let ok = await store.edit(auth: auth) { raw in
             var st = raw["jk_settings"]?.object ?? [:]
             st["wUnit"] = .string(u); st["restDefault"] = .number(Double(restV)); st["autoRest"] = .bool(a)
             st["repMin"] = .number(Double(mn)); st["repMax"] = .number(Double(mx))
             raw["jk_settings"] = .object(st)
             var p = raw["jk_prof"]?.object ?? [:]
-            let code = p["code"]?.string ?? p["username"]?.string ?? ""
+            let code = newU
             p["name"] = .string(n); p["username"] = .string(code); p["code"] = .string(code); p["sex"] = .string(sx); p["birthday"] = .string(bday)
             raw["jk_prof"] = .object(p)
             if let kg = newKg {
@@ -226,6 +259,81 @@ struct ProfileSheet: View {
         message = ok ? ("Profile saved \u{2713}", true) : ("Saved on this phone. It goes out on the next sync.", true)
         DevHooks.log("dev profile saved=\(ok)")
         if let kg = newKg { bwShown = Self.shown(kg, unit); bw = WorkoutMath.jsNumberString(bwShown) }
+    }
+
+    /// saveProf()'s username branch: refuse one someone else has (public_profiles), then
+    /// rename_profile re-keys the profile, backups, friend links and history on the server in one
+    /// step. Sign-in keeps working: the login email belongs to the auth user, not the username.
+    private func changeUsername(from old: String, to new: String) async -> Bool {
+        guard let s = await auth.validSession() else { message = ("Sign in first to change your username", false); return false }
+        if let d = try? await SupabaseHTTP().send("POST", "rest/v1/rpc/public_profiles", body: ["p_codes": [new]], bearer: s.accessToken),
+           let row = (try? JSONDecoder().decode(JSONValue.self, from: d))?.array?.first?.object, row["code"]?.string != old {
+            message = ("That username is already taken", false); return false
+        }
+        do {
+            let o = try await Self.rpc("rename_profile", ["p_new": .string(new)], auth: auth)
+            guard o["status"]?.string == "ok" else {
+                message = (o["status"]?.string == "taken" ? "That username is already taken" : "Could not change username \u{2014} try again", false)
+                DevHooks.log("dev rename_profile status=\(o["status"]?.string ?? "?")")
+                return false
+            }
+        } catch {
+            message = ("Could not change username \u{2014} try again", false); return false
+        }
+        // Follow the server: the phone's copies and the session move to the new name, then the
+        // profile's own code/username are saved by the caller through the careful save layer.
+        WorkoutSession.moveFile(from: old, to: new)
+        store.rekey(to: new)
+        auth.renamed(to: new)
+        DevHooks.log("dev username changed \(old) -> \(new)")
+        return true
+    }
+
+    /// uploadAvatar(): centre-cropped 256px JPEG at <code>.jpg in the avatars bucket (same path every
+    /// time, so the profile gets a fresh ?v= stamp), then saved and published like the web app.
+    private func uploadAvatar(_ data: Data) async {
+        guard let jpeg = Self.squareJPEG(data) else { message = ("Pick an image file", false); return }
+        guard let s = await auth.validSession() else { message = ("No connection \u{2014} try again later", false); return }
+        photoBusy = true; defer { photoBusy = false }
+        do {
+            _ = try await SupabaseHTTP().upload("POST", "storage/v1/object/avatars/\(s.code).jpg", data: jpeg, contentType: "image/jpeg",
+                                                bearer: s.accessToken, headers: ["x-upsert": "true", "cache-control": "max-age=3600"])
+        } catch {
+            DevHooks.log("dev avatar upload failed: \(error.localizedDescription)")
+            message = ("Upload failed \u{2014} try again", false); return
+        }
+        let url = SupabaseConfig.url.absoluteString + "/storage/v1/object/public/avatars/\(s.code).jpg?v=\(Int64(Date().timeIntervalSince1970 * 1000))"
+        let ok = await store.edit(auth: auth) { raw in
+            var p = raw["jk_prof"]?.object ?? [:]; p["avatarUrl"] = .string(url); raw["jk_prof"] = .object(p)
+        }
+        DevHooks.log("dev avatar uploaded saved=\(ok)")
+        message = ("Photo updated \u{2713}", true)
+    }
+
+    /// removeAvatar(): clear it on the profile first, then delete the file.
+    private func removeAvatar() async {
+        guard store.backup.avatarURL != nil else { return }
+        let ok = await store.edit(auth: auth) { raw in
+            var p = raw["jk_prof"]?.object ?? [:]; p["avatarUrl"] = .string(""); raw["jk_prof"] = .object(p)
+        }
+        if let s = await auth.validSession() {
+            _ = try? await SupabaseHTTP().send("DELETE", "storage/v1/object/avatars", body: ["prefixes": ["\(s.code).jpg"]], bearer: s.accessToken)
+        }
+        DevHooks.log("dev avatar removed saved=\(ok)")
+        message = ("Photo removed", true)
+    }
+
+    /// resizeAvatar(): centre square, 256 x 256, JPEG quality 0.82.
+    static func squareJPEG(_ data: Data) -> Data? {
+        guard let img = UIImage(data: data), img.size.width > 0, img.size.height > 0 else { return nil }
+        let side = min(img.size.width, img.size.height), out = CGSize(width: 256, height: 256)
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+        let scaled = UIGraphicsImageRenderer(size: out, format: fmt).image { _ in
+            let k = 256 / side
+            img.draw(in: CGRect(x: -(img.size.width - side) / 2 * k, y: -(img.size.height - side) / 2 * k,
+                                width: img.size.width * k, height: img.size.height * k))
+        }
+        return scaled.jpegData(compressionQuality: 0.82)
     }
 
     private func loadEmail() async {
@@ -294,10 +402,29 @@ struct ProfileSheet: View {
             case "bw": bw = parts[1]
             case "birthday": if let d = Self.dayFmt.date(from: parts[1]) { birthday = d; hasBirthday = true } else { hasBirthday = false }
             case "tab": tab = parts[1]
+            case "username": username = parts[1]
+            case "photo":
+                if parts[1] == "remove" { await removeAvatar() }
+                else if let d = Self.devPhoto(parts[1]) { await uploadAvatar(d) }
+                return
             default: break
             }
         }
         if !spec.hasPrefix("tab=") { await save() }
+    }
+
+    /// A generated test picture (the simulator's photo picker can't be driven over SSH): a teal
+    /// square with these letters, sent through the same upload path as a picked photo.
+    static func devPhoto(_ text: String) -> Data? {
+        let size = CGSize(width: 600, height: 400)   // not square, so the centre crop is exercised too
+        let img = UIGraphicsImageRenderer(size: size).image { ctx in
+            UIColor(red: 0.1, green: 0.1, blue: 0.12, alpha: 1).setFill(); ctx.fill(CGRect(origin: .zero, size: size))
+            UIColor(red: 0.13, green: 0.83, blue: 0.76, alpha: 1).setFill(); ctx.fill(CGRect(x: 100, y: 0, width: 400, height: 400))
+            let a: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 150), .foregroundColor: UIColor.black]
+            let t = NSString(string: text), ts = t.size(withAttributes: a)
+            t.draw(at: CGPoint(x: (size.width - ts.width) / 2, y: (size.height - ts.height) / 2), withAttributes: a)
+        }
+        return img.pngData()
     }
     #endif
 

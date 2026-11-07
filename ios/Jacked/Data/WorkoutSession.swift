@@ -293,6 +293,14 @@ final class WorkoutSession: ObservableObject {
         return f.string(from: Date())
     }
 
+    /// A username change: an open workout follows the account to its new name.
+    static func moveFile(from old: String, to new: String) {
+        let a = fileURL(old), b = fileURL(new)
+        guard a != b, FileManager.default.fileExists(atPath: a.path) else { return }
+        try? FileManager.default.removeItem(at: b)
+        try? FileManager.default.moveItem(at: a, to: b)
+    }
+
     private static func fileURL(_ code: String) -> URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("JackedBackup", isDirectory: true)
