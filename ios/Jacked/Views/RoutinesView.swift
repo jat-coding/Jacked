@@ -2,7 +2,7 @@ import SwiftUI
 
 /// #page-routines: your routines grouped by section (jk_routineSections, the PWA's sectioned
 /// list), New Routine, and Edit / Delete behind each card's 3-dot. Saves go through merge + CAS.
-/// Trusted Programs and dragging sections/routines into a custom order are not on the iPhone yet.
+/// Dragging sections/routines into a custom order is not on the iPhone yet.
 struct RoutinesView: View {
     @EnvironmentObject private var store: BackupStore
     @EnvironmentObject private var session: WorkoutSession
@@ -21,7 +21,16 @@ struct RoutinesView: View {
                 Button { session.startEmpty() } label: { Label("Empty Workout", systemImage: "plus").font(Theme.body(15, .semibold)) }
                     .buttonStyle(GhostButtonStyle())
                 TrustedPrograms()
-                BlockTitle(text: "My Routines").padding(.top, 8)
+                HStack {
+                    BlockTitle(text: "My Routines")
+                    Spacer()
+                    if !blocks.isEmpty {
+                        Button("Reorder") { showOrder = true }
+                            .font(Theme.body(14, .semibold)).foregroundStyle(Theme.text).padding(.horizontal, 14).padding(.vertical, 7)
+                            .overlay(Capsule().stroke(Theme.border2, lineWidth: 1)).buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 8)
                 if blocks.isEmpty {
                     VStack(spacing: 4) {
                         Text("No routines").font(Theme.heading(22, .bold)).foregroundStyle(Theme.text2)
@@ -29,9 +38,29 @@ struct RoutinesView: View {
                     }
                     .padding(.vertical, 30)
                 }
-                ForEach(blocks, id: \.name) { b in
-                    Text(b.name.uppercased()).font(Theme.heading(17, .extraBold)).foregroundStyle(Theme.text)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 4)
+                let collapsed = Set((raw["jk_collapsedSections"]?.array ?? []).compactMap(\.string))
+                ForEach(blocks, id: \.id) { b in
+                    // sectionBlockHtml: the whole header toggles collapse (saved, like the web app); the name is
+                    // renamed from a long press here instead of the web app's inline edit. "Unfiled" is read-only.
+                    let isCollapsed = collapsed.contains(b.id)
+                    Button { toggleCollapsed(b.id) } label: {
+                        HStack {
+                            Text(b.name.uppercased()).font(Theme.body(13, .bold)).tracking(0.4).foregroundStyle(Theme.text)
+                            Spacer()
+                            Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
+                                .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                        }
+                        .padding(.bottom, 8)
+                        .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).padding(.top, 4)
+                    .contextMenu {
+                        if !b.id.isEmpty {
+                            Button { renameDraft = b.name; renaming = b } label: { Label("Rename section", systemImage: "pencil") }
+                        }
+                    }
+                    if isCollapsed { EmptyView() } else {
                     if b.routines.isEmpty {
                         Text("No routines yet — edit a routine to move it here.").font(Theme.body(12)).foregroundStyle(Theme.muted)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -39,14 +68,41 @@ struct RoutinesView: View {
                     ForEach(Array(b.routines.enumerated()), id: \.offset) { _, r in
                         RoutineRow(r: r) { editing = RoutineDraft(r) }
                     }
+                    }
                 }
             }
             .padding(.horizontal, 16).padding(.bottom, 30)
         }
         .background(Theme.bg.ignoresSafeArea())
         .sheet(item: $editing) { RoutineEditorSheet(draft: $0) }
+        .alert("Rename section", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Section name", text: $renameDraft)
+            Button("Save") { if let b = renaming { rename(b.id, renameDraft) }; renaming = nil }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        }
+        .overlay(alignment: .top) { ToastView(text: $toast) }
+        .sheet(isPresented: $showOrder) { RoutineOrderSheet() }
         .task {
             #if DEBUG
+            if let spec = DevHooks.section {
+                // collapse:<name> | rename:<name>|<new name>
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                let secs = RoutineMath.sections(store.backup.raw)
+                if spec.hasPrefix("collapse:"), let b = secs.first(where: { $0.name == String(spec.dropFirst(9)) }) { toggleCollapsed(b.id) }
+                if spec == "order" { showOrder = true }
+                if spec.hasPrefix("move:") {   // move:<section name>|<from>|<to>, or move:|<from>|<to> for the sections themselves
+                    let p = spec.dropFirst(5).split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+                    if p.count == 3, let f = Int(p[1]), let t = Int(p[2]) {
+                        if p[0].isEmpty { await RoutineMath.moveSection(from: IndexSet(integer: f), to: t, store: store, auth: authStore) }
+                        else if let b = secs.first(where: { $0.name == p[0] }) { await RoutineMath.moveRoutine(in: b, from: IndexSet(integer: f), to: t, store: store, auth: authStore) }
+                    }
+                }
+                if spec.hasPrefix("rename:") {
+                    let parts = spec.dropFirst(7).split(separator: "|", maxSplits: 1).map(String.init)
+                    if parts.count == 2, let b = secs.first(where: { $0.name == parts[0] }) { rename(b.id, parts[1]) }
+                }
+                DevHooks.log("dev section \(spec) toast=\(toast ?? "-")")
+            }
             if let spec = DevHooks.newRoutine {
                 await catalog.load()
                 let parts = spec.split(separator: "|", maxSplits: 1).map(String.init)
@@ -60,6 +116,34 @@ struct RoutinesView: View {
     }
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var catalog: ExerciseCatalog
+    @State private var renaming: RoutineMath.Block?
+    @State private var renameDraft = ""
+    @State private var showOrder = false
+    @State private var toast: String?
+
+    /// toggleSectionCollapsed: jk_collapsedSections, saved through merge + CAS.
+    private func toggleCollapsed(_ id: String) {
+        Task { await store.edit(auth: authStore) { r in
+            var cs = (r["jk_collapsedSections"]?.array ?? []).compactMap(\.string)
+            if let i = cs.firstIndex(of: id) { cs.remove(at: i) } else { cs.append(id) }
+            r["jk_collapsedSections"] = .array(cs.map(JSONValue.string))
+        } }
+    }
+
+    /// renameSection: trimmed, unchanged or empty is a no-op, a name another section already has (any case) is refused.
+    private func rename(_ id: String, _ raw: String) {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secs = (store.backup.raw["jk_routineSections"]?.array ?? []).compactMap(\.object)
+        guard let idx = secs.firstIndex(where: { $0["id"]?.string == id }), !name.isEmpty, secs[idx]["name"]?.string != name else { return }
+        if secs.enumerated().contains(where: { $0.offset != idx && ($0.element["name"]?.string ?? "").lowercased() == name.lowercased() }) {
+            toast = "A section named \"\(name)\" already exists"; return
+        }
+        Task { await store.edit(auth: authStore) { r in
+            var a = (r["jk_routineSections"]?.array ?? [])
+            if let i = a.firstIndex(where: { $0.object?["id"]?.string == id }), var o = a[i].object { o["name"] = .string(name); a[i] = .object(o) }
+            r["jk_routineSections"] = .array(a)
+        } }
+    }
 }
 
 /// The Trusted Programs strip (renderCurated): each program's workouts and "+ Add to Routines" (addCurated).
@@ -70,6 +154,8 @@ struct TrustedPrograms: View {
     @State private var added: String?
 
     var body: some View {
+        let raw = store.backup.raw
+        let pick = MetricsMath(raw: raw, lib: ExLib(db: catalog.db, raw: raw)).todaysCuratedPick(today: JackedDate.dayKey(Date())).pick
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "star.fill").foregroundStyle(Color(hex: 0xFFD700))
@@ -81,7 +167,12 @@ struct TrustedPrograms: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(p.name).font(Theme.heading(18, .extraBold)).foregroundStyle(Theme.text)
                             Text(p.desc).font(Theme.body(11)).foregroundStyle(Theme.muted)
-                            ForEach(p.routines, id: \.name) { r in Text(r.name).font(Theme.body(12)).foregroundStyle(Theme.text2).padding(.top, 2) }
+                            ForEach(Array(p.routines.enumerated()), id: \.offset) { ri, r in
+                                // The Suggested today card's trusted pick, marked here too (renderCurated isPick).
+                                let isPick = pick?.pi == i && pick?.ri == ri
+                                Text((isPick ? "Today's pick \u{00B7} " : "") + r.name)
+                                    .font(Theme.body(12, isPick ? .bold : .regular)).foregroundStyle(isPick ? Theme.blue : Theme.text2).padding(.top, 2)
+                            }
                             Text("\(p.routines.count) workout\(p.routines.count == 1 ? "" : "s") · \(p.source)")
                                 .font(Theme.body(10)).foregroundStyle(Theme.muted).padding(.top, 4)
                             Spacer(minLength: 6)
@@ -222,7 +313,7 @@ extension RoutineDraft {
 
 /// Sections, filing and saveR() (index.html routinesInSection / suggestSectionId / findOrCreateSection).
 enum RoutineMath {
-    struct Block { let name: String; let routines: [[String: JSONValue]] }
+    struct Block { let id: String; let name: String; let routines: [[String: JSONValue]] }
     static let sectionLabel = ["chest": "Chest", "back": "Back", "shoulders": "Shoulders", "biceps": "Biceps",
                                "triceps": "Triceps", "legs": "Legs", "glutes": "Glutes", "core": "Core"]
     static let mgroups = ["chest", "back", "shoulders", "biceps", "triceps", "legs", "glutes", "core"]
@@ -243,11 +334,48 @@ enum RoutineMath {
                 list = ordered + list.filter { !manual.contains($0["id"]?.string ?? "") }.sorted(by: byName)
             } else { list.sort(by: byName) }
             list.forEach { if let id = $0["id"]?.string { grouped.insert(id) } }
-            return Block(name: s["name"]?.string ?? "Section", routines: list)
+            return Block(id: sid, name: s["name"]?.string ?? "Section", routines: list)
         }
         let orphans = rs.filter { !grouped.contains($0["id"]?.string ?? "") }.sorted(by: byName)
-        if !orphans.isEmpty { out.append(Block(name: "Unfiled", routines: orphans)) }
+        if !orphans.isEmpty { out.append(Block(id: "", name: "Unfiled", routines: orphans)) }
         return out
+    }
+
+    /// Reorder Sections (routineOrderList drop): the new section order, saved through merge + CAS. Sections
+    /// that arrived from another device in the meantime keep their place at the end.
+    @MainActor static func moveSection(from: IndexSet, to: Int, store: BackupStore, auth: AuthStore) async {
+        var ids = (store.backup.raw["jk_routineSections"]?.array ?? []).compactMap { $0.object?["id"]?.string }
+        ids.move(fromOffsets: from, toOffset: to)
+        _ = await store.edit(auth: auth) { r in
+            let old = (r["jk_routineSections"]?.array ?? [])
+            let byId = Dictionary(old.compactMap { v in v.object?["id"]?.string.map { ($0, v) } }, uniquingKeysWith: { a, _ in a })
+            r["jk_routineSections"] = .array(ids.compactMap { byId[$0] } + old.filter { !ids.contains($0.object?["id"]?.string ?? "") })
+        }
+    }
+
+    /// Reorder routines within one section (secROList drop): that section's manual `order`.
+    @MainActor static func moveRoutine(in b: Block, from: IndexSet, to: Int, store: BackupStore, auth: AuthStore) async {
+        var ids = b.routines.compactMap { $0["id"]?.string }
+        ids.move(fromOffsets: from, toOffset: to)
+        _ = await store.edit(auth: auth) { r in
+            var a = r["jk_routineSections"]?.array ?? []
+            if let i = a.firstIndex(where: { $0.object?["id"]?.string == b.id }), var o = a[i].object {
+                o["order"] = .array(ids.map(JSONValue.string)); a[i] = .object(o)
+            }
+            r["jk_routineSections"] = .array(a)
+        }
+    }
+
+    /// addSectionPrompt -> findOrCreateSection(name): an existing section with that name (any case) is reused.
+    @MainActor static func addSection(_ name: String, store: BackupStore, auth: AuthStore) async {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines); guard !n.isEmpty else { return }
+        _ = await store.edit(auth: auth) { r in
+            var a = r["jk_routineSections"]?.array ?? []
+            if a.contains(where: { ($0.object?["name"]?.string ?? "").lowercased() == n.lowercased() }) { return }
+            let rnd = String(UUID().uuidString.lowercased().filter(\.isLetter).prefix(5))
+            a.append(.object(["id": .string("sec\(Int64(Date().timeIntervalSince1970 * 1000))\(rnd)"), "name": .string(n), "order": .null]))
+            r["jk_routineSections"] = .array(a)
+        }
     }
 
     /// majorityGroupForRoutine: the group most exercises train; nil on a tie or none.
@@ -425,5 +553,57 @@ struct StartWorkoutSheet: View {
             .padding(.horizontal, 16)
         }
         .background(Theme.bg2.ignoresSafeArea())
+    }
+}
+
+/// #routineOrderModal: drag a section to reorder sections, drag a routine to reorder it within its section,
+/// "+ Section" adds an empty one. Every move saves straight away, like the web app's drop.
+struct RoutineOrderSheet: View {
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var store: BackupStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var adding = false
+    @State private var newName = ""
+
+    var body: some View {
+        let blocks = RoutineMath.sections(store.backup.raw).filter { !$0.id.isEmpty }
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(blocks, id: \.id) { b in
+                        Text(b.name.uppercased()).font(Theme.body(13, .bold)).tracking(0.4).foregroundStyle(Theme.text)
+                    }
+                    .onMove { f, t in Task { await RoutineMath.moveSection(from: f, to: t, store: store, auth: auth) } }
+                } header: {
+                    Text("Drag a section's grip to reorder sections. Drag a routine's grip to reorder it within its section.")
+                        .font(Theme.body(12)).foregroundStyle(Theme.muted).textCase(nil)
+                }
+                ForEach(blocks, id: \.id) { b in
+                    Section(b.name.uppercased()) {
+                        if b.routines.isEmpty { Text("No routines yet").font(Theme.body(13)).foregroundStyle(Theme.muted) }
+                        ForEach(Array(b.routines.enumerated()), id: \.offset) { _, r in
+                            Text(r["name"]?.string ?? "").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+                        }
+                        .onMove { f, t in Task { await RoutineMath.moveRoutine(in: b, from: f, to: t, store: store, auth: auth) } }
+                    }
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .scrollContentBackground(.hidden)
+            .background(Theme.bg2)
+            .navigationTitle("Reorder Sections & Routines")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("+ Section") { newName = ""; adding = true } }
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.bold() }
+            }
+            .alert("New section name:", isPresented: $adding) {
+                TextField("Section name", text: $newName)
+                Button("Add") { let n = newName; Task { await RoutineMath.addSection(n, store: store, auth: auth) } }
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+        .tint(Theme.accent)
+        .preferredColorScheme(.dark)
     }
 }
