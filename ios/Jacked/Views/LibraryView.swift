@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// #page-exercises: search, the body-map muscle chips, and the exercise list (favourites first,
 /// then what you've used, then the rest), each row with its PR. Tap a row for #exInfoModal.
@@ -108,7 +109,7 @@ struct LibraryRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            LogThumb(url: e.image.map { URL(string: ExerciseImages.base + $0) } ?? nil, muscle: e.muscle)
+            LogThumb(url: (e.custom ? ExPhotoStore.url(e.id) : nil) ?? e.image.map { URL(string: ExerciseImages.base + $0) } ?? nil, muscle: e.muscle)
             VStack(alignment: .leading, spacing: 2) {
                 (Text(fav ? "★ " : "").foregroundColor(Color(hex: 0xFFD700)) + Text(e.name))
                     .font(Theme.body(13, .semibold)).foregroundStyle(Theme.text).lineLimit(2)
@@ -169,6 +170,7 @@ struct ExerciseInfoSheet: View {
     @State private var confirmHide = false
     @State private var resetText: String?
     @State private var editing = false
+    @State private var photoTick = 0
     @State private var toast: String?
 
     var body: some View {
@@ -242,6 +244,15 @@ struct ExerciseInfoSheet: View {
                         store: store, auth: auth, catalog: catalogObj)
                     DevHooks.log("dev edit ex \(e)")
                 }
+                if DevHooks.exPhoto == ex.id {
+                    // A generated stand-in for a camera-roll pick (no photo library to tap in the simulator).
+                    let img = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 400)).image { c in
+                        UIColor(red: 0.13, green: 0.83, blue: 0.76, alpha: 1).setFill(); c.fill(CGRect(x: 0, y: 0, width: 600, height: 400))
+                        ("TEST" as NSString).draw(at: CGPoint(x: 210, y: 150), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 80), .foregroundColor: UIColor.black])
+                    }
+                    ExPhotoStore.save(ex.id, image: img); photoTick += 1
+                    DevHooks.log("dev ex photo \(ex.id) saved=\(ExPhotoStore.url(ex.id) != nil)")
+                }
                 if DevHooks.resetPR == ex.id {
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     await Self.resetPR(ex.id, store: store, auth: auth); toast = "PR reset"
@@ -257,7 +268,8 @@ struct ExerciseInfoSheet: View {
     }
 
     @ViewBuilder private var photos: some View {
-        let urls = ex.images.prefix(2).compactMap { URL(string: ExerciseImages.base + $0) }
+        let local = ex.custom && photoTick >= 0 ? ExPhotoStore.url(ex.id) : nil
+        let urls = local.map { [$0] } ?? ex.images.prefix(2).compactMap { URL(string: ExerciseImages.base + $0) }
         if urls.isEmpty {
             ZStack { Theme.bg3; Image(systemName: "dumbbell").font(.system(size: 50)).foregroundStyle(Theme.muted) }
                 .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 12))
@@ -378,6 +390,9 @@ struct CreateExerciseSheet: View {
     var onSaved: () -> Void = {}
     @EnvironmentObject private var catalog: ExerciseCatalog
     @State private var loaded = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var photo: UIImage?
+    @State private var photoRemoved = false
     @State private var assist = false
     @State private var durUnit = "sec"
     @State private var name = ""
@@ -400,6 +415,28 @@ struct CreateExerciseSheet: View {
         NavigationStack {
             Form {
                 Section { TextField("Exercise name", text: $name) }
+                if fullForm {
+                    // #cePhotoRow: your own exercises only; the photo stays on this phone.
+                    Section {
+                        HStack(spacing: 12) {
+                            Group {
+                                if let photo { Image(uiImage: photo).resizable().scaledToFill() }
+                                else if !photoRemoved, let id = editing?.id, let u = ExPhotoStore.url(id), let img = UIImage(contentsOfFile: u.path) {
+                                    Image(uiImage: img).resizable().scaledToFill()
+                                } else { ZStack { Theme.bg4; Image(systemName: "dumbbell").foregroundStyle(Theme.muted) } }
+                            }
+                            .frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 10))
+                            PhotosPicker(selection: $photoItem, matching: .images) { Text("Choose photo") }
+                            Spacer()
+                            if photo != nil || (!photoRemoved && editing.flatMap { ExPhotoStore.url($0.id) } != nil) {
+                                Button("Remove", role: .destructive) { photo = nil; photoRemoved = true }.buttonStyle(.borderless)
+                            }
+                        }
+                    } footer: { Text("Kept on this phone only.").font(Theme.body(11)) }
+                    .onChange(of: photoItem) { _, item in
+                        Task { if let d = try? await item?.loadTransferable(type: Data.self), let img = UIImage(data: d) { photo = img; photoRemoved = false } }
+                    }
+                }
                 Section {
                     if fullForm {
                         Picker("Muscle", selection: $muscle) { ForEach(Self.muscles, id: \.self) { Text($0) } }
@@ -461,13 +498,17 @@ struct CreateExerciseSheet: View {
     }
 
     private func save() async {
+        if let ex = editing, fullForm {
+            if photoRemoved && photo == nil { ExPhotoStore.remove(ex.id) } else if let photo { ExPhotoStore.save(ex.id, image: photo) }
+        }
         if let ex = editing {
             await Self.update(ex, fullForm: fullForm, name: name, muscle: muscle, category: category, equip: bodyweight ? "body only" : equip,
                               tracking: tracking, notes: notes, assist: assist, durUnit: durUnit, store: store, auth: auth, catalog: catalog)
             return
         }
-        await Self.create(name: name, muscle: muscle, category: category, equip: bodyweight ? "body only" : equip,
+        let id = await Self.create(name: name, muscle: muscle, category: category, equip: bodyweight ? "body only" : equip,
                           tracking: tracking, notes: notes, store: store, auth: auth)
+        if let photo { ExPhotoStore.save(id, image: photo) }
     }
 
     /// saveCE() editing: a custom exercise is updated in place (jk_cex); a built-in keeps its dataset entry, the
