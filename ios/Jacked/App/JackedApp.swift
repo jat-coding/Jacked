@@ -28,7 +28,7 @@ struct RootView: View {
             case .signedOut:
                 AuthView().transition(.opacity)
             case .signedIn:
-                SignedInView().transition(.opacity)
+                MainTabView().transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.25), value: auth.phase)
