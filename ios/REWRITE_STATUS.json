@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-06T23:58:00-07:00",
+  "updated": "2026-11-07T00:25:00-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -59,18 +59,24 @@
     {
       "id": "safe-saving",
       "title": "Safe saving",
-      "status": "todo",
-      "summary": "The careful save layer, ported before anything can write.",
+      "status": "done",
+      "summary": "The careful save layer is in: the iPhone can rename a past workout and the web app shows it.",
       "detail": [
-        "Same merge-then-save rules the web app uses, so a save from the iPhone can never wipe data from the web app or the watch.",
-        "Done on purpose before logging: a bad save wiped real data twice in August, before the web app had this layer.",
-        "Mac check: rename a workout on the iPhone, the web app shows the new name."
+        "Every save reads the latest copy from the server first, merges it with what's on the phone using the same rules as the web app, and only writes if nobody else saved in between. If someone did, it reads again and merges again.",
+        "The merge rules are a direct copy of the web app's. Checked on the Mac: 2,014 sample cases run through both the web app's code and the iPhone's code gave the same result every time.",
+        "Checked for real in the iPhone simulator on the throwaway test account: renamed a workout, the web app shows the new name, nothing else in the account changed.",
+        "Also forced the worst case: another device saved a workout while the iPhone was mid-save. Both the other workout and the iPhone's rename survived.",
+        "If the phone is offline, the change stays on the phone and goes out on the next sync.",
+        "Not yet: updating the friends leaderboard numbers after a save. That needs the stats math, which comes with workout logging and Metrics."
+      ],
+      "commits": [
+        "69da208"
       ]
     },
     {
       "id": "workout-logging",
       "title": "Workout logging",
-      "status": "todo",
+      "status": "active",
       "summary": "Log a full workout: sets, rest timer, PRs, plate math, routines.",
       "detail": [
         "Mac check: log a real workout, it shows on the web app and the watch.",
