@@ -167,6 +167,7 @@ struct BadgeDetailSheet: View {
                 Text(b.detail ?? b.desc).font(Theme.body(14)).foregroundStyle(Theme.text2).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                 Rectangle().fill(Theme.border).frame(height: 1).padding(.vertical, 8)
                 h("How to earn it"); para(how.how)
+                ForEach(m.badgeExHow(b.name), id: \.t) { x in h(x.t); para(x.body) }
                 if !how.tiers.isEmpty {
                     h("Tiers")
                     ForEach(how.tiers, id: \.0) { t, v in
