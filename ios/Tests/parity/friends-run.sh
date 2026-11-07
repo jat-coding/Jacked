@@ -6,7 +6,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; src="$here/../../Jacked"
 export TZ="${TZ:-America/Denver}"
 db="$here/exercises.json"
-[ -s "$db" ] || curl -fsS -o "$db" "https://$(grep -o '[a-z0-9]*\.supabase\.co' | head -1)/storage/v1/object/public/exercise-images/exercises.json"
+[ -s "$db" ] || curl -fsS -o "$db" "https://$(grep -o '[a-z0-9]*\.supabase\.co' "$src/Backend/SupabaseConfig.swift" | head -1)/storage/v1/object/public/exercise-images/exercises.json"
 node "$here/friends-gen.mjs" "$db" "${PARITY_N:-300}"
 files=("$src/Data/JSONValue.swift" "$src/Data/HomeMath.swift" "$src/Data/Backup.swift" "$src/Data/PWATables.swift" "$src/Data/WorkoutLog.swift"
   "$src/Data/LibraryMath.swift" "$src/Data/ExerciseCatalog.swift" "$src/Data/MetricsMath.swift" "$src/Data/BadgeMath.swift" "$src/Data/BadgeTables.swift" "$src/Data/FriendsMath.swift" "$here/FriendsMain.swift" "$here/FinishStubs.swift")

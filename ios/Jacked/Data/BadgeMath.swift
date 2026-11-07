@@ -396,6 +396,47 @@ extension MetricsMath {
         return benchOK ? "Set for your sex and \(lbTxt(bwLb)) body weight\(ag)." : "Standard numbers\(ag): set your sex and body weight in Profile to get your own."
     }
 
+    /// badgeAdjNote(mccullochFactor): the squat / OHP "Adjusted for your profile" suffix.
+    func badgeAdjNote() -> String {
+        let fem = benchSex == "female", a = Self.mccullochFactor(age)
+        return (fem || a != 1) ? " Adjusted for your profile" + (fem && a != 1 ? " (sex and age)" : fem ? " (sex)" : " (age)") + "." : ""
+    }
+
+    /// stdHowNote(key): where the pull-up / push-up / cardio numbers come from, for this profile.
+    func stdHowNote(_ key: String) -> String {
+        let fem = benchSex == "female", who = (fem ? "women" : "men") + (age.map { " aged \($0)" } ?? "")
+        if key == "cardio" {
+            return " Tiers are Running Level's Intermediate, Advanced and Elite mile times for \(fem ? "women" : "men")"
+                + (age.map { ", adjusted to age \($0) with the official WMA/USATF age-grading factors" } ?? "")
+                + ". Body weight isn't used: no running standard accounts for it." + (age == nil ? " Set your birthday in Profile to adjust for age." : "")
+        }
+        let name = key == "pullup" ? "pull-up" : "push-up"
+        return " Tiers are Strength Level's Intermediate, Advanced and Elite \(name) standards for \(who)"
+            + (bwLb > 0 ? " at \(lbTxt(bwLb)) body weight." : " at any body weight. Set your body weight in Profile to get your own.")
+            + (age == nil ? " Set your birthday to adjust for age." : "")
+    }
+
+    /// BADGE_HOW: the one-line how-to under each badge in a friend's (or your own) badge list.
+    func badgeShortHow(_ name: String, _ T: BadgeLadders) -> String {
+        switch name {
+        case "Bench-Maxing": return "Barbell flat bench, 1 rep. Flat dumbbell bench counts at +15% (both dumbbells together), Smith machine flat bench at -15%. Bronze \(lbN(T.bench[0])), Silver \(lbN(T.bench[1])), Gold \(lbTxt(T.bench[2])). " + benchHowNote()
+        case "Shoulder-Maxing": return "Standing barbell overhead press, 1 rep, vs sourced strength standards for your sex and body weight (set it in Profile). Standing dumbbell press counts at +15% (both dumbbells together). Seated presses, including the Smith machine one, don't count. Bronze \(lbN(T.ohp[0])), Silver \(lbN(T.ohp[1])), Gold \(lbTxt(T.ohp[2]))." + badgeAdjNote()
+        case "Leg-Maxing": return "Barbell back squat, 1 rep, vs sourced strength standards for your sex and body weight (set it in Profile). Bronze \(lbN(T.squat[0])), Silver \(lbN(T.squat[1])), Gold \(lbTxt(T.squat[2]))." + badgeAdjNote()
+        case "1000lb Club": return "Barbell flat bench press + barbell back squat + conventional barbell deadlift from one workout, summed to 1000 lb or more. Flat dumbbell bench counts at +15%, Smith machine bench at -15%; no other variations."
+        case "PR-Maxing": return "Hit 7 personal records within any rolling 7-day window. Only the last 3 months count."
+        case "Consistency-Maxing": return "Finish a workout 7 days in a row. Only the last 3 months count."
+        case "Coward-Maxing": return "Given after 7+ days off in a row this month. Resets monthly."
+        case "Jacked": return "Every Monthly and 3-month badge earned -- any tier counts on the tiered ones. Permanent badges not needed. Locked while you hold Coward-Maxing."
+        case "Pull-up-Maxing": return "Most reps in one set of strict pull-ups. Chin-ups, assisted and band pull-ups don't count. Bronze \(Self.jsStr(T.pullup[0])), Silver \(Self.jsStr(T.pullup[1])), Gold \(Self.jsStr(T.pullup[2]))." + stdHowNote("pullup")
+        case "Push-up-Maxing": return "Most reps in one set of standard push-ups (not summed). Bronze \(Self.jsStr(T.pushup[0])), Silver \(Self.jsStr(T.pushup[1])), Gold \(Self.jsStr(T.pushup[2]))." + stdHowNote("pushup")
+        case "Cardio-Maxing": let c = T.cardio.map(Self.fmtClock); return "Best mile pace from Running (outdoor) or Running (treadmill); other cardio doesn't count. Bronze \(c[0]), Silver \(c[1]), Gold \(c[2]) per mile." + stdHowNote("cardio")
+        case "Challenge-Maxing": return "Train your weakest muscle group (glutes excluded) enough times this month. New group every month."
+        case "Comeback-Maxing": return "Train half the days this month, or beat last month after a slow one."
+        case "Variety-Maxing": return "Log one real set on 100 different library exercises. Each counts once, forever."
+        default: return ""
+        }
+    }
+
     /// BADGE_HOW / BADGE_DETAIL text for the badge page, ported (plain text).
     func badgeHow(_ name: String, _ T: BadgeLadders) -> (how: String, tiers: [(String, String)], note: String?) {
         let three = "Your tier follows your best in the last 3 months."
