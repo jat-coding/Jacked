@@ -78,6 +78,15 @@ final class BackupStore: ObservableObject {
         }
     }
 
+    /// After a username change: the server re-keyed the row (backups follow the profile, ON UPDATE
+    /// CASCADE), so the copy on this phone moves to the new name too, unsent edits included.
+    func rekey(to code: String) {
+        guard let old = loadedCode, old != code else { return }
+        loadedCode = code
+        saveToDisk(code: code)
+        try? FileManager.default.removeItem(at: Self.fileURL(old))
+    }
+
     func signedOut() {
         backup = .empty; updatedAt = nil; lastSynced = nil; loadedCode = nil; state = .idle; freshThisLaunch = false
         dirty = false; pendingNotes = []
