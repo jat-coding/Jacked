@@ -19,10 +19,10 @@ B=\$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' $APP/Info.plist)
 xcrun simctl install \$UDID $APP
 xcrun simctl terminate \$UDID \$B >/dev/null 2>&1 || true
 xcrun simctl status_bar \$UDID override --time 9:41 --batteryState charged --batteryLevel 100 >/dev/null 2>&1 || true
-rm -f /tmp/jacked-sim-stdout.txt
-$ENVS xcrun simctl launch --stdout=/tmp/jacked-sim-stdout.txt \$UDID \$B >/dev/null
+rm -f \$HOME/jacked-sim-stdout.txt
+$ENVS xcrun simctl launch --stdout=\$HOME/jacked-sim-stdout.txt \$UDID \$B >/dev/null
 sleep $WAIT
 xcrun simctl io \$UDID screenshot /tmp/jacked-sim-shot.png >/dev/null 2>&1"
 S="scp -q -i $HOME/.ssh/id_ed25519_mac -o BatchMode=yes -o IdentitiesOnly=yes sire@jacostas-macbook-pro.tail2df36b.ts.net"
-$S:/tmp/jacked-sim-shot.png "$OUT.png"; $S:/tmp/jacked-sim-stdout.txt "$OUT.log" 2>/dev/null || touch "$OUT.log"
+$S:/tmp/jacked-sim-shot.png "$OUT.png"; $S:jacked-sim-stdout.txt "$OUT.log" 2>/dev/null || touch "$OUT.log"
 echo "$OUT.png"; cat "$OUT.log"
