@@ -26,6 +26,7 @@ struct HomeView: View {
                     .accessibilityLabel("Profile")
                 }
                 syncLine
+                HomeRecapCard()
                 StreakBanner(history: h).padding(.bottom, 20)
                 CalendarCard(history: h, month: $month) { dayKey = DayKey(id: $0) }
                     .padding(.bottom, 20)
