@@ -52,9 +52,11 @@ struct SuggestCard: View {
             .background(Theme.bg2, in: RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color(red: 77 / 255, green: 158 / 255, blue: 1).opacity(0.3), lineWidth: 1))
             .padding(.bottom, 22)
-            .task(id: "\(today)|\(store.loadedCode ?? "")|\(store.lastSynced != nil)") {
+            .task(id: "\(today)|\(store.loadedCode ?? "")|\(store.freshThisLaunch)") {
                 // todaysCuratedPick caches the pick per day in the synced blob, like the web app.
-                guard store.lastSynced != nil else { return }
+                // Only after this launch's server read: a pick made from an old disk copy could disagree with
+                // the one another device already cached for today.
+                guard store.freshThisLaunch else { return }
                 #if DEBUG
                 DevHooks.log("suggest: " + (sug ?? []).map { "\($0.label) \($0.sub) [\($0.routine?["name"]?.string ?? "-")]" }.joined(separator: " | ") + " pick=\(pick.pick?.name ?? "-") write=\(pick.write != nil)")
                 if let hook = DevHooks.suggest, sug != nil, !Self.hookDone {
