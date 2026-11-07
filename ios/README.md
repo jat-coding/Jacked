@@ -47,3 +47,14 @@ iPhone only, Swift 5 language mode, bundle id `com.inclineinstitute.jacked.ios` 
 see plan).
 
 Body text uses the system font; the PWA uses DM Sans. Bundling DM Sans is a small follow-up.
+
+## Building and checking from the desktop (agent jobs)
+
+The agent repo's `scripts/jacked-ios-mac-build.sh <ios dir>` copies this tree to the Mac and runs
+`xcodebuild` for the simulator; `scripts/jacked-sim-shot.sh` installs the build, signs in as the
+throwaway test account (`config/jacked-ios-dev-test-account.json`, via the DEBUG-only
+`App/DevHooks.swift` launch environment) and takes a screenshot. Copies of both live in `Tools/`.
+`Tools/pwa-shot.mjs` screenshots the local PWA logged in as the same account, for side-by-side
+checks. `Tools/pbx-add.py` registers new Swift files in the Xcode project. `Tools/seed-test-account.py`
+gave the test account its fixture history once (it refuses to overwrite).
+Never point any of these at a real person's account.
