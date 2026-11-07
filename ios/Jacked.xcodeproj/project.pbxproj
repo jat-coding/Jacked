@@ -45,6 +45,10 @@
 		A0AC69881CBA7555B3D191B6 /* BadgeMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C822E8F580B0F96F0D70E79 /* BadgeMath.swift */; };
 		4C69B9B16858BDA69199C9AB /* BadgeTables.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BA21A4EDE6D6843C287BED /* BadgeTables.swift */; };
 		A860FB2C47B934CC0929192D /* AchievementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CDE94620CF16338890B81C2 /* AchievementsView.swift */; };
+		74BF7551060FA9FDD4F561B1 /* FriendsMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D7A222BB675DC9D2F1AE53 /* FriendsMath.swift */; };
+		77CB121082B182CCACA60523 /* FriendsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BBDFDE1BC965F4464FD1F6F /* FriendsStore.swift */; };
+		589D8FE873EFAD5F66A2C964 /* FriendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16A8FA0D8F3FE39DFC6618D /* FriendsView.swift */; };
+		F1550EF1BA2ECBFD64A9DEF6 /* FriendProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9541312805A08C30F3273763 /* FriendProfileView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -88,6 +92,10 @@
 		2C822E8F580B0F96F0D70E79 /* BadgeMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeMath.swift; sourceTree = "<group>"; };
 		B9BA21A4EDE6D6843C287BED /* BadgeTables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeTables.swift; sourceTree = "<group>"; };
 		1CDE94620CF16338890B81C2 /* AchievementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementsView.swift; sourceTree = "<group>"; };
+		B9D7A222BB675DC9D2F1AE53 /* FriendsMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsMath.swift; sourceTree = "<group>"; };
+		7BBDFDE1BC965F4464FD1F6F /* FriendsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsStore.swift; sourceTree = "<group>"; };
+		B16A8FA0D8F3FE39DFC6618D /* FriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsView.swift; sourceTree = "<group>"; };
+		9541312805A08C30F3273763 /* FriendProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendProfileView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -166,6 +174,8 @@
 		4BE43130E63E6223C39B0FA6 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				9541312805A08C30F3273763 /* FriendProfileView.swift */,
+				B16A8FA0D8F3FE39DFC6618D /* FriendsView.swift */,
 				1CDE94620CF16338890B81C2 /* AchievementsView.swift */,
 				917BD0FC690B83DAB01F18E6 /* MetricsView.swift */,
 				208A502B9172126234A57B5C /* LibraryView.swift */,
@@ -209,6 +219,8 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				7BBDFDE1BC965F4464FD1F6F /* FriendsStore.swift */,
+				B9D7A222BB675DC9D2F1AE53 /* FriendsMath.swift */,
 				B9BA21A4EDE6D6843C287BED /* BadgeTables.swift */,
 				2C822E8F580B0F96F0D70E79 /* BadgeMath.swift */,
 				951A26D480BCC5591A952E7F /* MetricsMath.swift */,
@@ -302,6 +314,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F1550EF1BA2ECBFD64A9DEF6 /* FriendProfileView.swift in Sources */,
+				589D8FE873EFAD5F66A2C964 /* FriendsView.swift in Sources */,
+				77CB121082B182CCACA60523 /* FriendsStore.swift in Sources */,
+				74BF7551060FA9FDD4F561B1 /* FriendsMath.swift in Sources */,
 				A860FB2C47B934CC0929192D /* AchievementsView.swift in Sources */,
 				4C69B9B16858BDA69199C9AB /* BadgeTables.swift in Sources */,
 				A0AC69881CBA7555B3D191B6 /* BadgeMath.swift in Sources */,
