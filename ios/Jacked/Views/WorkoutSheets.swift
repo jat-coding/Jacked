@@ -31,14 +31,29 @@ struct DaySheet: View {
                             Spacer()
                             Text(summary(w)).font(Theme.body(11)).foregroundStyle(Theme.muted)
                         }
-                        ForEach(w.exercises) { e in
-                            HStack {
-                                Text(e.name).font(Theme.body(13, .semibold)).foregroundStyle(Theme.text2)
-                                Spacer()
-                                let n = e.sets.filter(\.done).count
-                                let c = n > 0 ? n : e.sets.count
-                                Text("\(c) set\(c == 1 ? "" : "s")").font(Theme.body(11)).foregroundStyle(Theme.muted)
+                        let pr = w.shownPRs
+                        ForEach(Array(w.exercises.enumerated()), id: \.offset) { ei, e in
+                            // Gold star line on an exercise that set a PR; a suggested PR shows its set and the tag.
+                            let p = pr.list.first { $0.ei == ei }
+                            let g = p == nil ? pr.sug.first { $0.ei == ei } : nil
+                            HStack(spacing: 8) {
+                                Text((p != nil ? "\u{2605} " : "") + e.name).font(Theme.body(13, .semibold))
+                                    .foregroundStyle(p != nil ? Self.gold : Theme.text2)
+                                Spacer(minLength: 4)
+                                if let p {
+                                    Text(Workout.prSetText(p, settings: settings)).font(Theme.body(11, .bold)).foregroundStyle(Self.gold)
+                                } else if let g {
+                                    Text(Workout.prSetText(g, settings: settings)).font(Theme.body(11)).foregroundStyle(Theme.muted)
+                                    Text("SUGGESTED").font(Theme.body(9, .bold)).tracking(0.4).foregroundStyle(Color(hex: 0xD9B84A))
+                                        .padding(.horizontal, 6).padding(.vertical, 1)
+                                        .overlay(Capsule().stroke(Color(hex: 0xD9B84A).opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
+                                } else {
+                                    let n = e.sets.filter(\.done).count
+                                    let c = n > 0 ? n : e.sets.count
+                                    Text("\(c) set\(c == 1 ? "" : "s")").font(Theme.body(11)).foregroundStyle(Theme.muted)
+                                }
                             }
+                            .lineLimit(1)
                             .padding(.vertical, 6)
                             Divider().overlay(Theme.border)
                         }
@@ -53,6 +68,8 @@ struct DaySheet: View {
                 .buttonStyle(AccentButtonStyle()).padding(.top, 10)
         }
     }
+
+    private static let gold = Color(hex: 0xFFD700)
 
     private func summary(_ w: Workout) -> String {
         let load = w.totalVolume > 0 || w.distance <= 0
