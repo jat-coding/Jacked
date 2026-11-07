@@ -23,7 +23,7 @@ import Foundation
 ///   SIMCTL_CHILD_JACKED_DEV_ADDPROGRAM    <index>: "+ Add to Routines" on that Trusted Program
 ///   SIMCTL_CHILD_JACKED_DEV_WEIGHT        <kg>: log today's body weight from Metrics through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_HIDECARD      <card id>: hide / show that Metrics card through the real save path
-///   (OPEN also takes recap:<YYYY-MM> and card:<card id> on the Metrics tab)
+///   (OPEN also takes recap:<YYYY-MM>, card:<card id>, ach and badge:<badge name> on the Metrics tab)
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
