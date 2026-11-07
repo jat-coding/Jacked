@@ -32,8 +32,15 @@ enum PRReplay {
         return best
     }
 
-    static func compute(_ hist: [[String: JSONValue]], bw: Double) -> [String: Entry] {
+    static func compute(_ hist: [[String: JSONValue]], bw: Double) -> [String: Entry] { full(hist, bw: bw).map }
+
+    /// The record history ends on per exercise, with the id of the workout that set it (map.docEnd / map.sugEnd).
+    struct End: Equatable { let weight: Double; let reps: Double; let wid: JSONValue? }
+    struct Full { var map: [String: Entry]; var docEnd: [String: End]; var sugEnd: [String: End] }
+
+    static func full(_ hist: [[String: JSONValue]], bw: Double) -> Full {
         typealias Rec = (weight: Double, reps: Double)
+        var recW: [String: JSONValue?] = [:], sugW: [String: JSONValue?] = [:]
         func obj(_ r: Rec?) -> [String: JSONValue]? { r.map { ["weight": .number($0.weight), "reps": .number($0.reps)] } }
         func e1(_ r: Rec?) -> Double { r.map { WorkoutMath.e1rm($0.weight, $0.reps) } ?? 0 }
         var rec: [String: Rec] = [:], sugR: [String: Rec] = [:], leg: [String: Rec] = [:], bestC: [String: Double] = [:], bestH: [String: Double] = [:]
@@ -47,7 +54,7 @@ enum PRReplay {
             return Double(a.0 - b.0)
         }
         for (_, w, _) in order {
-            let id = w["id"]?.string ?? w["id"]?.double.map { String(Int($0)) } ?? ""
+            let id = key(w["id"])
             let imported = WorkoutMath.importedId.firstMatch(in: id, range: NSRange(id.startIndex..., in: id)) != nil
             let v2 = !imported && jsNum(w["prRule"]) == 2
             var e = Entry()
@@ -70,15 +77,15 @@ enum PRReplay {
                     if imported {
                         isPR = b.weight > prev.weight || (b.weight == prev.weight && b.reps > prev.reps)
                         if isPR {
-                            rec[exId] = (b.weight, b.reps)
+                            rec[exId] = (b.weight, b.reps); recW[exId] = w["id"]
                             // sugStands(sugR, rec)
                             if !(sugR[exId] != nil && e1(sugR[exId]) > b.weight + WorkoutMath.sugEps) { sugR[exId] = nil }
                         }
                         if b.weight > lp.weight || (b.weight == lp.weight && b.reps > lp.reps) { leg[exId] = (b.weight, b.reps) }
                     } else {
                         let st = WorkoutMath.prWeightStep(ex, prev: obj(prev), sug: obj(sugR[exId]), bw: bw)
-                        if let d = st.doc { rec[exId] = (d.weight, d.reps) }
-                        if let s = st.sug { sugR[exId] = (s.weight, s.reps) } else if !st.keepSug { sugR[exId] = nil }
+                        if let d = st.doc { rec[exId] = (d.weight, d.reps); recW[exId] = w["id"] }
+                        if let s = st.sug { sugR[exId] = (s.weight, s.reps); sugW[exId] = w["id"] } else if !st.keepSug { sugR[exId] = nil }
                         let legPR = WorkoutMath.e1rm(b.weight, b.reps) > e1(lp)
                         if legPR { leg[exId] = (b.weight, b.reps) }
                         if v2 {
@@ -93,8 +100,13 @@ enum PRReplay {
             }
             out[id] = e
         }
-        return out
+        return Full(map: out,
+                    docEnd: rec.reduce(into: [:]) { $0[$1.key] = End(weight: $1.value.weight, reps: $1.value.reps, wid: recW[$1.key] ?? nil) },
+                    sugEnd: sugR.reduce(into: [:]) { $0[$1.key] = End(weight: $1.value.weight, reps: $1.value.reps, wid: sugW[$1.key] ?? nil) })
     }
+
+    /// The key compute() files a workout under (String(w.id)).
+    static func key(_ id: JSONValue?) -> String { id?.string ?? id?.double.map { String(Int($0)) } ?? "" }
 
     /// Array.prototype.sort as V8 runs it (TimSort; below 64 items one run plus binary insertion sort,
     /// exactly) for a comparator that may be inconsistent. 64+ items: a plain stable sort.
