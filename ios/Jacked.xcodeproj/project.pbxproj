@@ -51,6 +51,7 @@
 		F1550EF1BA2ECBFD64A9DEF6 /* FriendProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9541312805A08C30F3273763 /* FriendProfileView.swift */; };
 		F3761F403F81764A1306D84A /* SuggestMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3C9A73CCF739F1B886FC77 /* SuggestMath.swift */; };
 		8191AEAFBD0711677C052662 /* SuggestCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B37106CEAD7C8ECA99D38E /* SuggestCard.swift */; };
+		905FF08113E94FE0BE60699A /* ExPhotoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 783EC9D8526ED4E6DBC03BE5 /* ExPhotoStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -100,6 +101,7 @@
 		9541312805A08C30F3273763 /* FriendProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendProfileView.swift; sourceTree = "<group>"; };
 		FC3C9A73CCF739F1B886FC77 /* SuggestMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestMath.swift; sourceTree = "<group>"; };
 		03B37106CEAD7C8ECA99D38E /* SuggestCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestCard.swift; sourceTree = "<group>"; };
+		783EC9D8526ED4E6DBC03BE5 /* ExPhotoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExPhotoStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -224,6 +226,7 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				783EC9D8526ED4E6DBC03BE5 /* ExPhotoStore.swift */,
 				FC3C9A73CCF739F1B886FC77 /* SuggestMath.swift */,
 				7BBDFDE1BC965F4464FD1F6F /* FriendsStore.swift */,
 				B9D7A222BB675DC9D2F1AE53 /* FriendsMath.swift */,
@@ -320,6 +323,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				905FF08113E94FE0BE60699A /* ExPhotoStore.swift in Sources */,
 				8191AEAFBD0711677C052662 /* SuggestCard.swift in Sources */,
 				F3761F403F81764A1306D84A /* SuggestMath.swift in Sources */,
 				F1550EF1BA2ECBFD64A9DEF6 /* FriendProfileView.swift in Sources */,
