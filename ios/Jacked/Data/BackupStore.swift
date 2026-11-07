@@ -18,6 +18,8 @@ final class BackupStore: ObservableObject {
     /// Opaque watermark from the server (only ever handed back as-is, see syncBackup()).
     @Published private(set) var updatedAt: String?
     @Published private(set) var lastSynced: Date?
+    /// True once the server copy has been read since launch (the disk copy alone may be days old).
+    @Published private(set) var freshThisLaunch = false
     @Published private(set) var state: SyncState = .idle
     @Published private(set) var loadedCode: String?
     /// True while this phone has edits the server hasn't accepted yet (kept on disk).
@@ -65,6 +67,7 @@ final class BackupStore: ObservableObject {
             updatedAt = row?.updated_at
             lastSynced = Date()
             loadedCode = s.code
+            freshThisLaunch = true
             saveToDisk(code: s.code)
             state = .idle
             if dirty { await push(auth: auth) }
@@ -76,7 +79,7 @@ final class BackupStore: ObservableObject {
     }
 
     func signedOut() {
-        backup = .empty; updatedAt = nil; lastSynced = nil; loadedCode = nil; state = .idle
+        backup = .empty; updatedAt = nil; lastSynced = nil; loadedCode = nil; state = .idle; freshThisLaunch = false
         dirty = false; pendingNotes = []
     }
 
