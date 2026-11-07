@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-07T01:15:00-07:00",
+  "updated": "2026-11-07T01:45:00-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -102,19 +102,25 @@
       "id": "rest-of-app",
       "title": "Library, stats and friends",
       "status": "active",
-      "summary": "In progress: Library and Routines are in and checked against the web app. Metrics and badges, then friends and the leaderboard, come next.",
+      "summary": "In progress: Library, Routines and now Metrics are in and checked against the web app. Badges, then friends and the leaderboard, come next.",
       "detail": [
         "Library done: search, the muscle chips, favourites first then what you've used, the PR on each row, and the exercise page with photos, your suggested PR, recent top weights and the how-to steps. Favourite, hide and create a custom exercise all save through the careful save layer.",
         "Routines done: your routines in their sections like the web app, new, edit and delete a routine (it files itself into a section the same way), and Trusted Programs with + Add to Routines.",
-        "Checked on the throwaway test account, side by side with the web app: the same list order, PRs and chart numbers; a favourite, a custom exercise, a new routine and an added program made on the iPhone all showed up in the web app.",
-        "Not on the iPhone yet: editing an exercise, resetting a PR, a photo for a custom exercise, Today's pick on Trusted Programs, renaming and reordering sections. The exercise list needs one online open to download, then works offline.",
-        "Still to do in this step: Metrics and badges (the stats math gets checked number for number against the web app), friends and the leaderboard (tested between two throwaway accounts), and the Home extras that need that math: Suggested today, monthly recap, Gym years, the gold PR lines on the calendar day view, and updating the leaderboard numbers after each saved workout."
+        "Metrics done: Overview, Body Weight (log today's weight, the trend line), the Muscle Map rankings with the how-it's-scored page, Workout Summary, Lifetime Stats with your top PR, and Monthly Recaps with the full recap page. Hide a card, reorder the cards and bring hidden ones back, like the web app.",
+        "Home now shows the monthly recap card on the 1st to the 7th of each month, until you close it.",
+        "The stats math is copied from the web app and checked on the Mac: 300 of 300 random accounts gave the same numbers on both sides, muscle rankings included.",
+        "Checked side by side on the throwaway test account: every number on every Metrics card matched the web app, and the muscle ranking order and levels were identical. A weight logged and a card hidden on the iPhone showed up in the web app.",
+        "Not on Metrics yet: the front and back body drawing above the rankings, the badges (count, list and the badge grid on a recap), the leaderboard crown on a recap, and sharing a recap as a picture.",
+        "Small web app quirk, not copied: the web app's weight chart shows each date one day early (Oct 26 for an Oct 27 entry). The iPhone shows the real date.",
+        "Not on the iPhone yet from earlier: editing an exercise, resetting a PR, a photo for a custom exercise, Today's pick on Trusted Programs, renaming and reordering sections.",
+        "Still to do in this step: badges (Achievements), friends and the leaderboard (tested between two throwaway accounts), and the Home extras: Suggested today, Gym years, the gold PR lines on the calendar day view, and updating the leaderboard numbers after each saved workout."
       ],
       "commits": [
         "9c3cee0",
         "90ea5b9",
         "1517b92",
-        "414ca8d"
+        "414ca8d",
+        "af59351"
       ]
     },
     {
