@@ -39,6 +39,7 @@
 		BA2C2C32B27C27203C5A37F9 /* RoutinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8135359F6DED927A98346B /* RoutinesView.swift */; };
 		75EC7D6C19333B7B6657EFE6 /* LibraryMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B802B75FC11BDA0C9416CD /* LibraryMath.swift */; };
 		DE0F418F3A62F6C353BA586D /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 208A502B9172126234A57B5C /* LibraryView.swift */; };
+		C30E6BA52205F2780D56219A /* Curated.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFF9B8EFEF1F114D1C369587 /* Curated.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -76,6 +77,7 @@
 		7E8135359F6DED927A98346B /* RoutinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutinesView.swift; sourceTree = "<group>"; };
 		84B802B75FC11BDA0C9416CD /* LibraryMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMath.swift; sourceTree = "<group>"; };
 		208A502B9172126234A57B5C /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		BFF9B8EFEF1F114D1C369587 /* Curated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Curated.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -195,6 +197,7 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				BFF9B8EFEF1F114D1C369587 /* Curated.swift */,
 				84B802B75FC11BDA0C9416CD /* LibraryMath.swift */,
 				BB515C9976E9D70D89DF7356 /* WorkoutSession.swift */,
 				1CEC90B399EDBC94D1D70658 /* ExerciseCatalog.swift */,
@@ -284,6 +287,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C30E6BA52205F2780D56219A /* Curated.swift in Sources */,
 				DE0F418F3A62F6C353BA586D /* LibraryView.swift in Sources */,
 				75EC7D6C19333B7B6657EFE6 /* LibraryMath.swift in Sources */,
 				BA2C2C32B27C27203C5A37F9 /* RoutinesView.swift in Sources */,
