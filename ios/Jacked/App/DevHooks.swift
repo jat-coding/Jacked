@@ -43,6 +43,7 @@ import Foundation
 ///                                         username and taps Delete (the server call is not live: nothing is deleted)
 ///   SIMCTL_CHILD_JACKED_DEV_TIERXP        with OPEN=badge:<name>: open these rows' logged-set lines (bronze,silver,gold,all)
 ///   SIMCTL_CHILD_JACKED_DEV_BADGESTART    1: with OPEN=badge:<name>, tap the badge page's start button (never finished, never saved)
+///   SIMCTL_CHILD_JACKED_DEV_SAVEROUTINE   <name>: with OPEN=workout:<i>, Save as Routine through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
@@ -91,12 +92,14 @@ enum DevHooks {
     static var resetPR: String? { env["JACKED_DEV_RESETPR"].flatMap { $0.isEmpty ? nil : $0 } }
     static var editEx: String? { env["JACKED_DEV_EDITEX"].flatMap { $0.isEmpty ? nil : $0 } }
     static var exPhoto: String? { env["JACKED_DEV_EXPHOTO"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var saveRoutine: String? { env["JACKED_DEV_SAVEROUTINE"].flatMap { $0.isEmpty ? nil : $0 } }
     static var badgeStart: Bool { env["JACKED_DEV_BADGESTART"] == "1" }
     static var tierXp: [String] { (env["JACKED_DEV_TIERXP"] ?? "").split(separator: ",").map(String.init) }
     static var profile: String? { env["JACKED_DEV_PROFILE"].flatMap { $0.isEmpty ? nil : $0 } }
     static var deleteAccount: String? { env["JACKED_DEV_DELETEACCT"].flatMap { $0.isEmpty ? nil : $0 } }
     static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
+    static var saveRoutine: String? { nil }
     static var badgeStart: Bool { false }
     static var tierXp: [String] { [] }
     static var profile: String? { nil }
