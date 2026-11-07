@@ -49,6 +49,8 @@
 		77CB121082B182CCACA60523 /* FriendsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BBDFDE1BC965F4464FD1F6F /* FriendsStore.swift */; };
 		589D8FE873EFAD5F66A2C964 /* FriendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16A8FA0D8F3FE39DFC6618D /* FriendsView.swift */; };
 		F1550EF1BA2ECBFD64A9DEF6 /* FriendProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9541312805A08C30F3273763 /* FriendProfileView.swift */; };
+		F3761F403F81764A1306D84A /* SuggestMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3C9A73CCF739F1B886FC77 /* SuggestMath.swift */; };
+		8191AEAFBD0711677C052662 /* SuggestCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B37106CEAD7C8ECA99D38E /* SuggestCard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -96,6 +98,8 @@
 		7BBDFDE1BC965F4464FD1F6F /* FriendsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsStore.swift; sourceTree = "<group>"; };
 		B16A8FA0D8F3FE39DFC6618D /* FriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsView.swift; sourceTree = "<group>"; };
 		9541312805A08C30F3273763 /* FriendProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendProfileView.swift; sourceTree = "<group>"; };
+		FC3C9A73CCF739F1B886FC77 /* SuggestMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestMath.swift; sourceTree = "<group>"; };
+		03B37106CEAD7C8ECA99D38E /* SuggestCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestCard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -174,6 +178,7 @@
 		4BE43130E63E6223C39B0FA6 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				03B37106CEAD7C8ECA99D38E /* SuggestCard.swift */,
 				9541312805A08C30F3273763 /* FriendProfileView.swift */,
 				B16A8FA0D8F3FE39DFC6618D /* FriendsView.swift */,
 				1CDE94620CF16338890B81C2 /* AchievementsView.swift */,
@@ -219,6 +224,7 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				FC3C9A73CCF739F1B886FC77 /* SuggestMath.swift */,
 				7BBDFDE1BC965F4464FD1F6F /* FriendsStore.swift */,
 				B9D7A222BB675DC9D2F1AE53 /* FriendsMath.swift */,
 				B9BA21A4EDE6D6843C287BED /* BadgeTables.swift */,
@@ -314,6 +320,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8191AEAFBD0711677C052662 /* SuggestCard.swift in Sources */,
+				F3761F403F81764A1306D84A /* SuggestMath.swift in Sources */,
 				F1550EF1BA2ECBFD64A9DEF6 /* FriendProfileView.swift in Sources */,
 				589D8FE873EFAD5F66A2C964 /* FriendsView.swift in Sources */,
 				77CB121082B182CCACA60523 /* FriendsStore.swift in Sources */,

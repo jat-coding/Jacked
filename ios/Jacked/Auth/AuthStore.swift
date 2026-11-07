@@ -25,7 +25,9 @@ final class AuthStore: ObservableObject {
     /// A network failure keeps the session (offline is not signed out, AUTH_HANDOFF.md 3d).
     func restore() async {
         if let dev = DevHooks.login {
-            if session?.code != Username.normalize(dev.user) {
+            // Reuse a saved session that is already the test account: a fresh sign-in on every scripted
+            // launch trips account_status's rate limit after a dozen runs.
+            if (session ?? KeychainStore.load())?.code != Username.normalize(dev.user) {
                 KeychainStore.clear()
                 await logIn(identifier: dev.user, password: dev.pass)
                 if session != nil { return }
