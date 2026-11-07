@@ -120,6 +120,14 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    /// After rename_profile: the same tokens and auth user, a new username (the key for every table).
+    func renamed(to code: String) {
+        guard var s = session, s.code != code else { return }
+        s.code = code
+        KeychainStore.save(s)
+        phase = .signedIn(s)
+    }
+
     func logOut() async {
         if let s = session { await api.signOut(s) }
         KeychainStore.clear()

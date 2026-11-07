@@ -47,7 +47,24 @@ struct SupabaseHTTP {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONEncoder().encode(body)
         }
+        return try await perform(req)
+    }
 
+    /// A non-JSON body (Storage uploads): the bytes as they are, with their own content type.
+    func upload(_ method: String, _ path: String, data body: Data, contentType: String,
+                bearer: String, headers: [String: String] = [:]) async throws -> Data {
+        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        req.httpMethod = method
+        req.timeoutInterval = 30
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+        req.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
+        req.httpBody = body
+        return try await perform(req)
+    }
+
+    private func perform(_ req: URLRequest) async throws -> Data {
         let data: Data
         let resp: URLResponse
         do {
