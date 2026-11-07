@@ -31,6 +31,8 @@
 		3AB706BF4E9E28EDD419B146 /* WorkoutSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A8A89E3E7F91072A1A66A7A /* WorkoutSheets.swift */; };
 		611D177D99866B77656B3BB0 /* DevHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D3087738D22635CB92ACC7 /* DevHooks.swift */; };
 		3FA9CF4FD473AF65DE97FAF6 /* BackupMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FE4AB70CD5D0E793A9BF58 /* BackupMerge.swift */; };
+		C8666762654E8B93CEF66E7F /* WorkoutLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 246AD48394BA035D5E8DA982 /* WorkoutLog.swift */; };
+		DA4073E34094486EE087A14A /* PWATables.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A95E972229275FD818990D0 /* PWATables.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +62,8 @@
 		8A8A89E3E7F91072A1A66A7A /* WorkoutSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutSheets.swift; sourceTree = "<group>"; };
 		D2D3087738D22635CB92ACC7 /* DevHooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevHooks.swift; sourceTree = "<group>"; };
 		37FE4AB70CD5D0E793A9BF58 /* BackupMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupMerge.swift; sourceTree = "<group>"; };
+		246AD48394BA035D5E8DA982 /* WorkoutLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLog.swift; sourceTree = "<group>"; };
+		0A95E972229275FD818990D0 /* PWATables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PWATables.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -176,6 +180,8 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				0A95E972229275FD818990D0 /* PWATables.swift */,
+				246AD48394BA035D5E8DA982 /* WorkoutLog.swift */,
 				37FE4AB70CD5D0E793A9BF58 /* BackupMerge.swift */,
 				87D0BC24FED64F4F404EEA57 /* BackupStore.swift */,
 				375CFA8F58F4EB017AF56316 /* HomeMath.swift */,
@@ -260,6 +266,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA4073E34094486EE087A14A /* PWATables.swift in Sources */,
+				C8666762654E8B93CEF66E7F /* WorkoutLog.swift in Sources */,
 				3FA9CF4FD473AF65DE97FAF6 /* BackupMerge.swift in Sources */,
 				611D177D99866B77656B3BB0 /* DevHooks.swift in Sources */,
 				3AB706BF4E9E28EDD419B146 /* WorkoutSheets.swift in Sources */,
