@@ -550,3 +550,44 @@ extension MetricsMath {
         return f.string(from: Date(timeIntervalSince1970: ms / 1000))
     }
 }
+
+// MARK: "Take me to the workout for this badge" (badgePlan / stdExIdForBadge)
+
+extension MetricsMath {
+    struct BadgePlan { let label: String; let title: String; let ids: [String]; var page: String? = nil }
+
+    /// The badge's own standard exercise: whichever qualifying id you logged most recently, else the first.
+    func stdExIdForBadge(_ key: String) -> String {
+        let ids = BadgeTables.BADGE_STD[key] ?? []
+        var best: String?, bestTs = -Double.infinity
+        for w in hist { let t = w.ms ?? -.infinity
+            for ex in w.exercises { if let id = badgeStdId(ex), ids.contains(id), t > bestTs { bestTs = t; best = id } } }
+        return best ?? ids.first ?? ""
+    }
+
+    func badgePlan(_ b: Badge, db: [CatalogExercise]) -> BadgePlan? {
+        let ex: (String, String, [String]) -> BadgePlan = { BadgePlan(label: $0, title: $1, ids: $2.filter { !$0.isEmpty }) }
+        switch b.name {
+        case "Bench-Maxing": return ex("Start a bench workout", "Bench day", [stdExIdForBadge("bench")])
+        case "Shoulder-Maxing": return ex("Start an overhead press workout", "Shoulder day", [stdExIdForBadge("ohp")])
+        case "Leg-Maxing": return ex("Start a squat workout", "Leg day", [stdExIdForBadge("squat")])
+        case "Pull-up-Maxing": return ex("Start a pull-up workout", "Pull-ups", [stdExIdForBadge("pullup")])
+        case "Push-up-Maxing": return ex("Start a push-up workout", "Push-ups", [stdExIdForBadge("pushup")])
+        case "Cardio-Maxing": return ex("Start a run", "Run", [stdExIdForBadge("cardio")])
+        case "1000lb Club": return ex("Start a big-3 workout", "Big 3", [stdExIdForBadge("bench"), stdExIdForBadge("squat"), stdExIdForBadge("deadlift")])
+        case "Variety-Maxing": return BadgePlan(label: "Browse the library", title: "", ids: [], page: "library")
+        case "Challenge-Maxing":
+            let g = b.group ?? ""
+            var order: [String] = [], use: [String: Int] = [:]
+            for w in hist { for e in w.exercises where logGroup(e) == g && !e.exId.isEmpty {
+                if use[e.exId] == nil { order.append(e.exId) }; use[e.exId, default: 0] += 1 } }
+            var ids = Array(order.enumerated().sorted { use[$0.element]! != use[$1.element]! ? use[$0.element]! > use[$1.element]! : $0.offset < $1.offset }.map(\.element).prefix(3))
+            if ids.isEmpty {
+                ids = db.filter { LibraryMath.muscleGroup($0.muscle) == g && $0.equip.range(of: "barbell|dumbbell", options: [.regularExpression, .caseInsensitive]) != nil }.prefix(3).map(\.id)
+            }
+            let n = Self.MGNAME[g]
+            return ex("Train \(n ?? "it") now", "\(n ?? "Challenge") day", ids)
+        default: return nil
+        }
+    }
+}
