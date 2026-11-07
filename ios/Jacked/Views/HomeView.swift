@@ -11,6 +11,7 @@ struct HomeView: View {
     @State private var workout: Workout?
     @State private var showAccount = false
     @State private var showStartNote = false
+    @State private var showGymYears = false
 
     struct DayKey: Identifiable { let id: String }
 
@@ -29,7 +30,7 @@ struct HomeView: View {
                 syncLine
                 HomeRecapCard()
                 StreakBanner(history: h).padding(.bottom, 20)
-                CalendarCard(history: h, month: $month) { dayKey = DayKey(id: $0) }
+                CalendarCard(history: h, month: $month, onTitle: { showGymYears = true }) { dayKey = DayKey(id: $0) }
                     .padding(.bottom, 20)
                 Button { if session.active != nil { session.presented = true } else { showStartNote = true } } label: {
                     Label("Start Workout", systemImage: "play.fill").font(Theme.body(16, .semibold))
@@ -68,6 +69,7 @@ struct HomeView: View {
             }
             guard let o = DevHooks.open else { return }
             if o == "profile" { showAccount = true }
+            else if o == "gymyears" { showGymYears = true }
             else if o.hasPrefix("day:") {
                 let d = String(o.dropFirst(4)); dayKey = DayKey(id: d == "today" ? JackedDate.dayKey(Date()) : d)
             } else if o.hasPrefix("workout:"), let i = Int(o.dropFirst(8)) {
@@ -85,6 +87,7 @@ struct HomeView: View {
         }
         .sheet(item: $workout) { WorkoutDetailSheet(workout: $0, settings: settings) }
         .sheet(isPresented: $showAccount) { AccountSheet() }
+        .fullScreenCover(isPresented: $showGymYears) { GymYearsView(who: "You", days: Set(h.map(\.dayKey).filter { !$0.isEmpty })) }
         .sheet(isPresented: $showStartNote) { StartWorkoutSheet().presentationDetents([.medium, .large]) }
     }
 
@@ -135,6 +138,7 @@ struct StreakBanner: View {
 struct CalendarCard: View {
     let history: [Workout]
     @Binding var month: DateComponents
+    var onTitle: () -> Void = {}
     var onDay: (String) -> Void
 
     private let cal = Calendar.current
@@ -152,7 +156,11 @@ struct CalendarCard: View {
             HStack {
                 navButton("chevron.left") { shift(-1) }
                 Spacer()
-                Text("\(Self.months[m - 1]) \(String(y))").font(Theme.heading(19, .bold)).foregroundStyle(Theme.text)
+                // #calLabel: tapping the month name opens Gym years, like the web app.
+                Button(action: onTitle) {
+                    Text("\(Self.months[m - 1]) \(String(y))").font(Theme.heading(19, .bold)).foregroundStyle(Theme.text)
+                }
+                .buttonStyle(.plain).accessibilityHint("Opens Gym years")
                 Spacer()
                 navButton("chevron.right") { shift(1) }
             }
@@ -309,5 +317,81 @@ struct AvatarBadge: View {
         let parts = (name ?? "").split(separator: " ").prefix(2)
         let s = parts.compactMap(\.first).map { String($0).uppercased() }.joined()
         return s.isEmpty ? "?" : s
+    }
+}
+
+/// #gymYears (openGymYears / gymYearsHtml): every day since the first workout, one square per day, lit when
+/// trained. One flat 18-column grid per year that has any training, newest first, no month breakout.
+/// Binary on purpose, no volume shading. Yours from the history, a friend's from their synced days.
+struct GymYearsView: View {
+    let who: String
+    let days: Set<String>
+    @Environment(\.dismiss) private var dismiss
+
+    private static let months = ["January", "February", "March", "April", "May", "June", "July",
+                                 "August", "September", "October", "November", "December"]
+
+    var body: some View {
+        let today = JackedDate.dayKey(Date())
+        let years = Array(Set(days.compactMap { Int($0.prefix(4)) })).sorted(by: >)
+        let first = days.sorted().first
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(spacing: 0) {
+                Text(who.uppercased()).font(Theme.body(11, .heavy)).tracking(2.5).foregroundStyle(Theme.accent).padding(.bottom, 2)
+                Text("Gym years").font(Theme.heading(30, .extraBold)).foregroundStyle(Theme.text).padding(.bottom, 4)
+                if let f = first, let mo = Int(f.dropFirst(5).prefix(2)) {
+                    Text("\(days.count) day\(days.count == 1 ? "" : "s") trained since \(Self.months[mo - 1]) \(String(f.prefix(4)))")
+                        .font(Theme.body(15, .semibold)).foregroundStyle(Theme.text2).padding(.bottom, 16)
+                }
+                }
+                .frame(maxWidth: .infinity).multilineTextAlignment(.center)
+                if years.isEmpty {
+                    Text("No training days yet.").font(Theme.body(15, .semibold)).foregroundStyle(Theme.text2)
+                        .frame(maxWidth: .infinity).padding(.top, 30)
+                }
+                ForEach(years, id: \.self) { y in
+                    let n = days.filter { $0.hasPrefix("\(y)-") }.count
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(String(y)).font(Theme.heading(22, .extraBold)).foregroundStyle(Theme.text)
+                            Spacer()
+                            Text("\(n) day\(n == 1 ? "" : "s")".uppercased()).font(Theme.body(11, .heavy)).tracking(0.8).foregroundStyle(Theme.muted)
+                        }
+                        .padding(.top, 12)
+                        .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 18), spacing: 2) {
+                            ForEach(Self.dayKeys(y), id: \.self) { ds in
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(days.contains(ds) ? Theme.accent : ds > today ? Color.clear : Theme.bg3)
+                                    .aspectRatio(1, contentMode: .fit)
+                            }
+                        }
+                    }
+                    .padding(.bottom, 18)
+                }
+            }
+            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 30)
+        }
+        .scrollIndicators(.hidden)
+        .background(Theme.bg.ignoresSafeArea())
+        .overlay(alignment: .topTrailing) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text2)
+                    .frame(width: 34, height: 34).background(Theme.bg3, in: Circle())
+            }
+            .buttonStyle(.plain).accessibilityLabel("Close").padding(.trailing, 16).padding(.top, 8)
+        }
+    }
+
+    /// Jan 1 .. Dec 31 of year y as YYYY-MM-DD keys (366 in a leap year).
+    static func dayKeys(_ y: Int) -> [String] {
+        var g = Calendar(identifier: .gregorian); g.timeZone = TimeZone(identifier: "UTC")!
+        let start = g.date(from: DateComponents(year: y, month: 1, day: 1))!
+        let n = g.range(of: .day, in: .year, for: start)!.count
+        return (0..<n).map { i in
+            let c = g.dateComponents([.year, .month, .day], from: g.date(byAdding: .day, value: i, to: start)!)
+            return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
+        }
     }
 }
