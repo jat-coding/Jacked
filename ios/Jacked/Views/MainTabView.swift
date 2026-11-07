@@ -38,6 +38,11 @@ struct MainTabView: View {
                 .environmentObject(auth).environmentObject(store).environmentObject(session).environmentObject(catalog)
                 .preferredColorScheme(.dark)
         }
+        .confirmationDialog(busyPrompt, isPresented: Binding(get: { session.busyStart != nil }, set: { if !$0 { session.busyStart = nil } }),
+                            titleVisibility: .visible) {
+            Button("Discard & start", role: .destructive) { let f = session.busyStart; session.busyStart = nil; f?() }
+            Button("Keep it", role: .cancel) { session.busyStart = nil }
+        }
         .sheet(item: $session.summary) { s in
             FinishSummarySheet(s: s)
                 .environmentObject(auth).environmentObject(store).environmentObject(session)
@@ -75,7 +80,7 @@ extension MainTabView {
             if let rid = DevHooks.routine,
                let r = (raw["jk_routines"]?.array ?? []).compactMap(\.object).first(where: { $0["name"]?.string == rid }) {
                 session.start(routine: r, catalog: catalog, raw: raw)
-            } else { session.startEmpty() }
+            } else if let day = DevHooks.logDay { session.startEmpty(on: day) } else { session.startEmpty() }
             for (i, part) in script.split(separator: ";").enumerated() {
                 let kv = part.split(separator: "=", maxSplits: 1)
                 guard kv.count == 2 else { continue }
@@ -101,6 +106,13 @@ extension MainTabView {
         } else if session.active != nil && DevHooks.logScript != nil {
             session.presented = true
         }
+    }
+}
+
+extension MainTabView {
+    var busyPrompt: String {
+        let n = session.busySets
+        return "You have a workout in progress\(n > 0 ? " (\(n) set\(n > 1 ? "s" : "") logged)" : ""). Discard it and start a new one?"
     }
 }
 

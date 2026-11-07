@@ -66,10 +66,13 @@ struct HomeView: View {
             }
         }
         .sheet(item: $dayKey) { d in
-            DaySheet(dayKey: d.id, workouts: h.filter { $0.dayKey == d.id }, settings: settings) { w in
+            DaySheet(dayKey: d.id, workouts: h.filter { $0.dayKey == d.id }, settings: settings, onOpen: { w in
                 dayKey = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { workout = w }
-            }
+            }, onLog: {
+                dayKey = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { session.startEmpty(on: d.id) }
+            })
         }
         .sheet(item: $workout) { WorkoutDetailSheet(workout: $0, settings: settings) }
         .sheet(isPresented: $showAccount) { AccountSheet() }
