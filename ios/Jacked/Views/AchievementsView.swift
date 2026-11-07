@@ -61,6 +61,7 @@ struct AchievementsSheet: View {
     let result: MetricsMath.BadgeResult
     let m: MetricsMath
     @State var openBadge: Badge?
+    var onStart: ((MetricsMath.BadgePlan) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -105,7 +106,7 @@ struct AchievementsSheet: View {
             .padding(20)
         }
         .background(Theme.bg2.ignoresSafeArea())
-        .sheet(item: $openBadge) { BadgeDetailSheet(b: $0, m: m, T: result.ladders) }
+        .sheet(item: $openBadge) { BadgeDetailSheet(b: $0, m: m, T: result.ladders, onStart: onStart) }
     }
 
     private func row(_ b: Badge) -> some View {
@@ -147,7 +148,12 @@ struct BadgeDetailSheet: View {
     let b: Badge
     let m: MetricsMath
     let T: MetricsMath.BadgeLadders
+    /// badgeStart: close the badge pages, then start (or add to) the workout / open the library.
+    var onStart: ((MetricsMath.BadgePlan) -> Void)? = nil
     @State private var open: Set<String> = []
+    @EnvironmentObject private var session: WorkoutSession
+    @EnvironmentObject private var catalog: ExerciseCatalog
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         let how = m.badgeHow(b.name, T)
@@ -244,7 +250,22 @@ struct BadgeDetailSheet: View {
         }
         .background(Theme.bg2.ignoresSafeArea())
         .presentationDragIndicator(.visible)
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 8) {
+                if let plan = m.badgePlan(b, db: catalog.db), let onStart {
+                    let label = session.active != nil && plan.page == nil ? (plan.ids.isEmpty ? "Back to my workout" : "Add to my current workout") : plan.label
+                    Button(label) { onStart(plan) }.buttonStyle(AccentButtonStyle())
+                }
+                Button("Close") { dismiss() }.buttonStyle(GhostButtonStyle())
+            }
+            .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 6).background(Theme.bg2)
+        }
         .onAppear { open.formUnion(DevHooks.tierXp) }
+        .task {
+            #if DEBUG
+            if DevHooks.badgeStart, let plan = m.badgePlan(b, db: catalog.db) { try? await Task.sleep(nanoseconds: 1_200_000_000); onStart?(plan) }
+            #endif
+        }
     }
 
     private func toggle(_ k: String) { withAnimation(.easeOut(duration: 0.15)) { if open.contains(k) { open.remove(k) } else { open.insert(k) } } }

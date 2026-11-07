@@ -35,6 +35,9 @@ struct MainTabView: View {
                 .padding(.bottom, 56)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .jackedOpenTab)) { n in
+            if let t = (n.object as? String).flatMap(Tab.init(rawValue:)) { tab = t }
+        }
         .fullScreenCover(isPresented: $session.presented) {
             ActiveWorkoutView()
                 .environmentObject(auth).environmentObject(store).environmentObject(session).environmentObject(catalog)
