@@ -7,6 +7,7 @@ struct MetricsView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
     @EnvironmentObject private var catalog: ExerciseCatalog
+    @EnvironmentObject private var friends: FriendsStore
     @State private var showOrder = false
     @State private var recap: MetricsMath.Recap?
     @State private var showScoring = false
@@ -136,6 +137,10 @@ struct MetricsView: View {
             }
         case "recaps":
             let rows = m.recaps()
+            // recapData's crown (cardRecaps): last month's row only, when you topped last month's weight on your board.
+            let now = Calendar.current.dateComponents([.year, .month], from: Date())
+            let you = m.yourStats(code: auth.session?.code ?? "", badges: m.computeBadges().list)
+            let crowned = m.crownCodes([you] + friends.friends.filter { !$0.pending }).contains(you.code)
             if rows.isEmpty {
                 Text("Your first recap shows up after your first full month of workouts.").font(Theme.body(13)).foregroundStyle(Theme.muted)
             }
@@ -144,7 +149,12 @@ struct MetricsView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "calendar.badge.checkmark").font(.system(size: 20)).foregroundStyle(Theme.accent)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("\(r.label) \(String(r.y))").font(Theme.body(14, .bold)).foregroundStyle(Theme.text)
+                            HStack(spacing: 5) {
+                                Text("\(r.label) \(String(r.y))").font(Theme.body(14, .bold)).foregroundStyle(Theme.text)
+                                if crowned && r.y * 12 + (r.m + 1) == now.year! * 12 + now.month! - 1 {
+                                    Image(systemName: "crown.fill").font(.system(size: 12)).foregroundStyle(Color(hex: 0xFFD700))
+                                }
+                            }
                             Text(Self.recapLine(r, s)).font(Theme.body(12)).foregroundStyle(Theme.muted)
                         }
                         Spacer()
@@ -276,8 +286,8 @@ private struct WeightCard: View {
     }
 }
 
-/// cardBody(): tier key + every group ranked by musclePerf(). The front/back body figure is not drawn yet.
-private struct MuscleMapCard: View {
+/// cardBody(): the front/back body figure, tier key + every group ranked by musclePerf().
+struct MuscleMapCard: View {
     let m: MetricsMath
     let info: () -> Void
     static let TIER_COL: [String: Color] = ["Untrained": Color(hex: 0x6B6B7A), "Needs Work": Color(hex: 0xFF5D6C), "Building": Color(hex: 0x3DDC97),
@@ -290,12 +300,13 @@ private struct MuscleMapCard: View {
                 Text("Log or import workouts to map your training.").font(Theme.body(13)).foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity).padding(.vertical, 20)
             } else {
+                BodyFigure(score: Dictionary(r.rows.map { ($0.group, $0.score) }, uniquingKeysWith: { a, _ in a }), female: m.sex == "female")
                 HStack(spacing: 10) {
                     ForEach(["Needs Work", "Building", "Strong", "Elite"], id: \.self) { n in
                         HStack(spacing: 4) { Circle().fill(Self.TIER_COL[n]!).frame(width: 8, height: 8); Text(n) }
                     }
                 }
-                .font(Theme.body(10)).foregroundStyle(Theme.muted)
+                .font(Theme.body(10)).foregroundStyle(Theme.muted).padding(.top, 8)
             }
             HStack(spacing: 10) {
                 Text(r.mode == "strength" ? "Estimated strength vs. your body weight, per muscle group"
