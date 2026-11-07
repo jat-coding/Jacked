@@ -29,6 +29,7 @@ import Foundation
 ///   SIMCTL_CHILD_JACKED_DEV_ACCEPT        <code>: accept that person's friend request (real call)
 ///   SIMCTL_CHILD_JACKED_DEV_RMFRIEND      <code>: remove / decline / cancel with that person (real call)
 ///   SIMCTL_CHILD_JACKED_DEV_ADDFRIEND     <username>: open Add Friend prefilled; with ADDFRIEND_SEND=1 also tap Add Friend
+///   SIMCTL_CHILD_JACKED_DEV_COPY          1: with OPEN=friend:<code>/<i>, tap Copy to my workout
 ///   (OPEN also takes friend:<code|me>, friend:<code>/<workout index> and friend:<code>/badges on the Friends tab)
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
@@ -72,6 +73,7 @@ enum DevHooks {
     static var removeFriend: String? { env["JACKED_DEV_RMFRIEND"].flatMap { $0.isEmpty ? nil : $0 } }
     static var addFriend: String? { env["JACKED_DEV_ADDFRIEND"].flatMap { $0.isEmpty ? nil : $0 } }
     static var addFriendSend: Bool { env["JACKED_DEV_ADDFRIEND_SEND"] == "1" }
+    static var copyFriend: Bool { env["JACKED_DEV_COPY"] == "1" }
     static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
     static var cmp: String? { nil }
@@ -80,6 +82,7 @@ enum DevHooks {
     static var removeFriend: String? { nil }
     static var addFriend: String? { nil }
     static var addFriendSend: Bool { false }
+    static var copyFriend: Bool { false }
     static var casDelay: Double { 0 }
     static func log(_ s: String) {}
     static var login: (user: String, pass: String)? { nil }
