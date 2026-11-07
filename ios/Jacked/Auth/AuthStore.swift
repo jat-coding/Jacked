@@ -24,6 +24,13 @@ final class AuthStore: ObservableObject {
     /// App launch: reuse the Keychain session, refreshing it if it is about to expire.
     /// A network failure keeps the session (offline is not signed out, AUTH_HANDOFF.md 3d).
     func restore() async {
+        if let dev = DevHooks.login {
+            if session?.code != Username.normalize(dev.user) {
+                KeychainStore.clear()
+                await logIn(identifier: dev.user, password: dev.pass)
+                if session != nil { return }
+            }
+        }
         guard let saved = KeychainStore.load() else { phase = .signedOut; return }
         guard saved.needsRefresh else { phase = .signedIn(saved); return }
         do {
