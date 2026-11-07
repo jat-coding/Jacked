@@ -40,6 +40,8 @@
 		75EC7D6C19333B7B6657EFE6 /* LibraryMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B802B75FC11BDA0C9416CD /* LibraryMath.swift */; };
 		DE0F418F3A62F6C353BA586D /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 208A502B9172126234A57B5C /* LibraryView.swift */; };
 		C30E6BA52205F2780D56219A /* Curated.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFF9B8EFEF1F114D1C369587 /* Curated.swift */; };
+		1C261B3E46FDE08F4786AFCD /* MetricsMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951A26D480BCC5591A952E7F /* MetricsMath.swift */; };
+		293D228F5B9E5C34488C1464 /* MetricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917BD0FC690B83DAB01F18E6 /* MetricsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,6 +80,8 @@
 		84B802B75FC11BDA0C9416CD /* LibraryMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMath.swift; sourceTree = "<group>"; };
 		208A502B9172126234A57B5C /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		BFF9B8EFEF1F114D1C369587 /* Curated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Curated.swift; sourceTree = "<group>"; };
+		951A26D480BCC5591A952E7F /* MetricsMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsMath.swift; sourceTree = "<group>"; };
+		917BD0FC690B83DAB01F18E6 /* MetricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -156,6 +160,7 @@
 		4BE43130E63E6223C39B0FA6 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				917BD0FC690B83DAB01F18E6 /* MetricsView.swift */,
 				208A502B9172126234A57B5C /* LibraryView.swift */,
 				7E8135359F6DED927A98346B /* RoutinesView.swift */,
 				777EEAA7560F5B8ED9A1DE60 /* ActiveWorkoutView.swift */,
@@ -197,6 +202,7 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				951A26D480BCC5591A952E7F /* MetricsMath.swift */,
 				BFF9B8EFEF1F114D1C369587 /* Curated.swift */,
 				84B802B75FC11BDA0C9416CD /* LibraryMath.swift */,
 				BB515C9976E9D70D89DF7356 /* WorkoutSession.swift */,
@@ -287,6 +293,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				293D228F5B9E5C34488C1464 /* MetricsView.swift in Sources */,
+				1C261B3E46FDE08F4786AFCD /* MetricsMath.swift in Sources */,
 				C30E6BA52205F2780D56219A /* Curated.swift in Sources */,
 				DE0F418F3A62F6C353BA586D /* LibraryView.swift in Sources */,
 				75EC7D6C19333B7B6657EFE6 /* LibraryMath.swift in Sources */,

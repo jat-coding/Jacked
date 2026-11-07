@@ -18,7 +18,7 @@ struct MainTabView: View {
                 .tabItem { Label("Library", systemImage: "books.vertical") }.tag(Tab.library)
             HomeView()
                 .tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)
-            PlaceholderTab(title: "Metrics", note: "Muscle map, stats and badges are a later build step.")
+            MetricsView()
                 .tabItem { Label("Metrics", systemImage: "waveform.path.ecg") }.tag(Tab.metrics)
             PlaceholderTab(title: "Friends", note: "Friends and the leaderboard are a later build step.")
                 .tabItem { Label("Friends", systemImage: "person.2") }.tag(Tab.friends)
