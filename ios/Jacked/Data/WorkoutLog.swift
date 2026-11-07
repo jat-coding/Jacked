@@ -68,6 +68,8 @@ struct CatalogExercise: Codable, Equatable, Identifiable {
     var mechanic = ""
     var secondary: [String] = []
     var dbEquip = ""
+    /// exercise-db's raw name ("Barbell Bench Press - Medium Grip"): the import matcher searches it too.
+    var dbName = ""
 }
 
 // MARK: - JSON (blob) shape
