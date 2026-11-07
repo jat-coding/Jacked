@@ -114,19 +114,46 @@ final class BackupStore: ObservableObject {
     }
 
     /// saveWE() for a name-only edit: trimmed, blank keeps the old name. Every other field of
-    /// the stored workout is left exactly as it was.
+    /// the stored workout is left exactly as it was, except lrev, bumped so the merge keeps it.
     @discardableResult
     func renameWorkout(id: JSONValue, to name: String, auth: AuthStore) async -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return true }
         return await edit(auth: auth) { raw in
-            guard var hist = raw["jk_hist"]?.array else { return }
+            guard let before = raw["jk_hist"]?.array else { return }
+            var hist = before
             for i in hist.indices {
                 guard var o = hist[i].object, o["id"] == id else { continue }
                 o["name"] = .string(trimmed)
                 hist[i] = .object(o)
             }
+            HistRepair.stampLrev(before: before, after: &hist)
             raw["jk_hist"] = .array(hist)
+        }
+    }
+
+    /// saveWE(): the edited copy of a past workout, its exercises' PRs rebuilt from history, and
+    /// every workout the edit changed stamped lrev + 1 so neither side's older copy wins the merge.
+    @discardableResult
+    func editWorkout(id: JSONValue, draft: [String: JSONValue], name: String, dayKey: String?, auth: AuthStore) async -> Bool {
+        await edit(auth: auth) { raw in
+            let before = raw["jk_hist"]?.array ?? []
+            HistRepair.saveEdit(&raw, id: id, draft: draft, name: name, dayKey: dayKey, at: HistRepair.isoString(Date()))
+            var after = raw["jk_hist"]?.array ?? []
+            HistRepair.stampLrev(before: before, after: &after)
+            raw["jk_hist"] = .array(after)
+        }
+    }
+
+    /// delW(): remove a past workout (tombstoned in jk_deleted), rebuilding the records it held.
+    @discardableResult
+    func deleteWorkout(id: JSONValue, auth: AuthStore) async -> Bool {
+        await edit(auth: auth) { raw in
+            let before = raw["jk_hist"]?.array ?? []
+            HistRepair.delete(&raw, id: id, at: HistRepair.isoString(Date()))
+            var after = raw["jk_hist"]?.array ?? []
+            HistRepair.stampLrev(before: before, after: &after)
+            raw["jk_hist"] = .array(after)
         }
     }
 
