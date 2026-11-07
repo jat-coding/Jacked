@@ -237,6 +237,9 @@ struct EditWorkoutSheet: View {
     @State private var day = Date()
     @State private var removing: Int?
     @State private var saving = false
+    @State private var adding = false
+    @State private var already = false
+    @EnvironmentObject private var catalog: ExerciseCatalog
 
     init(id: JSONValue, original: [String: JSONValue], settings: Settings, onSaved: @escaping (Bool) -> Void) {
         self.id = id; self.original = original; self.settings = settings; self.onSaved = onSaved
@@ -264,9 +267,12 @@ struct EditWorkoutSheet: View {
             ForEach(Array(exercises.enumerated()), id: \.offset) { ei, exv in
                 exerciseCard(ei, LogExercise(json: exv.object ?? [:]))
             }
+            Button("+ Add Exercise") { adding = true }.buttonStyle(GhostButtonStyle())
+            if already { Text("Already in workout").font(Theme.body(12, .semibold)).foregroundStyle(Theme.red) }
             Button(saving ? "Saving\u{2026}" : "Save Changes") { Task { await save() } }
                 .buttonStyle(AccentButtonStyle()).disabled(saving).padding(.top, 6)
         }
+        .sheet(isPresented: $adding) { ExercisePickerSheet { addExercise($0) } }
         .confirmationDialog("Remove this exercise from the workout?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
             Button("Remove", role: .destructive) { if let ei = removing { mutateExercises { $0.remove(at: ei) } }; removing = nil }
             Button("Cancel", role: .cancel) { removing = nil }
@@ -344,6 +350,19 @@ struct EditWorkoutSheet: View {
             var sets = o["sets"]?.array ?? []; f(&sets); o["sets"] = .array(sets); exs[ei] = .object(o)
         }
     }
+    /// weAddEx(): an exercise forgotten at the time. Its first set starts checked (this is history,
+    /// not something still being logged), and the same exercise twice is refused.
+    private func addExercise(_ exId: String) {
+        if exercises.contains(where: { $0.object?["exId"]?.string == exId }) { already = true; return }
+        already = false
+        let c = catalog.byId(exId, raw: store.backup.raw)
+        mutateExercises { $0.append(.object([
+            "exId": .string(exId), "name": .string(c.name), "muscle": .string(c.muscle), "equip": .string(c.equip),
+            "assist": .bool(c.assist), "tracking": .string(c.tracking.isEmpty ? "weight_reps" : c.tracking),
+            "imgUrl": c.image.map { .string(ExerciseImages.base + $0) } ?? .null,
+            "sets": .array([.object(["weight": .number(0), "reps": .number(0), "done": .bool(true)])])
+        ])) }
+    }
     private func setField(_ ei: Int, _ si: Int, _ k: String, _ v: Double) {
         mutateSets(ei) { sets in
             guard sets.indices.contains(si), var s = sets[si].object else { return }
@@ -373,6 +392,7 @@ struct EditWorkoutSheet: View {
         for part in script.split(separator: ";").map(String.init) {
             if part.hasPrefix("name=") { name = String(part.dropFirst(5)); continue }
             if part.hasPrefix("day="), let d = JackedDate.parse(String(part.dropFirst(4))) { day = d; continue }
+            if part.hasPrefix("add=") { addExercise(String(part.dropFirst(4))); continue }
             let n = part.split(separator: ",").compactMap { Double($0) }
             guard n.count >= 3 else { continue }
             setField(Int(n[0]), Int(n[1]), "weight", n[2])

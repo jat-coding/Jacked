@@ -18,7 +18,12 @@ struct Backup: Equatable {
     var settings: Settings { Settings(raw["jk_settings"]?.object ?? [:]) }
 
     var profileName: String? { raw["jk_prof"]?["name"]?.string }
-    var avatarURL: URL? { (raw["jk_prof"]?["avatarUrl"]?.string).flatMap(URL.init(string:)) }
+    /// cleanAvatar(): only the version stamp is read; the URL is rebuilt from the bucket and the code.
+    var avatarURL: URL? {
+        let p = raw["jk_prof"]?.object ?? [:]
+        let u = FriendsMath.cleanAvatar(p["avatarUrl"]?.string, p["code"]?.string ?? p["username"]?.string ?? "")
+        return u.isEmpty ? nil : URL(string: u)
+    }
 }
 
 /// `jk_settings`, with the PWA's gSet() defaults.
