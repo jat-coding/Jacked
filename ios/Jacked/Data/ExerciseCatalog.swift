@@ -21,7 +21,9 @@ final class ExerciseCatalog: ObservableObject {
         if !parsed.isEmpty { db = parsed; try? d.write(to: Self.cacheURL, options: .atomic) }
     }
 
-    func all(custom raw: [String: JSONValue]) -> [CatalogExercise] {
+    func all(custom raw: [String: JSONValue]) -> [CatalogExercise] { Self.all(db: db, custom: raw) }
+
+    nonisolated static func all(db: [CatalogExercise], custom raw: [String: JSONValue]) -> [CatalogExercise] {
         let renames = raw["jk_exRename"]?.object ?? [:]
         let ovs = raw["jk_exOverride"]?.object ?? [:]
         // byId(): a renamed exercise shows the new name; a built-in's edit (jk_exOverride) sets equip / category / assist.
@@ -70,7 +72,7 @@ final class ExerciseCatalog: ObservableObject {
                                    tracking: PWATables.TIMED_HOLDS.contains(id) ? "duration" : "weight_reps",
                                    assist: false, image: r.images?.first, custom: false,
                                    images: r.images ?? [], instructions: r.instructions ?? [],
-                                   mechanic: PWATables.MECH_FIX[id] ?? r.mechanic ?? "", secondary: r.secondaryMuscles ?? [], dbEquip: r.equipment ?? "")
+                                   mechanic: PWATables.MECH_FIX[id] ?? r.mechanic ?? "", secondary: r.secondaryMuscles ?? [], dbEquip: r.equipment ?? "", dbName: r.name ?? "")
         }
     }
 
