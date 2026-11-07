@@ -33,6 +33,7 @@ import Foundation
 ///   (OPEN also takes friend:<code|me>, friend:<code>/<workout index> and friend:<code>/badges on the Friends tab)
 ///   SIMCTL_CHILD_JACKED_DEV_SUGGEST       <label>|pick|dismiss: tap that row's Start on Home's Suggested today
 ///                                         card (pick = the trusted pick), or its dismiss button
+///   SIMCTL_CHILD_JACKED_DEV_SECTION       collapse:<name> | rename:<name>|<new name>: on the Routines tab, through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
@@ -77,9 +78,11 @@ enum DevHooks {
     static var addFriendSend: Bool { env["JACKED_DEV_ADDFRIEND_SEND"] == "1" }
     static var copyFriend: Bool { env["JACKED_DEV_COPY"] == "1" }
     static var suggest: String? { env["JACKED_DEV_SUGGEST"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var section: String? { env["JACKED_DEV_SECTION"].flatMap { $0.isEmpty ? nil : $0 } }
     static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
     static var suggest: String? { nil }
+    static var section: String? { nil }
     static var cmp: String? { nil }
     static var toggleCB: String? { nil }
     static var acceptFriend: String? { nil }
