@@ -3,6 +3,7 @@
 // node pwa_shot.mjs <out.png> [day:YYYY-MM-DD|workout:0|routines|lib|libq:<search>|exinfo:<exId>|active:<exId>=<lb>x<reps>,...;<exId>=...]
 // friends | friends:<cmp>|<month|all> | friend:<code|me>[/<workout index>[/copy]|/badges] | metrics (full page) | recap:YYYY-MM | ach (achievements page) | badge:<name> (one badge's page)
 // gymyears | gymyears:<code>: the Gym years page (yours, or that person's).
+// prof | profbody: My Profile (Profile tab / Body Metrics tab); prints the saved name, rest, sex and birthday.
 // sugstart:<label|pick>: taps Start on that Suggested today row (never finished, never saved).
 // active: starts an empty workout and logs those sets through uSet/togSet (never finished, never saved).
 import { createRequire } from 'module'; import { spawn } from 'child_process'; import fs from 'fs';
@@ -58,6 +59,8 @@ try {
   if (open.startsWith('gymyears:')) { await p.evaluate(() => sp('leaderboard')); await p.waitForTimeout(3500); await p.evaluate(c => openGymYears(c), open.slice(9)); }
   if (open.startsWith('sugstart:')) console.log(await p.evaluate(l => { if (l === 'pick') { const c = todaysCuratedPick(dayKey(new Date())); startCuratedRoutine(c.pi, c.ri); } else startGroupWorkout(l);
     return aw.name + ': ' + aw.exercises.map(e => e.name).join(', '); }, open.slice(9)));
+  if (open === 'prof' || open === 'profbody') console.log(await p.evaluate(b => { openProf(); if (b) switchProfTab(document.querySelector('#profTabTog [data-v=body]'));
+    return JSON.stringify({ name: profName.value, rest: setRest.value, sex: segVal('setSexTog'), birthday: profBirthday.value, age: profAgeReadout.textContent }); }, open === 'profbody'));
   await p.waitForTimeout(800);
   if (open === 'home') console.log(await p.evaluate(() => document.getElementById('suggestCard').innerText.replace(/\s*\n\s*/g, ' | ')));
   await p.screenshot({ path: out, fullPage: open === 'metrics' || open === 'home' });
