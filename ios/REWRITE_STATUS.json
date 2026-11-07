@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-04T18:50:58-07:00",
+  "updated": "2026-11-06T23:58:00-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -13,7 +13,10 @@
         "The networking part compiles on the desktop and passes 16 of 16 live read-only checks (re-run 2026-11-04 evening).",
         "The screens and the Xcode project file have only been read through, never built in Xcode."
       ],
-      "commits": ["69c132b", "db0e8c7"]
+      "commits": [
+        "69c132b",
+        "db0e8c7"
+      ]
     },
     {
       "id": "decisions",
@@ -30,24 +33,27 @@
     {
       "id": "first-xcode-build",
       "title": "First build in Xcode",
-      "status": "gate",
-      "owner": "you",
-      "summary": "Open it on the Mac, run it in a simulator, try logging in.",
+      "status": "done",
+      "summary": "Builds in Xcode on the Mac and runs in the iPhone simulator.",
       "detail": [
-        "Steps are on your Home page: Build the first Jacked iPhone app in Xcode.",
-        "If it builds: log in, check your name, workout count and streak show, then sign out.",
-        "If it fails: send me the first red error. Nothing below gets built until this works."
+        "Built with a real xcodebuild on the Mac and run in the simulator on 2026-11-06; screenshot and video were sent to you.",
+        "Agent jobs now build and screenshot it on the Mac themselves, signed in as a throwaway test account, never yours."
       ]
     },
     {
       "id": "home-read-only",
       "title": "Your workout history on the Home screen",
-      "status": "todo",
-      "summary": "Read-only: your real history, calendar and streak on the iPhone Home screen, plus the tab bar.",
+      "status": "done",
+      "summary": "Read-only: workout history, streak and calendar on the iPhone Home screen, plus the tab bar.",
       "detail": [
-        "Reads your saved data and keeps a copy on the phone for offline.",
-        "Writes nothing yet.",
-        "Mac check: your real history shows on Home."
+        "Signs in, downloads the saved data and keeps a copy on the phone, one copy per account, so it opens offline.",
+        "Home shows the streak box, the month calendar (tap a day to see what was trained), Start Workout and the last 6 workouts; tap one for every exercise and set.",
+        "Checked in the iPhone simulator next to the web app, both signed in to the same throwaway test account: same streak, same best, same trained days, same workouts.",
+        "Writes nothing yet. Start Workout says logging is the next step.",
+        "Not on Home yet: the monthly recap card (comes with Metrics), the Suggested today card (comes with routines), the Gym years view."
+      ],
+      "commits": [
+        "6bd5337"
       ]
     },
     {
@@ -68,7 +74,8 @@
       "summary": "Log a full workout: sets, rest timer, PRs, plate math, routines.",
       "detail": [
         "Mac check: log a real workout, it shows on the web app and the watch.",
-        "TestFlight testing for you and Phil can start once this works, long before the App Store."
+        "TestFlight testing for you and Phil can start once this works, long before the App Store.",
+        "Also brings the Suggested today card on Home and logging a past day from the calendar."
       ]
     },
     {
@@ -78,7 +85,8 @@
       "summary": "Exercise library offline, metrics and badges, friends and leaderboard.",
       "detail": [
         "The stats math is checked number for number against the web app.",
-        "Friends tested between two test accounts."
+        "Friends tested between two test accounts.",
+        "Also brings the Home extras still missing: monthly recap card and Gym years."
       ]
     },
     {
