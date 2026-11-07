@@ -16,6 +16,7 @@ struct FriendProfileSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var workout: Int?
     @State private var showBadges = false
+    @State private var showGymYears = false
     @State private var confirmRemove = false
 
     var body: some View {
@@ -39,13 +40,14 @@ struct FriendProfileSheet: View {
         .background(Theme.bg2.ignoresSafeArea())
         .overlay(alignment: .top) { ToastView(text: $friends.toast) }
         .sheet(isPresented: $showBadges) { FriendBadgesSheet(p: p, m: m) }
+        .fullScreenCover(isPresented: $showGymYears) { GymYearsView(who: p.isYou ? "You" : p.name, days: Set(p.days)) }
         .confirmationDialog("Remove this friend?", isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { let c = p.code; dismiss(); Task { await friends.remove(c, auth: auth, store: store) } }
         }
         .task {
             #if DEBUG
             if let o = DevHooks.open, o.hasPrefix("friend:"), let r = o.split(separator: "/").dropFirst().first {
-                if r == "badges" { showBadges = true } else if let i = Int(r) {
+                if r == "badges" { showBadges = true } else if r == "gymyears" { showGymYears = true } else if let i = Int(r) {
                     workout = i
                     if DevHooks.copyFriend, p.wd.indices.contains(i) { try? await Task.sleep(nanoseconds: 1_500_000_000); copy(p.wd[i]) }
                 }
@@ -87,7 +89,16 @@ struct FriendProfileSheet: View {
             if let i = p.wd.firstIndex(where: { dayOf($0.date) == ds }) { workout = i }
             else { friends.toast = p.wd.isEmpty && p.workouts > 0 ? "Their app needs an update to share workout details" : "Only the last 30 days of workout detail are shared" }
         }
-        .padding(.bottom, 20)
+        .padding(.bottom, 12)
+        Button { showGymYears = true } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "calendar").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.accent)
+                Text("Gym years \u{203A}").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 12)
+            .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+        }
+        .buttonStyle(.plain).padding(.bottom, 20)
         if !p.wd.isEmpty {
             BlockTitle(text: "Workouts \u{00B7} last 30 days")
             ForEach(Array(p.wd.enumerated()), id: \.offset) { i, w in
