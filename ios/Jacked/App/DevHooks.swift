@@ -21,6 +21,9 @@ import Foundation
 ///   SIMCTL_CHILD_JACKED_DEV_CREATEEX      <name>: create a custom exercise (Biceps, cable) through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_NEWROUTINE    <name>|<exId>,<exId>: save a new routine through saveR's path
 ///   SIMCTL_CHILD_JACKED_DEV_ADDPROGRAM    <index>: "+ Add to Routines" on that Trusted Program
+///   SIMCTL_CHILD_JACKED_DEV_WEIGHT        <kg>: log today's body weight from Metrics through the real save path
+///   SIMCTL_CHILD_JACKED_DEV_HIDECARD      <card id>: hide / show that Metrics card through the real save path
+///   (OPEN also takes recap:<YYYY-MM> and card:<card id> on the Metrics tab)
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
 /// Compiled out of Release builds entirely. Never point these at a real person's account
@@ -55,6 +58,8 @@ enum DevHooks {
     }
     static var durUnit: String? { env["JACKED_DEV_DURUNIT"].flatMap { $0.isEmpty ? nil : $0 } }
     static var superset: [Int] { (env["JACKED_DEV_SUPERSET"] ?? "").split(separator: ",").compactMap { Int($0) } }
+    static var logWeight: Double? { env["JACKED_DEV_WEIGHT"].flatMap { Double($0) } }
+    static var hideCard: String? { env["JACKED_DEV_HIDECARD"].flatMap { $0.isEmpty ? nil : $0 } }
     static func log(_ s: String) { print("[jacked-sync] " + s); fflush(stdout) }
     #else
     static var casDelay: Double { 0 }
@@ -76,5 +81,7 @@ enum DevHooks {
     static var superset: [Int] { [] }
     static var note: (exId: String, text: String)? { nil }
     static var durUnit: String? { nil }
+    static var logWeight: Double? { nil }
+    static var hideCard: String? { nil }
     #endif
 }
