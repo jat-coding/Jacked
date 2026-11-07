@@ -65,8 +65,13 @@ struct Workout: Identifiable {
     let totalVolume: Double
     let prCount: Int
     let exercises: [WorkoutExercise]
+    /// The PR record finish saved (prSets / sugSets), for the day view's gold lines.
+    let prSets: [JSONValue]?
+    let sugSets: [JSONValue]?
 
     init(_ o: [String: JSONValue]) {
+        prSets = o["prSets"]?.array
+        sugSets = o["sugSets"]?.array
         id = o["id"]?.string ?? o["id"]?.double.map { String(Int($0)) } ?? UUID().uuidString
         rawId = o["id"]
         name = o["name"]?.string ?? "Workout"
@@ -95,6 +100,39 @@ struct Workout: Identifiable {
         var d = 0.0, t = 0.0
         for e in exercises where e.tracking == "distance" { for s in e.sets { d += s.weight; t += s.reps } }
         return d > 0 && t > 0 ? t / d : 0
+    }
+}
+
+extension Workout {
+    struct ShownPR { let ei: Int; let si: Int; let weight: Double; let reps: Double; let cardio: Bool; let hold: Bool }
+
+    /// prsOf(w) for display: PR stars from the saved prSets when every entry still resolves against the
+    /// exercises and agrees with prCount, else no per-exercise stars (the count alone, never a guess).
+    /// Suggested PRs come from sugSets the same way. Workouts saved before prSets existed need the web app's
+    /// full history replay (prReplay), not ported yet: those show the count only.
+    var shownPRs: (list: [ShownPR], sug: [ShownPR]) {
+        func resolve(_ a: [JSONValue]?) -> [ShownPR]? {
+            guard let a else { return nil }
+            var out: [ShownPR] = []
+            for v in a {
+                guard let p = v.object, let ei = p["ei"]?.int, let si = p["si"]?.int, exercises.indices.contains(ei),
+                      exercises[ei].exId == (p["exId"]?.string ?? ""), exercises[ei].sets.indices.contains(si) else { return nil }
+                let ex = exercises[ei]
+                out.append(ShownPR(ei: ei, si: si, weight: p["weight"]?.double ?? 0, reps: p["reps"]?.double ?? 0,
+                                   cardio: ex.tracking == "distance", hold: ex.tracking == "duration"))
+            }
+            return out
+        }
+        var list = resolve(prSets) ?? []
+        if list.count != prCount { list = [] }
+        return (list, resolve(sugSets) ?? [])
+    }
+
+    /// prSetText
+    static func prSetText(_ p: ShownPR, settings: Settings) -> String {
+        if p.cardio { return "\(WorkoutMath.jsNumberString(p.weight)) mi \u{00B7} \(WorkoutMath.fmtPace(WorkoutMath.pacePerMile(p.weight, p.reps)))" }
+        if p.hold { return "\(WorkoutMath.fmtHold(p.weight)) hold" }
+        return "\(WorkoutMath.n((settings.display(p.weight) * 10).rounded() / 10))\(settings.unitLabel) \u{00D7} \(WorkoutMath.jsNumberString(p.reps))"
     }
 }
 
