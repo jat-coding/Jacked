@@ -9,6 +9,7 @@ struct LibraryView: View {
     @State private var q = ""
     @State private var chip: String?
     @State private var info: CatalogExercise?
+    @State private var showCreate = false
 
     var body: some View {
         let raw = store.backup.raw
@@ -18,7 +19,11 @@ struct LibraryView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    PageHeader(title: "Library")
+                    PageHeader(title: "Library") {
+                        Button("+ Custom") { showCreate = true }.font(Theme.body(14, .semibold))
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .overlay(Capsule().stroke(Theme.border2, lineWidth: 1))
+                    }
                     SearchBox(text: $q).padding(.bottom, 10)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
@@ -55,6 +60,7 @@ struct LibraryView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(item: $info) { ExerciseInfoSheet(ex: $0) }
+        .sheet(isPresented: $showCreate) { CreateExerciseSheet() }
         .task { await catalog.load() }
         .task {
             #if DEBUG
@@ -63,6 +69,11 @@ struct LibraryView: View {
                 info = catalog.byId(String(o.dropFirst(3)), raw: store.backup.raw)
             }
             if let s = DevHooks.search { q = s }
+            if let n = DevHooks.createEx {
+                let id = await CreateExerciseSheet.create(name: n, muscle: "Biceps", category: "strength", equip: "cable",
+                                                          tracking: "weight_reps", notes: "", store: store, auth: auth)
+                DevHooks.log("dev custom exercise \(id)")
+            }
             if let id = DevHooks.fav {
                 await catalog.load()
                 await ExerciseInfoSheet.toggleFav(id, store: store, auth: auth)
@@ -287,5 +298,74 @@ struct ExerciseInfoSheet: View {
             if var rn = raw["jk_exRename"]?.object, rn[ex.id] != nil { rn[ex.id] = nil; raw["jk_exRename"] = .object(rn) }
             if var ov = raw["jk_exOverride"]?.object, ov[ex.id] != nil { ov[ex.id] = nil; raw["jk_exOverride"] = .object(ov) }
         }
+    }
+}
+
+/// #ceModal, create only: a custom exercise in jk_cex (id "cex<ms>"), saved through merge + CAS.
+/// Photo, grip and editing an existing exercise are not on the iPhone yet.
+struct CreateExerciseSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var store: BackupStore
+    @State private var name = ""
+    @State private var muscle = "Chest"
+    @State private var category = "strength"
+    @State private var equip = "barbell"
+    @State private var bodyweight = false
+    @State private var tracking = "weight_reps"
+    @State private var notes = ""
+    @State private var saving = false
+
+    static let muscles = ["Chest", "Back", "Shoulders", "Biceps", "Triceps", "Legs", "Glutes", "Core", "Forearms", "Cardio", "Full Body"]
+    static let categories = [("strength", "Strength"), ("hypertrophy", "Hypertrophy"), ("cardio", "Cardio"), ("power", "Power"), ("warmup", "Warm-up")]
+    static let equips = [("barbell", "Barbell"), ("dumbbell", "Dumbbell"), ("cable", "Cable"), ("machine", "Machine"), ("bodyweight", "Bodyweight"),
+                         ("kettlebell", "Kettlebell"), ("resistance_band", "Resistance Band"), ("ez_bar", "EZ Bar"), ("trap_bar", "Trap Bar"), ("other", "Other")]
+    static let trackings = [("weight_reps", "Weight + Reps"), ("bodyweight_reps", "Bodyweight + Reps"), ("duration", "Duration"),
+                            ("distance", "Distance + Time"), ("reps_only", "Reps only (no weight)")]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section { TextField("Exercise name", text: $name) }
+                Section {
+                    Picker("Muscle", selection: $muscle) { ForEach(Self.muscles, id: \.self) { Text($0) } }
+                    Picker("Category", selection: $category) { ForEach(Self.categories, id: \.0) { Text($0.1).tag($0.0) } }
+                    Toggle("Bodyweight exercise", isOn: $bodyweight).tint(Theme.accent)
+                    if !bodyweight { Picker("Equipment", selection: $equip) { ForEach(Self.equips, id: \.0) { Text($0.1).tag($0.0) } } }
+                    Picker("Tracking", selection: $tracking) { ForEach(Self.trackings, id: \.0) { Text($0.1).tag($0.0) } }
+                }
+                Section { TextField("Notes (optional)", text: $notes, axis: .vertical) }
+            }
+            .scrollContentBackground(.hidden).background(Theme.bg2)
+            .navigationTitle("Create Exercise").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { Task { saving = true; await save(); dismiss() } }
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || saving)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        await Self.create(name: name, muscle: muscle, category: category, equip: bodyweight ? "body only" : equip,
+                          tracking: tracking, notes: notes, store: store, auth: auth)
+    }
+
+    /// saveCE() for a new exercise: the same object shape the PWA writes.
+    @discardableResult
+    static func create(name: String, muscle: String, category: String, equip: String, tracking: String, notes: String,
+                       store: BackupStore, auth: AuthStore) async -> String {
+        let id = "cex\(Int64(Date().timeIntervalSince1970 * 1000))"
+        _ = await store.edit(auth: auth) { raw in
+            var c = raw["jk_cex"]?.array ?? []
+            c.append(.object(["id": .string(id), "name": .string(name.trimmingCharacters(in: .whitespacesAndNewlines)),
+                              "muscle": .string(muscle), "equip": .string(equip), "tracking": .string(tracking),
+                              "category": .string(category), "notes": .string(notes.trimmingCharacters(in: .whitespacesAndNewlines)),
+                              "assist": .bool(false), "durUnit": .string("sec"), "images": .array([]), "_c": .bool(true)]))
+            raw["jk_cex"] = .array(c)
+        }
+        return id
     }
 }
