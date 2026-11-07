@@ -643,10 +643,18 @@ struct FinishSummarySheet: View {
                             Text("\(WorkoutMath.n((settings.display(implied) * 10).rounded() / 10))\(settings.unitLabel)")
                                 .font(Theme.heading(16, .bold)).foregroundStyle(Color(hex: 0xD9B84A))
                         }
-                        Text("Estimated from \(WorkoutMath.n(settings.display(p.weight)))\(settings.unitLabel) × \(Int(p.reps)).")
+                        Text("Estimated from \(WorkoutMath.n(settings.display(p.weight)))\(settings.unitLabel) × \(Int(p.reps)). Becomes your PR once you lift \(WorkoutMath.n((settings.display(implied) * 10).rounded() / 10))\(settings.unitLabel).")
                             .font(Theme.body(11)).foregroundStyle(Theme.muted)
                     }
                     .padding(12).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+                }
+                ForEach(Array(s.notes.enumerated()), id: \.offset) { _, n in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(n.up ? "▲" : "▼"); Text(n.text).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .font(Theme.body(12.5)).foregroundStyle(n.up ? Theme.accentBright : Theme.muted)
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
                 }
                 if let done { Text(done).font(Theme.body(13, .semibold)).foregroundStyle(Theme.accent) }
                 if let r = s.routine, done == nil {
