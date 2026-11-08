@@ -8138,7 +8138,7 @@ function openFriendWorkout(code,idx){
       <div class="sc"><div class="sv">${w.sets||0}</div><div class="sl">Sets</div></div>
       <div class="sc"><div class="sv">${(w.ex||[]).length}</div><div class="sl">Exercises</div></div>
     </div>
-    <button class="btn ba wf" style="margin-bottom:14px" onclick="copyFriendWorkout('${code}',${idx})">${uic('clipboard')} Copy to my workout</button>
+    <button class="btn ba wf" style="margin-bottom:14px" onclick="copyFriendWorkout('${code}',${idx})">${uic('clipboard')} Save to my routines</button>
     <div class="blk-t">Exercises &amp; sets</div>`;
   h+=(w.ex||[]).length ? (w.ex||[]).map(e=>{
     const sets=e.sets||[];
@@ -8162,38 +8162,49 @@ function resolveSharedEx(e){
   if(e.n){ const m=allEx().find(x=>(x.name||'').toLowerCase()===String(e.n).toLowerCase()); if(m) return m; }
   return null;
 }
-// Copy a friend's workout into a fresh session of your own: same exercises, with
-// their numbers seeded as greyed targets (pw/pr) — you adopt or beat them, exactly
-// like starting from a routine. Exercises you don't have in your library are skipped.
+// Copy a friend's workout into a new routine of your own: resolve each exercise against
+// your library, recreating (from name + tracking only — see friendWorkoutSummary) any
+// exercise you don't have, so nothing gets dropped. Routines only reference exercise ids
+// (see saveWorkoutAsRoutine), so no sets/weights come along — this is a routine, not a
+// live workout.
 function copyFriendWorkout(code,idx){
   const p=personByCode(code); if(!p) return;
   const w=(p.wd||[])[idx]; if(!w) return;
-  // Same guard as every other Start (awBusy): this one replaced the open workout without ending it, so
-  // the watch kept the old one live, and the new one was stamped against the old one's shadow
-  // (adversarial pass 3, 2026-10-13).
-  if(awBusy(()=>_copyFriendWorkoutNow(w))) return;
-  _copyFriendWorkoutNow(w);
-}
-function _copyFriendWorkoutNow(w){
-  const exs=[]; let skipped=0;
-  (w.ex||[]).forEach(e=>{
-    const lib=resolveSharedEx(e);
-    if(!lib){ skipped++; return; }
-    const sets=(e.sets||[]).map(s=>{
-      const pw = s.w!=null?s.w : (s.mi!=null?s.mi:0);
-      const pr = s.r!=null?s.r : (s.min!=null?s.min : (s.sec!=null?s.sec:0));
-      return {weight:0,reps:0,done:false,pw,pr};
+  if(!(w.ex||[]).length){ toast('This workout has no exercises to copy','err'); return; }
+  showConfirm('Name this routine:',{isPrompt:true,defaultValue:w.name||''}).then(nm=>{
+    if(nm==null) return;
+    const name=nm.trim()||'My Routine';
+    const ids=[], seen=new Set(), createdByName=new Map(); let created=0;
+    (w.ex||[]).forEach(e=>{
+      let lib=resolveSharedEx(e);
+      if(!lib){
+        const key=String(e.n||'').toLowerCase();
+        if(createdByName.has(key)) lib=createdByName.get(key);
+        else { lib=createCEFromShared(e); createdByName.set(key,lib); created++; }
+      }
+      if(seen.has(lib.id)) return;
+      seen.add(lib.id); ids.push(lib.id);
     });
-    exs.push({exId:lib.id, name:lib.name, muscle:lib.muscle||'', equip:lib.equip||'', assist:lib.assist||false,
-      tracking:lib.tracking||e.t||'weight_reps', imgUrl:imgUrl(lib)||null,
-      sets:sets.length?sets:[{weight:0,reps:0,done:false}]});
+    const rs=gR();
+    rs.push({id:'r'+Date.now(), name, desc:'Copied from '+(p.name||'a friend'), exercises:ids});
+    S.s('routines',rs);
+    cm('fpModal');
+    toast(created?`Saved as routine ✓ · ${created} exercise${created>1?'s':''} added to your library`:'Saved as routine ✓','ok');
   });
-  if(!exs.length){ toast('None of these exercises are in your library','err'); return; }
-  cm('fpModal');
-  awStart=Date.now();
-  aw={id:'w'+Date.now(), name:w.name||'Copied Workout', date:new Date().toISOString(), exercises:exs};
-  beginW();
-  toast(skipped?`Copied ✓ · ${skipped} exercise${skipped>1?'s':''} skipped (not in your library)`:'Workout copied ✓','ok');
+}
+// Recreate a friend's custom exercise you don't have, from the limited shared payload
+// (name + tracking type only — see friendWorkoutSummary). Everything else the exercise
+// editor normally captures (muscle, equip, notes, assist) isn't in the payload, so this
+// fills sensible defaults; losing the exercise from the routine entirely would be worse
+// than an under-specified one the viewer can refine afterward.
+function createCEFromShared(e){
+  const t=e.t||'weight_reps';
+  const c=gCEx();
+  const nu={id:'cex'+Date.now()+Math.random().toString(36).slice(2,7), name:e.n||'Exercise', muscle:'',
+    equip:'other', tracking:t, category:(t==='duration'||t==='distance')?'cardio':'strength',
+    notes:'', assist:false, durUnit:'sec', images:[], _c:true};
+  c.push(nu); S.s('cex',c);
+  return nu;
 }
 
 // Show WHICH badges a person has earned (yours computed live; friends' from sync).

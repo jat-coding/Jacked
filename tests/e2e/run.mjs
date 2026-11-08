@@ -3980,21 +3980,50 @@ async function adv3FriendRemove() {
   await ctx.close();
 }
 async function adv3CopyFriendWorkout() {
-  // 4. "Copy to my workout" from a friend's profile replaced an open workout without ending it: no discard on
-  // the live row (the watch kept the old one), and the new one was stamped against the old one's shadow.
-  const friends = [{ id: '@pal', code: '@pal', name: 'Pal', username: '@pal', pending: false, wd: [{ name: 'Pal Push', date: new Date().toISOString(), vol: 100, sets: 1, ex: [{ id: 'cex1', n: 'Bench', sets: [{ w: 50, r: 5 }] }] }] }];
+  // 4. "Copy to my workout" became "Save to my routines" (Mr. Roni, 2026-11-08): copying a
+  // friend's workout no longer starts (or replaces) a live workout at all -- it only prompts
+  // for a routine name and saves the exercises as a new routine, exactly like Save As New
+  // Routine elsewhere in the app.
+  const friends = [{ id: '@pal', code: '@pal', name: 'Pal', username: '@pal', pending: false, wd: [{ name: 'Pal Push', date: new Date().toISOString(), vol: 100, sets: 1, ex: [{ id: 'cex1', n: 'Bench', t: 'weight_reps', sets: [{ w: 50, r: 5 }] }] }] }];
   const { page, ctx, errors } = await phone({ seed: { cex: ADV3_CEX, friends, routines: ADV3_R } });
-  await page.evaluate(() => { startRW('r1'); aw.exercises[0].sets[0] = { ...aw.exercises[0].sets[0], weight: 100, reps: 5, done: true }; saveAW();
-    window._disc = []; const o = liveDiscard; liveDiscard = id => { _disc.push(id); return o(id); }; });
-  const old = await page.evaluate(() => ({ id: aw.id, lids: aw.exercises.map(e => e.lid) }));
+  await page.evaluate(() => openFriendWorkout('@pal', 0)); await page.waitForTimeout(50);
   await page.evaluate(() => copyFriendWorkout('@pal', 0)); await page.waitForTimeout(100);
-  const msg = await page.evaluate(() => document.getElementById('cfMsg').textContent);
-  check('adv3 copy friend workout: asks like every other Start, naming the logged sets', /in progress \(1 set logged\)/.test(msg), msg);
-  await page.evaluate(() => _cfDone(true)); await page.waitForTimeout(200);
-  const r = await page.evaluate(() => ({ id: aw && aw.id, name: aw && aw.name, tomb: Object.keys(aw.tomb || {}), disc: _disc }));
-  check('adv3 copy friend workout: replacing ends the old workout everywhere (live discard)', r.name === 'Pal Push' && r.id !== old.id && r.disc.includes(old.id), JSON.stringify(r));
-  check("adv3 copy friend workout: the copy carries no tombstones of the old workout's exercises", !old.lids.some(l => r.tomb.includes(l)), JSON.stringify(r.tomb));
+  const cf = await page.evaluate(() => ({ open: document.getElementById('confirmModal').classList.contains('open'), msg: document.getElementById('cfMsg').textContent }));
+  check('adv3 copy friend workout: asks to name a routine (no live-workout-replace confirm)', cf.open && cf.msg === 'Name this routine:', JSON.stringify(cf));
+  await page.fill('#cfInput', 'Copied Push'); await page.click('#cfOk'); await page.waitForTimeout(150);
+  const t = await toasts(page);
+  check('adv3 copy friend workout: toasts plain success when every exercise already resolved', t.includes('Saved as routine ✓') && !/added to your library/.test(t), t);
+  const r = await page.evaluate(() => ({ aw: aw, fpOpen: document.getElementById('fpModal').classList.contains('open'), routines: gR() }));
+  check('adv3 copy friend workout: no live workout gets started', r.aw == null, JSON.stringify(r.aw));
+  check('adv3 copy friend workout: closes the friend-workout modal', r.fpOpen === false);
+  const newRoutine = r.routines.find(x => x.name === 'Copied Push');
+  check('adv3 copy friend workout: a new routine appears in Routines with the resolved exercise', !!newRoutine && JSON.stringify(newRoutine.exercises) === JSON.stringify(['cex1']), JSON.stringify(r.routines));
   check('adv3 copy friend workout: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+async function adv3CopyFriendWorkoutRecreatesMissing() {
+  // Mr. Roni, 2026-11-08: a friend's exercise the viewer doesn't have used to be silently
+  // dropped ("skipped"). It must now be recreated as a custom exercise from the limited
+  // shared payload (name + tracking only), and a repeated unresolved exercise within the
+  // same copy must only create ONE custom exercise, not a near-dupe per occurrence.
+  const friends = [{ id: '@pal', code: '@pal', name: 'Pal', username: '@pal', pending: false, wd: [{ name: 'Pal Pull', date: new Date().toISOString(), vol: 100, sets: 3, ex: [
+    { id: 'cex1', n: 'Bench', t: 'weight_reps', sets: [{ w: 50, r: 5 }] },
+    { id: '', n: 'Pal Special Curl', t: 'duration', sets: [{ sec: 30 }] },
+    { id: '', n: 'Pal Special Curl', t: 'duration', sets: [{ sec: 40 }] },
+  ] }] }];
+  const { page, ctx, errors } = await phone({ seed: { cex: ADV3_CEX, friends, routines: ADV3_R } });
+  await page.evaluate(() => copyFriendWorkout('@pal', 0)); await page.waitForTimeout(100);
+  await page.fill('#cfInput', 'Copied Pull'); await page.click('#cfOk'); await page.waitForTimeout(150);
+  const t = await toasts(page);
+  check('adv3 copy friend workout recreates missing: toasts the recreated-exercise count', /Saved as routine ✓ · 1 exercise added to your library/.test(t), t);
+  const r = await page.evaluate(() => ({ cex: gCEx(), routines: gR() }));
+  const matches = r.cex.filter(c => c.name === 'Pal Special Curl');
+  check('adv3 copy friend workout recreates missing: creates exactly ONE custom exercise for the repeated unresolved name', matches.length === 1, JSON.stringify(r.cex));
+  check('adv3 copy friend workout recreates missing: the recreated exercise matches the shared name + tracking', matches[0] && matches[0].tracking === 'duration', JSON.stringify(matches));
+  check("adv3 copy friend workout recreates missing: the recreated exercise's id looks like a real custom exercise id", matches[0] && matches[0].id.startsWith('cex') && matches[0]._c === true, JSON.stringify(matches));
+  const newRoutine = r.routines.find(x => x.name === 'Copied Pull');
+  check('adv3 copy friend workout recreates missing: the new routine references both the resolved AND recreated exercise, deduped', !!newRoutine && JSON.stringify(newRoutine.exercises.slice().sort()) === JSON.stringify(['cex1', matches[0].id].sort()), JSON.stringify(newRoutine && newRoutine.exercises));
+  check('adv3 copy friend workout recreates missing: no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
 async function adv3UnitSwitchBW() {
@@ -5036,7 +5065,7 @@ const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, calLiveToday, ...AUTH_FLOW_SUITES, ...STANDALONE_GAP_SUITES, ...SUGGESTED_SUITES, ...LIVE_SUITES, ...WEEKLY_REVIEW_SUITES, ...EXERCISE_PHOTO_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3CopyFriendWorkoutRecreatesMissing, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, calLiveToday, ...AUTH_FLOW_SUITES, ...STANDALONE_GAP_SUITES, ...SUGGESTED_SUITES, ...LIVE_SUITES, ...WEEKLY_REVIEW_SUITES, ...EXERCISE_PHOTO_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
