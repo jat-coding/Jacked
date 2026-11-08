@@ -352,6 +352,7 @@ struct SetRow: View {
             .accessibilityLabel(set.done ? "Set \(si + 1) done" : "Mark set \(si + 1) done")
         }
         .padding(.vertical, 2)
+        .frame(maxWidth: .infinity)
         .background(set.done ? Theme.accent.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 9))
         .contextMenu { Button("Delete set", role: .destructive) { session.removeSet(ei, si) } }
     }
