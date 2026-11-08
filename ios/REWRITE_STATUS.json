@@ -1,6 +1,6 @@
 {
   "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
-  "updated": "2026-11-07T09:35:00-07:00",
+  "updated": "2026-11-08T12:25:00-07:00",
   "stages": [
     {
       "id": "kickoff",
@@ -173,17 +173,19 @@
     {
       "id": "account-deletion",
       "title": "Settings and account deletion",
-      "status": "gate",
-      "summary": "Built on the iPhone. The part that actually deletes an account waits for your go.",
+      "status": "done",
+      "summary": "Built and live. Delete Account really deletes the account now.",
       "detail": [
         "My Profile works like the web app: name, units, default rest, rep range, auto rest timer, your username with Copy (and changing it), your photo, and Body Metrics (body, body weight, birthday with your age). Saved through the careful save layer; the web app showed the same values after an iPhone save on the test account.",
         "Also on Profile: Export a backup file, Sync now, add or change the email on file, Sign Out.",
-        "Delete Account (Apple requires it): a warning page, type your username to confirm, then Delete. Right now that last button deletes nothing and says so, because the server side is switched off.",
-        "Tested on the test account: the delete steps ran to the end, and the account still had all 19 workouts afterwards.",
-        "Next, after your go: a small server function that removes the account, its saved data and its friendships. The iPhone side is already wired to call it."
+        "Delete Account (Apple requires it): a warning page, type your username to confirm, then Delete. The app then signs out.",
+        "The server side is live: it works out whose account it is from the signed-in session only, refuses if the typed username isn't yours, then removes your saved workouts, their history copies, every friendship and friend request, your photo, your profile and finally the login itself. If a step fails it stops and says so instead of claiming it worked.",
+        "Tested for real on throwaway accounts made just for this, never yours or the shared test account: the wrong username and a signed-out call were refused with nothing touched; the right one removed everything, the login stopped working, and the other two accounts and their own friend request were untouched.",
+        "Checked in the simulator on a fourth throwaway account: the real Delete button deleted it on the server and the app went back to the Log in screen."
       ],
       "commits": [
-        "514bcf6"
+        "514bcf6",
+        "b7e992f"
       ]
     },
     {
