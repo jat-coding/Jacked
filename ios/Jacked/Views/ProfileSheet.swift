@@ -563,9 +563,8 @@ struct Seg: View {
     }
 }
 
-/// Delete Account (App Store rule 5.1.1(v)). The screen and the confirm step are real; the server
-/// call that actually deletes is not switched on yet (AccountDeletion.serverLive), so tapping the
-/// final button deletes nothing and says so.
+/// Delete Account (App Store rule 5.1.1(v)). Type your username to confirm, then the server
+/// function deletes the account for real and the app signs out.
 struct DeleteAccountSheet: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
@@ -624,11 +623,13 @@ struct DeleteAccountSheet: View {
     }
 }
 
-/// The client half of account deletion. The server half (an Edge Function that removes the
-/// profile, backups, friendships and the auth user) waits for Mr. Roni's go before it exists or
-/// runs live, so serverLive stays false and delete() never sends anything until it's flipped.
+/// The client half of account deletion. The server half is the jacked-delete-account Edge Function
+/// (supabase/functions/jacked-delete-account): it checks the typed username against the caller's
+/// own session and removes the backup, history, friendships, photo, profile and the auth user.
+/// Live since 2026-11-08 (supabase/tests/delete_account_live_test.mjs). serverLive = false turns
+/// the button back into a no-op that sends nothing.
 enum AccountDeletion {
-    static let serverLive = false
+    static let serverLive = true
     static let functionPath = "functions/v1/jacked-delete-account"
     enum Outcome { case deleted, notLive, failed(String) }
 
