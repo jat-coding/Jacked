@@ -312,38 +312,42 @@ struct SetRow: View {
     var body: some View {
         let sug = WorkoutMath.suggestion(ex, si, raw: store.backup.raw)
         HStack {
-            HStack(spacing: 2) {
-                Text("\(si + 1)").font(Theme.body(14, .bold))
-                if star { Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(Color(hex: 0xFFD700)) }
+            HStack {
+                HStack(spacing: 2) {
+                    Text("\(si + 1)").font(Theme.body(14, .bold))
+                    if star { Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(Color(hex: 0xFFD700)) }
+                }
+                .padding(.leading, 10)  // breathing room from the done-row highlight's left edge
+                .frame(width: 34, alignment: .leading).foregroundStyle(set.done ? Theme.accent : Theme.text2)
+                Text(prev).font(Theme.body(11)).foregroundStyle(Theme.muted).lineLimit(1).minimumScaleFactor(0.7).frame(width: 62)
+                if WorkoutMath.bwCapable(ex) && WorkoutMath.bwMode(ex) == "body" {
+                    let bw = jsNum(store.backup.raw["jk_bw"])
+                    Text(bw > 0 ? "\(WorkoutMath.n(settings.display(bw).rounded()))\(settings.unitLabel)" : "set BW")
+                        .font(Theme.body(14, .semibold)).foregroundStyle(Theme.text2).frame(maxWidth: .infinity)
+                } else if ex.tracking != "reps_only" {
+                    if ex.tracking == "duration" {
+                        let u = WorkoutMath.durUnit(ex)
+                        NumberField(value: set.weight, placeholder: sug.w, format: { WorkoutMath.toDispDur($0, u) },
+                                    parse: { WorkoutMath.fromDispDur($0, u) }) { session.set(ei, si, weight: $0) }
+                            .id(u)
+                    } else {
+                        NumberField(value: shown(set.weight, weightLike: true), placeholder: shown(sug.w, weightLike: true)) {
+                            session.set(ei, si, weight: stored($0, weightLike: true))
+                        }
+                    }
+                } else { Text("—").frame(maxWidth: .infinity).foregroundStyle(Theme.muted) }
+                if ex.tracking != "duration" {
+                    if ex.tracking == "distance" {
+                        NumberField(value: set.reps, placeholder: sug.r, format: WorkoutMath.minToClock, parse: WorkoutMath.clockToMin) {
+                            session.set(ei, si, reps: $0)
+                        }
+                    } else {
+                        NumberField(value: set.reps, placeholder: sug.r, keyboard: .numberPad) { session.set(ei, si, reps: $0) }
+                    }
+                } else { Text("—").frame(maxWidth: .infinity).foregroundStyle(Theme.muted) }
             }
-            .padding(.leading, 10)  // breathing room from the done-row highlight's left edge
-            .frame(width: 34, alignment: .leading).foregroundStyle(set.done ? Theme.accent : Theme.text2)
-            Text(prev).font(Theme.body(11)).foregroundStyle(Theme.muted).lineLimit(1).minimumScaleFactor(0.7).frame(width: 62)
-            if WorkoutMath.bwCapable(ex) && WorkoutMath.bwMode(ex) == "body" {
-                let bw = jsNum(store.backup.raw["jk_bw"])
-                Text(bw > 0 ? "\(WorkoutMath.n(settings.display(bw).rounded()))\(settings.unitLabel)" : "set BW")
-                    .font(Theme.body(14, .semibold)).foregroundStyle(Theme.text2).frame(maxWidth: .infinity)
-            } else if ex.tracking != "reps_only" {
-                if ex.tracking == "duration" {
-                    let u = WorkoutMath.durUnit(ex)
-                    NumberField(value: set.weight, placeholder: sug.w, format: { WorkoutMath.toDispDur($0, u) },
-                                parse: { WorkoutMath.fromDispDur($0, u) }) { session.set(ei, si, weight: $0) }
-                        .id(u)
-                } else {
-                    NumberField(value: shown(set.weight, weightLike: true), placeholder: shown(sug.w, weightLike: true)) {
-                        session.set(ei, si, weight: stored($0, weightLike: true))
-                    }
-                }
-            } else { Text("—").frame(maxWidth: .infinity).foregroundStyle(Theme.muted) }
-            if ex.tracking != "duration" {
-                if ex.tracking == "distance" {
-                    NumberField(value: set.reps, placeholder: sug.r, format: WorkoutMath.minToClock, parse: WorkoutMath.clockToMin) {
-                        session.set(ei, si, reps: $0)
-                    }
-                } else {
-                    NumberField(value: set.reps, placeholder: sug.r, keyboard: .numberPad) { session.set(ei, si, reps: $0) }
-                }
-            } else { Text("—").frame(maxWidth: .infinity).foregroundStyle(Theme.muted) }
+            .padding(.vertical, 2)
+            .background(set.done ? Theme.accent.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 9))
             Button { session.toggle(ei, si, raw: store.backup.raw, settings: settings) } label: {
                 Image(systemName: "checkmark").font(.system(size: 14, weight: .bold))
                     .foregroundStyle(set.done ? Theme.onAccent : Theme.muted)
@@ -352,9 +356,7 @@ struct SetRow: View {
             }
             .accessibilityLabel(set.done ? "Set \(si + 1) done" : "Mark set \(si + 1) done")
         }
-        .padding(.vertical, 2)
         .frame(maxWidth: .infinity)
-        .background(set.done ? Theme.accent.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 9))
         .contextMenu { Button("Delete set", role: .destructive) { session.removeSet(ei, si) } }
     }
 
