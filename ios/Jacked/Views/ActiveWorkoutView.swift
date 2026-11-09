@@ -193,7 +193,7 @@ struct ExerciseCard: View {
             }
             NoteField(exId: ex.exId)
             HStack {
-                Text("SET").frame(width: 34, alignment: .leading)
+                Text("SET").padding(.leading, 10).frame(width: 34, alignment: .leading)
                 Text("PREV").frame(width: 62)
                 Text(col1).frame(maxWidth: .infinity)
                 Text(col2).frame(maxWidth: .infinity)
@@ -316,6 +316,7 @@ struct SetRow: View {
                 Text("\(si + 1)").font(Theme.body(14, .bold))
                 if star { Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(Color(hex: 0xFFD700)) }
             }
+            .padding(.leading, 10)  // breathing room from the done-row highlight's left edge
             .frame(width: 34, alignment: .leading).foregroundStyle(set.done ? Theme.accent : Theme.text2)
             Text(prev).font(Theme.body(11)).foregroundStyle(Theme.muted).lineLimit(1).minimumScaleFactor(0.7).frame(width: 62)
             if WorkoutMath.bwCapable(ex) && WorkoutMath.bwMode(ex) == "body" {
