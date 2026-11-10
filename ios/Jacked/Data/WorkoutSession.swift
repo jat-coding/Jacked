@@ -44,6 +44,7 @@ final class WorkoutSession: ObservableObject {
         active = ActiveWorkout(id: "w\(Self.nowMs)", routineId: nil, name: "Quick Workout", date: Self.isoNow(),
                                exercises: [], startedAt: Double(Self.nowMs))
         presented = true
+        Haptics.medium()
     }
 
     /// startEmptyOn: a workout dated noon local time on a past calendar day ("YYYY-MM-DD").
@@ -55,6 +56,7 @@ final class WorkoutSession: ObservableObject {
         active = ActiveWorkout(id: "w\(Self.nowMs)", routineId: nil, name: "Workout", date: f.string(from: d),
                                exercises: [], startedAt: Double(Self.nowMs))
         presented = true
+        Haptics.medium()
     }
 
     func start(routine r: [String: JSONValue], catalog: ExerciseCatalog, raw: [String: JSONValue]) {
@@ -64,6 +66,7 @@ final class WorkoutSession: ObservableObject {
                                date: Self.isoNow(), exercises: ids.map { exercise(for: catalog.byId($0, raw: raw), raw: raw) },
                                startedAt: Double(Self.nowMs))
         presented = true
+        Haptics.medium()
     }
 
     /// startGroupWorkout / startCuratedRoutine's ad-hoc path: a named workout from exercise ids, not saved as a routine.
@@ -72,6 +75,7 @@ final class WorkoutSession: ObservableObject {
         active = ActiveWorkout(id: "w\(Self.nowMs)", routineId: nil, name: name, date: Self.isoNow(),
                                exercises: ids.map { exercise(for: catalog.byId($0, raw: raw), raw: raw) }, startedAt: Double(Self.nowMs))
         presented = true
+        Haptics.medium()
     }
 
     /// copyFriendWorkout / _copyFriendWorkoutNow: a friend's shared workout as a fresh session of your own,
@@ -97,7 +101,7 @@ final class WorkoutSession: ObservableObject {
         let begin: () -> Void = { [weak self] in
             self?.active = ActiveWorkout(id: "w\(Self.nowMs)", routineId: nil, name: w.name.isEmpty ? "Copied Workout" : w.name,
                                          date: Self.isoNow(), exercises: exs, startedAt: Double(Self.nowMs))
-            self?.presented = true
+            self?.presented = true; Haptics.medium()
         }
         if ifFree(begin) { begin() }
         return skipped > 0 ? "Copied \u{2713} \u{00B7} \(skipped) exercise\(skipped > 1 ? "s" : "") skipped (not in your library)" : "Workout copied \u{2713}"
@@ -203,6 +207,7 @@ final class WorkoutSession: ObservableObject {
     func toggle(_ ei: Int, _ si: Int, raw: [String: JSONValue], settings: Settings) {
         guard var a = active, a.exercises.indices.contains(ei), a.exercises[ei].sets.indices.contains(si) else { return }
         a.exercises[ei].sets[si].done.toggle()
+        if !a.exercises[ei].sets[si].done { Haptics.light() }
         if a.exercises[ei].sets[si].done {
             Haptics.medium()
             let sug = WorkoutMath.suggestion(a.exercises[ei], si, raw: raw)
@@ -257,6 +262,7 @@ final class WorkoutSession: ObservableObject {
                           notes: notes, savedToServer: ok)
         active = nil
         presented = false
+        Haptics.success()
     }
 
     // MARK: routines (saveAsNewRoutine / updateRoutineFromWorkout)
