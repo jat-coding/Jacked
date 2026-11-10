@@ -81,7 +81,7 @@ struct RoutinesView: View {
             Button("Cancel", role: .cancel) { renaming = nil }
         }
         .overlay(alignment: .top) { ToastView(text: $toast) }
-        .sheet(isPresented: $showOrder) { RoutineOrderSheet() }
+        .sheet(isPresented: $showOrder) { RoutineOrderSheet().popup() }
         .task {
             #if DEBUG
             if let spec = DevHooks.section {
@@ -296,7 +296,7 @@ struct FlowLayout: Layout {
     }
 }
 
-struct RoutineDraft: Identifiable {
+struct RoutineDraft: Identifiable, Equatable {
     let uid = UUID()
     var id: String?
     var name: String
@@ -435,6 +435,7 @@ struct RoutineEditorSheet: View {
     @State var draft: RoutineDraft
     @State private var picking: Int? = nil   // -1 = add, else replace that index
     @State private var saving = false
+    @State private var initial: RoutineDraft? = nil
 
     var body: some View {
         let raw = store.backup.raw
@@ -470,6 +471,8 @@ struct RoutineEditorSheet: View {
             }
             .scrollContentBackground(.hidden).background(Theme.bg2)
             .navigationTitle(draft.id == nil ? "New Routine" : "Edit Routine").navigationBarTitleDisplayMode(.inline)
+            .onAppear { if initial == nil { initial = draft } }
+            .popup(dirty: initial != nil && initial != draft && !saving)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -480,7 +483,7 @@ struct RoutineEditorSheet: View {
             .sheet(item: Binding(get: { picking.map { PickSlot(i: $0) } }, set: { picking = $0?.i })) { slot in
                 ExercisePickerSheet { id in
                     if slot.i < 0 { draft.exercises.append(id) } else if draft.exercises.indices.contains(slot.i) { draft.exercises[slot.i] = id }
-                }
+                }.popup()
             }
         }
         .task { await catalog.load() }

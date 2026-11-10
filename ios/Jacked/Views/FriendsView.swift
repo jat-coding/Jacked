@@ -96,10 +96,11 @@ struct FriendsView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .overlay(alignment: .top) { ToastView(text: $friends.toast) }
-        .sheet(isPresented: $showAdd) { AddFriendSheet(code: auth.session?.code ?? "", prefill: DevHooks.addFriend ?? "") }
+        .sheet(isPresented: $showAdd) { AddFriendSheet(code: auth.session?.code ?? "", prefill: DevHooks.addFriend ?? "").popup() }
         .sheet(item: $open) { p in
             FriendProfileSheet(p: p, m: m, badges: badges, settings: store.backup.settings)
                 .environmentObject(auth).environmentObject(store).environmentObject(friends)
+                .popup()
         }
         .alert("Last month's winner", isPresented: $crownInfo) { Button("Got it", role: .cancel) {} } message: {
             Text("The crown goes to whoever lifted the most total weight last calendar month, among the people on that leaderboard. It only counts last month's weight lifted, and it stays all month. Nobody who lifted nothing gets it.")
