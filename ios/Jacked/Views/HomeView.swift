@@ -87,6 +87,7 @@ struct HomeView: View {
         }
         .sheet(item: $workout) { WorkoutDetailSheet(workout: $0, settings: settings) }
         .sheet(isPresented: $showAccount) { ProfileSheet() }
+        .onChange(of: showGymYears) { _, v in if v { Haptics.light() } }
         .fullScreenCover(isPresented: $showGymYears) { GymYearsView(who: "You", days: Set(h.map(\.dayKey).filter { !$0.isEmpty })) }
         .sheet(isPresented: $showStartNote) { StartWorkoutSheet().presentationDetents([.medium, .large]) }
     }
@@ -278,22 +279,7 @@ struct ExerciseThumb: View {
     let exercise: WorkoutExercise?
     let size: CGFloat
 
-    var body: some View {
-        Group {
-            if let url = exercise?.imageURL {
-                AsyncImage(url: url) { img in img.resizable().scaledToFill() } placeholder: { fallback }
-            } else { fallback }
-        }
-        .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var fallback: some View {
-        ZStack {
-            Theme.bg4
-            SFIcon("dumbbell", size * 0.38).foregroundStyle(Theme.muted)
-        }
-    }
+    var body: some View { ExPhoto(url: exercise?.imageURL, muscle: exercise?.muscle ?? "", size: size) }
 }
 
 /// The header photo button: profile photo, else initials on teal like the PWA's setHomeAv().
@@ -303,14 +289,14 @@ struct AvatarBadge: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(Theme.accent)
-            Text(initials).font(Theme.heading(17, .black)).foregroundStyle(Theme.onAccent)
+            Circle().fill(Color(hex: FriendsMath.avc(name ?? "You")))
+            Text(FriendsMath.avi(name ?? "You")).font(Theme.heading(13, .extraBold)).foregroundStyle(Theme.onAccent)
             if let url {
-                AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
+                CachedImage(url: url) { Color.clear }
                     .clipShape(Circle())
             }
         }
-        .frame(width: 44, height: 44)
+        .frame(width: 30, height: 30)
     }
 
     private var initials: String {

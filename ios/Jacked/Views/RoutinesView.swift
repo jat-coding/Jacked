@@ -179,7 +179,7 @@ struct TrustedPrograms: View {
                             Button(added == p.name ? "Added ✓" : "+ Add to Routines") { Task { await add(i) } }
                                 .font(Theme.body(12, .bold)).foregroundStyle(Theme.onAccent)
                                 .padding(.horizontal, 12).padding(.vertical, 6)
-                                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 8))
+                                .accentFill(RoundedRectangle(cornerRadius: 8))
                                 .disabled(added == p.name)
                         }
                         .frame(width: 210, alignment: .leading).frame(minHeight: 150)

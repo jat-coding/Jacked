@@ -13,17 +13,14 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            RoutinesView()
-                .tabItem { Label("ROUTINES", image: "ic-tab-routines") }.tag(Tab.routines)
-            LibraryView()
-                .tabItem { Label("LIBRARY", image: "ic-tab-library") }.tag(Tab.library)
-            HomeView()
-                .tabItem { Label("HOME", image: "ic-tab-home") }.tag(Tab.home)
-            MetricsView()
-                .tabItem { Label("METRICS", image: "ic-tab-metrics") }.tag(Tab.metrics)
-            FriendsView()
-                .tabItem { Label("FRIENDS", image: "ic-tab-friends") }.tag(Tab.friends)
-                .badge(friends.friends.filter(\.pending).count)
+            RoutinesView().toolbar(.hidden, for: .tabBar).tag(Tab.routines)
+            LibraryView().toolbar(.hidden, for: .tabBar).tag(Tab.library)
+            HomeView().toolbar(.hidden, for: .tabBar).tag(Tab.home)
+            MetricsView().toolbar(.hidden, for: .tabBar).tag(Tab.metrics)
+            FriendsView().toolbar(.hidden, for: .tabBar).tag(Tab.friends)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            NavCapsule(tab: $tab, requests: friends.friends.filter(\.pending).count)
         }
         .safeAreaInset(edge: .bottom) {
             if session.active != nil && !session.presented {
@@ -32,9 +29,10 @@ struct MainTabView: View {
                         .foregroundStyle(Theme.onAccent).padding(.horizontal, 18).padding(.vertical, 10)
                         .background(Theme.accent, in: Capsule())
                 }
-                .padding(.bottom, 56)
+                .padding(.bottom, 8)
             }
         }
+        .onChange(of: tab) { _, _ in Haptics.light() }
         .onReceive(NotificationCenter.default.publisher(for: .jackedOpenTab)) { n in
             if let t = (n.object as? String).flatMap(Tab.init(rawValue:)) { tab = t }
         }
@@ -71,20 +69,6 @@ struct MainTabView: View {
                 await catalog.load()
                 await runDevLog()
             }
-        }
-        .onAppear {
-            let a = UITabBarAppearance()
-            a.configureWithOpaqueBackground()
-            a.backgroundColor = UIColor(Theme.bg2)
-            a.shadowColor = UIColor(Theme.border)
-            let dm = UIFont(name: "DMSans-SemiBold", size: 9) ?? .systemFont(ofSize: 9, weight: .semibold)
-            for item in [a.stackedLayoutAppearance, a.inlineLayoutAppearance, a.compactInlineLayoutAppearance] {
-                item.normal.iconColor = UIColor(Theme.muted); item.selected.iconColor = UIColor(Theme.accent)
-                item.normal.titleTextAttributes = [.font: dm, .foregroundColor: UIColor(Theme.muted), .kern: 0.3]
-                item.selected.titleTextAttributes = [.font: dm, .foregroundColor: UIColor(Theme.accent), .kern: 0.3]
-            }
-            UITabBar.appearance().standardAppearance = a
-            UITabBar.appearance().scrollEdgeAppearance = a
         }
     }
 }
@@ -216,5 +200,54 @@ struct CardBackground: ViewModifier {
 extension View {
     func card(fill: Color = Theme.bg2, radius: CGFloat = Theme.radiusLarge) -> some View {
         modifier(CardBackground(fill: fill, radius: radius))
+    }
+}
+
+/// The PWA's floating bottom nav: a frosted capsule (nav, index.html:99/535), five buttons, and a teal pill
+/// (#navInd) that glides to the selected one. Icons 20pt, labels 9pt semibold uppercase.
+struct NavCapsule: View {
+    @Binding var tab: MainTabView.Tab
+    let requests: Int
+    @Namespace private var ind
+    private let items: [(MainTabView.Tab, String, String)] = [
+        (.routines, "tab-routines", "Routines"), (.library, "tab-library", "Library"), (.home, "tab-home", "Home"),
+        (.metrics, "tab-metrics", "Metrics"), (.friends, "tab-friends", "Friends")]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(items, id: \.0) { it in
+                let on = tab == it.0
+                Button { withAnimation(.timingCurve(0.3, 0.8, 0.25, 1, duration: 0.38)) { tab = it.0 } } label: {
+                    VStack(spacing: 3) {
+                        JIcon(it.1, 20).shadow(color: on ? Theme.accent.opacity(0.7) : .clear, radius: 5)
+                        Text(it.2.uppercased()).font(Theme.body(9, .semibold)).tracking(0.3).lineLimit(1)
+                    }
+                    .foregroundStyle(on ? Theme.accent : Theme.muted)
+                    .padding(.top, 8).padding(.bottom, 7).frame(maxWidth: .infinity)
+                    .background {
+                        if on {
+                            Capsule().fill(Theme.accent.opacity(0.16))
+                                .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.28), lineWidth: 1))
+                                .matchedGeometryEffect(id: "ind", in: ind)
+                        }
+                    }
+                    .overlay(alignment: .top) {
+                        if it.0 == .friends && requests > 0 {
+                            Circle().fill(Color(hex: 0xFF453A)).frame(width: 8, height: 8)
+                                .overlay(Circle().stroke(Theme.bg, lineWidth: 2)).offset(x: 12, y: 5)
+                        }
+                    }
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(it.2).accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(5)
+        .background(.ultraThinMaterial, in: Capsule())
+        .background(Color(red: 22 / 255, green: 22 / 255, blue: 30 / 255).opacity(0.62), in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+        .shadow(color: .black.opacity(0.6), radius: 15, x: 0, y: 10)
+        .padding(.horizontal, 12).padding(.bottom, 4)
     }
 }

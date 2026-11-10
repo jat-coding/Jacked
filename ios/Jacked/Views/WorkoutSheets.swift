@@ -107,17 +107,17 @@ struct WorkoutDetailSheet: View {
                 if let saveNote { Text(saveNote).font(Theme.body(12)).foregroundStyle(store.dirty ? Theme.orange : Theme.muted) }
                 Spacer()
                 Button { editing = true } label: {
-                    Label("Edit", image: "ic-pencil").font(Theme.body(13, .semibold))
+                    HStack(spacing: 5) { JIcon("pencil", 14); Text("Edit") }.font(Theme.body(13, .semibold))
                 }
                 .tint(Theme.accent)
                 .disabled(rawWorkout == nil)
                 Button { routineName = workout.name; savingRoutine = true } label: {
-                    Label("Save as Routine", image: "ic-tab-routines").font(Theme.body(13, .semibold))
+                    Text("Save as Routine").font(Theme.body(13, .semibold))
                 }
                 .tint(Theme.accent)
                 Menu {
                     Button { editing = true } label: { Label("Edit Workout", image: "ic-pencil") }
-                    Button { routineName = workout.name; savingRoutine = true } label: { Label("Save as Routine", image: "ic-tab-routines") }
+                    Button { routineName = workout.name; savingRoutine = true } label: { Text("Save as Routine") }
                     Button(role: .destructive) { confirmDelete = true } label: { Label("Delete Workout", image: "ic-trash") }
                 } label: {
                     JIcon("dots", 14).foregroundStyle(Theme.text2)

@@ -66,6 +66,8 @@
 		E51C8C6472D7B611960294BF /* BarlowCondensed-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 79166CF21DBB834C5F0E496F /* BarlowCondensed-SemiBold.ttf */; };
 		246EC07E8D500FA961F9C880 /* OFL-DMSans-Barlow.txt in Resources */ = {isa = PBXBuildFile; fileRef = B8516250F9B89BE6C2BB5846 /* OFL-DMSans-Barlow.txt */; };
 		910184F24B98C4D487B5615A /* JIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80675D7654CBD11A3E55DA63 /* JIcon.swift */; };
+		22D71F8B46FC52BC2EADE3B1 /* ImageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 472342DFA64979AD67482863 /* ImageCache.swift */; };
+		CFB9B0A82C625177F7EC31AD /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2AA65BD32996C2729F7F5C /* Haptics.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -130,6 +132,8 @@
 		79166CF21DBB834C5F0E496F /* BarlowCondensed-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = BarlowCondensed-SemiBold.ttf; sourceTree = "<group>"; };
 		B8516250F9B89BE6C2BB5846 /* OFL-DMSans-Barlow.txt */ = {isa = PBXFileReference; lastKnownFileType = file; path = OFL-DMSans-Barlow.txt; sourceTree = "<group>"; };
 		80675D7654CBD11A3E55DA63 /* JIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JIcon.swift; sourceTree = "<group>"; };
+		472342DFA64979AD67482863 /* ImageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCache.swift; sourceTree = "<group>"; };
+		FB2AA65BD32996C2729F7F5C /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -200,6 +204,7 @@
 		7E5C7084BED80FB89B624295 /* Theme */ = {
 			isa = PBXGroup;
 			children = (
+				FB2AA65BD32996C2729F7F5C /* Haptics.swift */,
 				80675D7654CBD11A3E55DA63 /* JIcon.swift */,
 				8DF8CAD4FFBC408695BE1AE4 /* Theme.swift */,
 			);
@@ -264,6 +269,7 @@
 		6D073E8790EA5B8BEFB0DD4C /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				472342DFA64979AD67482863 /* ImageCache.swift */,
 				923007BB6C48E7DC2BFCFE61 /* ImportMath.swift */,
 				DE0F1F889BB16911B97495C2 /* HistRepair.swift */,
 				DDF0E9B800DCE2D8892A7A86 /* PRReplay.swift */,
@@ -372,6 +378,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CFB9B0A82C625177F7EC31AD /* Haptics.swift in Sources */,
+				22D71F8B46FC52BC2EADE3B1 /* ImageCache.swift in Sources */,
 				910184F24B98C4D487B5615A /* JIcon.swift in Sources */,
 				D6E485753F65D6974DFD289A /* ImportMath.swift in Sources */,
 				6A188260C20711F3B322FEE9 /* HistRepair.swift in Sources */,
