@@ -19,7 +19,7 @@ struct SuggestCard: View {
                         .font(Theme.heading(24, .extraBold)).tracking(0.6).foregroundStyle(Theme.text)
                     Spacer()
                     Button { dismiss(today) } label: {
-                        Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.text2)
+                        JIcon("close", 11).foregroundStyle(Theme.text2)
                             .frame(width: 26, height: 26).background(Theme.bg3, in: Circle())
                     }
                     .buttonStyle(.plain).accessibilityLabel("Dismiss")

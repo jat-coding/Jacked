@@ -47,7 +47,7 @@ struct RoutinesView: View {
                         HStack {
                             Text(b.name.uppercased()).font(Theme.body(13, .bold)).tracking(0.4).foregroundStyle(Theme.text)
                             Spacer()
-                            Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
+                            JIcon("chevron", 13).foregroundStyle(Theme.muted)
                                 .rotationEffect(.degrees(isCollapsed ? -90 : 0))
                         }
                         .padding(.bottom, 8)
@@ -57,7 +57,7 @@ struct RoutinesView: View {
                     .buttonStyle(.plain).padding(.top, 4)
                     .contextMenu {
                         if !b.id.isEmpty {
-                            Button { renameDraft = b.name; renaming = b } label: { Label("Rename section", systemImage: "pencil") }
+                            Button { renameDraft = b.name; renaming = b } label: { Label("Rename section", image: "ic-pencil") }
                         }
                     }
                     if isCollapsed { EmptyView() } else {
@@ -158,7 +158,7 @@ struct TrustedPrograms: View {
         let pick = MetricsMath(raw: raw, lib: ExLib(db: catalog.db, raw: raw)).todaysCuratedPick(today: JackedDate.dayKey(Date())).pick
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "star.fill").foregroundStyle(Color(hex: 0xFFD700))
+                SFIcon("star.fill").foregroundStyle(Color(hex: 0xFFD700))
                 Text("TRUSTED PROGRAMS").font(Theme.heading(24, .extraBold)).foregroundStyle(Theme.text)
             }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -234,9 +234,9 @@ struct RoutineRow: View {
                 }
                 Spacer()
                 Menu {
-                    Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
-                    Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
-                } label: { Image(systemName: "ellipsis").foregroundStyle(Theme.text2).frame(width: 32, height: 32) }
+                    Button { onEdit() } label: { Label("Edit", image: "ic-pencil") }
+                    Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", image: "ic-trash") }
+                } label: { SFIcon("ellipsis").foregroundStyle(Theme.text2).frame(width: 32, height: 32) }
                 .accessibilityLabel("Routine options")
             }
             FlowChips(items: Array(names.prefix(5)) + (names.count > 5 ? ["+\(names.count - 5) more"] : []))
@@ -460,7 +460,7 @@ struct RoutineEditorSheet: View {
                                 Button("Move down") { move(i, 1) }.disabled(i == draft.exercises.count - 1)
                                 Button("Replace") { picking = i }
                                 Button("Delete", role: .destructive) { draft.exercises.remove(at: i) }
-                            } label: { Image(systemName: "ellipsis.circle").foregroundStyle(Theme.text2) }
+                            } label: { SFIcon("ellipsis.circle").foregroundStyle(Theme.text2) }
                         }
                     }
                     Button { picking = -1 } label: { Label("Add Exercises", systemImage: "plus") }
@@ -544,7 +544,7 @@ struct StartWorkoutSheet: View {
                         HStack {
                             Text(r["name"]?.string ?? "Routine").font(Theme.body(15, .semibold)).foregroundStyle(Theme.text)
                             Spacer()
-                            Image(systemName: "play.fill").foregroundStyle(Theme.accent)
+                            SFIcon("play.fill").foregroundStyle(Theme.accent)
                         }
                         .padding(14).card(fill: Theme.bg3)
                     }
