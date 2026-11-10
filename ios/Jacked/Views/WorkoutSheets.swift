@@ -14,7 +14,7 @@ struct DaySheet: View {
         SheetScaffold(title: JackedDate.dayTitle(dayKey)) {
             if workouts.isEmpty {
                 VStack(spacing: 8) {
-                    Image(systemName: "bed.double").font(.system(size: 36)).foregroundStyle(Theme.muted)
+                    JIcon("bed", 36).foregroundStyle(Theme.muted)
                     Text("sorry little baby didn't workout this day")
                         .font(Theme.body(15, .semibold)).foregroundStyle(Theme.text2).multilineTextAlignment(.center)
                 }
@@ -107,20 +107,20 @@ struct WorkoutDetailSheet: View {
                 if let saveNote { Text(saveNote).font(Theme.body(12)).foregroundStyle(store.dirty ? Theme.orange : Theme.muted) }
                 Spacer()
                 Button { editing = true } label: {
-                    Label("Edit", systemImage: "pencil").font(Theme.body(13, .semibold))
+                    Label("Edit", image: "ic-pencil").font(Theme.body(13, .semibold))
                 }
                 .tint(Theme.accent)
                 .disabled(rawWorkout == nil)
                 Button { routineName = workout.name; savingRoutine = true } label: {
-                    Label("Save as Routine", systemImage: "square.grid.2x2").font(Theme.body(13, .semibold))
+                    Label("Save as Routine", image: "ic-tab-routines").font(Theme.body(13, .semibold))
                 }
                 .tint(Theme.accent)
                 Menu {
-                    Button { editing = true } label: { Label("Edit Workout", systemImage: "pencil") }
-                    Button { routineName = workout.name; savingRoutine = true } label: { Label("Save as Routine", systemImage: "square.grid.2x2") }
-                    Button(role: .destructive) { confirmDelete = true } label: { Label("Delete Workout", systemImage: "trash") }
+                    Button { editing = true } label: { Label("Edit Workout", image: "ic-pencil") }
+                    Button { routineName = workout.name; savingRoutine = true } label: { Label("Save as Routine", image: "ic-tab-routines") }
+                    Button(role: .destructive) { confirmDelete = true } label: { Label("Delete Workout", image: "ic-trash") }
                 } label: {
-                    Image(systemName: "ellipsis").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text2)
+                    JIcon("dots", 14).foregroundStyle(Theme.text2)
                         .frame(width: 30, height: 30).background(Theme.bg4, in: Circle())
                 }
                 .disabled(rawWorkout == nil)
@@ -143,7 +143,7 @@ struct WorkoutDetailSheet: View {
                             Text(SetText.describe(s, exercise: e, settings: settings))
                                 .font(Theme.body(13)).foregroundStyle(s.done ? Theme.text2 : Theme.muted)
                             Spacer()
-                            if s.done { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.accent) }
+                            if s.done { JIcon("tick", 11).foregroundStyle(Theme.accent) }
                         }
                     }
                 }
@@ -294,7 +294,7 @@ struct EditWorkoutSheet: View {
                 Text(ex.name).font(Theme.heading(16, .bold)).foregroundStyle(Theme.accent).lineLimit(1)
                 Spacer()
                 Button { removing = ei } label: {
-                    Image(systemName: "trash").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.red)
+                    JIcon("trash", 13).foregroundStyle(Theme.red)
                         .frame(width: 30, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: 8))
                 }
                 .accessibilityLabel("Remove exercise")
@@ -324,7 +324,7 @@ struct EditWorkoutSheet: View {
                         NumberField(value: st.reps, placeholder: 0, keyboard: .numberPad) { setField(ei, si, "reps", max(0, $0)) }
                     }
                     Button { toggleDone(ei, si) } label: {
-                        Image(systemName: "checkmark").font(.system(size: 13, weight: .bold))
+                        JIcon("tick", 13)
                             .foregroundStyle(st.done ? Color(hex: 0x4DFF91) : Theme.muted).frame(width: 40, height: 32)
                     }
                 }
@@ -439,7 +439,7 @@ struct SheetScaffold<Content: View>: View {
                 Text(title).font(Theme.heading(24, .extraBold)).foregroundStyle(Theme.text).lineLimit(1)
                 Spacer()
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.text2)
+                    JIcon("close", 13).foregroundStyle(Theme.text2)
                         .frame(width: 30, height: 30).background(Theme.bg4, in: Circle())
                 }
                 .accessibilityLabel("Close")

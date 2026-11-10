@@ -58,6 +58,14 @@
 		0BFCF441D3A64F8167DCD709 /* ProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D226DB47C0EFF500E11B22CE /* ProfileSheet.swift */; };
 		6A188260C20711F3B322FEE9 /* HistRepair.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0F1F889BB16911B97495C2 /* HistRepair.swift */; };
 		D6E485753F65D6974DFD289A /* ImportMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 923007BB6C48E7DC2BFCFE61 /* ImportMath.swift */; };
+		7E3327050774212813BAFE87 /* DMSans-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C710FA111C704AE6B6A4515A /* DMSans-Light.ttf */; };
+		5B976908274B7888FEAA66E5 /* DMSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2AE3F45C6336BFDAB985F47D /* DMSans-Regular.ttf */; };
+		E278374845E3CD6D75D4ECEB /* DMSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E3570A19D56F665B0940FE03 /* DMSans-Medium.ttf */; };
+		3C8D4C5AA276F8A5C8846100 /* DMSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1DE740F6CCE96785C1EFF53B /* DMSans-SemiBold.ttf */; };
+		DD8A3C39DF3E3D6381B81187 /* BarlowCondensed-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2E626950F687A9A3FF48C9FD /* BarlowCondensed-Regular.ttf */; };
+		E51C8C6472D7B611960294BF /* BarlowCondensed-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 79166CF21DBB834C5F0E496F /* BarlowCondensed-SemiBold.ttf */; };
+		246EC07E8D500FA961F9C880 /* OFL-DMSans-Barlow.txt in Resources */ = {isa = PBXBuildFile; fileRef = B8516250F9B89BE6C2BB5846 /* OFL-DMSans-Barlow.txt */; };
+		910184F24B98C4D487B5615A /* JIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80675D7654CBD11A3E55DA63 /* JIcon.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -114,6 +122,14 @@
 		D226DB47C0EFF500E11B22CE /* ProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSheet.swift; sourceTree = "<group>"; };
 		DE0F1F889BB16911B97495C2 /* HistRepair.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistRepair.swift; sourceTree = "<group>"; };
 		923007BB6C48E7DC2BFCFE61 /* ImportMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportMath.swift; sourceTree = "<group>"; };
+		C710FA111C704AE6B6A4515A /* DMSans-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = DMSans-Light.ttf; sourceTree = "<group>"; };
+		2AE3F45C6336BFDAB985F47D /* DMSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = DMSans-Regular.ttf; sourceTree = "<group>"; };
+		E3570A19D56F665B0940FE03 /* DMSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = DMSans-Medium.ttf; sourceTree = "<group>"; };
+		1DE740F6CCE96785C1EFF53B /* DMSans-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = DMSans-SemiBold.ttf; sourceTree = "<group>"; };
+		2E626950F687A9A3FF48C9FD /* BarlowCondensed-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = BarlowCondensed-Regular.ttf; sourceTree = "<group>"; };
+		79166CF21DBB834C5F0E496F /* BarlowCondensed-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = BarlowCondensed-SemiBold.ttf; sourceTree = "<group>"; };
+		B8516250F9B89BE6C2BB5846 /* OFL-DMSans-Barlow.txt */ = {isa = PBXFileReference; lastKnownFileType = file; path = OFL-DMSans-Barlow.txt; sourceTree = "<group>"; };
+		80675D7654CBD11A3E55DA63 /* JIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JIcon.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -184,6 +200,7 @@
 		7E5C7084BED80FB89B624295 /* Theme */ = {
 			isa = PBXGroup;
 			children = (
+				80675D7654CBD11A3E55DA63 /* JIcon.swift */,
 				8DF8CAD4FFBC408695BE1AE4 /* Theme.swift */,
 			);
 			path = Theme;
@@ -221,6 +238,13 @@
 		021307FEA9633120DD28001C /* Fonts */ = {
 			isa = PBXGroup;
 			children = (
+				B8516250F9B89BE6C2BB5846 /* OFL-DMSans-Barlow.txt */,
+				79166CF21DBB834C5F0E496F /* BarlowCondensed-SemiBold.ttf */,
+				2E626950F687A9A3FF48C9FD /* BarlowCondensed-Regular.ttf */,
+				1DE740F6CCE96785C1EFF53B /* DMSans-SemiBold.ttf */,
+				E3570A19D56F665B0940FE03 /* DMSans-Medium.ttf */,
+				2AE3F45C6336BFDAB985F47D /* DMSans-Regular.ttf */,
+				C710FA111C704AE6B6A4515A /* DMSans-Light.ttf */,
 				FBC1AE161B9EE9E3197BD3F5 /* BarlowCondensed-Black.ttf */,
 				488153A8708E1C9142975955 /* BarlowCondensed-Bold.ttf */,
 				9ECF19311CB5F6DD4C4ACC82 /* BarlowCondensed-ExtraBold.ttf */,
@@ -330,6 +354,13 @@
 				E2CABC81EDCFA1CB5A230903 /* BarlowCondensed-Bold.ttf in Resources */,
 				883F59FA2C41AB6B933333C1 /* BarlowCondensed-ExtraBold.ttf in Resources */,
 				5CF551676B9C5477E09BF919 /* OFL-BarlowCondensed.txt in Resources */,
+				7E3327050774212813BAFE87 /* DMSans-Light.ttf in Resources */,
+				5B976908274B7888FEAA66E5 /* DMSans-Regular.ttf in Resources */,
+				E278374845E3CD6D75D4ECEB /* DMSans-Medium.ttf in Resources */,
+				3C8D4C5AA276F8A5C8846100 /* DMSans-SemiBold.ttf in Resources */,
+				DD8A3C39DF3E3D6381B81187 /* BarlowCondensed-Regular.ttf in Resources */,
+				E51C8C6472D7B611960294BF /* BarlowCondensed-SemiBold.ttf in Resources */,
+				246EC07E8D500FA961F9C880 /* OFL-DMSans-Barlow.txt in Resources */,
 				0B7170E70CE1CF65DA155847 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -341,6 +372,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				910184F24B98C4D487B5615A /* JIcon.swift in Sources */,
 				D6E485753F65D6974DFD289A /* ImportMath.swift in Sources */,
 				6A188260C20711F3B322FEE9 /* HistRepair.swift in Sources */,
 				0BFCF441D3A64F8167DCD709 /* ProfileSheet.swift in Sources */,

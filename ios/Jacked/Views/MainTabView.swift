@@ -14,15 +14,15 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $tab) {
             RoutinesView()
-                .tabItem { Label("Routines", systemImage: "square.grid.2x2") }.tag(Tab.routines)
+                .tabItem { Label("ROUTINES", image: "ic-tab-routines") }.tag(Tab.routines)
             LibraryView()
-                .tabItem { Label("Library", systemImage: "books.vertical") }.tag(Tab.library)
+                .tabItem { Label("LIBRARY", image: "ic-tab-library") }.tag(Tab.library)
             HomeView()
-                .tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)
+                .tabItem { Label("HOME", image: "ic-tab-home") }.tag(Tab.home)
             MetricsView()
-                .tabItem { Label("Metrics", systemImage: "waveform.path.ecg") }.tag(Tab.metrics)
+                .tabItem { Label("METRICS", image: "ic-tab-metrics") }.tag(Tab.metrics)
             FriendsView()
-                .tabItem { Label("Friends", systemImage: "person.2") }.tag(Tab.friends)
+                .tabItem { Label("FRIENDS", image: "ic-tab-friends") }.tag(Tab.friends)
                 .badge(friends.friends.filter(\.pending).count)
         }
         .safeAreaInset(edge: .bottom) {
@@ -77,6 +77,12 @@ struct MainTabView: View {
             a.configureWithOpaqueBackground()
             a.backgroundColor = UIColor(Theme.bg2)
             a.shadowColor = UIColor(Theme.border)
+            let dm = UIFont(name: "DMSans-SemiBold", size: 9) ?? .systemFont(ofSize: 9, weight: .semibold)
+            for item in [a.stackedLayoutAppearance, a.inlineLayoutAppearance, a.compactInlineLayoutAppearance] {
+                item.normal.iconColor = UIColor(Theme.muted); item.selected.iconColor = UIColor(Theme.accent)
+                item.normal.titleTextAttributes = [.font: dm, .foregroundColor: UIColor(Theme.muted), .kern: 0.3]
+                item.selected.titleTextAttributes = [.font: dm, .foregroundColor: UIColor(Theme.accent), .kern: 0.3]
+            }
             UITabBar.appearance().standardAppearance = a
             UITabBar.appearance().scrollEdgeAppearance = a
         }

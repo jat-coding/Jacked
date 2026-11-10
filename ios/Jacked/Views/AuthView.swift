@@ -213,8 +213,7 @@ private struct PasswordField<Field: Hashable>: View {
                 revealed.toggle()
                 focus.wrappedValue = field   // the swap replaces the field; keep the keyboard up
             } label: {
-                Image(systemName: revealed ? "eye.slash" : "eye")
-                    .font(.system(size: 15))
+                SFIcon(revealed ? "eye.slash" : "eye", 15)
                     .foregroundStyle(Theme.muted)
                     .frame(width: 34, height: 24)
             }
