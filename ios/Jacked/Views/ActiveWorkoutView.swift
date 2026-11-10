@@ -700,5 +700,6 @@ struct FinishSummarySheet: View {
 struct LogThumb: View {
     let url: URL?
     let muscle: String
-    var body: some View { ExPhoto(url: url, muscle: muscle, size: 40) }
+    var size: CGFloat = 40
+    var body: some View { ExPhoto(url: url, muscle: muscle, size: size) }
 }
