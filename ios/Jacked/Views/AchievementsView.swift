@@ -194,8 +194,8 @@ struct BadgeDetailSheet: View {
                             }
                             ForEach(b.lifts.filter { $0.tier == k }, id: \.key) { l in liftRow(l) }
                         }
-                        .padding(12).background(on ? c.opacity(0.08) : Theme.bg3, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(on ? c.opacity(0.55) : .clear, lineWidth: 1))
+                        .padding(12).background(on ? c.opacity(0.08) : Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(on ? c.opacity(0.55) : .clear, lineWidth: 1))
                         .contentShape(Rectangle())
                         .onTapGesture { if reached { toggle(k) } }
                         if reached && open.contains(k) {
@@ -209,15 +209,15 @@ struct BadgeDetailSheet: View {
                             Text("Below Bronze").font(Theme.body(14, .heavy)).foregroundStyle(Theme.muted)
                             ForEach(below, id: \.key) { l in liftRow(l) }
                         }
-                        .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 12)).opacity(0.7)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius)).opacity(0.7)
                     }
                 }
                 ForEach(b.sections, id: \.t) { s in
                     HStack(spacing: 8) { h(s.t); if s.met { Text("\u{2713} met").font(Theme.body(13, .semibold)).foregroundStyle(Theme.green).padding(.top, 10) } }
                     ForEach(s.rows, id: \.0) { l, v in
                         HStack { Text(l).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text2); Spacer(); Text(v).font(Theme.body(14, .heavy)).foregroundStyle(Theme.text) }
-                            .padding(12).background(s.met ? Theme.green.opacity(0.07) : Theme.bg3, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(s.met ? Theme.green.opacity(0.45) : .clear, lineWidth: 1))
+                            .padding(12).background(s.met ? Theme.green.opacity(0.07) : Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+                            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(s.met ? Theme.green.opacity(0.45) : .clear, lineWidth: 1))
                     }
                 }
                 if let a = b.all {
@@ -229,7 +229,7 @@ struct BadgeDetailSheet: View {
                     }
                     .overlay(alignment: .trailing) { if xKey != nil { SFIcon("chevron.right", 12).foregroundStyle(Theme.muted).padding(.trailing, -18)
                         .rotationEffect(.degrees(open.contains("all") ? 90 : 0)) } }
-                    .padding(12).padding(.trailing, xKey != nil ? 18 : 0).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 12)).opacity(0.55)
+                    .padding(12).padding(.trailing, xKey != nil ? 18 : 0).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius)).opacity(0.55)
                     .contentShape(Rectangle())
                     .onTapGesture { if xKey != nil { toggle("all") } }
                     if let k = xKey, open.contains("all") {
