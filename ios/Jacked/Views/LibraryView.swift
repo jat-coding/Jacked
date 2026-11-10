@@ -271,13 +271,13 @@ struct ExerciseInfoSheet: View {
         let local = ex.custom && photoTick >= 0 ? ExPhotoStore.url(ex.id) : nil
         let urls = local.map { [$0] } ?? ex.images.prefix(2).compactMap { URL(string: ExerciseImages.base + $0) }
         if urls.isEmpty {
-            ZStack { Theme.bg3; JIcon("dumbbell", 50).foregroundStyle(Theme.muted) }
+            ExPhoto.fallback(muscle: ex.muscle, size: 120)
                 .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 12))
         } else {
             HStack(spacing: 8) {
                 ForEach(urls, id: \.self) { u in
                     Color.clear.aspectRatio(1, contentMode: .fit)
-                        .overlay { AsyncImage(url: u) { $0.resizable().scaledToFill() } placeholder: { Theme.bg4 } }
+                        .overlay { CachedImage(url: u) { ExPhoto.fallback(muscle: ex.muscle, size: 80) } }
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
