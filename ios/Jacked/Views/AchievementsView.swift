@@ -106,7 +106,7 @@ struct AchievementsSheet: View {
             .padding(20)
         }
         .background(Theme.bg2.ignoresSafeArea())
-        .sheet(item: $openBadge) { BadgeDetailSheet(b: $0, m: m, T: result.ladders, onStart: onStart) }
+        .sheet(item: $openBadge) { BadgeDetailSheet(b: $0, m: m, T: result.ladders, onStart: onStart).popup() }
     }
 
     private func row(_ b: Badge) -> some View {
