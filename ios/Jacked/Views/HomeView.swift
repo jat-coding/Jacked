@@ -83,13 +83,13 @@ struct HomeView: View {
             }, onLog: {
                 dayKey = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { session.startEmpty(on: d.id) }
-            })
+            }).popup()
         }
-        .sheet(item: $workout) { WorkoutDetailSheet(workout: $0, settings: settings) }
-        .sheet(isPresented: $showAccount) { ProfileSheet() }
+        .sheet(item: $workout) { WorkoutDetailSheet(workout: $0, settings: settings).popup() }
+        .sheet(isPresented: $showAccount) { ProfileSheet().popup() }
         .onChange(of: showGymYears) { _, v in if v { Haptics.light() } }
-        .fullScreenCover(isPresented: $showGymYears) { GymYearsView(who: "You", days: Set(h.map(\.dayKey).filter { !$0.isEmpty })) }
-        .sheet(isPresented: $showStartNote) { StartWorkoutSheet().presentationDetents([.medium, .large]) }
+        .sheet(isPresented: $showGymYears) { GymYearsView(who: "You", days: Set(h.map(\.dayKey).filter { !$0.isEmpty })).popup() }
+        .sheet(isPresented: $showStartNote) { StartWorkoutSheet().presentationDetents([.medium, .large]).popup() }
     }
 
     @ViewBuilder private var syncLine: some View {
