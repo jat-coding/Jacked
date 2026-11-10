@@ -528,18 +528,21 @@ struct StartWorkoutSheet: View {
     @EnvironmentObject private var store: BackupStore
     @EnvironmentObject private var session: WorkoutSession
     @EnvironmentObject private var catalog: ExerciseCatalog
+    /// Hands the chosen start to the presenter, which runs it in the sheet's onDismiss (presenting the
+    /// workout sheet while this one is still closing leaves it unshown or untouchable).
+    var onPick: (@escaping () -> Void) -> Void = { $0() }
 
     var body: some View {
         let rs = (store.backup.raw["jk_routines"]?.array ?? []).compactMap(\.object)
         ScrollView {
             VStack(spacing: 12) {
                 Text("START WORKOUT").font(Theme.heading(24, .extraBold)).foregroundStyle(Theme.text).padding(.top, 22)
-                Button { dismiss(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { session.startEmpty() } } label: { Label("Empty Workout", systemImage: "plus").font(Theme.body(15, .semibold)) }
+                Button { onPick { session.startEmpty() }; dismiss() } label: { Label("Empty Workout", systemImage: "plus").font(Theme.body(15, .semibold)) }
                     .buttonStyle(AccentButtonStyle())
                 if !rs.isEmpty { BlockTitle(text: "From a routine").padding(.top, 8) }
                 ForEach(Array(rs.enumerated()), id: \.offset) { _, r in
                     Button {
-                        dismiss(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { session.start(routine: r, catalog: catalog, raw: store.backup.raw) }
+                        onPick { session.start(routine: r, catalog: catalog, raw: store.backup.raw) }; dismiss()
                     } label: {
                         HStack {
                             Text(r["name"]?.string ?? "Routine").font(Theme.body(15, .semibold)).foregroundStyle(Theme.text)

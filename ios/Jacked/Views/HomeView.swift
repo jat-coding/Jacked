@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var showAccount = false
     @State private var showStartNote = false
     @State private var showGymYears = false
+    @State private var pendingStart: (() -> Void)?
 
     struct DayKey: Identifiable { let id: String }
 
@@ -89,7 +90,9 @@ struct HomeView: View {
         .sheet(isPresented: $showAccount) { ProfileSheet().popup() }
         .onChange(of: showGymYears) { _, v in if v { Haptics.light() } }
         .sheet(isPresented: $showGymYears) { GymYearsView(who: "You", days: Set(h.map(\.dayKey).filter { !$0.isEmpty })).popup() }
-        .sheet(isPresented: $showStartNote) { StartWorkoutSheet().presentationDetents([.medium, .large]).popup() }
+        .sheet(isPresented: $showStartNote, onDismiss: { let f = pendingStart; pendingStart = nil; f?() }) {
+            StartWorkoutSheet(onPick: { pendingStart = $0 }).presentationDetents([.medium, .large]).popup()
+        }
     }
 
     @ViewBuilder private var syncLine: some View {
