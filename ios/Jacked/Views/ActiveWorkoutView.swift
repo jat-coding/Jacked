@@ -28,12 +28,11 @@ struct ActiveWorkoutView: View {
                                 .font(Theme.body(14)).foregroundStyle(Theme.muted).padding(.vertical, 30)
                         }
                     }
-                    Button { showAdd = true } label: { Label("Add Exercise", systemImage: "plus").font(Theme.body(15, .semibold)) }
+                    Button { showAdd = true } label: { Label("Add Exercise", systemImage: "plus") }
                         .buttonStyle(GhostButtonStyle())
-                    Button(role: .destructive) { confirmCancel = true } label: {
-                        Text("Cancel Workout").font(Theme.body(14, .semibold)).foregroundStyle(Theme.red)
-                    }
-                    .padding(.top, 6).padding(.bottom, 120)
+                    Button { confirmCancel = true } label: { Text("Cancel Workout") }
+                        .buttonStyle(DestructiveGhostButtonStyle())
+                        .padding(.bottom, 120)
                 }
                 .padding(.horizontal, 16).padding(.top, 8)
             }
@@ -212,15 +211,11 @@ struct ExerciseCard: View {
                 }
             }
             HStack(spacing: 8) {
-                Button { session.addSet(ei); Haptics.light() } label: {
-                    Label("Add Set", systemImage: "plus").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity).padding(.vertical, 8)
-                }
-                .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+                Button { session.addSet(ei); Haptics.light() } label: { Label("Add Set", systemImage: "plus") }
+                    .buttonStyle(GhostButtonStyle())
                 if ex.sets.count > 1 {
-                    Button { session.removeSet(ei, ex.sets.count - 1) } label: {
-                        Text("− Set").font(Theme.body(13, .semibold)).padding(.horizontal, 14).padding(.vertical, 8)
-                    }
-                    .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+                    Button { session.removeSet(ei, ex.sets.count - 1) } label: { Text("− Set") }
+                    .buttonStyle(GhostButtonStyle()).frame(width: 90)
                     .accessibilityLabel("Remove last set")
                 }
             }
