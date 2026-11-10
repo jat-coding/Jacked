@@ -89,11 +89,11 @@ struct SearchBox: View {
     @Binding var text: String
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
+            SFIcon("magnifyingglass").foregroundStyle(Theme.muted)
             TextField("Search exercises", text: $text).font(Theme.body(15)).foregroundStyle(Theme.text)
                 .autocorrectionDisabled().textInputAutocapitalization(.never)
             if !text.isEmpty {
-                Button { text = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted) }
+                Button { text = "" } label: { SFIcon("xmark.circle.fill").foregroundStyle(Theme.muted) }
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
@@ -218,7 +218,7 @@ struct ExerciseInfoSheet: View {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
                             Button("Hide from Library", role: .destructive) { confirmHide = true }
-                        } label: { Image(systemName: "ellipsis") }
+                        } label: { SFIcon("ellipsis") }
                     }
                 }
             }
@@ -271,7 +271,7 @@ struct ExerciseInfoSheet: View {
         let local = ex.custom && photoTick >= 0 ? ExPhotoStore.url(ex.id) : nil
         let urls = local.map { [$0] } ?? ex.images.prefix(2).compactMap { URL(string: ExerciseImages.base + $0) }
         if urls.isEmpty {
-            ZStack { Theme.bg3; Image(systemName: "dumbbell").font(.system(size: 50)).foregroundStyle(Theme.muted) }
+            ZStack { Theme.bg3; JIcon("dumbbell", 50).foregroundStyle(Theme.muted) }
                 .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 12))
         } else {
             HStack(spacing: 8) {
@@ -423,7 +423,7 @@ struct CreateExerciseSheet: View {
                                 if let photo { Image(uiImage: photo).resizable().scaledToFill() }
                                 else if !photoRemoved, let id = editing?.id, let u = ExPhotoStore.url(id), let img = UIImage(contentsOfFile: u.path) {
                                     Image(uiImage: img).resizable().scaledToFill()
-                                } else { ZStack { Theme.bg4; Image(systemName: "dumbbell").foregroundStyle(Theme.muted) } }
+                                } else { ZStack { Theme.bg4; SFIcon("dumbbell").foregroundStyle(Theme.muted) } }
                             }
                             .frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 10))
                             PhotosPicker(selection: $photoItem, matching: .images) { Text("Choose photo") }

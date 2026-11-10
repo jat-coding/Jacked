@@ -30,9 +30,11 @@ enum Theme {
     }
 
     enum HeadingWeight {
-        case bold, extraBold, black
+        case regular, semibold, bold, extraBold, black
         var postScriptName: String {
             switch self {
+            case .regular: return "BarlowCondensed-Regular"
+            case .semibold: return "BarlowCondensed-SemiBold"
             case .bold: return "BarlowCondensed-Bold"
             case .extraBold: return "BarlowCondensed-ExtraBold"
             case .black: return "BarlowCondensed-Black"
@@ -40,9 +42,16 @@ enum Theme {
         }
     }
 
-    /// --fb is DM Sans on the web. The system font stands in for now (see ios/README.md).
+    /// --fb: DM Sans (bundled, OFL), weights 300/400/500/600 like the PWA's Google Fonts link.
     static func body(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
+        let name: String
+        switch weight {
+        case .ultraLight, .thin, .light: name = "DMSans-Light"
+        case .medium: name = "DMSans-Medium"
+        case .semibold, .bold, .heavy, .black: name = "DMSans-SemiBold"
+        default: name = "DMSans-Regular"
+        }
+        return .custom(name, size: size)
     }
 }
 

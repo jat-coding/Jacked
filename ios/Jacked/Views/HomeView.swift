@@ -33,7 +33,7 @@ struct HomeView: View {
                 CalendarCard(history: h, month: $month, onTitle: { showGymYears = true }) { dayKey = DayKey(id: $0) }
                     .padding(.bottom, 20)
                 Button { if session.active != nil { session.presented = true } else { showStartNote = true } } label: {
-                    Label("Start Workout", systemImage: "play.fill").font(Theme.body(16, .semibold))
+                    HStack(spacing: 6) { JIcon("play", 15); Text("Start Workout") }.font(Theme.body(16, .semibold))
                 }
                 .buttonStyle(AccentButtonStyle())
                 .padding(.bottom, 22)
@@ -112,7 +112,7 @@ struct StreakBanner: View {
             VStack(alignment: .leading, spacing: 0) {
                 BlockTitle(text: "Streak")
                 HStack(alignment: .center, spacing: 14) {
-                    Image(systemName: "flame").font(.system(size: 28, weight: .semibold)).foregroundStyle(Theme.orange)
+                    JIcon("flame", 28).foregroundStyle(Theme.orange)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(streak) day\(streak == 1 ? "" : "s")")
                             .font(Theme.heading(30, .black)).foregroundStyle(Theme.text)
@@ -166,7 +166,7 @@ struct CalendarCard: View {
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 7), spacing: 3) {
                 ForEach(Array(["S", "M", "T", "W", "T", "F", "S"].enumerated()), id: \.offset) { i, d in
-                    Text(d).font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.muted).padding(.vertical, 3)
+                    Text(d).font(Theme.body(9, .semibold)).foregroundStyle(Theme.muted).padding(.vertical, 3)
                         .id("h\(i)")
                 }
                 // One ForEach with unique ids: separate ForEach blocks keyed by overlapping
@@ -195,7 +195,7 @@ struct CalendarCard: View {
             RoundedRectangle(cornerRadius: 6).fill(bg)
             if isToday { RoundedRectangle(cornerRadius: 6).stroke(Theme.accent, lineWidth: 1.5) }
             Text("\(d)")
-                .font(.system(size: 11, weight: worked && !isFuture ? .bold : .medium))
+                .font(Theme.body(11, worked && !isFuture ? .bold : .medium))
                 .foregroundStyle(fg)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             if worked && !isFuture { Circle().fill(Theme.accent).frame(width: 3, height: 3).padding(.bottom, 2) }
@@ -205,7 +205,7 @@ struct CalendarCard: View {
 
     private func navButton(_ icon: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text2)
+            SFIcon(icon, 13).foregroundStyle(Theme.text2)
                 .frame(width: 30, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: 8))
         }
     }
@@ -265,7 +265,7 @@ struct WorkoutRow: View {
             VStack(alignment: .trailing, spacing: 0) {
                 Text(isRun ? HomeMath.miles(w.distance) : HomeMath.fmtV(settings.display(w.totalVolume)))
                     .font(Theme.heading(18, .bold)).foregroundStyle(Theme.text2)
-                Text(isRun ? "mi" : settings.unitLabel).font(.system(size: 9)).foregroundStyle(Theme.muted)
+                Text(isRun ? "mi" : settings.unitLabel).font(Theme.body(9)).foregroundStyle(Theme.muted)
             }
         }
         .padding(12)
@@ -291,7 +291,7 @@ struct ExerciseThumb: View {
     private var fallback: some View {
         ZStack {
             Theme.bg4
-            Image(systemName: "dumbbell").font(.system(size: size * 0.38)).foregroundStyle(Theme.muted)
+            SFIcon("dumbbell", size * 0.38).foregroundStyle(Theme.muted)
         }
     }
 }
@@ -377,7 +377,7 @@ struct GymYearsView: View {
         .background(Theme.bg.ignoresSafeArea())
         .overlay(alignment: .topTrailing) {
             Button { dismiss() } label: {
-                Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text2)
+                JIcon("close", 14).foregroundStyle(Theme.text2)
                     .frame(width: 34, height: 34).background(Theme.bg3, in: Circle())
             }
             .buttonStyle(.plain).accessibilityLabel("Close").padding(.trailing, 16).padding(.top, 8)

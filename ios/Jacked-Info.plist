@@ -7,6 +7,12 @@
 		<string>BarlowCondensed-Bold.ttf</string>
 		<string>BarlowCondensed-ExtraBold.ttf</string>
 		<string>BarlowCondensed-Black.ttf</string>
+		<string>DMSans-Light.ttf</string>
+		<string>DMSans-Regular.ttf</string>
+		<string>DMSans-Medium.ttf</string>
+		<string>DMSans-SemiBold.ttf</string>
+		<string>BarlowCondensed-Regular.ttf</string>
+		<string>BarlowCondensed-SemiBold.ttf</string>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
