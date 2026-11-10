@@ -56,14 +56,15 @@ struct ActiveWorkoutView: View {
                     Button("Finish") { confirmFinish = true }.font(Theme.body(15, .bold)).disabled(finishing)
                 }
             }
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Theme.bg2, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
-        .sheet(isPresented: $showAdd) { AddExerciseSheet() }
+        .sheet(isPresented: $showAdd) { AddExerciseSheet().popup() }
         .alert(session.notice ?? "", isPresented: Binding(get: { session.notice != nil }, set: { if !$0 { session.notice = nil } })) {
             Button("OK", role: .cancel) {}
         }
-        .sheet(isPresented: $showPlates) { PlateCalcSheet(settings: settings).presentationDetents([.medium]) }
+        .sheet(isPresented: $showPlates) { PlateCalcSheet(settings: settings).presentationDetents([.medium]).popup() }
         .confirmationDialog(finishPrompt, isPresented: $confirmFinish, titleVisibility: .visible) {
             Button("Finish and save") { Task { finishing = true; await session.finish(store: store, auth: auth); finishing = false } }
         }
@@ -227,14 +228,14 @@ struct ExerciseCard: View {
         .overlay(alignment: .leading) {
             if paired { RoundedRectangle(cornerRadius: 2).fill(Theme.blue).frame(width: 3).padding(.vertical, 10) }
         }
-        .sheet(isPresented: $showReorder) { ReorderSheet() }
+        .sheet(isPresented: $showReorder) { ReorderSheet().popup() }
         .confirmationDialog(removePrompt, isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { Haptics.warning(); session.removeExercise(ei) }
         }
         .alert(info ?? "", isPresented: Binding(get: { info != nil }, set: { if !$0 { info = nil } })) {
             Button("Got it", role: .cancel) {}
         }
-        .sheet(isPresented: $showSwitch) { AddExerciseSheet(replacing: ei) }
+        .sheet(isPresented: $showSwitch) { AddExerciseSheet(replacing: ei).popup() }
     }
 
     private var removePrompt: String {
