@@ -42,7 +42,7 @@ struct ActiveWorkoutView: View {
             .safeAreaInset(edge: .bottom) { RestBar() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { session.presented = false } label: { Image(systemName: "chevron.down") }
+                    Button { session.presented = false } label: { SFIcon("chevron.down") }
                         .accessibilityLabel("Minimize")
                 }
                 ToolbarItem(placement: .principal) {
@@ -52,7 +52,7 @@ struct ActiveWorkoutView: View {
                     }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { showPlates = true } label: { Image(systemName: "circle.circle") }.accessibilityLabel("Plate calculator")
+                    Button { showPlates = true } label: { SFIcon("circle.circle") }.accessibilityLabel("Plate calculator")
                     Button("Finish") { confirmFinish = true }.font(Theme.body(15, .bold)).disabled(finishing)
                 }
             }
@@ -134,10 +134,10 @@ struct ExerciseCard: View {
         VStack(alignment: .leading, spacing: 8) {
             if paired {
                 HStack(spacing: 6) {
-                    Image(systemName: "link").font(.system(size: 11, weight: .bold))
+                    JIcon("link", 11)
                     Text("Superset with \(session.supersetPartner(ei))").font(Theme.body(11, .bold))
                     Spacer()
-                    Button { session.unlinkSuperset(ei) } label: { Image(systemName: "xmark.circle") }
+                    Button { session.unlinkSuperset(ei) } label: { SFIcon("xmark.circle") }
                         .accessibilityLabel("Unlink")
                 }
                 .foregroundStyle(Theme.blue)
@@ -153,16 +153,16 @@ struct ExerciseCard: View {
                 }
                 Spacer()
                 Button { session.tapSuperset(ei) } label: {
-                    Image(systemName: "link").foregroundStyle(picking ? Theme.accent : paired ? Theme.blue : Theme.text2).frame(width: 32, height: 32)
+                    SFIcon("link").foregroundStyle(picking ? Theme.accent : paired ? Theme.blue : Theme.text2).frame(width: 32, height: 32)
                 }
                 .accessibilityLabel("Superset")
                 Menu {
-                    Button { showReorder = true } label: { Label("Reorder exercises", systemImage: "arrow.up.arrow.down") }
-                    Button { showSwitch = true } label: { Label("Switch exercise", systemImage: "arrow.left.arrow.right") }
+                    Button { showReorder = true } label: { Label("Reorder exercises", image: "ic-sort") }
+                    Button { showSwitch = true } label: { Label("Switch exercise", image: "ic-replace") }
                     Button("Remove exercise", role: .destructive) {
                         if ex.sets.contains(where: \.done) { confirmRemove = true } else { session.removeExercise(ei) }
                     }
-                } label: { Image(systemName: "ellipsis").foregroundStyle(Theme.text2).frame(width: 32, height: 32) }
+                } label: { SFIcon("ellipsis").foregroundStyle(Theme.text2).frame(width: 32, height: 32) }
             }
             if !chips.isEmpty {
                 HStack(spacing: 6) {
@@ -197,7 +197,7 @@ struct ExerciseCard: View {
                 Text("PREV").frame(width: 62)
                 Text(col1).frame(maxWidth: .infinity)
                 Text(col2).frame(maxWidth: .infinity)
-                Image(systemName: "checkmark").frame(width: 40)
+                SFIcon("checkmark").frame(width: 40)
             }
             .font(Theme.body(10, .bold)).foregroundStyle(Theme.muted)
             ForEach(Array(ex.sets.enumerated()), id: \.offset) { si, s in
@@ -315,7 +315,7 @@ struct SetRow: View {
             HStack {
                 HStack(spacing: 2) {
                     Text("\(si + 1)").font(Theme.body(14, .bold))
-                    if star { Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(Color(hex: 0xFFD700)) }
+                    if star { JIcon("starfill", 9).foregroundStyle(Color(hex: 0xFFD700)) }
                 }
                 .padding(.leading, 10)  // breathing room from the done-row highlight's left edge
                 .frame(width: 34, alignment: .leading).foregroundStyle(set.done ? Theme.accent : Theme.text2)
@@ -349,7 +349,7 @@ struct SetRow: View {
             .padding(.vertical, 2)
             .background(set.done ? Theme.accent.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 9))
             Button { session.toggle(ei, si, raw: store.backup.raw, settings: settings) } label: {
-                Image(systemName: "checkmark").font(.system(size: 14, weight: .bold))
+                JIcon("tick", 14)
                     .foregroundStyle(set.done ? Theme.onAccent : Theme.muted)
                     .frame(width: 40, height: 34)
                     .background(set.done ? Theme.accent : Theme.bg3, in: RoundedRectangle(cornerRadius: 9))
@@ -619,7 +619,7 @@ struct FinishSummarySheet: View {
         let settings = store.backup.settings
         ScrollView {
             VStack(spacing: 12) {
-                Image(systemName: s.prs.isEmpty ? "dumbbell" : "trophy.fill").font(.system(size: 38))
+                SFIcon(s.prs.isEmpty ? "dumbbell" : "trophy.fill", 38)
                     .foregroundStyle(s.prs.isEmpty ? Theme.muted : Color(hex: 0xFFD700)).padding(.top, 24)
                 Text(s.name).font(Theme.heading(26, .extraBold)).foregroundStyle(Theme.text)
                 Text(s.savedToServer ? "Workout complete" : "Workout complete · saved on this phone, will sync when online")
@@ -703,7 +703,7 @@ struct LogThumb: View {
     var body: some View {
         Group {
             if let url { AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Theme.bg4 } }
-            else { ZStack { Theme.bg4; Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Theme.muted) } }
+            else { ZStack { Theme.bg4; JIcon("dumbbell", 15).foregroundStyle(Theme.muted) } }
         }
         .frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 8))
     }
