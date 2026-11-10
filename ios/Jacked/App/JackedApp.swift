@@ -3,6 +3,8 @@ import SwiftUI
 @main
 struct JackedApp: App {
     @StateObject private var auth = AuthStore()
+    @StateObject private var lock = AppLock()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -10,7 +12,9 @@ struct JackedApp: App {
                 .environmentObject(auth)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
-                .task { await auth.restore() }
+                .environmentObject(lock)
+                .task { await auth.restore(); lock.refreshWindow() }
+                .onChange(of: scenePhase) { _, p in lock.scenePhase(p) }
         }
     }
 }

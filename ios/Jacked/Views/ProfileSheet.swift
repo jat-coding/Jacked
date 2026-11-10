@@ -22,6 +22,8 @@ struct ProfileSheet: View {
     @State private var repMin = ""
     @State private var repMax = ""
     @State private var autoRest = true
+    @State private var healthOn = HealthLog.enabled
+    @State private var faceOn = AppLock.enabled
     @State private var sex = "male"
     @State private var bw = ""
     @State private var bwShown = 0.0
@@ -93,6 +95,26 @@ struct ProfileSheet: View {
                 }
                 .padding(14).card(fill: Theme.bg3, radius: Theme.radius)
 
+                sep(); BlockTitle(text: "This Phone").id("thisphone")
+                note("These two switches apply right away and belong to this phone only. They are not part of your synced backup.")
+                Toggle(isOn: $healthOn) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Save workouts to Apple Health").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+                        Text("Each finished workout is written to Health as strength training. Jacked only writes, it never reads Health.")
+                            .font(Theme.body(12)).foregroundStyle(Theme.muted)
+                    }
+                }
+                .tint(Theme.accent).disabled(!HealthLog.available)
+                .onChange(of: healthOn) { _, on in HealthLog.enabled = on; if on { Task { await HealthLog.requestAccess() } } }
+                Toggle(isOn: Binding(get: { faceOn }, set: { setFaceLock($0) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Face ID lock").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+                        Text("Ask for Face ID (or your passcode) when Jacked opens and after it has been in the background for a minute.")
+                            .font(Theme.body(12)).foregroundStyle(Theme.muted)
+                    }
+                }
+                .tint(Theme.accent)
+
                 sep(); BlockTitle(text: "Data & Backup")
                 note("Changes sync to the cloud automatically, and your watch picks them up from there. Export any time for an offline copy. Import a Jacked backup, or a Hevy CSV export (.csv/.txt) to bring in your history.")
                 HStack(spacing: 10) {
@@ -160,6 +182,7 @@ struct ProfileSheet: View {
         .task {
             #if DEBUG
             if let p = DevHooks.profile, p == "scroll=feedback" { try? await Task.sleep(nanoseconds: 2_000_000_000); proxy.scrollTo("feedback", anchor: .top) }
+            else if let p = DevHooks.profile, p == "scroll=thisphone" { try? await Task.sleep(nanoseconds: 2_000_000_000); proxy.scrollTo("thisphone", anchor: .top) }
             else if let p = DevHooks.profile { await devApply(p) }
             if DevHooks.deleteAccount != nil { try? await Task.sleep(nanoseconds: 800_000_000); showDelete = true }
             if let path = DevHooks.importFile { await devImport(path) }
@@ -555,6 +578,11 @@ struct ProfileSheet: View {
         var a = t.year! - d.year!
         if t.month! < d.month! || (t.month! == d.month! && t.day! < d.day!) { a -= 1 }
         return a >= 0 && a < 130 ? a : nil
+    }
+    /// Turning the lock on first proves the phone can unlock it (Face ID or passcode), so it can never lock him out.
+    private func setFaceLock(_ on: Bool) {
+        guard on else { AppLock.enabled = false; faceOn = false; return }
+        Task { if await AppLock.canEnable() { AppLock.enabled = true; faceOn = true } else { faceOn = false; message = ("Could not turn on Face ID lock. Set a passcode in iOS Settings first.", false) } }
     }
     private func sep() -> some View { Rectangle().fill(Theme.border).frame(height: 1).padding(.vertical, 6) }
     /// The PWA's <label>: small, bold, uppercase, muted.
