@@ -34,16 +34,20 @@ struct LibraryView: View {
                                     Text(c.1).font(Theme.body(12, .semibold))
                                         .foregroundStyle(on ? Theme.onAccent : Theme.text2)
                                         .padding(.horizontal, 12).padding(.vertical, 7)
-                                        .background(on ? Theme.accent : Theme.bg3, in: Capsule())
+                                        .background(on ? Theme.accent : Color.clear, in: Capsule())
+                                        .overlay(Capsule().stroke(on ? Theme.accent : Theme.border, lineWidth: 1))
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                     }
                     .padding(.bottom, 16)
-                    HStack {
+                    VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .firstTextBaseline) {
                         BlockTitle(text: "Exercises")
+                        Spacer()
                         if all.count <= PWATables.builtIns.count { ProgressView().tint(Theme.accent).padding(.bottom, 12) }
+                        else { Text("\(all.count) loaded \u{2713}").font(Theme.body(13)).foregroundStyle(Theme.muted) }
                     }
                     if shown.isEmpty {
                         Text("No results").font(Theme.heading(20, .bold)).foregroundStyle(Theme.muted)
@@ -53,6 +57,8 @@ struct LibraryView: View {
                         Button { info = e } label: { LibraryRow(e: e, fav: fav.contains(e.id)) }.buttonStyle(.plain)
                         Divider().overlay(Theme.border)
                     }
+                    }
+                    .padding(18).background(Theme.bg2, in: RoundedRectangle(cornerRadius: Theme.radiusLarge))
                 }
                 .padding(.horizontal, 16).padding(.bottom, 30)
             }
@@ -90,7 +96,7 @@ struct SearchBox: View {
     var body: some View {
         HStack(spacing: 8) {
             SFIcon("magnifyingglass").foregroundStyle(Theme.muted)
-            TextField("Search exercises", text: $text).font(Theme.body(15)).foregroundStyle(Theme.text)
+            TextField("Search exercises\u{2026}", text: $text).font(Theme.body(15)).foregroundStyle(Theme.text)
                 .autocorrectionDisabled().textInputAutocapitalization(.never)
             if !text.isEmpty {
                 Button { text = "" } label: { SFIcon("xmark.circle.fill").foregroundStyle(Theme.muted) }
@@ -98,6 +104,7 @@ struct SearchBox: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.border, lineWidth: 1))
     }
 }
 
@@ -109,7 +116,7 @@ struct LibraryRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            LogThumb(url: (e.custom ? ExPhotoStore.url(e.id) : nil) ?? e.image.map { URL(string: ExerciseImages.base + $0) } ?? nil, muscle: e.muscle)
+            LogThumb(url: (e.custom ? ExPhotoStore.url(e.id) : nil) ?? e.image.map { URL(string: ExerciseImages.base + $0) } ?? nil, muscle: e.muscle, size: 52)
             VStack(alignment: .leading, spacing: 2) {
                 (Text(fav ? "★ " : "").foregroundColor(Color(hex: 0xFFD700)) + Text(e.name))
                     .font(Theme.body(13, .semibold)).foregroundStyle(Theme.text).lineLimit(2)
