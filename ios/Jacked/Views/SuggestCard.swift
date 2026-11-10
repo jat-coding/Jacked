@@ -90,7 +90,7 @@ struct SuggestCard: View {
     private func startButton(_ title: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title).font(Theme.body(13, .semibold)).foregroundStyle(Theme.bg).lineLimit(1)
-                .padding(.horizontal, 12).padding(.vertical, 7).background(Theme.accent, in: Capsule())
+                .padding(.horizontal, 12).padding(.vertical, 7).accentFill(Capsule())
         }
         .buttonStyle(.plain)
     }
