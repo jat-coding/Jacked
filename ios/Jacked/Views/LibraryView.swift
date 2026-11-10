@@ -66,7 +66,7 @@ struct LibraryView: View {
             .background(Theme.bg.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
-        .sheet(item: $info) { ExerciseInfoSheet(ex: $0) }
+        .sheet(item: $info) { ExerciseInfoSheet(ex: $0).popup() }
         .sheet(isPresented: $showCreate) { CreateExerciseSheet() }
         .task { await catalog.load() }
         .task {
@@ -93,11 +93,16 @@ struct LibraryView: View {
 
 struct SearchBox: View {
     @Binding var text: String
+    @FocusState private var focused: Bool
     var body: some View {
         HStack(spacing: 8) {
             SFIcon("magnifyingglass").foregroundStyle(Theme.muted)
             TextField("Search exercises\u{2026}", text: $text).font(Theme.body(15)).foregroundStyle(Theme.text)
                 .autocorrectionDisabled().textInputAutocapitalization(.never)
+                .focused($focused)
+                #if DEBUG
+                .task { if ProcessInfo.processInfo.environment["JACKED_DEV_FOCUS"] == "1" { try? await Task.sleep(nanoseconds: 2_500_000_000); focused = true } }
+                #endif
             if !text.isEmpty {
                 Button { text = "" } label: { SFIcon("xmark.circle.fill").foregroundStyle(Theme.muted) }
             }
@@ -397,6 +402,7 @@ struct CreateExerciseSheet: View {
     var onSaved: () -> Void = {}
     @EnvironmentObject private var catalog: ExerciseCatalog
     @State private var loaded = false
+    @State private var baseName = ""
     @State private var photoItem: PhotosPickerItem?
     @State private var photo: UIImage?
     @State private var photoRemoved = false
@@ -465,7 +471,8 @@ struct CreateExerciseSheet: View {
             }
             .scrollContentBackground(.hidden).background(Theme.bg2)
             .navigationTitle(editing == nil ? "Create Exercise" : "Edit Exercise").navigationBarTitleDisplayMode(.inline)
-            .onAppear { if !loaded { loaded = true; prefill() } }
+            .onAppear { if !loaded { loaded = true; prefill(); baseName = name } }
+            .popup(dirty: loaded && !saving && (name != baseName || photo != nil || !notes.isEmpty && editing == nil))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
