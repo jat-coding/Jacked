@@ -55,6 +55,9 @@ import Foundation
 ///   SIMCTL_CHILD_JACKED_DEV_DELW          1: with OPEN=workout:<i>, Delete Workout through the real save path
 ///   SIMCTL_CHILD_JACKED_DEV_CANCEL        1: drop any workout left open by an earlier run first
 ///   SIMCTL_CHILD_JACKED_DEV_FINISH        1: finish the open workout through the real save path
+///   SIMCTL_CHILD_JACKED_DEV_REST          <seconds>: with LOG, start the rest timer (drives the Live Activity)
+///   SIMCTL_CHILD_JACKED_DEV_SHARECARD     <png path on the Mac>: render a SAMPLE finished-workout share card there (nothing is finished or shared)
+///   SIMCTL_CHILD_JACKED_DEV_LOCK          1: show the Face ID lock screen and stay on it (no prompt, setting not saved)
 /// Compiled out of Release builds entirely. Never point these at a real person's account
 /// (ios/REWRITE_BUILD_BRIEF.md guardrail 2).
 enum DevHooks {
@@ -74,6 +77,9 @@ enum DevHooks {
     static var logScript: String? { env["JACKED_DEV_LOG"].flatMap { $0.isEmpty ? nil : $0 } }
     static var routine: String? { env["JACKED_DEV_ROUTINE"].flatMap { $0.isEmpty ? nil : $0 } }
     static var finish: Bool { env["JACKED_DEV_FINISH"] == "1" }
+    static var restDemo: Int? { env["JACKED_DEV_REST"].flatMap { Int($0) } }
+    static var shareCardOut: String? { env["JACKED_DEV_SHARECARD"].flatMap { $0.isEmpty ? nil : $0 } }
+    static var lockDemo: Bool { env["JACKED_DEV_LOCK"] == "1" }
     static var cancel: Bool { env["JACKED_DEV_CANCEL"] == "1" }
     static var search: String? { env["JACKED_DEV_SEARCH"].flatMap { $0.isEmpty ? nil : $0 } }
     static var fav: String? { env["JACKED_DEV_FAV"].flatMap { $0.isEmpty ? nil : $0 } }
@@ -145,6 +151,9 @@ enum DevHooks {
     static var logScript: String? { nil }
     static var routine: String? { nil }
     static var finish: Bool { false }
+    static var restDemo: Int? { nil }
+    static var shareCardOut: String? { nil }
+    static var lockDemo: Bool { false }
     static var cancel: Bool { false }
     static var search: String? { nil }
     static var fav: String? { nil }

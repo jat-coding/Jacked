@@ -612,6 +612,7 @@ struct FinishSummarySheet: View {
     @State private var naming = false
     @State private var routineName = ""
     @State private var done: String?
+    @State private var card: Image?
 
     var body: some View {
         let settings = store.backup.settings
@@ -667,11 +668,18 @@ struct FinishSummarySheet: View {
                 if done == nil {
                     Button("Save as a new routine…") { naming = true }.buttonStyle(GhostButtonStyle())
                 }
+                if let card {
+                    ShareLink(item: card, message: Text("Finished \(s.name) on Jacked: \(s.duration), \(s.sets) sets, \(HomeMath.fmtV(settings.display(s.volume))) \(settings.unitLabel) lifted."),
+                              preview: SharePreview("\(s.name) on Jacked", image: card)) {
+                        Text("Share workout").frame(maxWidth: .infinity)
+                    }.buttonStyle(GhostButtonStyle())
+                }
                 Button("Done") { dismiss() }.buttonStyle(AccentButtonStyle()).padding(.top, 4)
             }
             .padding(.horizontal, 18).padding(.bottom, 30)
         }
         .background(Theme.bg2.ignoresSafeArea())
+        .task { card = WorkoutShareCard(summary: s, settings: settings).render().map(Image.init(uiImage:)) }
         .onAppear {
             // New-PR moment: a second, distinct success tap just after the finish one.
             if !s.prs.isEmpty { DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { Haptics.success() } }
