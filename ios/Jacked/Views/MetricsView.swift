@@ -26,9 +26,7 @@ struct MetricsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     PageHeader(title: "Metrics") {
-                        Button("Reorder") { showOrder = true }.font(Theme.body(14, .semibold))
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .overlay(Capsule().stroke(Theme.border2, lineWidth: 1))
+                        Button("Reorder") { showOrder = true }.buttonStyle(HeaderPillStyle())
                     }
                     ForEach(cards, id: \.self) { id in
                         VStack(alignment: .leading, spacing: 0) {
@@ -484,7 +482,7 @@ struct RecapSheet: View {
                                         .environment(\.colorScheme, .dark)).uiImage.map(Image.init(uiImage:)) {
                 ShareLink(item: img, message: Text(shareText), preview: SharePreview("\(r.label) recap", image: img)) {
                     Text("Share").font(Theme.body(15, .semibold)).foregroundStyle(Theme.bg).frame(maxWidth: 220).padding(.vertical, 12)
-                        .background(Color(hex: 0xEDEDED), in: RoundedRectangle(cornerRadius: 12))
+                        .background(Color(hex: 0xEDEDED), in: RoundedRectangle(cornerRadius: Theme.radius))
                 }
                 .padding(.bottom, 24)
             }
@@ -547,8 +545,8 @@ struct RecapSheet: View {
                             Text(b.curV ?? " ").font(Theme.body(11)).foregroundStyle(Theme.muted).lineLimit(1)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 8).padding(.horizontal, 4)
-                        .background(Theme.bg3, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(tc.map { $0.opacity(0.4) } ?? Theme.border2, lineWidth: 1))
+                        .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(tc.map { $0.opacity(0.4) } ?? Theme.border2, lineWidth: 1))
                     }
                 }
             }

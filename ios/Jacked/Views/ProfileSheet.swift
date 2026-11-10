@@ -117,10 +117,8 @@ struct ProfileSheet: View {
                 note("Signing out removes this account's copy from this phone. Your workouts stay saved in your account.")
                 Button("Sign Out") { Task { dismiss(); store.signedOut(); await auth.logOut() } }
                     .buttonStyle(GhostButtonStyle())
-                Button { showDelete = true } label: {
-                    Text("Delete Account").font(Theme.body(14, .semibold)).foregroundStyle(Theme.red).frame(maxWidth: .infinity).padding(.vertical, 11)
-                }
-                .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.red.opacity(0.5), lineWidth: 1))
+                Button("Delete Account") { showDelete = true }
+                    .buttonStyle(DestructiveGhostButtonStyle())
 
                 sep()
                 Text("Jacked for iPhone " + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""))
@@ -617,10 +615,9 @@ struct DeleteAccountSheet: View {
                     .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(matches ? Theme.red : Theme.border2, lineWidth: 1))
                 if let r = result { Text(r).font(Theme.body(13, .semibold)).foregroundStyle(Theme.orange).fixedSize(horizontal: false, vertical: true) }
                 Button { Task { await delete() } } label: {
-                    Text(busy ? "Deleting\u{2026}" : "Delete my account").font(Theme.body(15, .semibold)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity).padding(.vertical, 13)
-                        .background(Theme.red.opacity(matches && !busy ? 1 : 0.35), in: RoundedRectangle(cornerRadius: Theme.radius))
+                    Text(busy ? "Deleting\u{2026}" : "Delete my account")
                 }
+                .buttonStyle(DestructiveFilledButtonStyle(armed: matches && !busy))
                 .disabled(!matches || busy)
                 Button("Cancel") { dismiss() }.buttonStyle(GhostButtonStyle())
             }

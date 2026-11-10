@@ -158,8 +158,7 @@ struct FriendProfileSheet: View {
     /// openFriendWorkout(): every exercise and every set, weights in YOUR unit.
     @ViewBuilder private func workoutDetail(_ w: SharedWorkout) -> some View {
         let run = isRun(w.vol, w.dist)
-        Button("\u{2039} Back") { workout = nil }.font(Theme.body(13, .semibold)).foregroundStyle(Theme.text2)
-            .padding(.horizontal, 12).padding(.vertical, 7).overlay(Capsule().stroke(Theme.border2, lineWidth: 1)).buttonStyle(.plain)
+        Button("\u{2039} Back") { workout = nil }.buttonStyle(HeaderPillStyle())
         Text(w.name).font(Theme.heading(22, .extraBold)).foregroundStyle(Theme.text).padding(.top, 14)
         Text(dateText(w.date) + (run && (w.pace ?? 0) > 0 ? " \u{00B7} " + HomeMath.fmtPace(w.pace ?? 0) : "")).font(Theme.body(12)).foregroundStyle(Theme.muted).padding(.bottom, 12)
         HStack(spacing: 8) {
