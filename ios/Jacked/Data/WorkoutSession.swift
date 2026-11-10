@@ -6,7 +6,9 @@ import Foundation
 /// once, through BackupStore's merge + compare-and-swap save.
 @MainActor
 final class WorkoutSession: ObservableObject {
-    @Published var active: ActiveWorkout? { didSet { if active != oldValue { save() } } }
+    @Published var active: ActiveWorkout? { didSet {
+        if active != oldValue { save(); RestLiveActivity.sync(endsAtMs: active?.restEndsAt, workoutName: active?.name ?? "Workout") }
+    } }
     @Published var summary: Summary?
     @Published var presented = false
 
@@ -263,6 +265,12 @@ final class WorkoutSession: ObservableObject {
         active = nil
         presented = false
         Haptics.success()
+        // Apple Health (write only, never blocks, silent when denied). Backdated workouts are not written:
+        // Health would stamp them with today's clock times.
+        let endD = Date(timeIntervalSince1970: (endMs ?? Double(Self.nowMs)) / 1000)
+        let startD = Date(timeIntervalSince1970: (a.startedAt > 0 ? a.startedAt : (endMs ?? Double(Self.nowMs))) / 1000)
+        let isoF = ISO8601DateFormatter(); isoF.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if isoF.date(from: a.date).map({ Calendar.current.isDateInToday($0) }) ?? true { HealthLog.record(id: a.id, start: startD, end: endD) }
     }
 
     // MARK: routines (saveAsNewRoutine / updateRoutineFromWorkout)

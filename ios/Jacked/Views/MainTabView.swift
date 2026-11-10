@@ -113,6 +113,13 @@ extension MainTabView {
             }
             DevHooks.log("dev workout started: \(session.active?.exercises.count ?? 0) exercises")
         }
+        if let n = DevHooks.restDemo, session.active != nil { session.startRest(n); DevHooks.log("dev rest started: \(n)s, live activities \(RestLiveActivity.liveCount)") }
+        if let out = DevHooks.shareCardOut {
+            let card = WorkoutShareCard(name: "Push Day", dateLabel: Date().formatted(.dateTime.month(.abbreviated).day().year()),
+                                        duration: "52:10", sets: 18, volume: HomeMath.fmtV(store.backup.settings.display(14230)), unit: store.backup.settings.unitLabel,
+                                        prs: [("Bench Press", "185\(store.backup.settings.unitLabel) \u{00D7} 5"), ("Overhead Press", "115\(store.backup.settings.unitLabel) \u{00D7} 6")])
+            if let png = card.render()?.pngData() { try? png.write(to: URL(fileURLWithPath: out)); DevHooks.log("share card written: \(out) \(png.count) bytes") }
+        }
         if let n = DevHooks.note {
             let ok = await store.setExNote(n.exId, n.text, auth: auth)
             DevHooks.log("dev note saved=\(ok)")
@@ -224,7 +231,7 @@ struct NavCapsule: View {
         HStack(spacing: 0) {
             ForEach(items, id: \.0) { it in
                 let on = tab == it.0
-                Button { Haptics.light(); withAnimation(.timingCurve(0.3, 0.8, 0.25, 1, duration: 0.38)) { tab = it.0 } } label: {
+                Button { Haptics.light(); withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { tab = it.0 } } label: {
                     VStack(spacing: 3) {
                         JIcon(it.1, 20).shadow(color: on ? Theme.accent.opacity(0.7) : .clear, radius: 5)
                         Text(it.2.uppercased()).font(Theme.body(9, .semibold)).tracking(0.3).lineLimit(1)
@@ -232,9 +239,11 @@ struct NavCapsule: View {
                     .foregroundStyle(on ? Theme.accent : Theme.muted)
                     .padding(.top, 8).padding(.bottom, 7).frame(maxWidth: .infinity)
                     .background {
+                        // iPhone-style selection: a smaller, softer pill that slides on a spring. It is inset from the
+                        // button on every side so it reads as a highlight behind the icon, not a second capsule.
                         if on {
-                            Capsule().fill(Theme.accent.opacity(0.16))
-                                .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.28), lineWidth: 1))
+                            Capsule().fill(Theme.accent.opacity(0.12))
+                                .padding(.horizontal, 7).padding(.vertical, 3)
                                 .matchedGeometryEffect(id: "ind", in: ind)
                         }
                     }

@@ -14,6 +14,14 @@
 		<string>BarlowCondensed-Regular.ttf</string>
 		<string>BarlowCondensed-SemiBold.ttf</string>
 	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Jacked never reads your Health data.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Jacked saves each finished workout to Health as a strength training workout.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Jacked uses Face ID to unlock the app when the lock is turned on in My Profile.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>
