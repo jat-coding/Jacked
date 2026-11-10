@@ -31,7 +31,7 @@ enum BadgeUI {
     static func visible(_ all: [Badge]) -> [Badge] { all.filter { !($0.name == "Coward-Maxing" && !$0.earned) } }
 
     static func icon(_ b: Badge, size: CGFloat) -> some View {
-        Image(systemName: symbols[b.icon] ?? "rosette").font(.system(size: size * 0.8, weight: .semibold))
+        SFIcon(symbols[b.icon] ?? "rosette", size * 0.8)
             .foregroundStyle(b.earned ? color(b.color) : lockedGrey).frame(width: size, height: size)
     }
 }
@@ -44,11 +44,11 @@ struct BadgesCardRow: View {
         let list = BadgeUI.visible(badges).filter { $0.name != "Coward-Maxing" }
         Button(action: open) {
             HStack(spacing: 10) {
-                Image(systemName: "medal.fill").foregroundStyle(Color(hex: 0xFFCA4D))
+                SFIcon("medal.fill").foregroundStyle(Color(hex: 0xFFCA4D))
                 Text("Badges earned").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
                 Spacer()
                 Text("\(list.filter(\.earned).count) / \(list.count)").font(Theme.heading(18, .extraBold)).foregroundStyle(Theme.accent)
-                Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
+                SFIcon("chevron.right").foregroundStyle(Theme.muted)
             }
             .padding(.vertical, 4).contentShape(Rectangle())
         }
@@ -75,14 +75,14 @@ struct AchievementsSheet: View {
                 HStack {
                     Text("Achievements").font(Theme.heading(30, .extraBold)).foregroundStyle(Theme.text)
                     Spacer()
-                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text2)
+                    Button { dismiss() } label: { JIcon("close", 14).foregroundStyle(Theme.text2)
                         .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()) }.buttonStyle(.plain)
                 }
                 .padding(.bottom, 14)
                 if let jk {
                     Button { openBadge = jk } label: {
                         HStack(spacing: 10) {
-                            Image(systemName: "crown.fill").font(.system(size: 24)).foregroundStyle(jk.earned ? Color(hex: 0xFFD700) : BadgeUI.lockedGrey)
+                            JIcon("crown", 24).foregroundStyle(jk.earned ? Color(hex: 0xFFD700) : BadgeUI.lockedGrey)
                             Text("Jacked").font(Theme.heading(26, .extraBold)).foregroundStyle(jk.earned ? Color(hex: 0xFFD700) : Theme.muted)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -189,7 +189,7 @@ struct BadgeDetailSheet: View {
                                 if on { Text("You").font(Theme.body(11, .bold)).foregroundStyle(Theme.bg).padding(.horizontal, 6).padding(.vertical, 2).background(c, in: Capsule()) }
                                 Spacer()
                                 Text(v).font(Theme.body(14, on ? .heavy : .semibold)).foregroundStyle(Theme.text)
-                                if reached { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted)
+                                if reached { SFIcon("chevron.right", 12).foregroundStyle(Theme.muted)
                                     .rotationEffect(.degrees(open.contains(k) ? 90 : 0)) }
                             }
                             ForEach(b.lifts.filter { $0.tier == k }, id: \.key) { l in liftRow(l) }
@@ -227,7 +227,7 @@ struct BadgeDetailSheet: View {
                         Spacer()
                         if a.hasTier { Text(a.tier?.capitalized ?? "No tier").font(Theme.body(13, .bold)).foregroundStyle(Theme.muted) }
                     }
-                    .overlay(alignment: .trailing) { if xKey != nil { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.muted).padding(.trailing, -18)
+                    .overlay(alignment: .trailing) { if xKey != nil { SFIcon("chevron.right", 12).foregroundStyle(Theme.muted).padding(.trailing, -18)
                         .rotationEffect(.degrees(open.contains("all") ? 90 : 0)) } }
                     .padding(12).padding(.trailing, xKey != nil ? 18 : 0).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 12)).opacity(0.55)
                     .contentShape(Rectangle())
