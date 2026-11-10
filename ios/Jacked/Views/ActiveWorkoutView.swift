@@ -68,7 +68,7 @@ struct ActiveWorkoutView: View {
             Button("Finish and save") { Task { finishing = true; await session.finish(store: store, auth: auth); finishing = false } }
         }
         .confirmationDialog("Cancel workout? All progress will be lost.", isPresented: $confirmCancel, titleVisibility: .visible) {
-            Button("Cancel workout", role: .destructive) { session.cancel() }
+            Button("Cancel workout", role: .destructive) { Haptics.warning(); session.cancel() }
         }
     }
 
@@ -209,7 +209,7 @@ struct ExerciseCard: View {
                 }
             }
             HStack(spacing: 8) {
-                Button { session.addSet(ei) } label: {
+                Button { session.addSet(ei); Haptics.light() } label: {
                     Label("Add Set", systemImage: "plus").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity).padding(.vertical, 8)
                 }
                 .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
@@ -229,7 +229,7 @@ struct ExerciseCard: View {
         }
         .sheet(isPresented: $showReorder) { ReorderSheet() }
         .confirmationDialog(removePrompt, isPresented: $confirmRemove, titleVisibility: .visible) {
-            Button("Remove", role: .destructive) { session.removeExercise(ei) }
+            Button("Remove", role: .destructive) { Haptics.warning(); session.removeExercise(ei) }
         }
         .alert(info ?? "", isPresented: Binding(get: { info != nil }, set: { if !$0 { info = nil } })) {
             Button("Got it", role: .cancel) {}
@@ -674,6 +674,10 @@ struct FinishSummarySheet: View {
             .padding(.horizontal, 18).padding(.bottom, 30)
         }
         .background(Theme.bg2.ignoresSafeArea())
+        .onAppear {
+            // New-PR moment: a second, distinct success tap just after the finish one.
+            if !s.prs.isEmpty { DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { Haptics.success() } }
+        }
         .alert("Name this routine:", isPresented: $naming) {
             TextField("My Routine", text: $routineName)
             Button("Save") {
