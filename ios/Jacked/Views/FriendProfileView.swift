@@ -40,10 +40,10 @@ struct FriendProfileSheet: View {
             .padding(20)
         }
         .background(Theme.bg2.ignoresSafeArea())
-        .fullScreenCover(isPresented: $lightbox) { AvatarLightbox(url: URL(string: p.avatarUrl)) }
+        .sheet(isPresented: $lightbox) { AvatarLightbox(url: URL(string: p.avatarUrl)).popup() }
         .overlay(alignment: .top) { ToastView(text: $friends.toast) }
-        .sheet(isPresented: $showBadges) { FriendBadgesSheet(p: p, m: m) }
-        .fullScreenCover(isPresented: $showGymYears) { GymYearsView(who: p.isYou ? "You" : p.name, days: Set(p.days)) }
+        .sheet(isPresented: $showBadges) { FriendBadgesSheet(p: p, m: m).popup() }
+        .sheet(isPresented: $showGymYears) { GymYearsView(who: p.isYou ? "You" : p.name, days: Set(p.days)).popup() }
         .confirmationDialog("Remove this friend?", isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { let c = p.code; dismiss(); Task { await friends.remove(c, auth: auth, store: store) } }
         }

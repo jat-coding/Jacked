@@ -240,6 +240,8 @@ struct EditWorkoutSheet: View {
     @State private var adding = false
     @State private var already = false
     @EnvironmentObject private var catalog: ExerciseCatalog
+    private var dirty: Bool { !saving && (draft != original || name != (original["name"]?.string ?? "")
+        || day != ((original["date"]?.string).flatMap(JackedDate.parse) ?? day)) }
 
     init(id: JSONValue, original: [String: JSONValue], settings: Settings, onSaved: @escaping (Bool) -> Void) {
         self.id = id; self.original = original; self.settings = settings; self.onSaved = onSaved
@@ -272,7 +274,8 @@ struct EditWorkoutSheet: View {
             Button(saving ? "Saving\u{2026}" : "Save Changes") { Task { await save() } }
                 .buttonStyle(AccentButtonStyle()).disabled(saving).padding(.top, 6)
         }
-        .sheet(isPresented: $adding) { ExercisePickerSheet { addExercise($0) } }
+        .popup(dirty: dirty)
+        .sheet(isPresented: $adding) { ExercisePickerSheet { addExercise($0) }.popup() }
         .confirmationDialog("Remove this exercise from the workout?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
             Button("Remove", role: .destructive) { if let ei = removing { mutateExercises { $0.remove(at: ei) } }; removing = nil }
             Button("Cancel", role: .cancel) { removing = nil }
@@ -428,6 +431,52 @@ enum SetText {
 }
 
 /// Sheet chrome shared by the Home sheets: title, close button, scrolling content.
+/// Every popup rises from the bottom and drags down to dismiss. When `dirty` (unsaved input) a drag-down or
+/// swipe is intercepted and asks Keep editing / Discard instead of silently losing the input.
+private final class DismissGuardProxy: NSObject, UIAdaptivePresentationControllerDelegate {
+    weak var original: UIAdaptivePresentationControllerDelegate?
+    var onAttempt: () -> Void = {}
+    func presentationControllerDidAttemptToDismiss(_ presentationController: UIPresentationController) { onAttempt() }
+    override func responds(to a: Selector!) -> Bool { super.responds(to: a) || (original?.responds(to: a) ?? false) }
+    override func forwardingTarget(for a: Selector!) -> Any? { original?.responds(to: a) == true ? original : super.forwardingTarget(for: a) }
+}
+private struct DismissGuardHook: UIViewControllerRepresentable {
+    let onAttempt: () -> Void
+    final class Coord { let proxy = DismissGuardProxy() }
+    func makeCoordinator() -> Coord { Coord() }
+    func makeUIViewController(context: Context) -> UIViewController { UIViewController() }
+    func updateUIViewController(_ vc: UIViewController, context: Context) {
+        let proxy = context.coordinator.proxy
+        proxy.onAttempt = onAttempt
+        DispatchQueue.main.async {
+            guard let pc = vc.parent?.presentationController ?? vc.presentationController, pc.delegate !== proxy else { return }
+            proxy.original = pc.delegate
+            pc.delegate = proxy
+        }
+    }
+}
+private struct DiscardGuard: ViewModifier {
+    let dirty: Bool
+    @Environment(\.dismiss) private var dismiss
+    @State private var ask = false
+    func body(content: Content) -> some View {
+        content
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled(dirty)
+            .background(DismissGuardHook { if dirty { ask = true } })
+            .confirmationDialog("Discard your changes?", isPresented: $ask, titleVisibility: .visible) {
+                Button("Discard changes", role: .destructive) { dismiss() }
+                Button("Keep editing", role: .cancel) {}
+            }
+    }
+}
+extension View {
+    /// Standard popup chrome: drag indicator + interactive swipe-down dismissal.
+    func popup() -> some View { presentationDragIndicator(.visible) }
+    /// Same, but with unsaved input a swipe-down asks before discarding.
+    func popup(dirty: Bool) -> some View { modifier(DiscardGuard(dirty: dirty)) }
+}
+
 struct SheetScaffold<Content: View>: View {
     let title: String
     @ViewBuilder var content: () -> Content

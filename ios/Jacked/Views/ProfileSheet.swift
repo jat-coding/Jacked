@@ -128,7 +128,7 @@ struct ProfileSheet: View {
             }
         }
         .presentationDetents([.large])
-        .sheet(isPresented: $showDelete) { DeleteAccountSheet() }
+        .sheet(isPresented: $showDelete) { DeleteAccountSheet().popup() }
         .photosPicker(isPresented: $pickingPhoto, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
