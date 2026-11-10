@@ -477,26 +477,9 @@ struct RecapSheet: View {
         let crown = isPrev && m.crownCodes([you] + friends.friends.filter { !$0.pending }).contains(you.code)
         ScrollView {
             content(crown: crown, tiered: tiered).padding(20)
-            // shareRecap: the recap as a picture plus a one-line caption, through the share sheet.
-            if let img = ImageRenderer(content: content(crown: crown, tiered: tiered).padding(24).frame(width: 400).background(Theme.bg)
-                                        .environment(\.colorScheme, .dark)).uiImage.map(Image.init(uiImage:)) {
-                ShareLink(item: img, message: Text(shareText), preview: SharePreview("\(r.label) recap", image: img)) {
-                    Text("Share").font(Theme.body(15, .semibold)).foregroundStyle(Theme.bg).frame(maxWidth: 220).padding(.vertical, 12)
-                        .background(Color(hex: 0xEDEDED), in: RoundedRectangle(cornerRadius: Theme.radius))
-                }
-                .padding(.bottom, 24)
-            }
         }
         .background(Theme.bg2.ignoresSafeArea())
         .presentationDragIndicator(.visible)
-    }
-
-    /// shareRecap's caption.
-    private var shareText: String {
-        let s = settings
-        var t = "My \(r.label) on Jacked: \(r.sessions) sessions, \(HomeMath.fmtV(s.display(r.vol))) \(s.unitLabel) lifted, \(r.prs) PRs."
-        if let b = r.best { t += " Best lift: \(b.name) \(MetricsView.dW(b.w, s)) \(s.unitLabel) x \(WorkoutMath.n(b.r))." }
-        return t
     }
 
     private func content(crown: Bool, tiered: [Badge]) -> some View {
