@@ -8,8 +8,7 @@ export TZ="${TZ:-America/Denver}"
 db="$here/exercises.json"
 [ -s "$db" ] || curl -fsS -o "$db" "https://$(grep -o '[a-z0-9]*\.supabase\.co' "$src/Backend/SupabaseConfig.swift" | head -1)/storage/v1/object/public/exercise-images/exercises.json"
 node "$here/metrics-gen.mjs" "$db" "${PARITY_N:-300}"
-files=("$src/Data/JSONValue.swift" "$src/Data/HomeMath.swift" "$src/Data/Backup.swift" "$src/Data/PWATables.swift" "$src/Data/WorkoutLog.swift"
-  "$src/Data/LibraryMath.swift" "$src/Data/ExerciseCatalog.swift" "$src/Data/MetricsMath.swift" "$here/MetricsMain.swift" "$here/FinishStubs.swift")
+files=("$src/Data/JSONValue.swift" "$src/Data/HomeMath.swift" "$src/Data/Backup.swift" "$src/Data/PWATables.swift" "$src/Data/WorkoutLog.swift" "$src/Data/PRReplay.swift" "$src/Data/FriendsMath.swift" "$src/Data/LibraryMath.swift" "$src/Data/ExerciseCatalog.swift" "$src/Data/MetricsMath.swift" "$src/Data/BadgeMath.swift" "$src/Data/BadgeTables.swift" "$here/MetricsMain.swift" "$here/FinishStubs.swift")
 mac="${MAC_SSH:-/home/roni/agent/scripts/broker/mac-ssh}"; host=sire@jacostas-macbook-pro.tail2df36b.ts.net
 ssh_="ssh -i $HOME/.ssh/id_ed25519_mac -o BatchMode=yes -o ConnectTimeout=10 -o IdentitiesOnly=yes"
 "$mac" "rm -rf /tmp/agent-jacked-mparity && mkdir -p /tmp/agent-jacked-mparity"

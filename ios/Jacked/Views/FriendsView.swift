@@ -299,7 +299,7 @@ private struct CmpChips: View {
                 HStack(spacing: 6) {
                     ForEach(rows[r], id: \.k) { c in
                         Button { on = c.k } label: {
-                            HStack(spacing: 4) { SFIcon(c.icon, 10).foregroundStyle(on == c.k ? c.col : Theme.muted); Text(c.label) }
+                            HStack(spacing: 4) { SFIcon(c.icon, 10).foregroundStyle(on == c.k ? Theme.onAccent : Theme.muted); Text(c.label) }
                                 .font(Theme.body(11, .semibold)).foregroundStyle(on == c.k ? Theme.onAccent : Theme.muted)
                                 .padding(.horizontal, 13).padding(.vertical, 6)
                                 .background(on == c.k ? Theme.accent : .clear, in: Capsule())

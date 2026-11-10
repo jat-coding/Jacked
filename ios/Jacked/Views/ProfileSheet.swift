@@ -52,6 +52,7 @@ struct ProfileSheet: View {
     @State private var askUnit = false
 
     var body: some View {
+        ScrollViewReader { proxy in
         SheetScaffold(title: "My Profile") {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 14) {
@@ -103,7 +104,7 @@ struct ProfileSheet: View {
                                  : "Last synced " + (store.lastSynced.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "never") + ".")
                     .font(Theme.body(12)).foregroundStyle(Theme.muted)
 
-                sep(); BlockTitle(text: "Feedback")
+                sep(); BlockTitle(text: "Feedback").id("feedback")
                 note("Found a bug or want a change? Send it our way.")
                 TextField("What should we fix or add?", text: $feedbackText, axis: .vertical).lineLimit(3...6)
                     .onChange(of: feedbackText) { _, v in if v.count > 2000 { feedbackText = String(v.prefix(2000)) } }
@@ -160,10 +161,12 @@ struct ProfileSheet: View {
         .task(id: store.updatedAt) { exportURL = Self.writeExport(store.backup.raw) }
         .task {
             #if DEBUG
-            if let p = DevHooks.profile { await devApply(p) }
+            if let p = DevHooks.profile, p == "scroll=feedback" { try? await Task.sleep(nanoseconds: 2_000_000_000); proxy.scrollTo("feedback", anchor: .top) }
+            else if let p = DevHooks.profile { await devApply(p) }
             if DevHooks.deleteAccount != nil { try? await Task.sleep(nanoseconds: 800_000_000); showDelete = true }
             if let path = DevHooks.importFile { await devImport(path) }
             #endif
+        }
         }
     }
 
