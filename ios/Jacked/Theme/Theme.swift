@@ -67,12 +67,13 @@ extension Color {
 
 /// .btn.ba: solid teal, dark text, darker teal and a slight shrink while pressed.
 struct AccentButtonStyle: ButtonStyle {
+    var vertical: CGFloat = 13
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.body(15, .semibold))
             .foregroundStyle(Theme.onAccent)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
+            .padding(.vertical, vertical)
             .accentFill(RoundedRectangle(cornerRadius: Theme.radius), pressed: configuration.isPressed)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.18), value: configuration.isPressed)

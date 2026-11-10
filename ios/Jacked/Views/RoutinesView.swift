@@ -18,9 +18,8 @@ struct RoutinesView: View {
                         .font(Theme.body(14, .semibold)).padding(.horizontal, 14).padding(.vertical, 8)
                         .overlay(Capsule().stroke(Theme.border2, lineWidth: 1))
                 }
-                Button { session.startEmpty() } label: { Label("Empty Workout", systemImage: "plus").font(Theme.body(15, .semibold)) }
-                    .buttonStyle(GhostButtonStyle())
                 TrustedPrograms()
+                VStack(spacing: 12) {
                 HStack {
                     BlockTitle(text: "My Routines")
                     Spacer()
@@ -30,7 +29,6 @@ struct RoutinesView: View {
                             .overlay(Capsule().stroke(Theme.border2, lineWidth: 1)).buttonStyle(.plain)
                     }
                 }
-                .padding(.top, 8)
                 if blocks.isEmpty {
                     VStack(spacing: 4) {
                         Text("No routines").font(Theme.heading(22, .bold)).foregroundStyle(Theme.text2)
@@ -45,7 +43,7 @@ struct RoutinesView: View {
                     let isCollapsed = collapsed.contains(b.id)
                     Button { toggleCollapsed(b.id) } label: {
                         HStack {
-                            Text(b.name.uppercased()).font(Theme.body(13, .bold)).tracking(0.4).foregroundStyle(Theme.text)
+                            Text(b.name.uppercased()).font(Theme.heading(16, .bold)).tracking(0.6).foregroundStyle(Theme.text)
                             Spacer()
                             JIcon("chevron", 13).foregroundStyle(Theme.muted)
                                 .rotationEffect(.degrees(isCollapsed ? -90 : 0))
@@ -70,6 +68,8 @@ struct RoutinesView: View {
                     }
                     }
                 }
+                }
+                .padding(18).background(Theme.bg2, in: RoundedRectangle(cornerRadius: Theme.radiusLarge))
             }
             .padding(.horizontal, 16).padding(.bottom, 30)
         }
@@ -183,7 +183,7 @@ struct TrustedPrograms: View {
                                 .disabled(added == p.name)
                         }
                         .frame(width: 210, alignment: .leading).frame(minHeight: 150)
-                        .padding(14).card(fill: Theme.bg3)
+                        .padding(14).overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge).stroke(Theme.border2, lineWidth: 1))
                     }
                 }
             }
@@ -241,11 +241,13 @@ struct RoutineRow: View {
             }
             FlowChips(items: Array(names.prefix(5)) + (names.count > 5 ? ["+\(names.count - 5) more"] : []))
             Button { session.start(routine: r, catalog: catalog, raw: store.backup.raw) } label: {
-                Text("Start Workout").font(Theme.body(14, .bold)).frame(maxWidth: .infinity)
+                Text("Start Workout").font(Theme.body(14, .semibold)).padding(.horizontal, 24)
             }
-            .buttonStyle(AccentButtonStyle())
+            .buttonStyle(AccentButtonStyle(vertical: 9)).fixedSize()
         }
-        .padding(14).card()
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
         .confirmationDialog("Delete this routine?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 let id = r["id"]
