@@ -534,12 +534,12 @@ struct StartWorkoutSheet: View {
         ScrollView {
             VStack(spacing: 12) {
                 Text("START WORKOUT").font(Theme.heading(24, .extraBold)).foregroundStyle(Theme.text).padding(.top, 22)
-                Button { dismiss(); session.startEmpty() } label: { Label("Empty Workout", systemImage: "plus").font(Theme.body(15, .semibold)) }
+                Button { dismiss(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { session.startEmpty() } } label: { Label("Empty Workout", systemImage: "plus").font(Theme.body(15, .semibold)) }
                     .buttonStyle(AccentButtonStyle())
                 if !rs.isEmpty { BlockTitle(text: "From a routine").padding(.top, 8) }
                 ForEach(Array(rs.enumerated()), id: \.offset) { _, r in
                     Button {
-                        dismiss(); session.start(routine: r, catalog: catalog, raw: store.backup.raw)
+                        dismiss(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { session.start(routine: r, catalog: catalog, raw: store.backup.raw) }
                     } label: {
                         HStack {
                             Text(r["name"]?.string ?? "Routine").font(Theme.body(15, .semibold)).foregroundStyle(Theme.text)
