@@ -1,0 +1,4 @@
+DM Sans (c) The DM Sans Project Authors (https://github.com/googlefonts/dm-fonts)
+Barlow Condensed (c) The Barlow Project Authors (https://github.com/jpt/barlow)
+Both are licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org).
+Latin subsets obtained from Fontsource (https://fontsource.org), converted from WOFF to TTF unchanged.

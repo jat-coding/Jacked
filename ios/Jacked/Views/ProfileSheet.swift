@@ -56,7 +56,7 @@ struct ProfileSheet: View {
                     // renderAvPrev: the photo, else initials on the name's colour (avHTML), like the web app.
                     ZStack {
                         Circle().fill(Color(hex: FriendsMath.avc(name)))
-                        Text(FriendsMath.avi(name)).font(.system(size: 23, weight: .bold)).foregroundStyle(Theme.onAccent)
+                        Text(FriendsMath.avi(name)).font(Theme.body(23, .semibold)).foregroundStyle(Theme.onAccent)
                         if let u = store.backup.avatarURL {
                             AsyncImage(url: u) { $0.resizable().scaledToFill() } placeholder: { Color.clear }.clipShape(Circle())
                         }
@@ -578,7 +578,7 @@ struct DeleteAccountSheet: View {
         let matches = !code.isEmpty && Username.normalize(typed) == code
         SheetScaffold(title: "Delete Account") {
             VStack(alignment: .leading, spacing: 12) {
-                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 34)).foregroundStyle(Theme.red).frame(maxWidth: .infinity)
+                JIcon("warning", 34).foregroundStyle(Theme.red).frame(maxWidth: .infinity)
                 Text("This permanently deletes your Jacked account and everything in it: every workout, routine, personal record, body weight entry, badge and photo. You leave your friends' leaderboards and they can no longer see you. It can't be undone.")
                     .font(Theme.body(14)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
                 Text("Want to keep your history? Use Export on your Profile first.").font(Theme.body(13)).foregroundStyle(Theme.muted)

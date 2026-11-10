@@ -29,7 +29,7 @@ struct FriendProfileSheet: View {
                         Text(p.username).font(Theme.body(12)).foregroundStyle(Theme.muted)
                     }
                     Spacer()
-                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text2)
+                    Button { dismiss() } label: { JIcon("close", 14).foregroundStyle(Theme.text2)
                         .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()) }.buttonStyle(.plain)
                 }
                 .padding(.bottom, 16)
@@ -59,7 +59,7 @@ struct FriendProfileSheet: View {
     @ViewBuilder private var overview: some View {
         if p.hasJacked {
             HStack(spacing: 12) {
-                Image(systemName: "crown.fill").font(.system(size: 26)).foregroundStyle(Color(hex: 0xFFD700)).shadow(color: Color(hex: 0xFFD700).opacity(0.6), radius: 6)
+                JIcon("crown", 26).foregroundStyle(Color(hex: 0xFFD700)).shadow(color: Color(hex: 0xFFD700).opacity(0.6), radius: 6)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("JACKED").font(Theme.heading(17, .extraBold)).tracking(1).foregroundStyle(Color(hex: 0xFFD700))
                     Text("\(p.isYou ? "You hold" : "Holds") every monthly and 3-month badge, with every tiered badge earned.").font(Theme.body(12)).foregroundStyle(Theme.muted)
@@ -78,10 +78,10 @@ struct FriendProfileSheet: View {
         .padding(.bottom, 10)
         HStack(spacing: 8) {
             StatTile(v: WorkoutMath.n(p.streak), l: "Day Streak", size: 20, color: Theme.orange)
-                .overlay(alignment: .topTrailing) { Image(systemName: "flame.fill").foregroundStyle(Theme.orange).padding(12) }
+                .overlay(alignment: .topTrailing) { SFIcon("flame.fill").foregroundStyle(Theme.orange).padding(12) }
             Button { showBadges = true } label: {
                 StatTile(v: WorkoutMath.n(p.badges), l: "Badges \u{203A}", size: 20, color: Color(hex: 0xFFCA4D))
-                    .overlay(alignment: .topTrailing) { Image(systemName: "medal.fill").foregroundStyle(Color(hex: 0xFFCA4D)).padding(12) }
+                    .overlay(alignment: .topTrailing) { SFIcon("medal.fill").foregroundStyle(Color(hex: 0xFFCA4D)).padding(12) }
             }.buttonStyle(.plain)
         }
         .padding(.bottom, 14)
@@ -92,7 +92,7 @@ struct FriendProfileSheet: View {
         .padding(.bottom, 12)
         Button { showGymYears = true } label: {
             HStack(spacing: 6) {
-                Image(systemName: "calendar").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.accent)
+                JIcon("calendar", 15).foregroundStyle(Theme.accent)
                 Text("Gym years \u{203A}").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
             }
             .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -165,7 +165,7 @@ struct FriendProfileSheet: View {
             StatTile(v: "\(w.ex.count)", l: "Exercises")
         }
         .padding(.bottom, 14)
-        Button { copy(w) } label: { Label("Copy to my workout", systemImage: "doc.on.clipboard").frame(maxWidth: .infinity) }
+        Button { copy(w) } label: { Label("Copy to my workout", image: "ic-clipboard").frame(maxWidth: .infinity) }
             .buttonStyle(AccentButtonStyle()).padding(.bottom, 14)
         BlockTitle(text: "Exercises & sets")
         if w.ex.isEmpty { Text("No exercise detail shared.").font(Theme.body(13)).foregroundStyle(Theme.muted) }
@@ -254,7 +254,7 @@ struct FriendBadgesSheet: View {
                         Text(p.name + (p.isYou ? " (You)" : "")).font(Theme.body(12)).foregroundStyle(Theme.muted)
                     }
                     Spacer()
-                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text2)
+                    Button { dismiss() } label: { JIcon("close", 14).foregroundStyle(Theme.text2)
                         .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()) }.buttonStyle(.plain)
                 }
                 .padding(.bottom, 10)
@@ -267,7 +267,7 @@ struct FriendBadgesSheet: View {
                     let parts = b.e.split(separator: "|").map(String.init)
                     let icon = parts.first ?? "medal", col = parts.count > 1 ? parts[1] : "var(--muted)"
                     HStack(spacing: 12) {
-                        Image(systemName: BadgeUI.symbols[icon] ?? "medal.fill").font(.system(size: 22)).foregroundStyle(BadgeUI.color(col.hasPrefix("var(--") ? String(col.dropFirst(6).dropLast()) : col))
+                        SFIcon(BadgeUI.symbols[icon] ?? "medal.fill", 22).foregroundStyle(BadgeUI.color(col.hasPrefix("var(--") ? String(col.dropFirst(6).dropLast()) : col))
                             .frame(width: 28)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(shown).font(Theme.body(14, .bold)).foregroundStyle(Theme.text)

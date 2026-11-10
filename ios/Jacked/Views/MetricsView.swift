@@ -35,7 +35,7 @@ struct MetricsView: View {
                             HStack(alignment: .top) {
                                 BlockTitle(text: MetricsMath.cardTitles[id] ?? id)
                                 Button { Task { await Self.toggleCard(id, store: store, auth: auth) } } label: {
-                                    Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.text2)
+                                    JIcon("close", 11).foregroundStyle(Theme.text2)
                                         .frame(width: 26, height: 26).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 8))
                                 }
                                 .buttonStyle(.plain).accessibilityLabel("Hide card")
@@ -126,7 +126,7 @@ struct MetricsView: View {
             }
             if let t = l.top {
                 HStack(spacing: 10) {
-                    Image(systemName: "trophy.fill").font(.system(size: 22)).foregroundStyle(Color(hex: 0xFFD700))
+                    JIcon("trophy", 22).foregroundStyle(Color(hex: 0xFFD700))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("TOP PR").font(Theme.body(11, .semibold)).tracking(0.5).foregroundStyle(Theme.muted)
                         Text(t.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
@@ -148,18 +148,18 @@ struct MetricsView: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
                 Button { recap = r } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: "calendar.badge.checkmark").font(.system(size: 20)).foregroundStyle(Theme.accent)
+                        JIcon("calendarCheck", 20).foregroundStyle(Theme.accent)
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 5) {
                                 Text("\(r.label) \(String(r.y))").font(Theme.body(14, .bold)).foregroundStyle(Theme.text)
                                 if crowned && r.y * 12 + (r.m + 1) == now.year! * 12 + now.month! - 1 {
-                                    Image(systemName: "crown.fill").font(.system(size: 12)).foregroundStyle(Color(hex: 0xFFD700))
+                                    JIcon("crown", 12).foregroundStyle(Color(hex: 0xFFD700))
                                 }
                             }
                             Text(Self.recapLine(r, s)).font(Theme.body(12)).foregroundStyle(Theme.muted)
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
+                        SFIcon("chevron.right").foregroundStyle(Theme.muted)
                     }
                     .padding(.vertical, 10).contentShape(Rectangle())
                 }
@@ -236,7 +236,7 @@ private struct Insight: View {
     let icon: String; let color: Color; let text: Text
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon).font(.system(size: 18)).foregroundStyle(color)
+            SFIcon(icon, 18).foregroundStyle(color)
             text.font(Theme.body(13)).foregroundStyle(color).lineSpacing(3).frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius)).padding(.top, 10)
@@ -329,7 +329,7 @@ struct MuscleMapCard: View {
                     .font(Theme.body(12)).foregroundStyle(Theme.muted)
                 Spacer(minLength: 0)
                 if r.mode == "strength" {
-                    Button(action: info) { Image(systemName: "info.circle").font(.system(size: 16)).foregroundStyle(Theme.text2) }
+                    Button(action: info) { JIcon("info", 16).foregroundStyle(Theme.text2) }
                         .buttonStyle(.plain).accessibilityLabel("How the muscle rankings are scored")
                 }
             }
@@ -524,7 +524,7 @@ struct RecapSheet: View {
                 if !chips.isEmpty {
                     HStack(spacing: 6) {
                         ForEach(chips, id: \.1) { c in
-                            HStack(spacing: 5) { Image(systemName: c.0).font(.system(size: 12)); Text(c.1.uppercased()).font(Theme.body(11, .heavy)).tracking(0.5) }
+                            HStack(spacing: 5) { SFIcon(c.0, 12); Text(c.1.uppercased()).font(Theme.body(11, .heavy)).tracking(0.5) }
                                 .foregroundStyle(Color(hex: 0xFFD700)).padding(.horizontal, 10).padding(.vertical, 4)
                                 .background(Color(hex: 0xFFD700).opacity(0.08), in: Capsule())
                                 .overlay(Capsule().stroke(Color(hex: 0xFFD700).opacity(0.4), lineWidth: 1))
@@ -539,7 +539,7 @@ struct RecapSheet: View {
                         let tc = b.tier.flatMap { BadgeUI.tierColor[$0] }
                         VStack(spacing: 2) {
                             // The recap colours every tiered badge's icon (uic(b.icon, b.color)), earned or not.
-                            Image(systemName: BadgeUI.symbols[b.icon] ?? "rosette").font(.system(size: 18, weight: .semibold))
+                            SFIcon(BadgeUI.symbols[b.icon] ?? "rosette", 18)
                                 .foregroundStyle(BadgeUI.color(b.color)).frame(width: 22, height: 22)
                             Text(Self.tierShort[b.name] ?? b.name).font(Theme.body(13, .heavy)).foregroundStyle(Theme.text).lineLimit(1).padding(.top, 2)
                             Text((b.tier ?? "\u{2014}").uppercased()).font(Theme.body(10, .heavy)).tracking(0.8).foregroundStyle(tc ?? Theme.muted)
@@ -554,7 +554,7 @@ struct RecapSheet: View {
     }
     private func row(_ icon: String, _ c: Color, _ t: String, _ sub: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 20)).foregroundStyle(c)
+            SFIcon(icon, 20).foregroundStyle(c)
             VStack(alignment: .leading, spacing: 1) {
                 Text(t).font(Theme.body(13, .bold)).foregroundStyle(Theme.text)
                 Text(sub).font(Theme.body(12)).foregroundStyle(Theme.muted).lineLimit(1)
@@ -583,17 +583,17 @@ struct HomeRecapCard: View {
         let show = cal.component(.day, from: now) <= 7 && raw["jk_recapDismissed"]?.string != key
         if show, let d = MetricsMath(raw: raw, lib: ExLib(db: [], raw: raw)).recapData(pc.year!, pc.month! - 1) {
             HStack(spacing: 11) {
-                Image(systemName: "calendar.badge.checkmark").font(.system(size: 24)).foregroundStyle(Theme.accent)
+                JIcon("calendarCheck", 24).foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 5) {
                     Text("\(d.label) recap".uppercased()).font(Theme.heading(21.6, .extraBold)).tracking(0.6).foregroundStyle(Theme.text)
                     Text(MetricsView.recapLine(d, s).uppercased()).font(Theme.body(10, .semibold)).tracking(0.5).foregroundStyle(Theme.muted)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
+                SFIcon("chevron.right").foregroundStyle(Theme.muted)
                 Button {
                     Task { await store.edit(auth: auth) { $0["jk_recapDismissed"] = .string(key) } }
                 } label: {
-                    Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.text2)
+                    JIcon("close", 11).foregroundStyle(Theme.text2)
                         .frame(width: 26, height: 26).background(Theme.bg3, in: Circle())
                 }
                 .buttonStyle(.plain).accessibilityLabel("Dismiss")

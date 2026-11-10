@@ -41,7 +41,7 @@ struct FriendsView: View {
                             HStack(spacing: 4) {
                                 Text("+ Friend")
                                 if !pending.isEmpty {
-                                    Text("\(pending.count)").font(.system(size: 10, weight: .heavy)).foregroundStyle(.white)
+                                    Text("\(pending.count)").font(Theme.body(10, .semibold)).foregroundStyle(.white)
                                         .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16).background(Color(hex: 0xFF453A), in: Capsule())
                                 }
                             }
@@ -67,7 +67,7 @@ struct FriendsView: View {
                     .padding(16).card()
                     if !pending.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
-                            HStack(spacing: 6) { Image(systemName: "hourglass").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.text).padding(.bottom, 12); BlockTitle(text: "Pending") }
+                            HStack(spacing: 6) { JIcon("hourglass", 16).foregroundStyle(Theme.text).padding(.bottom, 12); BlockTitle(text: "Pending") }
                             ForEach(pending) { p in
                                 reqRow(p, note: nil) {
                                     Button("Accept") { Task { await friends.accept(p.code, auth: auth) } }.buttonStyle(SmallPill(fill: Theme.accent, fg: Theme.onAccent))
@@ -127,7 +127,7 @@ struct FriendsView: View {
             HStack(alignment: .top) {
                 BlockTitle(text: "Leaderboards")
                 Button { crownInfo = true } label: {
-                    HStack(spacing: 4) { Image(systemName: "crown.fill").font(.system(size: 11)).foregroundStyle(Color(hex: 0xFFD700)); Text("Last month's winner") }
+                    HStack(spacing: 4) { JIcon("crown", 11).foregroundStyle(Color(hex: 0xFFD700)); Text("Last month's winner") }
                         .font(Theme.body(12, .semibold)).foregroundStyle(Theme.text2)
                 }.buttonStyle(.plain).padding(.top, 6)
             }
@@ -165,7 +165,7 @@ struct FriendsView: View {
                         HStack(spacing: 12) {
                             Group {
                                 if z { Text("\u{2013}").foregroundStyle(Theme.muted) }
-                                else if i < 3 { Image(systemName: "medal.fill").foregroundStyle([Color(hex: 0xFFD700), Color(hex: 0xB8B8C8), Color(hex: 0xCD7F32)][i]) }
+                                else if i < 3 { SFIcon("medal.fill").foregroundStyle([Color(hex: 0xFFD700), Color(hex: 0xB8B8C8), Color(hex: 0xCD7F32)][i]) }
                                 else { Text("#\(i + 1)").foregroundStyle(Theme.muted) }
                             }
                             .font(Theme.heading(20, .extraBold)).frame(width: 32)
@@ -173,7 +173,7 @@ struct FriendsView: View {
                             nameBlock(p, sub: p.username, crown: crowned.contains(p.code))
                             HStack(spacing: 3) {
                                 Text(fmt(def.k, v, s))
-                                if def.k == "badges" { Image(systemName: "medal.fill").font(.system(size: 14)) }
+                                if def.k == "badges" { JIcon("medal", 14) }
                             }
                             .font(Theme.heading(20, .extraBold)).foregroundStyle(i == 0 && !z ? Theme.accent : Theme.text2)
                         }
@@ -236,13 +236,13 @@ struct FriendsView: View {
     private func nameBlock(_ p: Person, sub: String, medal: Bool = false, crown: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
-                if crown { Image(systemName: "crown.fill").font(.system(size: 12)).foregroundStyle(Color(hex: 0xFFD700)) }
+                if crown { JIcon("crown", 12).foregroundStyle(Color(hex: 0xFFD700)) }
                 Text(p.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text).lineLimit(1)
                 if p.isYou { Text("(You)").font(Theme.body(10, .bold)).foregroundStyle(Theme.accent) }
             }
             HStack(spacing: 3) {
                 Text(sub).lineLimit(1)
-                if medal { Image(systemName: "medal.fill").font(.system(size: 10)) }
+                if medal { JIcon("medal", 10) }
             }
             .font(Theme.body(11)).foregroundStyle(Theme.muted)
         }
@@ -251,7 +251,7 @@ struct FriendsView: View {
 
     private func subTitle(star: Bool, _ t: String) -> some View {
         HStack(spacing: 4) {
-            if star { Image(systemName: "star.fill").font(.system(size: 11)).foregroundStyle(Color(hex: 0xFFD700)) }
+            if star { JIcon("starfill", 11).foregroundStyle(Color(hex: 0xFFD700)) }
             Text(t.uppercased())
         }
         .font(Theme.body(11, .bold)).tracking(0.8).foregroundStyle(Theme.muted).padding(.bottom, 6)
@@ -299,7 +299,7 @@ private struct CmpChips: View {
                 HStack(spacing: 6) {
                     ForEach(rows[r], id: \.k) { c in
                         Button { on = c.k } label: {
-                            HStack(spacing: 4) { Image(systemName: c.icon).font(.system(size: 10)).foregroundStyle(on == c.k ? c.col : Theme.muted); Text(c.label) }
+                            HStack(spacing: 4) { SFIcon(c.icon, 10).foregroundStyle(on == c.k ? c.col : Theme.muted); Text(c.label) }
                                 .font(Theme.body(11, .semibold)).foregroundStyle(on == c.k ? Theme.onAccent : Theme.muted)
                                 .padding(.horizontal, 13).padding(.vertical, 6)
                                 .background(on == c.k ? Theme.accent : .clear, in: Capsule())
@@ -350,7 +350,7 @@ struct Avatar: View {
     var body: some View {
         ZStack {
             Circle().fill(Color(hex: FriendsMath.avc(p.name)))
-            Text(FriendsMath.avi(p.name)).font(.system(size: size * 0.4, weight: .bold)).foregroundStyle(Theme.onAccent)
+            Text(FriendsMath.avi(p.name)).font(Theme.body(size * 0.4, .semibold)).foregroundStyle(Theme.onAccent)
             if let u = URL(string: p.avatarUrl), !p.avatarUrl.isEmpty {
                 AsyncImage(url: u) { $0.resizable().scaledToFill() } placeholder: { Color.clear }.clipShape(Circle())
             }
@@ -391,7 +391,7 @@ struct AddFriendSheet: View {
             HStack {
                 Text("Add Friend").font(Theme.heading(26, .extraBold)).foregroundStyle(Theme.text)
                 Spacer()
-                Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text2)
+                Button { dismiss() } label: { JIcon("close", 14).foregroundStyle(Theme.text2)
                     .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()) }.buttonStyle(.plain)
             }
             VStack(spacing: 6) {
