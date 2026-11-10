@@ -59,11 +59,11 @@ struct MetricsView: View {
             .background(Theme.bg.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
-        .sheet(isPresented: $showOrder) { CardOrderSheet() }
-        .sheet(item: $recap) { RecapSheet(r: $0, settings: store.backup.settings) }
-        .sheet(isPresented: $showScoring) { MuscleScoringSheet(sex: m.sex) }
+        .sheet(isPresented: $showOrder) { CardOrderSheet().popup() }
+        .sheet(item: $recap) { RecapSheet(r: $0, settings: store.backup.settings).popup() }
+        .sheet(isPresented: $showScoring) { MuscleScoringSheet(sex: m.sex).popup() }
         .onChange(of: showAch) { _, v in if v { Haptics.light() } }
-        .sheet(isPresented: $showAch) { AchievementsSheet(result: m.computeBadges(), m: m, openBadge: devBadge, onStart: badgeStart) }
+        .sheet(isPresented: $showAch) { AchievementsSheet(result: m.computeBadges(), m: m, openBadge: devBadge, onStart: badgeStart).popup() }
         .task(id: "\(store.loadedCode ?? "")|\(catalog.db.count)|\(store.backup.history.count)") {
             guard store.loadedCode != nil, store.lastSynced != nil else { return }
             let (st, au, db) = (store, auth, catalog.db)
@@ -602,7 +602,7 @@ struct HomeRecapCard: View {
             .padding(16).card().contentShape(Rectangle())
             .onTapGesture { open = d }
             .padding(.bottom, 20)
-            .sheet(item: $open) { RecapSheet(r: $0, settings: s) }
+            .sheet(item: $open) { RecapSheet(r: $0, settings: s).popup() }
         }
     }
 }

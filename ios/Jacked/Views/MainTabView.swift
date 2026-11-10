@@ -37,13 +37,15 @@ struct MainTabView: View {
                     }
                 }
         }
+        .ignoresSafeArea(.keyboard)   // outside the inset: the keyboard never lifts the tab bar (or the screens under it)
         .onReceive(NotificationCenter.default.publisher(for: .jackedOpenTab)) { n in
             if let t = (n.object as? String).flatMap(Tab.init(rawValue:)) { tab = t }
         }
-        .fullScreenCover(isPresented: $session.presented) {
+        .sheet(isPresented: $session.presented) {
             ActiveWorkoutView()
                 .environmentObject(auth).environmentObject(store).environmentObject(session).environmentObject(catalog)
                 .preferredColorScheme(.dark)
+                .presentationDetents([.large]).popup()   // minimize = swipe down; the workout lives in WorkoutSession, nothing is lost
         }
         .confirmationDialog(busyPrompt, isPresented: Binding(get: { session.busyStart != nil }, set: { if !$0 { session.busyStart = nil } }),
                             titleVisibility: .visible) {
@@ -53,6 +55,7 @@ struct MainTabView: View {
         .sheet(item: $session.summary) { s in
             FinishSummarySheet(s: s)
                 .environmentObject(auth).environmentObject(store).environmentObject(session)
+                .popup()
         }
         .environmentObject(store)
         .environmentObject(session)
