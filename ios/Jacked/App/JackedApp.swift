@@ -13,7 +13,7 @@ struct JackedApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
                 .environmentObject(lock)
-                .task { await auth.restore(); lock.refreshWindow() }
+                .task { lock.auth = auth; await auth.restore(); lock.refreshWindow() }
                 .onChange(of: scenePhase) { _, p in lock.scenePhase(p) }
         }
     }

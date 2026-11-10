@@ -2,14 +2,15 @@ import Combine
 import LocalAuthentication
 import SwiftUI
 
-/// Face ID lock on open (My Profile, default OFF). Locks on a cold start and when the app comes back
-/// after a minute or more in the background. LocalAuthentication's deviceOwnerAuthentication policy
+/// "Require login every time I open the app" (My Profile, default OFF). Sign-in happens once (email or
+/// username + password, saved in the Keychain session); after that the app opens straight in. Only when
+/// this switch is on does each open (cold start, or back from the background for 15s+) ask for Face ID. LocalAuthentication's deviceOwnerAuthentication policy
 /// is Face ID with the device passcode as the fallback. The lock screen lives in its own UIWindow so
 /// it also covers any sheet that was open.
 @MainActor
 final class AppLock: ObservableObject {
-    static let enabledKey = "jacked.faceid.enabled"
-    static let graceSeconds: TimeInterval = 60
+    static let enabledKey = "jacked.faceid.enabled"   // key kept: the old Face ID lock switch becomes this one
+    static let graceSeconds: TimeInterval = 15
     static var enabled: Bool {
         get { DevHooks.lockDemo || UserDefaults.standard.bool(forKey: enabledKey) }
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
@@ -20,6 +21,7 @@ final class AppLock: ObservableObject {
     private var backgroundedAt: Date?
     private var window: UIWindow?
     private var busy = false
+    weak var auth: AuthStore?   // set by JackedApp; the lock window is separate so it has no environment
 
     init() { locked = Self.enabled }   // cold start
 
@@ -67,13 +69,16 @@ final class AppLock: ObservableObject {
         } catch { failed = true }
     }
 
+    /// Escape hatch for a phone whose Face ID is not working: sign out so the normal login screen shows.
+    func passwordInstead() async { await auth?.logOut(); open() }
+
     private func open() { locked = false; failed = false; refreshWindow() }
 
     /// Used by the My Profile switch: only turns the lock on once the phone can actually unlock it.
     static func canEnable() async -> Bool {
         let ctx = LAContext(); var err: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else { return false }
-        return (try? await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Turn on Face ID lock for Jacked")) ?? false
+        return (try? await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Require login every time you open Jacked")) ?? false
     }
 }
 
@@ -95,6 +100,8 @@ struct LockScreen: View {
                         .font(Theme.body(13)).foregroundStyle(lock.failed ? Theme.red : Theme.muted).multilineTextAlignment(.center)
                     Button("Unlock") { Haptics.light(); Task { await lock.unlock() } }
                         .buttonStyle(AccentButtonStyle()).padding(.top, 6)
+                    Button("Sign in with password instead") { Haptics.light(); Task { await lock.passwordInstead() } }
+                        .font(Theme.body(13, .semibold)).foregroundStyle(Theme.muted)
                 }
                 .padding(20).frame(maxWidth: 320).card(fill: Theme.bg2, radius: Theme.radiusLarge)
                 Spacer(); Spacer()

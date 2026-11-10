@@ -108,8 +108,8 @@ struct ProfileSheet: View {
                 .onChange(of: healthOn) { _, on in HealthLog.enabled = on; if on { Task { await HealthLog.requestAccess() } } }
                 Toggle(isOn: Binding(get: { faceOn }, set: { setFaceLock($0) })) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Face ID lock").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
-                        Text("Ask for Face ID (or your passcode) when Jacked opens and after it has been in the background for a minute.")
+                        Text("Require login every time I open the app").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+                        Text("Off: you sign in once and Jacked opens straight in after that. On: each time Jacked opens, confirm with Face ID (or your passcode).")
                             .font(Theme.body(12)).foregroundStyle(Theme.muted)
                     }
                 }
@@ -582,7 +582,7 @@ struct ProfileSheet: View {
     /// Turning the lock on first proves the phone can unlock it (Face ID or passcode), so it can never lock him out.
     private func setFaceLock(_ on: Bool) {
         guard on else { AppLock.enabled = false; faceOn = false; return }
-        Task { if await AppLock.canEnable() { AppLock.enabled = true; faceOn = true } else { faceOn = false; message = ("Could not turn on Face ID lock. Set a passcode in iOS Settings first.", false) } }
+        Task { if await AppLock.canEnable() { AppLock.enabled = true; faceOn = true } else { faceOn = false; message = ("Could not turn on login every time. Set a passcode in iOS Settings first.", false) } }
     }
     private func sep() -> some View { Rectangle().fill(Theme.border).frame(height: 1).padding(.vertical, 6) }
     /// The PWA's <label>: small, bold, uppercase, muted.
