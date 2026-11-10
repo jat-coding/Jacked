@@ -442,7 +442,7 @@ struct RestBar: View {
                 .padding(.horizontal, 18).padding(.vertical, 12)
                 .background(Theme.bg2)
                 .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
-                .onChange(of: left == 0) { _, done in if done { session.skipRest() } }
+                .onChange(of: left == 0) { _, done in if done { Haptics.success(); session.skipRest() } }
             }
         }
     }
@@ -700,11 +700,5 @@ struct FinishSummarySheet: View {
 struct LogThumb: View {
     let url: URL?
     let muscle: String
-    var body: some View {
-        Group {
-            if let url { AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Theme.bg4 } }
-            else { ZStack { Theme.bg4; JIcon("dumbbell", 15).foregroundStyle(Theme.muted) } }
-        }
-        .frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 8))
-    }
+    var body: some View { ExPhoto(url: url, muscle: muscle, size: 40) }
 }

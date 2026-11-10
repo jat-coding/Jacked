@@ -352,7 +352,7 @@ struct Avatar: View {
             Circle().fill(Color(hex: FriendsMath.avc(p.name)))
             Text(FriendsMath.avi(p.name)).font(Theme.body(size * 0.4, .semibold)).foregroundStyle(Theme.onAccent)
             if let u = URL(string: p.avatarUrl), !p.avatarUrl.isEmpty {
-                AsyncImage(url: u) { $0.resizable().scaledToFill() } placeholder: { Color.clear }.clipShape(Circle())
+                CachedImage(url: u) { Color.clear }.clipShape(Circle())
             }
         }
         .frame(width: size, height: size)
