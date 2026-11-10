@@ -46,7 +46,7 @@ Settings worth knowing: iOS 17.0 minimum (pending Mr. Roni's answer, see plan), 
 iPhone only, Swift 5 language mode, bundle id `com.inclineinstitute.jacked.ios` (placeholder,
 see plan).
 
-Body text uses the system font; the PWA uses DM Sans. Bundling DM Sans is a small follow-up.
+Body text is DM Sans and headings Barlow Condensed (both bundled, OFL). Icons are the PWA's own line icons as template SVGs in Assets.xcassets (regenerate with Tools/gen-icons.py).
 
 ## Building and checking from the desktop (agent jobs)
 
