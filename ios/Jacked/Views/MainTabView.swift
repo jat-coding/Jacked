@@ -37,7 +37,6 @@ struct MainTabView: View {
                     }
                 }
         }
-        .onChange(of: tab) { _, _ in Haptics.light() }
         .onReceive(NotificationCenter.default.publisher(for: .jackedOpenTab)) { n in
             if let t = (n.object as? String).flatMap(Tab.init(rawValue:)) { tab = t }
         }
@@ -222,7 +221,7 @@ struct NavCapsule: View {
         HStack(spacing: 0) {
             ForEach(items, id: \.0) { it in
                 let on = tab == it.0
-                Button { withAnimation(.timingCurve(0.3, 0.8, 0.25, 1, duration: 0.38)) { tab = it.0 } } label: {
+                Button { Haptics.light(); withAnimation(.timingCurve(0.3, 0.8, 0.25, 1, duration: 0.38)) { tab = it.0 } } label: {
                     VStack(spacing: 3) {
                         JIcon(it.1, 20).shadow(color: on ? Theme.accent.opacity(0.7) : .clear, radius: 5)
                         Text(it.2.uppercased()).font(Theme.body(9, .semibold)).tracking(0.3).lineLimit(1)
