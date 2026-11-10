@@ -41,6 +41,8 @@ struct ProfileSheet: View {
     @State private var photoMenu = false
     @State private var photoBusy = false
     @State private var importing = false
+    @State private var feedbackText = ""
+    @State private var feedbackBusy = false
     @State private var importBusy = false
     /// importJsonBackup's "REPLACE all current data" confirm, holding the file's jk_ keys.
     @State private var pendingBundle: [String: JSONValue]?
@@ -58,7 +60,7 @@ struct ProfileSheet: View {
                         Circle().fill(Color(hex: FriendsMath.avc(name)))
                         Text(FriendsMath.avi(name)).font(Theme.body(23, .semibold)).foregroundStyle(Theme.onAccent)
                         if let u = store.backup.avatarURL {
-                            AsyncImage(url: u) { $0.resizable().scaledToFill() } placeholder: { Color.clear }.clipShape(Circle())
+                            CachedImage(url: u) { Color.clear }.clipShape(Circle())
                         }
                     }
                     .frame(width: 58, height: 58)
@@ -100,6 +102,14 @@ struct ProfileSheet: View {
                 Text(store.dirty ? "Some changes are only on this phone so far. They go out on the next sync."
                                  : "Last synced " + (store.lastSynced.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "never") + ".")
                     .font(Theme.body(12)).foregroundStyle(Theme.muted)
+
+                sep(); BlockTitle(text: "Feedback")
+                note("Found a bug or want a change? Send it our way.")
+                TextField("What should we fix or add?", text: $feedbackText, axis: .vertical).lineLimit(3...6)
+                    .onChange(of: feedbackText) { _, v in if v.count > 2000 { feedbackText = String(v.prefix(2000)) } }
+                    .modifier(JackedFieldStyle(focused: false))
+                Button(feedbackBusy ? "Sending\u{2026}" : "Send Feedback") { Task { await sendFeedback() } }
+                    .buttonStyle(AccentButtonStyle()).disabled(feedbackBusy)
 
                 sep(); BlockTitle(text: "Account")
                 emailBlock
@@ -362,6 +372,21 @@ struct ProfileSheet: View {
                                 width: img.size.width * k, height: img.size.height * k))
         }
         return scaled.jpegData(compressionQuality: 0.82)
+    }
+
+    /// submitFeedback(): one row into the `feedback` table (username + text), same as the web app.
+    private func sendFeedback() async {
+        let t = feedbackText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { message = ("Type your feedback first", false); return }
+        guard let s = auth.session else { message = ("Feedback needs a connection", false); return }
+        feedbackBusy = true; defer { feedbackBusy = false }
+        do {
+            _ = try await SupabaseHTTP().send("POST", "rest/v1/feedback", body: ["username": s.code, "text": t], bearer: s.accessToken)
+            feedbackText = ""; message = ("Thanks! Feedback sent", true)
+        } catch let e as SupabaseError {
+            message = (e.code == "53400" ? "Too much feedback in the last hour, try again later"
+                       : e.isNetwork ? "Network error, try again" : "Could not send, try again", false)
+        } catch { message = ("Network error, try again", false) }
     }
 
     private func loadEmail() async {

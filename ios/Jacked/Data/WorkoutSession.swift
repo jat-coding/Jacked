@@ -141,7 +141,7 @@ final class WorkoutSession: ObservableObject {
     /// setSingleArmEx: the Single / Both pair applies to the exercise and every set on it.
     func setSingle(_ ei: Int, _ v: Bool) {
         guard var a = active, a.exercises.indices.contains(ei) else { return }
-        a.exercises[ei].single = v
+        a.exercises[ei].single = v; Haptics.light()
         for j in a.exercises[ei].sets.indices { a.exercises[ei].sets[j].single = v }
         active = a
     }
@@ -204,6 +204,7 @@ final class WorkoutSession: ObservableObject {
         guard var a = active, a.exercises.indices.contains(ei), a.exercises[ei].sets.indices.contains(si) else { return }
         a.exercises[ei].sets[si].done.toggle()
         if a.exercises[ei].sets[si].done {
+            Haptics.medium()
             let sug = WorkoutMath.suggestion(a.exercises[ei], si, raw: raw)
             if !(a.exercises[ei].sets[si].weight > 0) { a.exercises[ei].sets[si].weight = sug.w }
             if !(a.exercises[ei].sets[si].reps > 0) { a.exercises[ei].sets[si].reps = sug.r }
