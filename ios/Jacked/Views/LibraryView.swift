@@ -21,9 +21,7 @@ struct LibraryView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     PageHeader(title: "Library") {
-                        Button("+ Custom") { showCreate = true }.font(Theme.body(14, .semibold))
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .overlay(Capsule().stroke(Theme.border2, lineWidth: 1))
+                        Button("+ Custom") { showCreate = true }.buttonStyle(HeaderPillStyle())
                     }
                     SearchBox(text: $q).padding(.bottom, 10)
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -31,13 +29,9 @@ struct LibraryView: View {
                             ForEach(LibraryMath.chipCats, id: \.0) { c in
                                 let on = chip == c.0
                                 Button { chip = on ? nil : c.0 } label: {
-                                    Text(c.1).font(Theme.body(12, .semibold))
-                                        .foregroundStyle(on ? Theme.onAccent : Theme.text2)
-                                        .padding(.horizontal, 12).padding(.vertical, 7)
-                                        .background(on ? Theme.accent : Color.clear, in: Capsule())
-                                        .overlay(Capsule().stroke(on ? Theme.accent : Theme.border, lineWidth: 1))
+                                    Text(c.1)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(ChipButtonStyle(on: on))
                             }
                         }
                     }
@@ -196,15 +190,15 @@ struct ExerciseInfoSheet: View {
                         .font(Theme.body(12)).foregroundStyle(Theme.muted)
                     HStack(spacing: 8) {
                         Button { Task { await toggleFav() } } label: {
-                            Text(fav ? "★ Favorited" : "☆ Favorite").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity)
+                            Text(fav ? "★ Favorited" : "☆ Favorite")
                         }
                         .buttonStyle(GhostButtonStyle())
-                        Button { editing = true } label: { Text("Edit").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity) }
+                        Button { editing = true } label: { Text("Edit") }
                             .buttonStyle(GhostButtonStyle())
                     }
                     sugBlock(raw: raw, settings: settings)
                     if let txt = Self.storedPRText(ex.id, raw: raw, settings: settings) {
-                        Button { resetText = txt } label: { Text("Reset PR (\(txt))").font(Theme.body(13, .semibold)).frame(maxWidth: .infinity) }
+                        Button { resetText = txt } label: { Text("Reset PR (\(txt))") }
                             .buttonStyle(GhostButtonStyle())
                     }
                     chart(raw: raw, settings: settings)
@@ -284,13 +278,13 @@ struct ExerciseInfoSheet: View {
         let urls = local.map { [$0] } ?? ex.images.prefix(2).compactMap { URL(string: ExerciseImages.base + $0) }
         if urls.isEmpty {
             ExPhoto.fallback(muscle: ex.muscle, size: 120)
-                .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 12))
+                .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: Theme.radius))
         } else {
             HStack(spacing: 8) {
                 ForEach(urls, id: \.self) { u in
                     Color.clear.aspectRatio(1, contentMode: .fit)
                         .overlay { CachedImage(url: u) { ExPhoto.fallback(muscle: ex.muscle, size: 80) } }
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
                 }
             }
         }

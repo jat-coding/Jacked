@@ -15,8 +15,7 @@ struct RoutinesView: View {
             VStack(spacing: 12) {
                 PageHeader(title: "Routines") {
                     Button("+ New") { editing = RoutineDraft(id: nil, name: "", desc: "", sectionId: "", exercises: []) }
-                        .font(Theme.body(14, .semibold)).padding(.horizontal, 14).padding(.vertical, 8)
-                        .overlay(Capsule().stroke(Theme.border2, lineWidth: 1))
+                        .buttonStyle(HeaderPillStyle())
                 }
                 TrustedPrograms()
                 VStack(spacing: 12) {
@@ -24,9 +23,7 @@ struct RoutinesView: View {
                     BlockTitle(text: "My Routines")
                     Spacer()
                     if !blocks.isEmpty {
-                        Button("Reorder") { showOrder = true }
-                            .font(Theme.body(14, .semibold)).foregroundStyle(Theme.text).padding(.horizontal, 14).padding(.vertical, 7)
-                            .overlay(Capsule().stroke(Theme.border2, lineWidth: 1)).buttonStyle(.plain)
+                        Button("Reorder") { showOrder = true }.buttonStyle(HeaderPillStyle())
                     }
                 }
                 if blocks.isEmpty {
@@ -177,9 +174,7 @@ struct TrustedPrograms: View {
                                 .font(Theme.body(10)).foregroundStyle(Theme.muted).padding(.top, 4)
                             Spacer(minLength: 6)
                             Button(added == p.name ? "Added ✓" : "+ Add to Routines") { Task { await add(i) } }
-                                .font(Theme.body(12, .bold)).foregroundStyle(Theme.onAccent)
-                                .padding(.horizontal, 12).padding(.vertical, 6)
-                                .accentFill(RoundedRectangle(cornerRadius: 8))
+                                .buttonStyle(SmallAccentButtonStyle())
                                 .disabled(added == p.name)
                         }
                         .frame(width: 210, alignment: .leading).frame(minHeight: 150)

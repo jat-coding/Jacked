@@ -45,10 +45,8 @@ struct FriendsView: View {
                                         .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16).background(Color(hex: 0xFF453A), in: Capsule())
                                 }
                             }
-                            .font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
-                            .padding(.horizontal, 14).padding(.vertical, 8).overlay(Capsule().stroke(Theme.border2, lineWidth: 1))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(HeaderPillStyle())
                     }
                     board(m: m, you: you, buddies: buddies)
                     VStack(alignment: .leading, spacing: 0) {
@@ -300,12 +298,8 @@ private struct CmpChips: View {
                 HStack(spacing: 6) {
                     ForEach(rows[r], id: \.k) { c in
                         Button { on = c.k } label: {
-                            HStack(spacing: 4) { SFIcon(c.icon, 10).foregroundStyle(on == c.k ? Theme.onAccent : Theme.muted); Text(c.label) }
-                                .font(Theme.body(11, .semibold)).foregroundStyle(on == c.k ? Theme.onAccent : Theme.muted)
-                                .padding(.horizontal, 13).padding(.vertical, 6)
-                                .background(on == c.k ? Theme.accent : .clear, in: Capsule())
-                                .overlay(Capsule().stroke(on == c.k ? Theme.accent : Theme.border, lineWidth: 1))
-                        }.buttonStyle(.plain)
+                            HStack(spacing: 4) { SFIcon(c.icon, 10); Text(c.label) }
+                        }.buttonStyle(ChipButtonStyle(on: on == c.k))
                     }
                 }
             }
@@ -334,14 +328,6 @@ struct RowBox: ViewModifier {
             content.background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.border, lineWidth: 1)).padding(.bottom, 8)
         }
-    }
-}
-
-struct SmallPill: ButtonStyle {
-    let fill: Color; let fg: Color
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(Theme.body(12, .bold)).foregroundStyle(fg).padding(.horizontal, 10).padding(.vertical, 6)
-            .background(fill, in: RoundedRectangle(cornerRadius: 8)).opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 
