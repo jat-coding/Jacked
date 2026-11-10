@@ -7,6 +7,7 @@ struct MainTabView: View {
     @StateObject private var session = WorkoutSession()
     @StateObject private var catalog = ExerciseCatalog()
     @StateObject private var friends = FriendsStore()
+    @State private var barH: CGFloat = 40
     @State private var tab: Tab = Tab(rawValue: DevHooks.tab ?? "") ?? .home
 
     enum Tab: String, Hashable { case routines, library, home, metrics, friends }
@@ -20,17 +21,21 @@ struct MainTabView: View {
             FriendsView().toolbar(.hidden, for: .tabBar).tag(Tab.friends)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
+            // The resume bar is an overlay on the capsule, not part of the inset: overlays add no layout
+            // height, so the tab bar sits at the same y with or without an open workout. The bar's bottom
+            // edge is lifted by its own measured height so it floats just above the capsule.
             NavCapsule(tab: $tab, requests: friends.friends.filter(\.pending).count)
-        }
-        .safeAreaInset(edge: .bottom) {
-            if session.active != nil && !session.presented {
-                Button { session.presented = true } label: {
-                    Label("Return to workout", systemImage: "arrow.uturn.left").font(Theme.body(14, .bold))
-                        .foregroundStyle(Theme.onAccent).padding(.horizontal, 18).padding(.vertical, 10)
-                        .background(Theme.accent, in: Capsule())
+                .overlay(alignment: .top) {
+                    if session.active != nil && !session.presented {
+                        Button { Haptics.light(); session.presented = true } label: {
+                            Label("Return to workout", systemImage: "arrow.uturn.left").font(Theme.body(14, .bold))
+                                .foregroundStyle(Theme.onAccent).padding(.horizontal, 18).padding(.vertical, 10)
+                                .background(Theme.accent, in: Capsule())
+                        }
+                        .background(GeometryReader { g in Color.clear.onAppear { barH = g.size.height } })
+                        .offset(y: -(barH + 8))
+                    }
                 }
-                .padding(.bottom, 8)
-            }
         }
         .onChange(of: tab) { _, _ in Haptics.light() }
         .onReceive(NotificationCenter.default.publisher(for: .jackedOpenTab)) { n in
@@ -43,7 +48,7 @@ struct MainTabView: View {
         }
         .confirmationDialog(busyPrompt, isPresented: Binding(get: { session.busyStart != nil }, set: { if !$0 { session.busyStart = nil } }),
                             titleVisibility: .visible) {
-            Button("Discard & start", role: .destructive) { let f = session.busyStart; session.busyStart = nil; f?() }
+            Button("Discard & start", role: .destructive) { Haptics.warning(); let f = session.busyStart; session.busyStart = nil; f?() }
             Button("Keep it", role: .cancel) { session.busyStart = nil }
         }
         .sheet(item: $session.summary) { s in
