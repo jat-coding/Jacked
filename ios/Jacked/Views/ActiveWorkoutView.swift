@@ -60,6 +60,8 @@ struct ActiveWorkoutView: View {
             .toolbarBackground(Theme.bg2, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
+        .padding(.top, 14)   // room between the sheet grabber and the title
+        .background(Theme.bg2.ignoresSafeArea())
         .sheet(isPresented: $showAdd) { AddExerciseSheet().popup() }
         .alert(session.notice ?? "", isPresented: Binding(get: { session.notice != nil }, set: { if !$0 { session.notice = nil } })) {
             Button("OK", role: .cancel) {}
