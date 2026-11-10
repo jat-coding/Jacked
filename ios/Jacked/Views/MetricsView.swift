@@ -62,6 +62,7 @@ struct MetricsView: View {
         .sheet(isPresented: $showOrder) { CardOrderSheet() }
         .sheet(item: $recap) { RecapSheet(r: $0, settings: store.backup.settings) }
         .sheet(isPresented: $showScoring) { MuscleScoringSheet(sex: m.sex) }
+        .onChange(of: showAch) { _, v in if v { Haptics.light() } }
         .sheet(isPresented: $showAch) { AchievementsSheet(result: m.computeBadges(), m: m, openBadge: devBadge, onStart: badgeStart) }
         .task(id: "\(store.loadedCode ?? "")|\(catalog.db.count)|\(store.backup.history.count)") {
             guard store.loadedCode != nil, store.lastSynced != nil else { return }
@@ -267,7 +268,7 @@ private struct WeightCard: View {
                     }
                 }
                 .font(Theme.body(15, .bold)).foregroundStyle(Theme.onAccent).padding(.horizontal, 20).padding(.vertical, 12)
-                .background(Theme.accent, in: RoundedRectangle(cornerRadius: Theme.radius))
+                .accentFill(RoundedRectangle(cornerRadius: Theme.radius))
             }
             if let msg { Text(msg).font(Theme.body(12)).foregroundStyle(Theme.accent) }
             if m.bw > 0 {

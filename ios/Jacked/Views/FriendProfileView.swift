@@ -18,12 +18,14 @@ struct FriendProfileSheet: View {
     @State private var showBadges = false
     @State private var showGymYears = false
     @State private var confirmRemove = false
+    @State private var lightbox = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 12) {
                     Avatar(p: p, size: 48)
+                        .onTapGesture { if URL(string: p.avatarUrl) != nil, !p.avatarUrl.isEmpty { Haptics.light(); lightbox = true } }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(p.name + (p.isYou ? " (You)" : "")).font(Theme.heading(24, .extraBold)).foregroundStyle(Theme.text).lineLimit(1)
                         Text(p.username).font(Theme.body(12)).foregroundStyle(Theme.muted)
@@ -38,6 +40,7 @@ struct FriendProfileSheet: View {
             .padding(20)
         }
         .background(Theme.bg2.ignoresSafeArea())
+        .fullScreenCover(isPresented: $lightbox) { AvatarLightbox(url: URL(string: p.avatarUrl)) }
         .overlay(alignment: .top) { ToastView(text: $friends.toast) }
         .sheet(isPresented: $showBadges) { FriendBadgesSheet(p: p, m: m) }
         .fullScreenCover(isPresented: $showGymYears) { GymYearsView(who: p.isYou ? "You" : p.name, days: Set(p.days)) }
@@ -165,7 +168,7 @@ struct FriendProfileSheet: View {
             StatTile(v: "\(w.ex.count)", l: "Exercises")
         }
         .padding(.bottom, 14)
-        Button { copy(w) } label: { Label("Copy to my workout", image: "ic-clipboard").frame(maxWidth: .infinity) }
+        Button { copy(w) } label: { HStack(spacing: 6) { JIcon("clipboard", 16); Text("Copy to my workout") }.frame(maxWidth: .infinity) }
             .buttonStyle(AccentButtonStyle()).padding(.bottom, 14)
         BlockTitle(text: "Exercises & sets")
         if w.ex.isEmpty { Text("No exercise detail shared.").font(Theme.body(13)).foregroundStyle(Theme.muted) }
@@ -284,5 +287,24 @@ struct FriendBadgesSheet: View {
             .padding(20)
         }
         .background(Theme.bg2.ignoresSafeArea())
+    }
+}
+
+/// #avLightbox: a friend's profile photo, enlarged on a 90% black backdrop. Tap anywhere or the close button.
+struct AvatarLightbox: View {
+    let url: URL?
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.opacity(0.9).ignoresSafeArea().onTapGesture { dismiss() }
+            CachedImage(url: url) { Color.clear }
+                .aspectRatio(1, contentMode: .fit).frame(maxWidth: 480)
+                .clipShape(RoundedRectangle(cornerRadius: 20)).padding(.horizontal, 16).frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+            Button { dismiss() } label: {
+                JIcon("close", 16).foregroundStyle(.white).frame(width: 36, height: 36).background(Color.black.opacity(0.55), in: Circle())
+            }.padding(.top, 12).padding(.trailing, 18)
+        }
+        .presentationBackground(.clear)
     }
 }

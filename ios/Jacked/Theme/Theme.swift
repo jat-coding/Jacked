@@ -73,8 +73,7 @@ struct AccentButtonStyle: ButtonStyle {
             .foregroundStyle(Theme.onAccent)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 13)
-            .background(configuration.isPressed ? Theme.accent2 : Theme.accent,
-                        in: RoundedRectangle(cornerRadius: Theme.radius))
+            .accentFill(RoundedRectangle(cornerRadius: Theme.radius), pressed: configuration.isPressed)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.18), value: configuration.isPressed)
     }
@@ -108,5 +107,14 @@ struct JackedFieldStyle: ViewModifier {
             .overlay(RoundedRectangle(cornerRadius: Theme.radius)
                 .stroke(focused ? Theme.accent : Theme.border, lineWidth: 1))
             .animation(.easeOut(duration: 0.2), value: focused)
+    }
+}
+
+extension View {
+    /// .ba / .rsb: vertical accent-bright to accent gradient with a soft teal glow; flat accent2 and no glow while pressed.
+    func accentFill<S: Shape>(_ shape: S, pressed: Bool = false) -> some View {
+        background(shape.fill(pressed ? AnyShapeStyle(Theme.accent2)
+                                      : AnyShapeStyle(LinearGradient(colors: [Theme.accentBright, Theme.accent], startPoint: .top, endPoint: .bottom)))
+            .shadow(color: pressed ? .clear : Theme.accent.opacity(0.4), radius: 9, x: 0, y: 8))
     }
 }
