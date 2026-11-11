@@ -4,6 +4,7 @@
 #   ios/Tests/parity/badges-run.sh
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; src="$here/../../Jacked"
+# TZ pins the zone for BOTH sides; the clock-change fixtures are checked per zone, so run: for z in America/Denver Europe/London; do TZ=$z ./badges-run.sh; done
 export TZ="${TZ:-America/Denver}"
 db="$here/exercises.json"
 [ -s "$db" ] || curl -fsS -o "$db" "https://$(grep -o '[a-z0-9]*\.supabase\.co' "$src/Backend/SupabaseConfig.swift" | head -1)/storage/v1/object/public/exercise-images/exercises.json"
