@@ -273,7 +273,7 @@ struct FriendBadgesSheet: View {
                             .frame(width: 28)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(shown).font(Theme.body(14, .bold)).foregroundStyle(Theme.text)
-                            Text(m.badgeShortHow(shown, ladders)).font(Theme.body(12)).foregroundStyle(Theme.muted)
+                            Text(BadgeUI.tierWordsText(m.badgeShortHow(shown, ladders), rank: BadgeUI.rank(b.t), base: Theme.muted)).font(Theme.body(12))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         let tc = BadgeUI.tierColor[b.t] ?? (b.n == "Jacked" ? Color(hex: 0xFFD700) : Theme.green)
