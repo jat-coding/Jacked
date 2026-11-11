@@ -164,7 +164,7 @@ struct ExerciseCard: View {
                     Button("Remove exercise", role: .destructive) {
                         if ex.sets.contains(where: \.done) { confirmRemove = true } else { session.removeExercise(ei) }
                     }
-                } label: { SFIcon("ellipsis").foregroundStyle(Theme.text2).frame(width: 32, height: 32) }
+                } label: { SFIcon("ellipsis").foregroundStyle(Theme.text2).frame(width: 32, height: 32) }.accessibilityLabel("Exercise options")
             }
             if !chips.isEmpty {
                 HStack(spacing: 6) {

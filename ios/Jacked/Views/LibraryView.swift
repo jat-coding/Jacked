@@ -107,7 +107,7 @@ struct SearchBox: View {
                 .task { if ProcessInfo.processInfo.environment["JACKED_DEV_FOCUS"] == "1" { try? await Task.sleep(nanoseconds: 2_500_000_000); focused = true } }
                 #endif
             if !text.isEmpty {
-                Button { text = "" } label: { SFIcon("xmark.circle.fill").foregroundStyle(Theme.muted) }
+                Button { text = "" } label: { SFIcon("xmark.circle.fill").foregroundStyle(Theme.muted) }.accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
