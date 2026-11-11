@@ -86,6 +86,13 @@ struct MetricsView: View {
             // Unstructured, like the buttons: a view's own .task is cancelled with the view, and its write with it.
             let (st, au) = (store, auth)
             if let kg = DevHooks.logWeight { Task { DevHooks.log("dev weight logged=\(await Self.logWeight(kg, store: st, auth: au))") } }
+            if let o = DevHooks.cardOrder {
+                _ = await st.edit(auth: au) { raw in
+                    var s = raw["jk_settings"]?.object ?? [:]
+                    if o == "none" { s["cardOrder"] = nil } else { s["cardOrder"] = .array(o.split(separator: ",").map { JSONValue.string(String($0)) }) }
+                    raw["jk_settings"] = .object(s)
+                }
+            }
             if let id = DevHooks.hideCard { Task { DevHooks.log("dev card toggled=\(await Self.toggleCard(id, store: st, auth: au))") } }
             #endif
         }
