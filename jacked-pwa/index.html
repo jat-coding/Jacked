@@ -496,7 +496,13 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    measured the last exercise row landing under the nav's reserved zone with the old flat 10px. */
 .ae-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(10px + 62px + var(--navB))}
 .ae-grp{font-family:var(--fh);font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);padding:10px 2px 6px;position:sticky;top:0;z-index:3;background:var(--bg2);box-shadow:0 4px 6px -4px var(--bg2)}
-.ms-bar{flex-shrink:0;background:var(--bg2);border-top:1px solid var(--border2);padding:12px 16px calc(12px + var(--sab));display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 -20px}
+/* Picker confirm bar (Grant Berry, 2026-11-11: "add button is hidden behind the routine/home tabs"):
+   the bar used to sit flush at the screen bottom, i.e. inside the fixed nav's footprint, and the
+   nav can paint over a sheet on a real iPhone. The bar now ends ABOVE the nav's zone (62px + navB),
+   matching every other sheet's bottom reserve; the sheet's own background fills the strip below it. */
+.ms-bar{flex-shrink:0;position:relative;z-index:5;background:var(--bg2);border-top:1px solid var(--border2);padding:12px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 -20px calc(62px + var(--navB))}
+/* bar showing: it already clears the nav, so the list only needs a small tail */
+.ae-md.has-bar .ae-list{padding-bottom:10px}
 /* While typing, hide fixed bottom chrome so the keyboard overlays it cleanly. */
 body.kb nav,body.kb .install-banner,body.kb #resumeBar{display:none!important}
 /* Persistent return-to-workout bar, sits just above the bottom nav. */
@@ -976,7 +982,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
       <div class="drag-handle"></div>
       <div class="mh">
         <div class="mt" id="aeModalTitle">Add Exercise</div>
-        <button class="cb" onclick="cm('aeModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <button class="cb" onclick="closeAE()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <div class="sw" style="margin-bottom:8px"><span class="sw-ic"><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0'/><path d='M21 21l-6 -6'/></svg></span><input type="text" id="aeSearch" placeholder="Search exercises..." oninput="renderAEList()"></div>
       <div class="chips" id="aeChips" style="margin-bottom:6px"></div>
@@ -1231,7 +1237,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
     <div id="cfMsg" style="font-size:14px;line-height:1.5;white-space:pre-wrap"></div>
     <div class="fg" id="cfInputWrap" style="display:none;margin-top:12px"><input type="text" id="cfInput"></div>
     <div class="fr" id="cfBtns" style="margin-top:16px">
-      <button class="btn bg" id="cfCancel" onclick="_cfDone(null)">Cancel</button>
+      <button class="btn bg" id="cfCancel" onclick="_cfDone(_cfCancelVal)">Cancel</button>
       <button class="btn ba" id="cfOk" onclick="_cfSubmit()">OK</button>
     </div>
   </div>
@@ -3355,15 +3361,29 @@ function toggleAEItem(id) {
 function updateMSBar() {
   const bar=document.getElementById('msBar');
   // For workout mode, never show bar
-  if (_aeTarget!=='routine') { bar.style.display='none'; return; }
+  const md=bar.closest('.ae-md');
+  if (_aeTarget!=='routine') { bar.style.display='none'; md&&md.classList.remove('has-bar'); return; }
   // Count only newly selected (not pre-existing) for display
   const newCount=_aeSelected.size;
   if (newCount>0) {
-    bar.style.display='flex';
+    bar.style.display='flex'; md&&md.classList.add('has-bar');
     document.getElementById('msCount').textContent=newCount;
   } else {
-    bar.style.display='none';
+    bar.style.display='none'; md&&md.classList.remove('has-bar');
   }
+}
+
+// X / backdrop on the picker. Checked-but-unconfirmed exercises are never dropped silently
+// (Grant Berry, 2026-11-11: closed with X and "none of the selected exercises were added").
+function aePending() { return _aeTarget==='routine' ? [..._aeSelected].filter(id=>!rExs.includes(id)).length : 0; }
+function closeAE() {
+  const n=aePending();
+  if (!n) { cm('aeModal'); return; }
+  showConfirm(`You checked ${n} exercise${n!==1?'s':''} but haven't added ${n!==1?'them':'it'} yet.`,{okText:`Add ${n} to routine`,cancelText:'Discard',cancelValue:false}).then(v=>{
+    if (v===true) confirmAESelection();
+    else if (v===false) cm('aeModal');
+    // null (tapped outside the dialog): stay in the picker, selection kept
+  });
 }
 
 function confirmAESelection() {
@@ -9819,7 +9839,7 @@ function pwToggle(btn) {
     ? '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>'
     : '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>';
 }
-document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m){ if(m.id==='aeModal') closeAE(); else m.classList.remove('open'); }}));
 
 // Page behind a popup never scrolls (Mr. Roni, 2026-10-01: "when on the recap page you are able to scroll the
 // background page. That shouldn't be allowed on any popup screen"). Every popup is position:fixed over the page, but
@@ -9909,9 +9929,10 @@ document.getElementById('jkRoot').addEventListener('scroll',_wMiniSync,{passive:
 // (returns a Promise instead of blocking), same visual language as every
 // other modal in the app.
 let _cfResolve=null;
-function showConfirm(msg,{isPrompt=false,defaultValue='',okText='OK',cancelText='Cancel',hideCancel=false}={}){
+let _cfCancelVal=null;   // what the Cancel button resolves with (default null; backdrop tap is always null)
+function showConfirm(msg,{isPrompt=false,defaultValue='',okText='OK',cancelText='Cancel',hideCancel=false,cancelValue=null}={}){
   return new Promise(resolve=>{
-    _cfResolve=resolve;
+    _cfResolve=resolve; _cfCancelVal=cancelValue;
     document.getElementById('cfMsg').textContent=msg;
     const wrap=document.getElementById('cfInputWrap'), input=document.getElementById('cfInput');
     wrap.style.display=isPrompt?'block':'none';

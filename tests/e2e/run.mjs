@@ -5031,12 +5031,64 @@ async function calLiveToday() {
   check('cal live: finished-today with no aw still reads cd worked today (2026-10-06 fix)', t3 === 'cd worked today' && await p3.page.evaluate(() => !aw), t3);
   await p3.ctx.close();
 }
+async function pickerAddBar() {
+  // Grant Berry, 2026-11-11: in the exercise picker the "Add Selected" bar was hidden behind the bottom nav
+  // (only the X showed), so checked exercises looked discarded. The bar must end ABOVE the nav's box, be
+  // the element actually hit at its centre, and X with checked-but-unadded exercises must never drop them silently.
+  const rect = (page, sel) => page.evaluate(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }; }, sel);
+  for (const [name, width, height] of [['iPhone SE', 375, 667], ['iPhone 16', 393, 852], ['iPhone 16 Pro Max', 440, 956]]) {
+    const { page, ctx, errors } = await phone({ width, height, seed: { routines: [{ id: 'r1', name: 'Push', desc: '', exercises: ['Barbell_Squat'] }] } });
+    for (const mode of ['new routine', 'edit routine']) {
+      await page.evaluate(m => { sp('routines'); if (m === 'new routine') openCR(); else editR('r1'); openAEModal('routine'); }, mode);
+      await page.waitForTimeout(500);
+      await page.evaluate(() => { const r = [...document.querySelectorAll('#aeList [id^=esr-]')].find(e => !e.classList.contains('selected')); r.click(); });
+      await page.waitForTimeout(200);
+      const bar = await rect(page, '#msBar'), btn = await rect(page, '#msBar button'), nav = await rect(page, 'nav');
+      const tag = `picker bar [${name}, ${mode}]`;
+      check(`${tag}: Add Selected is visible and inside the viewport`, bar.bottom <= height && btn.top >= 0 && btn.bottom - btn.top > 20, JSON.stringify({ bar, btn }));
+      check(`${tag}: bar sits above the nav (no bounding-box overlap)`, bar.bottom <= nav.top + 0.5, JSON.stringify({ bar, nav }));
+      check(`${tag}: the button is what a tap at its centre hits`, await page.evaluate(() => { const b = document.querySelector('#msBar button').getBoundingClientRect(); return !!document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2).closest('#msBar button'); }));
+      check(`${tag}: last list row is not hidden under the bar`, await page.evaluate(() => { const l = document.getElementById('aeList'); l.scrollTop = l.scrollHeight; const rows = l.querySelectorAll('[id^=esr-]'); return rows[rows.length - 1].getBoundingClientRect().bottom <= document.getElementById('msBar').getBoundingClientRect().top + 1; }));
+      if (name === 'iPhone 16' && mode === 'new routine') await page.screenshot({ path: `${SHOTS}/picker-add-bar.png` });
+      // X with an unadded checked exercise: asks, never silently discards.
+      await page.locator('#aeModal .cb').tap();
+      await page.waitForTimeout(150);
+      check(`${tag}: X with checked exercises asks first (picker stays, confirm up)`, await page.evaluate(() => document.getElementById('aeModal').classList.contains('open') && document.getElementById('confirmModal').classList.contains('open')));
+      await page.locator('#cfCancel').tap();   // Discard
+      await page.waitForTimeout(150);
+      check(`${tag}: Discard closes the picker without adding`, await page.evaluate(m => !document.getElementById('aeModal').classList.contains('open') && rExs.length === (m === 'new routine' ? 0 : 1), mode));
+      // Keep the selection: reopen, check one, X, tap the primary button => it is added.
+      await page.evaluate(() => openAEModal('routine'));
+      await page.waitForTimeout(400);
+      await page.evaluate(() => { [...document.querySelectorAll('#aeList [id^=esr-]')].find(e => !e.classList.contains('selected')).click(); });
+      const before = await page.evaluate(() => rExs.length);
+      await page.locator('#aeModal .cb').tap(); await page.waitForTimeout(150);
+      await page.locator('#cfOk').tap(); await page.waitForTimeout(200);
+      check(`${tag}: X then "Add" confirm adds the checked exercise`, await page.evaluate(b => !document.getElementById('aeModal').classList.contains('open') && rExs.length === b + 1, before));
+      await page.evaluate(() => { cm('crModal'); });
+    }
+    // X with nothing new checked closes straight away (no nag).
+    await page.evaluate(() => { openCR(); openAEModal('routine'); });
+    await page.waitForTimeout(300);
+    await page.locator('#aeModal .cb').tap(); await page.waitForTimeout(150);
+    check(`picker bar [${name}]: X with nothing checked closes with no prompt`, await page.evaluate(() => !document.getElementById('aeModal').classList.contains('open') && !document.getElementById('confirmModal').classList.contains('open')));
+    // Live workout add / switch: single-tap pick, no bar needed, tapping a row adds + closes.
+    await page.evaluate(() => { startEmpty(); openAEModal('workout'); });
+    await page.waitForTimeout(400);
+    check(`picker bar [${name}]: live-workout picker has no confirm bar (tap adds directly)`, await page.evaluate(() => document.getElementById('msBar').style.display === 'none'));
+    await page.evaluate(() => document.querySelector('#aeList [id^=esr-]').click());
+    await page.waitForTimeout(200);
+    check(`picker bar [${name}]: live-workout tap adds the exercise and closes`, await page.evaluate(() => aw.exercises.length === 1 && !document.getElementById('aeModal').classList.contains('open')));
+    check(`picker bar [${name}]: no page errors`, errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+}
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, calLiveToday, ...AUTH_FLOW_SUITES, ...STANDALONE_GAP_SUITES, ...SUGGESTED_SUITES, ...LIVE_SUITES, ...WEEKLY_REVIEW_SUITES, ...EXERCISE_PHOTO_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, calLiveToday, pickerAddBar, ...AUTH_FLOW_SUITES, ...STANDALONE_GAP_SUITES, ...SUGGESTED_SUITES, ...LIVE_SUITES, ...WEEKLY_REVIEW_SUITES, ...EXERCISE_PHOTO_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }
