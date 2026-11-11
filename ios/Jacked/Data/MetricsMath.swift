@@ -525,12 +525,23 @@ struct MetricsMath {
 
     // MARK: Card order (metricsOrdered)
 
-    static let cardIds = ["overview", "weight", "body", "summary", "lifetime", "recaps", "badges"]
+    /// Default order: Achievements, Muscle Map, then the rest in the old default order.
+    static let cardIds = ["badges", "body", "overview", "weight", "summary", "lifetime", "recaps"]
+    /// The previous default. Reordering saves the whole list, so an untouched old default can sit in
+    /// settings.cardOrder looking customized; it is treated as not customized.
+    static let legacyDefaultOrder = ["overview", "weight", "body", "summary", "lifetime", "recaps", "badges"]
     static let cardTitles = ["overview": "Overview", "weight": "Body Weight", "body": "Muscle Map", "summary": "Workout Summary",
                              "lifetime": "Lifetime Stats", "recaps": "Monthly Recaps", "badges": "Achievements"]
+    /// True when the saved order is just the old default (or an in-order slice of it): not a real customization.
+    static func isLegacyDefault(_ ord: [String]) -> Bool {
+        var i = 0
+        for id in ord { guard let j = legacyDefaultOrder[i...].firstIndex(of: id) else { return false }; i = j + 1 }
+        return true
+    }
     static func orderedCards(_ settings: [String: JSONValue]) -> [String] {
-        let ord = (settings["cardOrder"]?.array ?? []).compactMap(\.string)
-        let rank: (String) -> Int = { id in ord.firstIndex(of: id) ?? (id == "overview" ? -1 : 999) }
+        var ord = (settings["cardOrder"]?.array ?? []).compactMap(\.string)
+        if isLegacyDefault(ord) { ord = [] }
+        let rank: (String) -> Int = { id in ord.firstIndex(of: id) ?? (ord.isEmpty ? 0 : id == "overview" ? -1 : 999) }
         return cardIds.enumerated().sorted { rank($0.element) != rank($1.element) ? rank($0.element) < rank($1.element) : $0.offset < $1.offset }.map(\.element)
     }
     static func hiddenCards(_ settings: [String: JSONValue]) -> Set<String> { Set((settings["hiddenCards"]?.array ?? []).compactMap(\.string)) }
