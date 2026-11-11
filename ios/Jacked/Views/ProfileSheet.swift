@@ -196,7 +196,7 @@ struct ProfileSheet: View {
     @ViewBuilder private var mainTab: some View {
         BlockTitle(text: "Preferences")
         label("Units")
-        Seg(options: [("lb", "lb / in"), ("kg", "kg / cm")], selection: $unit)
+        UnitsPicker(options: [("lb", "lb / in"), ("kg", "kg / cm")], selection: $unit)
         field("Default Rest (sec)") { TextField("90", text: $rest).keyboardType(.numberPad) }
         label("Progress badge rep range")
         HStack(spacing: 10) {
@@ -614,6 +614,31 @@ struct Seg: View {
             }
         }
         .padding(4).background(Theme.bg4, in: RoundedRectangle(cornerRadius: Theme.radius))
+    }
+}
+
+/// Units control: two small outlined option buttons, mint outline + check on the picked one.
+/// Deliberately unlike `Seg` (the filled-pill tab switch) so a setting never reads as a tab.
+struct UnitsPicker: View {
+    let options: [(String, String)]
+    @Binding var selection: String
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(options, id: \.0) { v, t in
+                let on = selection == v
+                Button { selection = v } label: {
+                    HStack(spacing: 6) {
+                        if on { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)) }
+                        Text(t).font(Theme.body(13, .semibold))
+                    }
+                    .foregroundStyle(on ? Theme.accent : Theme.text2)
+                    .frame(maxWidth: .infinity).frame(height: 34)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(on ? Theme.accent : Theme.border2, lineWidth: on ? 1.5 : 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
     }
 }
 
