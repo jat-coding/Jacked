@@ -10,7 +10,7 @@ struct RoutinesView: View {
 
     var body: some View {
         let raw = store.backup.raw
-        let blocks = RoutineMath.sections(raw)
+        let blocks = RoutineMath.sections(raw, catalog: catalog)
         ScrollView {
             VStack(spacing: 12) {
                 PageHeader(title: "Routines") {
@@ -36,7 +36,7 @@ struct RoutinesView: View {
                 let collapsed = Set((raw["jk_collapsedSections"]?.array ?? []).compactMap(\.string))
                 ForEach(blocks, id: \.id) { b in
                     // sectionBlockHtml: the whole header toggles collapse (saved, like the web app); the name is
-                    // renamed from a long press here instead of the web app's inline edit. "Unfiled" is read-only.
+                    // renamed from a long press here instead of the web app's inline edit. Auto-filed groups are read-only.
                     let isCollapsed = collapsed.contains(b.id)
                     Button { toggleCollapsed(b.id) } label: {
                         HStack {
@@ -51,7 +51,7 @@ struct RoutinesView: View {
                     }
                     .buttonStyle(.plain).padding(.top, 4)
                     .contextMenu {
-                        if !b.id.isEmpty {
+                        if !b.id.isEmpty && !b.id.hasPrefix("auto:") {
                             Button { renameDraft = b.name; renaming = b } label: { Label("Rename section", image: "ic-pencil") }
                         }
                     }
@@ -84,7 +84,7 @@ struct RoutinesView: View {
             if let spec = DevHooks.section {
                 // collapse:<name> | rename:<name>|<new name>
                 try? await Task.sleep(nanoseconds: 4_000_000_000)
-                let secs = RoutineMath.sections(store.backup.raw)
+                let secs = RoutineMath.sections(store.backup.raw, catalog: catalog)
                 if spec.hasPrefix("collapse:"), let b = secs.first(where: { $0.name == String(spec.dropFirst(9)) }) { toggleCollapsed(b.id) }
                 if spec == "order" { showOrder = true }
                 if spec.hasPrefix("move:") {   // move:<section name>|<from>|<to>, or move:|<from>|<to> for the sections themselves
@@ -315,10 +315,13 @@ enum RoutineMath {
                                "triceps": "Triceps", "legs": "Legs", "glutes": "Glutes", "core": "Core"]
     static let mgroups = ["chest", "back", "shoulders", "biceps", "triceps", "legs", "glutes", "core"]
 
-    static func sections(_ raw: [String: JSONValue]) -> [Block] {
+    @MainActor static func sections(_ raw: [String: JSONValue], catalog: ExerciseCatalog? = nil) -> [Block] {
         let rs = (raw["jk_routines"]?.array ?? []).compactMap(\.object)
         guard !rs.isEmpty else { return [] }
+        // A section literally named "Unsorted" (made by older builds or the web app) is not shown: its
+        // routines are re-filed below into the group they train, like any routine without a section.
         let secs = (raw["jk_routineSections"]?.array ?? []).compactMap(\.object)
+            .filter { ($0["name"]?.string ?? "").lowercased() != "unsorted" }
         var grouped = Set<String>()
         let byName: ([String: JSONValue], [String: JSONValue]) -> Bool = {
             ($0["name"]?.string ?? "").localizedStandardCompare($1["name"]?.string ?? "") == .orderedAscending
@@ -334,7 +337,15 @@ enum RoutineMath {
             return Block(id: sid, name: s["name"]?.string ?? "Section", routines: list)
         }
         let orphans = rs.filter { !grouped.contains($0["id"]?.string ?? "") }.sorted(by: byName)
-        if !orphans.isEmpty { out.append(Block(id: "", name: "Unfiled", routines: orphans)) }
+        for r in orphans {
+            let label = groupLabel(for: (r["exercises"]?.array ?? []).compactMap(\.string), raw: raw, catalog: catalog)
+            if let i = out.firstIndex(where: { $0.name.lowercased() == label.lowercased() }) {
+                let b = out[i]
+                out[i] = Block(id: b.id, name: b.name, routines: (b.routines + [r]).sorted(by: byName))
+            } else {
+                out.append(Block(id: "auto:" + label, name: label, routines: [r]))
+            }
+        }
         return out
     }
 
@@ -385,13 +396,23 @@ enum RoutineMath {
         return top.key
     }
 
-    /// suggestSectionId + findOrCreateSection: the majority group's section, else "Unsorted", made if missing.
+    /// The group a routine files under. Majority group; on a tie the tied group listed first in `mgroups`;
+    /// with no tracked-group exercise at all, "Full Body". Never a catch-all "Unsorted".
+    @MainActor static func groupLabel(for ids: [String], raw: [String: JSONValue], catalog: ExerciseCatalog?) -> String {
+        var counts: [String: Int] = [:]
+        for id in ids {
+            let m = catalog?.byId(id, raw: raw).muscle ?? ""
+            let g = LibraryMath.muscleGroup(m); if mgroups.contains(g) { counts[g, default: 0] += 1 }
+        }
+        guard let top = counts.values.max() else { return "Full Body" }
+        let g = mgroups.first { counts[$0] == top } ?? "legs"
+        return sectionLabel[g] ?? "Full Body"
+    }
+
+    /// suggestSectionId + findOrCreateSection: the routine's group section, made if missing.
     @MainActor
     static func sectionId(for ids: [String], raw: inout [String: JSONValue], catalog: ExerciseCatalog?) -> String {
-        let r = raw
-        let g = majorityGroup(ids) { id in catalog?.byId(id, raw: r)
-            ?? CatalogExercise(id: id, name: id, muscle: "", equip: "", tracking: "weight_reps", assist: false, image: nil, custom: false) }
-        let label = g.flatMap { sectionLabel[$0] } ?? "Unsorted"
+        let label = groupLabel(for: ids, raw: raw, catalog: catalog)
         var secs = raw["jk_routineSections"]?.array ?? []
         if let hit = secs.first(where: { ($0["name"]?.string ?? "").lowercased() == label.lowercased() }), let id = hit["id"]?.string { return id }
         let id = "sec\(Int64(Date().timeIntervalSince1970 * 1000))" + String(UUID().uuidString.lowercased().prefix(5))
@@ -559,6 +580,7 @@ struct StartWorkoutSheet: View {
 /// #routineOrderModal: drag a section to reorder sections, drag a routine to reorder it within its section,
 /// "+ Section" adds an empty one. Every move saves straight away, like the web app's drop.
 struct RoutineOrderSheet: View {
+    @EnvironmentObject private var catalog: ExerciseCatalog
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
     @Environment(\.dismiss) private var dismiss
@@ -566,7 +588,7 @@ struct RoutineOrderSheet: View {
     @State private var newName = ""
 
     var body: some View {
-        let blocks = RoutineMath.sections(store.backup.raw).filter { !$0.id.isEmpty }
+        let blocks = RoutineMath.sections(store.backup.raw, catalog: catalog).filter { !$0.id.isEmpty && !$0.id.hasPrefix("auto:") }
         NavigationStack {
             List {
                 Section {
