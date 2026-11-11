@@ -106,11 +106,6 @@ struct WorkoutDetailSheet: View {
             HStack {
                 if let saveNote { Text(saveNote).font(Theme.body(12)).foregroundStyle(store.dirty ? Theme.orange : Theme.muted) }
                 Spacer()
-                Button { editing = true } label: {
-                    HStack(spacing: 5) { JIcon("pencil", 14); Text("Edit") }.font(Theme.body(13, .semibold))
-                }
-                .tint(Theme.accent)
-                .disabled(rawWorkout == nil)
                 Button { routineName = workout.name; savingRoutine = true } label: {
                     Text("Save as Routine").font(Theme.body(13, .semibold))
                 }
@@ -124,6 +119,7 @@ struct WorkoutDetailSheet: View {
                         .frame(width: 30, height: 30).background(Theme.bg4, in: Circle())
                 }
                 .disabled(rawWorkout == nil)
+                .accessibilityLabel("Workout options")
             }
             HStack(spacing: 8) {
                 stat(JackedDate.short(workout.date), "Date")
