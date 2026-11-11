@@ -20,6 +20,44 @@ enum BadgeUI {
     static let tierColor: [String: Color] = ["bronze": Color(hex: 0xCD7F32), "silver": Color(hex: 0xB8B8C8), "gold": Color(hex: 0xFFD700)]
     static let teal = Color(hex: 0x20D3C2), lockedGrey = Color(hex: 0x70707F)
 
+    // MARK: earned-tier highlight (same award math: Badge.tier / Badge.ladder.reached from computeBadges)
+    /// Colour for tier `i` (1 bronze ... 3 gold) when `rank` tiers are earned: unearned muted, earned in the
+    /// tier's own colour, the highest earned white when more than one is earned.
+    static func rungColor(_ i: Int, rank: Int) -> Color {
+        if i > rank { return Theme.muted }
+        if i == rank && rank > 1 { return Theme.text }
+        return tierColor[["bronze", "silver", "gold"][i - 1]]!
+    }
+    static func rank(_ tier: String?) -> Int { TIER_RANK_UI[tier ?? ""] ?? 0 }
+    static let TIER_RANK_UI = ["bronze": 1, "silver": 2, "gold": 3]
+    /// desc line with the ladder numbers ("185 / 225 / 315") coloured by whether each rung is earned.
+    static func ladderText(_ text: String, ladder: [Rung], base: Color) -> AttributedString {
+        var a = AttributedString(text); a.foregroundColor = base
+        guard ladder.count == 3 else { return a }
+        let rank = ladder.filter(\.reached).count
+        var from = text.startIndex
+        for (i, r) in ladder.enumerated() {
+            guard let rg = text.range(of: r.label, range: from..<text.endIndex),
+                  let lo = AttributedString.Index(rg.lowerBound, within: a), let hi = AttributedString.Index(rg.upperBound, within: a) else { return a }
+            a[lo..<hi].foregroundColor = rungColor(i + 1, rank: rank)
+            a[lo..<hi].font = Theme.body(12, .heavy)
+            from = rg.upperBound
+        }
+        return a
+    }
+    /// "Bronze 185 lb, Silver 225 lb, Gold 315 lb" phrases inside a how-text, earned ones highlighted.
+    static func tierWordsText(_ text: String, rank: Int, base: Color) -> AttributedString {
+        var a = AttributedString(text); a.foregroundColor = base
+        guard let re = try? NSRegularExpression(pattern: "(Bronze|Silver|Gold) [^,]*?(?=,|\\.(?:\\s|$))") else { return a }
+        for m in re.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let rg = Range(m.range, in: text), let lo = AttributedString.Index(rg.lowerBound, within: a), let hi = AttributedString.Index(rg.upperBound, within: a) else { continue }
+            let w = String(text[rg].prefix(while: { $0 != " " }))
+            let i = ["Bronze": 1, "Silver": 2, "Gold": 3][w] ?? 0
+            if i <= rank { a[lo..<hi].foregroundColor = rungColor(i, rank: rank); a[lo..<hi].font = Theme.body(12, .heavy) }
+        }
+        return a
+    }
+
     /// ACH_GROUPS: Monthly reset, 3-month reset, Permanent.
     static let groups = ["Monthly reset", "3-month reset", "Permanent"]
     static func group(_ b: Badge) -> Int {
@@ -114,7 +152,7 @@ struct AchievementsSheet: View {
             BadgeUI.icon(b, size: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(b.name).font(Theme.body(14, .bold)).foregroundStyle(Theme.text)
-                Text(b.desc).font(Theme.body(12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                Text(BadgeUI.ladderText(b.desc, ladder: b.ladder, base: Theme.muted)).font(Theme.body(12)).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 6)
             status(b)
@@ -174,21 +212,21 @@ struct BadgeDetailSheet: View {
                     .padding(.top, 10)
                 Text(status.uppercased()).font(Theme.body(12, .heavy)).tracking(2).foregroundStyle(col).frame(maxWidth: .infinity)
                 Text(b.name).font(Theme.heading(30, .extraBold)).foregroundStyle(Theme.text).frame(maxWidth: .infinity)
-                Text(b.detail ?? b.desc).font(Theme.body(14)).foregroundStyle(Theme.text2).multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                Text(BadgeUI.ladderText(b.detail ?? b.desc, ladder: b.ladder, base: Theme.text2)).font(Theme.body(14)).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                 Rectangle().fill(Theme.border).frame(height: 1).padding(.vertical, 8)
                 h("How to earn it"); para(how.how)
                 ForEach(m.badgeExHow(b.name), id: \.t) { x in h(x.t); para(x.body) }
                 if !how.tiers.isEmpty {
                     h("Tiers")
                     ForEach(how.tiers, id: \.0) { t, v in
-                        let k = t.lowercased(), on = b.tier == k, c = BadgeUI.tierColor[k]!
+                        let k = t.lowercased(), on = b.tier == k, c = BadgeUI.tierColor[k]!, rank = BadgeUI.rank(b.tier)
                         let reached = xKey != nil && (MetricsMath.TIER_RANK[k] ?? 0) <= (MetricsMath.TIER_RANK[b.tier ?? ""] ?? 0)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text(t).font(Theme.body(14, .heavy)).foregroundStyle(c)
                                 if on { Text("You").font(Theme.body(11, .bold)).foregroundStyle(Theme.bg).padding(.horizontal, 6).padding(.vertical, 2).background(c, in: Capsule()) }
                                 Spacer()
-                                Text(v).font(Theme.body(14, on ? .heavy : .semibold)).foregroundStyle(Theme.text)
+                                Text(v).font(Theme.body(14, rank >= (MetricsMath.TIER_RANK[k] ?? 0) ? .heavy : .semibold)).foregroundStyle(BadgeUI.rungColor(MetricsMath.TIER_RANK[k] ?? 0, rank: rank))
                                 if reached { SFIcon("chevron.right", 12).foregroundStyle(Theme.muted)
                                     .rotationEffect(.degrees(open.contains(k) ? 90 : 0)) }
                             }
