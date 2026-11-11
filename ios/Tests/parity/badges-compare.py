@@ -28,6 +28,16 @@ for c in exp:
         if bad <= 4:
             print("MISMATCH", c["name"])
             for k, a, b in diffs[:6]: print("  " + k, "\n   pwa:", json.dumps(a)[:400], "\n   ios:", json.dumps(b)[:400])
+# Absolute expectations (clock-change fixtures): web AND ios PR-Maxing.earned must equal c["want"].
+wbad = 0
+for c in exp:
+    if "want" not in c: continue
+    for who, lst in (("pwa", c["expected"]["list"]), ("ios", got.get(c["name"], {}).get("list", []))):
+        pr = next((b for b in lst if b["name"] == "PR-Maxing"), {})
+        if pr.get("earned") != c["want"]:
+            wbad += 1; print("WANT FAIL", c["name"], who, "PR-Maxing earned =", pr.get("earned"), "want", c["want"], "|", pr.get("desc"))
+print("clock fixtures wrong:", wbad)
+bad += wbad
 print("mismatches by field:", dict(sorted(per.items(), key=lambda x: -x[1])[:15]) or "none")
 print(f"{len(exp) - bad}/{len(exp)} accounts identical")
 sys.exit(1 if bad else 0)

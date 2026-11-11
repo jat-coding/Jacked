@@ -124,5 +124,21 @@ for (let i = 0; i < N; i++) {
   ctx.__NOW = now;
   cases.push({ name: 'case' + i, now, raw, expected: JSON.parse(JSON.stringify(ctx.__run())) });
 }
+
+// Clock-change fixtures (Mr. Roni, 2026-11-10): PR-Maxing counts calendar days, so 7 PRs inside 7 calendar days earn it even when
+// the window crosses a DST change (noon-to-noon is 6d+/-1h there). Transition days: Denver spring 03-08 / fall 11-01, London
+// spring 03-29 / fall 10-25 (every zone sees all four; only its own matter). `want` is an ABSOLUTE expectation checked by
+// badges-compare.py, since web and Swift shared the bug and agreed with each other. Run under each zone (badges-run.sh does).
+for (const [label, m, d] of [['denver-spring', 2, 8], ['denver-fall', 10, 1], ['london-spring', 2, 29], ['london-fall', 9, 25]]) {
+  for (const [gap, want] of [[6, true], [7, false]]) {   // days from first PR day to second: 6 = same 7-day window, 7 = just outside
+    const a = new Date(2026, m, d - 1, 12), b = new Date(2026, m, d - 1 + gap, 12), now = +new Date(2026, m, d - 1 + gap + 2, 15);
+    const mk = (dt, n, i) => ({ id: 'w' + (+dt), name: 'W', date: dt.toISOString(), duration: '45:00', sets: 3, totalVolume: 100, prCount: n, exercises: [] });
+    const raw = { jk_hist: [mk(a, 3), mk(b, 4)] };
+    for (const k of Object.keys(store)) delete store[k];
+    for (const [k, v] of Object.entries(raw)) store[k] = JSON.stringify(v);
+    vm.runInContext('_cexMemo={raw:undefined,map:null}', ctx); ctx.__NOW = now;
+    cases.push({ name: `clock-${label}-gap${gap}`, now, raw, want, expected: JSON.parse(JSON.stringify(ctx.__run())) });
+  }
+}
 fs.writeFileSync(path.join(here, 'badges-fixtures.json'), JSON.stringify(cases));
 console.log('node finished', cases.length, 'accounts');

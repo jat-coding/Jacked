@@ -6759,7 +6759,7 @@ const BADGE_HOW={
   get 'Cardio-Maxing'(){ const T=badgeT().cardio.map(fmtClock); return `Best mile pace from Running (outdoor) or Running (treadmill); other cardio doesn't count. Bronze ${T[0]}, Silver ${T[1]}, Gold ${T[2]} per mile.`+stdHowNote('cardio'); },
   'Challenge-Maxing':'Train your weakest muscle group (glutes excluded) enough times this month. New group every month.',
   'Comeback-Maxing':'Train half the days this month, or beat last month after a slow one.',
-  'Variety-Maxing':'Log one real set on 100 different library exercises. Each counts once, forever.'
+  'Variety-Maxing':'Log one real set on 100 different exercises (library and custom). Each counts once, forever.'
 };
 // Name shown for a badge; older builds stored '1000lb Club-Maxing' in friends' badge lists.
 function badgeShownName(n){ return n==='1000lb Club-Maxing' ? '1000lb Club' : n; }
@@ -6780,7 +6780,7 @@ const BADGE_DETAIL={
     tiers:[['Bronze',T[0]],['Silver',T[1]],['Gold',T[2]]],note:'Your tier follows your best pace in the last 3 months.'}; },
   'Challenge-Maxing':{how:'Your weakest muscle group each month (glutes excluded, never repeated). Train it in the target number of different workouts.',note:'Resets monthly with a new muscle group.'},
   'Comeback-Maxing':{how:'Two ways in: Steady (train at least half the days this month) or Bounce back (more sessions than a slow last month).',note:'Resets monthly. Either one earns it.'},
-  'Variety-Maxing':{how:'Log a real set on 100 different exercises from the library. Each new one counts once, forever.'},
+  'Variety-Maxing':{how:'Log a real set on 100 different exercises, library or custom. Each new one counts once, forever.'},
   'PR-Maxing':{how:'Hit 7 personal records within any rolling 7-day window. A single workout\'s PRs all count toward the total.',note:'Resets every 3 months. Only the last 3 months count.'},
   'Consistency-Maxing':{how:'Finish a workout on 7 calendar days in a row. Same day twice still counts as one.',note:'Resets every 3 months. Only the last 3 months count.'},
   'Coward-Maxing':{how:'Given after 7+ days off in a row this month. Holding it locks Jacked.',note:'Resets monthly. Starts fresh on the 1st.'},
@@ -7842,11 +7842,13 @@ function bestWeekTotal(h){
   h.forEach(w=>{ const c=w.prCount||0; if(c){ const k=dayKey(w.date); byDay[k]=(byDay[k]||0)+c; } });
   const days=Object.keys(byDay).sort();
   if(!days.length) return 0;
-  const ms=days.map(k=>+new Date(k+'T12:00:00')), vals=days.map(k=>byDay[k]);
+  // Calendar-day numbers (UTC arithmetic on the Y-M-D parts), not local-noon milliseconds: a window that crosses a clock
+  // change is 6 days +/- 1 hour in ms and used to lose a day (Mr. Roni, 2026-11-10).
+  const ms=days.map(k=>{ const p=k.split('-').map(Number); return Math.round(Date.UTC(p[0],p[1]-1,p[2])/864e5); }), vals=days.map(k=>byDay[k]);
   let best=0, start=0, sum=0;
   for(let end=0; end<days.length; end++){
     sum+=vals[end];
-    while(ms[end]-ms[start]>6*864e5){ sum-=vals[start]; start++; }
+    while(ms[end]-ms[start]>6){ sum-=vals[start]; start++; }
     if(sum>best) best=sum;
   }
   return best;

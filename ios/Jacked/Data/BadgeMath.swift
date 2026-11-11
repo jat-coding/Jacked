@@ -185,11 +185,17 @@ extension MetricsMath {
         var byDay: [String: Int] = [:]
         for w in h where w.w.prCount != 0 { byDay[w.w.dayKey, default: 0] += w.w.prCount }
         let days = byDay.keys.sorted()
-        let ms = days.map { JackedDate.noon(of: $0, calendar: cal).map { $0.timeIntervalSince1970 * 1000 } ?? .nan }
+        // Calendar-day numbers (UTC arithmetic on the Y-M-D parts), matching the web; local-noon ms lost a day across a clock change.
+        var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!
+        let ms: [Double] = days.map { k in
+            let p = k.split(separator: "-").compactMap { Int($0) }
+            guard p.count == 3, let d = utc.date(from: DateComponents(year: p[0], month: p[1], day: p[2])) else { return .nan }
+            return (d.timeIntervalSince1970 / 86400).rounded()
+        }
         var best = 0, start = 0, sum = 0
         for end in days.indices {
             sum += byDay[days[end]]!
-            while ms[end] - ms[start] > 6 * 864e5 { sum -= byDay[days[start]]!; start += 1 }
+            while ms[end] - ms[start] > 6 { sum -= byDay[days[start]]!; start += 1 }
             best = max(best, sum)
         }
         return best
@@ -432,7 +438,7 @@ extension MetricsMath {
         case "Cardio-Maxing": let c = T.cardio.map(Self.fmtClock); return "Best mile pace from Running (outdoor) or Running (treadmill); other cardio doesn't count. Bronze \(c[0]), Silver \(c[1]), Gold \(c[2]) per mile." + stdHowNote("cardio")
         case "Challenge-Maxing": return "Train your weakest muscle group (glutes excluded) enough times this month. New group every month."
         case "Comeback-Maxing": return "Train half the days this month, or beat last month after a slow one."
-        case "Variety-Maxing": return "Log one real set on 100 different library exercises. Each counts once, forever."
+        case "Variety-Maxing": return "Log one real set on 100 different exercises (library and custom). Each counts once, forever."
         default: return ""
         }
     }
@@ -466,7 +472,7 @@ extension MetricsMath {
                                      "Your tier follows your best pace in the last 3 months.")
         case "Challenge-Maxing": return ("Your weakest muscle group each month (glutes excluded, never repeated). Train it in the target number of different workouts.", [], "Resets monthly with a new muscle group.")
         case "Comeback-Maxing": return ("Two ways in: Steady (train at least half the days this month) or Bounce back (more sessions than a slow last month).", [], "Resets monthly. Either one earns it.")
-        case "Variety-Maxing": return ("Log a real set on 100 different exercises from the library. Each new one counts once, forever.", [], nil)
+        case "Variety-Maxing": return ("Log a real set on 100 different exercises, library or custom. Each new one counts once, forever.", [], nil)
         case "PR-Maxing": return ("Hit 7 personal records within any rolling 7-day window. A single workout's PRs all count toward the total.", [], "Resets every 3 months. Only the last 3 months count.")
         case "Consistency-Maxing": return ("Finish a workout on 7 calendar days in a row. Same day twice still counts as one.", [], "Resets every 3 months. Only the last 3 months count.")
         case "Coward-Maxing": return ("Given after 7+ days off in a row this month. Holding it locks Jacked.", [], "Resets monthly. Starts fresh on the 1st.")
