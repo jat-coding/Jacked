@@ -50,6 +50,11 @@ struct ActiveWorkoutView: View {
                         ElapsedClock(start: session.active?.startedAt ?? 0)
                     }
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+                        .accessibilityLabel("Dismiss keyboard")
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { showPlates = true } label: { SFIcon("circle.circle") }.accessibilityLabel("Plate calculator")
                     Button("Finish") { confirmFinish = true }.font(Theme.body(15, .bold)).disabled(finishing)
