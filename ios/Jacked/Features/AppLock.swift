@@ -71,6 +71,10 @@ final class AppLock: ObservableObject {
 
     /// Used by the My Profile switch: only turns the lock on once the phone can actually unlock it.
     static func canEnable() async -> Bool {
+        #if DEBUG
+        // Simulator has no passcode/Face ID enrolled; JACKED_DEV_FACEID_OK=1 skips the system prompt for demo recordings.
+        if ProcessInfo.processInfo.environment["JACKED_DEV_FACEID_OK"] == "1" { return true }
+        #endif
         let ctx = LAContext(); var err: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else { return false }
         return (try? await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Turn on Face ID lock for Jacked")) ?? false
