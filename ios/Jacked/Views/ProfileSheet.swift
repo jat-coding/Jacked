@@ -56,7 +56,8 @@ struct ProfileSheet: View {
     var body: some View {
         ScrollViewReader { proxy in
         SheetScaffold(title: "My Profile") {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 22) {
+                // Photo header (Friends can see this).
                 HStack(spacing: 14) {
                     // renderAvPrev: the photo, else initials on the name's colour (avHTML), like the web app.
                     ZStack {
@@ -77,74 +78,75 @@ struct ProfileSheet: View {
                         .disabled(photoBusy)
                         Text("Friends can see this.").font(Theme.body(11)).foregroundStyle(Theme.muted)
                     }
+                    Spacer(minLength: 0)
                 }
-                field("Display Name") { TextField("", text: $name).textInputAutocapitalization(.words) }
-                field("Username (unique handle)") {
-                    TextField("@username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled()
-                }
-                note("This is your friend handle and the key for all your data.")
 
-                Seg(options: [("main", "Profile"), ("body", "Body Metrics")], selection: $tab).padding(.top, 6)
+                Seg(options: [("main", "Profile"), ("body", "Body Metrics")], selection: $tab)
+
+                if tab == "main" { mainTab } else { bodyTab }
+
+                // Save Profile covers everything on the two tabs above.
                 VStack(alignment: .leading, spacing: 12) {
-                    if tab == "main" { mainTab } else { bodyTab }
                     if let m = message {
                         Text(m.text).font(Theme.body(13, .semibold)).foregroundStyle(m.ok ? Theme.green : Theme.red)
                     }
                     Button(saving ? "Saving\u{2026}" : "Save Profile") { Task { await save() } }
                         .buttonStyle(AccentButtonStyle()).disabled(saving)
                 }
-                .padding(14).card(fill: Theme.bg3, radius: Theme.radius)
 
-                sep(); BlockTitle(text: "This Phone").id("thisphone")
-                note("These two switches apply right away and belong to this phone only. They are not part of your synced backup.")
-                Toggle(isOn: $healthOn) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Save workouts to Apple Health").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
-                        Text("Each finished workout is written to Health as strength training. Jacked only writes, it never reads Health.")
-                            .font(Theme.body(12)).foregroundStyle(Theme.muted)
+                section("Health", footer: "Applies right away and belongs to this phone only. It is not part of your synced backup.") {
+                    toggleRow("Save workouts to Apple Health",
+                              "Each finished workout is written to Health as strength training. Jacked only writes, it never reads Health.",
+                              isOn: $healthOn)
+                        .disabled(!HealthLog.available)
+                        .onChange(of: healthOn) { _, on in HealthLog.enabled = on; if on { Task { await HealthLog.requestAccess() } } }
+                }
+                .id("thisphone")
+
+                section("Security", footer: "Applies right away and belongs to this phone only. It is not part of your synced backup.") {
+                    toggleRow("Face ID lock",
+                              "Ask for Face ID (or your passcode) when Jacked opens and after it has been in the background for a minute.",
+                              isOn: Binding(get: { faceOn }, set: { setFaceLock($0) }))
+                }
+
+                section("Data & Backup",
+                        footer: store.dirty ? "Some changes are only on this phone so far. They go out on the next sync."
+                                            : "Last synced " + (store.lastSynced.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "never") + ".") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        note("Changes sync to the cloud automatically, and your watch picks them up from there. Export any time for an offline copy. Import a Jacked backup, or a Hevy CSV export (.csv/.txt) to bring in your history.")
+                        HStack(spacing: 10) {
+                            if let u = exportURL { ShareLink(item: u) { Text("Export") }.buttonStyle(GhostButtonStyle()) }
+                            Button(importBusy ? "Importing\u{2026}" : "Import") { importing = true }.buttonStyle(GhostButtonStyle()).disabled(importBusy)
+                            Button("Sync now") { Task { await store.refresh(auth: auth) } }.buttonStyle(GhostButtonStyle())
+                        }
                     }
+                    .padding(14)
                 }
-                .tint(Theme.accent).disabled(!HealthLog.available)
-                .onChange(of: healthOn) { _, on in HealthLog.enabled = on; if on { Task { await HealthLog.requestAccess() } } }
-                Toggle(isOn: Binding(get: { faceOn }, set: { setFaceLock($0) })) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Face ID lock").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
-                        Text("Ask for Face ID (or your passcode) when Jacked opens and after it has been in the background for a minute.")
-                            .font(Theme.body(12)).foregroundStyle(Theme.muted)
+
+                section("Feedback", footer: "Found a bug or want a change? Send it our way.") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        TextField("What should we fix or add?", text: $feedbackText, axis: .vertical).lineLimit(3...6)
+                            .onChange(of: feedbackText) { _, v in if v.count > 2000 { feedbackText = String(v.prefix(2000)) } }
+                            .modifier(JackedFieldStyle(focused: false))
+                        Button(feedbackBusy ? "Sending\u{2026}" : "Send Feedback") { Task { await sendFeedback() } }
+                            .buttonStyle(AccentButtonStyle()).disabled(feedbackBusy)
                     }
+                    .padding(14)
                 }
-                .tint(Theme.accent)
+                .id("feedback")
 
-                sep(); BlockTitle(text: "Data & Backup")
-                note("Changes sync to the cloud automatically, and your watch picks them up from there. Export any time for an offline copy. Import a Jacked backup, or a Hevy CSV export (.csv/.txt) to bring in your history.")
-                HStack(spacing: 10) {
-                    if let u = exportURL { ShareLink(item: u) { Text("Export") }.buttonStyle(GhostButtonStyle()) }
-                    Button(importBusy ? "Importing\u{2026}" : "Import") { importing = true }.buttonStyle(GhostButtonStyle()).disabled(importBusy)
-                    Button("Sync now") { Task { await store.refresh(auth: auth) } }.buttonStyle(GhostButtonStyle())
+                // Sign out and delete last, set apart from everything else.
+                VStack(alignment: .leading, spacing: 12) {
+                    Rectangle().fill(Theme.border).frame(height: 1)
+                    note("Signing out removes this account's copy from this phone. Your workouts stay saved in your account.")
+                    Button("Sign Out") { Task { dismiss(); store.signedOut(); await auth.logOut() } }
+                        .buttonStyle(GhostButtonStyle())
+                    Button("Delete Account") { showDelete = true }
+                        .buttonStyle(DestructiveGhostButtonStyle())
+                    Text("Jacked for iPhone " + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""))
+                        .font(Theme.body(11)).foregroundStyle(Theme.muted).frame(maxWidth: .infinity).padding(.top, 4)
                 }
-                Text(store.dirty ? "Some changes are only on this phone so far. They go out on the next sync."
-                                 : "Last synced " + (store.lastSynced.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "never") + ".")
-                    .font(Theme.body(12)).foregroundStyle(Theme.muted)
-
-                sep(); BlockTitle(text: "Feedback").id("feedback")
-                note("Found a bug or want a change? Send it our way.")
-                TextField("What should we fix or add?", text: $feedbackText, axis: .vertical).lineLimit(3...6)
-                    .onChange(of: feedbackText) { _, v in if v.count > 2000 { feedbackText = String(v.prefix(2000)) } }
-                    .modifier(JackedFieldStyle(focused: false))
-                Button(feedbackBusy ? "Sending\u{2026}" : "Send Feedback") { Task { await sendFeedback() } }
-                    .buttonStyle(AccentButtonStyle()).disabled(feedbackBusy)
-
-                sep(); BlockTitle(text: "Account")
-                emailBlock
-                note("Signing out removes this account's copy from this phone. Your workouts stay saved in your account.")
-                Button("Sign Out") { Task { dismiss(); store.signedOut(); await auth.logOut() } }
-                    .buttonStyle(GhostButtonStyle())
-                Button("Delete Account") { showDelete = true }
-                    .buttonStyle(DestructiveGhostButtonStyle())
-
-                sep()
-                Text("Jacked for iPhone " + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""))
-                    .font(Theme.body(11)).foregroundStyle(Theme.muted).frame(maxWidth: .infinity)
+                .id("bottom")
             }
         }
         .presentationDetents([.large])
@@ -182,6 +184,8 @@ struct ProfileSheet: View {
         .task {
             #if DEBUG
             if let p = DevHooks.profile, p == "scroll=feedback" { try? await Task.sleep(nanoseconds: 2_000_000_000); proxy.scrollTo("feedback", anchor: .top) }
+            else if let p = DevHooks.profile, p == "scroll=bottom" { try? await Task.sleep(nanoseconds: 2_000_000_000); proxy.scrollTo("bottom", anchor: .bottom) }
+            else if let p = DevHooks.profile, p == "scroll=security" { try? await Task.sleep(nanoseconds: 2_000_000_000); proxy.scrollTo("thisphone", anchor: .top) }
             else if let p = DevHooks.profile, p == "scroll=thisphone" { try? await Task.sleep(nanoseconds: 2_000_000_000); proxy.scrollTo("thisphone", anchor: .top) }
             else if let p = DevHooks.profile { await devApply(p) }
             if DevHooks.deleteAccount != nil { try? await Task.sleep(nanoseconds: 800_000_000); showDelete = true }
@@ -194,73 +198,99 @@ struct ProfileSheet: View {
     // MARK: Tabs
 
     @ViewBuilder private var mainTab: some View {
-        BlockTitle(text: "Preferences")
-        label("Units")
-        UnitsPicker(options: [("lb", "lb / in"), ("kg", "kg / cm")], selection: $unit)
-        field("Default Rest (sec)") { TextField("90", text: $rest).keyboardType(.numberPad) }
-        label("Progress badge rep range")
-        HStack(spacing: 10) {
-            field("Min") { TextField("5", text: $repMin).keyboardType(.numberPad) }
-            field("Max") { TextField("12", text: $repMax).keyboardType(.numberPad) }
-        }
-        note("Every set at or above Max for 3 workouts in a row shows \"Ready to go up\"; a workout where no set reaches Min shows \"Consider lighter\" right away. Default 5 to 12.")
-        Toggle(isOn: $autoRest) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Auto rest timer").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
-                Text("Start a rest countdown after each completed set").font(Theme.body(12)).foregroundStyle(Theme.muted)
+        section("Account", footer: "Your username is your friend handle and the key for all your data. Share it so friends can add you.") {
+            VStack(spacing: 0) {
+                row("Display Name") { TextField("", text: $name).textInputAutocapitalization(.words).multilineTextAlignment(.trailing) }
+                rowDivider
+                row("Username") {
+                    TextField("@username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled().multilineTextAlignment(.trailing)
+                }
+                rowDivider
+                row("Share username") {
+                    HStack(spacing: 10) {
+                        Text(auth.session?.code ?? "\u{2014}").font(Theme.body(15, .bold)).foregroundStyle(Theme.accent).textSelection(.enabled)
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                        smallButton("Copy") { UIPasteboard.general.string = auth.session?.code; message = ("Username copied", true) }
+                    }
+                }
+                rowDivider
+                emailBlock
             }
         }
-        .tint(Theme.accent)
-        sep(); BlockTitle(text: "Your Username")
-        VStack(spacing: 6) {
-            Text("Share this so friends can add you").font(Theme.body(11)).foregroundStyle(Theme.muted)
-            Text(auth.session?.code ?? "\u{2014}").font(Theme.heading(26, .extraBold)).foregroundStyle(Theme.accent).textSelection(.enabled)
-            Button("Copy Username") { UIPasteboard.general.string = auth.session?.code; message = ("Username copied", true) }
-                .buttonStyle(GhostButtonStyle())
+        section("Preferences", footer: "Every set at or above Max for 3 workouts in a row shows \"Ready to go up\"; a workout where no set reaches Min shows \"Consider lighter\" right away. Default 5 to 12.") {
+            VStack(spacing: 0) {
+                row("Units") { UnitsPicker(options: [("lb", "lb / in"), ("kg", "kg / cm")], selection: $unit).frame(width: 200) }
+                rowDivider
+                row("Default Rest (sec)") { TextField("90", text: $rest).keyboardType(.numberPad).multilineTextAlignment(.trailing) }
+                rowDivider
+                row("Progress badge rep range") {
+                    HStack(spacing: 8) {
+                        TextField("5", text: $repMin).keyboardType(.numberPad).multilineTextAlignment(.center).frame(width: 44)
+                        Text("to").font(Theme.body(13)).foregroundStyle(Theme.muted)
+                        TextField("12", text: $repMax).keyboardType(.numberPad).multilineTextAlignment(.center).frame(width: 44)
+                    }
+                }
+                rowDivider
+                toggleRow("Auto rest timer", "Start a rest countdown after each completed set", isOn: $autoRest)
+            }
         }
-        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder private var bodyTab: some View {
-        BlockTitle(text: "Body Metrics")
-        note("Used for strength-based rankings on the Metrics tab and your achievement badges.")
-        label("Body")
-        Seg(options: [("male", "Male"), ("female", "Female")], selection: $sex)
-        field("Body Weight (\(unit == "kg" ? "kg" : "lb"))") { TextField(unit == "kg" ? "80" : "175", text: $bw).keyboardType(.decimalPad) }
-        label("Birthday")
-        if hasBirthday {
-            HStack {
-                DatePicker("", selection: $birthday, in: ...Date(), displayedComponents: .date).labelsHidden().tint(Theme.accent)
-                Spacer()
-                Button("Clear") { hasBirthday = false }.font(Theme.body(13, .semibold)).foregroundStyle(Theme.text2)
+        section("Body Metrics", footer: "Used for strength-based rankings on the Metrics tab and your achievement badges.") {
+            VStack(spacing: 0) {
+                row("Body") { Seg(options: [("male", "Male"), ("female", "Female")], selection: $sex).frame(width: 190) }
+                rowDivider
+                row("Body Weight (\(unit == "kg" ? "kg" : "lb"))") {
+                    TextField(unit == "kg" ? "80" : "175", text: $bw).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                }
+                rowDivider
+                row("Birthday") {
+                    if hasBirthday {
+                        DatePicker("", selection: $birthday, in: ...Date(), displayedComponents: .date).labelsHidden().tint(Theme.accent)
+                    } else {
+                        smallButton("Set birthday") { hasBirthday = true }
+                    }
+                }
+                if hasBirthday {
+                    rowDivider
+                    row("Age") {
+                        HStack(spacing: 10) {
+                            if let a = Self.age(birthday) { Text("\(a)").font(Theme.body(14)).foregroundStyle(Theme.text2) }
+                            smallButton("Clear birthday") { hasBirthday = false }
+                        }
+                    }
+                }
             }
-            if let a = Self.age(birthday) { note("Age \(a)") }
-        } else {
-            Button("Set birthday") { hasBirthday = true }.buttonStyle(GhostButtonStyle())
         }
     }
 
     @ViewBuilder private var emailBlock: some View {
-        label("Email")
         if editingEmail {
-            TextField("you@example.com", text: $emailIn).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                .padding(12).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius)).foregroundStyle(Theme.text)
-            HStack(spacing: 10) {
-                Button("Cancel") { editingEmail = false }.buttonStyle(GhostButtonStyle())
-                Button("Save email") { Task { await saveEmail() } }.buttonStyle(AccentButtonStyle())
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Email").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+                TextField("you@example.com", text: $emailIn).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .padding(12).background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radius))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.border2, lineWidth: 1))
+                    .foregroundStyle(Theme.text)
+                HStack(spacing: 10) {
+                    Button("Cancel") { editingEmail = false }.buttonStyle(GhostButtonStyle())
+                    Button("Save email") { Task { await saveEmail() } }.buttonStyle(AccentButtonStyle())
+                }
+                note("Lets you log in with your email as well as your username.")
             }
+            .padding(14)
         } else {
-            HStack(spacing: 10) {
-                Text(emailNote ?? email ?? "No email on file").font(Theme.body(14)).foregroundStyle(email == nil || emailNote != nil ? Theme.muted : Theme.text)
-                Spacer()
-                if emailNote == nil {
-                    Button(email == nil ? "Add email" : "Change") { emailIn = email ?? ""; editingEmail = true }
-                        .font(Theme.body(14, .semibold)).foregroundStyle(Theme.text2).padding(.horizontal, 14).padding(.vertical, 8)
-                        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.border2, lineWidth: 1))
+            row("Email") {
+                HStack(spacing: 10) {
+                    Text(emailNote ?? email ?? "No email on file").font(Theme.body(14)).foregroundStyle(email == nil || emailNote != nil ? Theme.muted : Theme.text)
+                        .lineLimit(1).truncationMode(.middle)
+                    if emailNote == nil {
+                        smallButton(email == nil ? "Add email" : "Change") { emailIn = email ?? ""; editingEmail = true }
+                    }
                 }
             }
         }
-        note("Lets you log in with your email as well as your username.")
     }
 
     // MARK: Load / save
@@ -583,6 +613,42 @@ struct ProfileSheet: View {
     private func setFaceLock(_ on: Bool) {
         guard on else { AppLock.enabled = false; faceOn = false; return }
         Task { if await AppLock.canEnable() { AppLock.enabled = true; faceOn = true } else { faceOn = false; message = ("Could not turn on Face ID lock. Set a passcode in iOS Settings first.", false) } }
+    }
+    // MARK: Layout helpers: one card per section, rows with the label left and the control right.
+
+    /// A section: small muted header, one bordered card, optional helper text under it.
+    private func section<C: View>(_ title: String, footer: String? = nil, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased()).font(Theme.body(12, .bold)).tracking(0.8).foregroundStyle(Theme.text2).padding(.horizontal, 4)
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+                .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.border, lineWidth: 1))
+            if let f = footer { Text(f).font(Theme.body(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4) }
+        }
+    }
+    private var rowDivider: some View { Rectangle().fill(Theme.border).frame(height: 1).padding(.leading, 14) }
+    /// Label left, control right, 48pt minimum.
+    private func row<C: View>(_ l: String, @ViewBuilder _ c: () -> C) -> some View {
+        HStack(spacing: 12) {
+            Text(l).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            c().font(Theme.body(15)).foregroundStyle(Theme.text)
+        }
+        .padding(.horizontal, 14).frame(minHeight: 48)
+    }
+    private func toggleRow(_ title: String, _ help: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+                Text(help).font(Theme.body(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .tint(Theme.accent).padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 48)
+    }
+    private func smallButton(_ t: String, _ a: @escaping () -> Void) -> some View {
+        Button(t, action: a).font(Theme.body(13, .semibold)).lineLimit(1).fixedSize().foregroundStyle(Theme.text2).padding(.horizontal, 12).padding(.vertical, 6)
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.border2, lineWidth: 1))
     }
     private func sep() -> some View { Rectangle().fill(Theme.border).frame(height: 1).padding(.vertical, 6) }
     /// The PWA's <label>: small, bold, uppercase, muted.
