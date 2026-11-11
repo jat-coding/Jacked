@@ -193,8 +193,6 @@ struct ExerciseInfoSheet: View {
                             Text(fav ? "★ Favorited" : "☆ Favorite")
                         }
                         .buttonStyle(GhostButtonStyle())
-                        Button { editing = true } label: { Text("Edit") }
-                            .buttonStyle(GhostButtonStyle())
                     }
                     sugBlock(raw: raw, settings: settings)
                     if let txt = Self.storedPRText(ex.id, raw: raw, settings: settings) {
@@ -220,12 +218,11 @@ struct ExerciseInfoSheet: View {
             .navigationTitle(ex.name).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
-                if !ex.custom {
-                    ToolbarItem(placement: .primaryAction) {
-                        Menu {
-                            Button("Hide from Library", role: .destructive) { confirmHide = true }
-                        } label: { SFIcon("ellipsis") }
-                    }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button { editing = true } label: { Label("Edit", image: "ic-pencil") }
+                        if !ex.custom { Button("Hide from Library", role: .destructive) { confirmHide = true } }
+                    } label: { SFIcon("ellipsis") }
                 }
             }
             .alert("Reset PR", isPresented: Binding(get: { resetText != nil }, set: { if !$0 { resetText = nil } })) {
@@ -240,12 +237,12 @@ struct ExerciseInfoSheet: View {
                 #if DEBUG
                 if DevHooks.editEx == ex.id { try? await Task.sleep(nanoseconds: 800_000_000); editing = true }
                 if let e = DevHooks.editEx, e.hasPrefix(ex.id + "|") {
-                    // <exId>|<new name>|<equip>|<notes>: saveCE's edit path, as the form's Save Changes would
+                    // <exId>|<new name>|<equip>|<notes>[|<muscle group>]: saveCE's edit path, as the form's Save Changes would
                     let p = e.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     let cex = (store.backup.raw["jk_cex"]?.array ?? []).compactMap(\.object).first { $0["id"]?.string == ex.id }
                     await CreateExerciseSheet.update(ex, fullForm: CreateExerciseSheet.isUserCustom(ex.id, raw: store.backup.raw), name: p[1],
-                        muscle: cex?["muscle"]?.string ?? ex.muscle, category: ex.category.isEmpty ? "strength" : ex.category, equip: p.count > 2 ? p[2] : ex.equip,
+                        muscle: p.count > 4 && !p[4].isEmpty ? p[4] : (CreateExerciseSheet.coarse[ex.muscle.lowercased()] ?? "Chest"), category: ex.category.isEmpty ? "strength" : ex.category, equip: p.count > 2 ? p[2] : ex.equip,
                         tracking: ex.tracking, notes: p.count > 3 ? p[3] : "", assist: ex.assist, durUnit: cex?["durUnit"]?.string ?? "sec",
                         store: store, auth: auth, catalog: catalogObj)
                     DevHooks.log("dev edit ex \(e)")
@@ -391,12 +388,13 @@ struct CreateExerciseSheet: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
     /// openEditEx: the exercise being edited (nil = create). A built-in or warm-up exercise only gets the
-    /// web app's locked-down subset (name, category, equipment, notes, assist); muscle and tracking stay put.
+    /// web app's locked-down subset (name, muscle, category, equipment, notes, assist); tracking stays put.
     var editing: CatalogExercise? = nil
     var onSaved: () -> Void = {}
     @EnvironmentObject private var catalog: ExerciseCatalog
     @State private var loaded = false
     @State private var baseName = ""
+    @State private var baseMuscle = ""
     @State private var photoItem: PhotosPickerItem?
     @State private var photo: UIImage?
     @State private var photoRemoved = false
@@ -445,11 +443,7 @@ struct CreateExerciseSheet: View {
                     }
                 }
                 Section {
-                    if fullForm {
-                        Picker("Muscle", selection: $muscle) { ForEach(Self.muscles, id: \.self) { Text($0) } }
-                    } else {
-                        LabeledContent("Muscle", value: editing.map { LibraryMath.capW($0.muscle) } ?? "")
-                    }
+                    Picker("Muscle", selection: $muscle) { ForEach(Self.muscles, id: \.self) { Text($0) } }
                     Picker("Category", selection: $category) { ForEach(Self.categories, id: \.0) { Text($0.1).tag($0.0) } }
                     Toggle("Bodyweight exercise", isOn: $bodyweight).tint(Theme.accent)
                     if !bodyweight { Picker("Equipment", selection: $equip) { ForEach(Self.equips, id: \.0) { Text($0.1).tag($0.0) } } }
@@ -465,8 +459,8 @@ struct CreateExerciseSheet: View {
             }
             .scrollContentBackground(.hidden).background(Theme.bg2)
             .navigationTitle(editing == nil ? "Create Exercise" : "Edit Exercise").navigationBarTitleDisplayMode(.inline)
-            .onAppear { if !loaded { loaded = true; prefill(); baseName = name } }
-            .popup(dirty: loaded && !saving && (name != baseName || photo != nil || !notes.isEmpty && editing == nil))
+            .onAppear { if !loaded { loaded = true; prefill(); baseName = name; baseMuscle = muscle } }
+            .popup(dirty: loaded && !saving && (name != baseName || muscle != baseMuscle || photo != nil || !notes.isEmpty && editing == nil))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -482,7 +476,7 @@ struct CreateExerciseSheet: View {
     static func isUserCustom(_ id: String, raw: [String: JSONValue]) -> Bool {
         (raw["jk_cex"]?.array ?? []).contains { $0.object?["id"]?.string == id && $0.object?["_w"]?.bool != true }
     }
-    private static let coarse = ["chest": "Chest", "back": "Back", "lats": "Back", "lower back": "Back", "shoulders": "Shoulders",
+    static let coarse = ["chest": "Chest", "back": "Back", "lats": "Back", "lower back": "Back", "shoulders": "Shoulders",
         "biceps": "Biceps", "triceps": "Triceps", "legs": "Legs", "quadriceps": "Legs", "hamstrings": "Legs", "calves": "Legs",
         "glutes": "Glutes", "core": "Core", "abdominals": "Core", "forearms": "Forearms", "traps": "Back", "cardio": "Cardio", "full body": "Full Body"]
 
@@ -541,7 +535,13 @@ struct CreateExerciseSheet: View {
                 if n != base { rn[ex.id] = .string(n) } else { rn[ex.id] = nil }
                 raw["jk_exRename"] = .object(rn)
                 var ov = raw["jk_exOverride"]?.object ?? [:]
-                ov[ex.id] = .object(["equip": .string(equip), "category": .string(category), "notes": .string(nt), "assist": .bool(assist)])
+                var o: [String: JSONValue] = ["equip": .string(equip), "category": .string(category), "notes": .string(nt), "assist": .bool(assist)]
+                // Muscle group: only written when it differs from what the exercise already shows, so untouched
+                // built-ins keep their dataset muscle. History is keyed by exercise id and is not touched.
+                let cur = Self.coarse[ex.muscle.lowercased()] ?? "Chest"
+                if muscle != cur { o["muscle"] = .string(muscle.lowercased()) }
+                else if let prev = ov[ex.id]?.object?["muscle"] { o["muscle"] = prev }
+                ov[ex.id] = .object(o)
                 raw["jk_exOverride"] = .object(ov)
             }
         }
