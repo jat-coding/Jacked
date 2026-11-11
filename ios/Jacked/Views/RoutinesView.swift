@@ -70,6 +70,7 @@ struct RoutinesView: View {
             }
             .padding(.horizontal, 16).padding(.bottom, 30)
         }
+        .contentMargins(.bottom, 78, for: .scrollContent)   // clears the floating tab capsule (the TabView inset never reaches these scroll views)
         .background(Theme.bg.ignoresSafeArea())
         .sheet(item: $editing) { RoutineEditorSheet(draft: $0) }
         .alert("Rename section", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {

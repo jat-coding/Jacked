@@ -89,6 +89,7 @@ struct FriendsView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 30)
             }
+            .contentMargins(.bottom, 78, for: .scrollContent)   // clears the floating tab capsule (the TabView inset never reaches these scroll views)
             .refreshable { await store.refresh(auth: auth); await friends.refresh(auth: auth) }   // same sync as Profile's Sync now, plus the friend list
             .background(Theme.bg.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)

@@ -20,6 +20,15 @@ struct MainTabView: View {
             MetricsView().toolbar(.hidden, for: .tabBar).tag(Tab.metrics)
             FriendsView().toolbar(.hidden, for: .tabBar).tag(Tab.friends)
         }
+        .overlay(alignment: .top) {
+            // Content scrolling up under the clock/battery reads as a collision: fade it out behind the status bar.
+            GeometryReader { g in
+                LinearGradient(colors: [Theme.bg, Theme.bg.opacity(0)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: g.safeAreaInsets.top + 8)
+                    .ignoresSafeArea(edges: .top)
+            }
+            .allowsHitTesting(false)
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             // The resume bar is an overlay on the capsule, not part of the inset: overlays add no layout
             // height, so the tab bar sits at the same y with or without an open workout. The bar's bottom

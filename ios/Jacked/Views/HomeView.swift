@@ -47,6 +47,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, 16)
         }
+        .contentMargins(.bottom, 78, for: .scrollContent)   // clears the floating tab capsule (the TabView inset never reaches these scroll views)
         .scrollIndicators(.hidden)
         .task(id: store.lastSynced) {
             #if DEBUG

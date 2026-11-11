@@ -45,6 +45,7 @@ struct MetricsView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 30)
             }
+            .contentMargins(.bottom, 78, for: .scrollContent)   // clears the floating tab capsule (the TabView inset never reaches these scroll views)
             .task {
                 #if DEBUG
                 if let o = DevHooks.open, o.hasPrefix("card:") {

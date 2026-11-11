@@ -36,26 +36,35 @@ struct LibraryView: View {
                         }
                     }
                     .padding(.bottom, 16)
-                    VStack(alignment: .leading, spacing: 0) {
+                    // One card, but built from lazy rows: a single 600-row view drawn as one tall background layer
+                    // exceeds the GPU layer limit and renders blank past ~row 100 when scrolled deep.
+                    let r = Theme.radiusLarge
                     HStack(alignment: .firstTextBaseline) {
                         BlockTitle(text: "Exercises")
                         Spacer()
                         if all.count <= PWATables.builtIns.count { ProgressView().tint(Theme.accent).padding(.bottom, 12) }
                         else { Text("\(all.count) loaded \u{2713}").font(Theme.body(13)).foregroundStyle(Theme.muted) }
                     }
+                    .padding(.horizontal, 18).padding(.top, 18)
+                    .background(Theme.bg2, in: UnevenRoundedRectangle(topLeadingRadius: r, topTrailingRadius: r))
                     if shown.isEmpty {
                         Text("No results").font(Theme.heading(20, .bold)).foregroundStyle(Theme.muted)
-                            .frame(maxWidth: .infinity).padding(.vertical, 30)
+                            .frame(maxWidth: .infinity).padding(.vertical, 30).padding(.bottom, 18)
+                            .background(Theme.bg2, in: UnevenRoundedRectangle(bottomLeadingRadius: r, bottomTrailingRadius: r))
                     }
                     ForEach(shown) { e in
-                        Button { info = e } label: { LibraryRow(e: e, fav: fav.contains(e.id)) }.buttonStyle(.plain)
-                        Divider().overlay(Theme.border)
+                        let last = e.id == shown.last?.id
+                        VStack(alignment: .leading, spacing: 0) {
+                            Button { info = e } label: { LibraryRow(e: e, fav: fav.contains(e.id)) }.buttonStyle(.plain)
+                            if !last { Divider().overlay(Theme.border) }
+                        }
+                        .padding(.horizontal, 18).padding(.bottom, last ? 18 : 0)
+                        .background(Theme.bg2, in: UnevenRoundedRectangle(bottomLeadingRadius: last ? r : 0, bottomTrailingRadius: last ? r : 0))
                     }
-                    }
-                    .padding(18).background(Theme.bg2, in: RoundedRectangle(cornerRadius: Theme.radiusLarge))
                 }
                 .padding(.horizontal, 16).padding(.bottom, 30)
             }
+            .contentMargins(.bottom, 78, for: .scrollContent)   // clears the floating tab capsule (the TabView inset never reaches these scroll views)
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.bg.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
