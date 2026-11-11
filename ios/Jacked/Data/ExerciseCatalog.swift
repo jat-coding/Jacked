@@ -29,6 +29,7 @@ final class ExerciseCatalog: ObservableObject {
         // byId(): a renamed exercise shows the new name; a built-in's edit (jk_exOverride) sets equip / category / assist.
         let rn: (CatalogExercise) -> CatalogExercise = { var e = $0; if let n = renames[e.id]?.string { e.name = n }
             if !e.custom, let o = ovs[e.id]?.object {
+                if let m = o["muscle"]?.string, !m.isEmpty { e.muscle = m }
                 if let q = o["equip"]?.string, !q.isEmpty { e.equip = q }
                 if let c = o["category"]?.string, !c.isEmpty { e.category = c }
                 if let a = o["assist"]?.bool { e.assist = a }
