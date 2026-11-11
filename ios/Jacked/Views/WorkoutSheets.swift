@@ -1,5 +1,45 @@
 import SwiftUI
 
+/// Teasing third-person rest-day notes. The pick is a pure function of the yyyy-mm-dd key
+/// (FNV-1a over UTF-8, modulo count), so a given day always shows the same line, across taps and launches.
+/// Never use Swift's Hasher here: it is seeded per launch.
+enum RestDayMessages {
+    static let all: [String] = [
+        "sorry little baby didn't workout this day",
+        "little baby was far too tired this day",
+        "little baby couldn't hack it this day",
+        "little baby could not get out of bed this day",
+        "little baby felt a tiny bit lazy this day",
+        "little baby had a sore tummy this day",
+        "little baby decided the couch needed company this day",
+        "little baby got comfy and just never left the blanket this day",
+        "little baby hit snooze one too many times this day",
+        "little baby said maybe tomorrow this day",
+        "little baby had a very busy nap schedule this day",
+        "little baby's legs filed a formal complaint this day",
+        "little baby was just not feeling it this day",
+        "little baby stared at the weights and walked away this day",
+        "little baby needed a snack and a long sit this day",
+        "little baby woke up on the wrong side of the pillow this day",
+        "little baby claimed rest day was a real thing this day",
+        "little baby got distracted by the couch this day",
+        "little baby's gym bag never made it out the door this day",
+        "little baby had big plans and zero energy this day",
+        "little baby decided today was a cuddle-the-bed kind of day",
+    ]
+
+    /// 32-bit FNV-1a, stable across launches and platforms.
+    static func stableHash(_ s: String) -> UInt32 {
+        var h: UInt32 = 2166136261
+        for b in s.utf8 { h ^= UInt32(b); h = h &* 16777619 }
+        return h
+    }
+
+    static func message(for dayKey: String) -> String {
+        all[Int(stableHash(dayKey) % UInt32(all.count))]
+    }
+}
+
 /// #dayModal: the workouts on one calendar day, or the PWA's cheeky rest-day note.
 struct DaySheet: View {
     let dayKey: String
@@ -15,7 +55,7 @@ struct DaySheet: View {
             if workouts.isEmpty {
                 VStack(spacing: 8) {
                     JIcon("bed", 36).foregroundStyle(Theme.muted)
-                    Text("sorry little baby didn't workout this day")
+                    Text(RestDayMessages.message(for: dayKey))
                         .font(Theme.body(15, .semibold)).foregroundStyle(Theme.text2).multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 14)
