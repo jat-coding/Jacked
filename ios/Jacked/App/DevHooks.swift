@@ -95,6 +95,8 @@ enum DevHooks {
     static var superset: [Int] { (env["JACKED_DEV_SUPERSET"] ?? "").split(separator: ",").compactMap { Int($0) } }
     static var logWeight: Double? { env["JACKED_DEV_WEIGHT"].flatMap { Double($0) } }
     static var hideCard: String? { env["JACKED_DEV_HIDECARD"].flatMap { $0.isEmpty ? nil : $0 } }
+    /// "none" clears settings.cardOrder; otherwise a comma list of card ids is saved as-is.
+    static var cardOrder: String? { env["JACKED_DEV_CARDORDER"].flatMap { $0.isEmpty ? nil : $0 } }
     static var cmp: String? { env["JACKED_DEV_CMP"].flatMap { $0.isEmpty ? nil : $0 } }
     static var toggleCB: String? { env["JACKED_DEV_CB"].flatMap { $0.isEmpty ? nil : $0 } }
     static var acceptFriend: String? { env["JACKED_DEV_ACCEPT"].flatMap { $0.isEmpty ? nil : $0 } }
@@ -166,5 +168,6 @@ enum DevHooks {
     static var durUnit: String? { nil }
     static var logWeight: Double? { nil }
     static var hideCard: String? { nil }
+    static var cardOrder: String? { nil }
     #endif
 }
