@@ -2298,7 +2298,19 @@ function moveNavInd(){
   // First placement (boot / nav just shown) jumps into place; after that it glides.
   if(ind.classList.contains('snap')) requestAnimationFrame(()=>requestAnimationFrame(()=>ind.classList.remove('snap')));
 }
-window.addEventListener('resize',()=>{ const ind=document.getElementById('navInd'); if(ind){ ind.classList.add('snap'); moveNavInd(); } });
+function resyncNavInd(){ const ind=document.getElementById('navInd'); if(ind){ ind.classList.add('snap'); moveNavInd(); } }
+window.addEventListener('resize',resyncNavInd);
+window.addEventListener('orientationchange',()=>{ resyncNavInd(); setTimeout(resyncNavInd,350); });
+window.addEventListener('pageshow',resyncNavInd);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) resyncNavInd(); });
+// Root-cause fix (2026-11-12): the pill was only placed from sp()/resize, so any change to the nav's own box that fires
+// neither (rotate-guard un-hiding the nav, --fixedBottom/standalone changes, webfont swap, nav display:none->flex)
+// left it on a stale offset (pill over Home while Library was active). Observe the nav and every tab directly.
+try{
+  const ro=new ResizeObserver(()=>resyncNavInd());
+  const n=document.querySelector('nav'); if(n){ ro.observe(n); n.querySelectorAll('.nb').forEach(b=>ro.observe(b)); }
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(resyncNavInd);
+}catch(_){}
 
 // Show a "return to workout" bar on every page while a session is active
 // (and you're not already on the workout screen).
