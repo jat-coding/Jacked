@@ -5084,12 +5084,72 @@ async function pickerAddBar() {
     await ctx.close();
   }
 }
+
+// 2026-11-11: portrait -> landscape -> portrait left Home's calendar with 3 huge cut-off columns on his iPhone.
+// The rotation itself is emulated with real CDP viewport changes; the two paths are (a) the rotate guard (no
+// orientation info: what his phone showed) and (b) the fake portrait lock (data-rot). Chromium and WebKit on Linux
+// never reproduced the original break, so this pins the outcome (7 equal columns, nothing past the right edge) plus the
+// class of cause (a cell that wants to be wider than its track must not widen the grid).
+async function rotateBackCalendar() {
+  const geo = () => ({ vw: innerWidth, cols: getComputedStyle(document.getElementById('calGrid')).gridTemplateColumns.split(' ').map(parseFloat),
+    cw: document.querySelector('#page-home .cw').getBoundingClientRect().toJSON(), grid: document.getElementById('calGrid').getBoundingClientRect().toJSON(),
+    cells: [...document.querySelectorAll('#calGrid .cd')].map(c => c.getBoundingClientRect().toJSON()),
+    nav: document.querySelector('nav').getBoundingClientRect().toJSON(), bar: document.getElementById('resumeBar').getBoundingClientRect().toJSON(),
+    barShown: document.getElementById('resumeBar').classList.contains('show'), tf: getComputedStyle(document.body).transform });
+  const goodCal = (g) => g.cols.length === 7 && Math.max(...g.cols) - Math.min(...g.cols) < 1 && g.cols[0] > 30 && g.cols[0] < 70
+    && g.grid.right <= g.vw + 0.5 && g.cw.right <= g.vw + 0.5 && g.cw.left >= -0.5 && g.cells.every(c => c.right <= g.vw + 0.5 && Math.abs(c.width - c.height) < 1.5);
+  for (const mode of ['guard', 'lock']) {
+    const { page, ctx, errors } = await phone({ width: 393, height: 852, angle: mode === 'lock' ? 0 : null });
+    const cdp = await ctx.newCDPSession(page);
+    await page.evaluate(() => { window.__wo = 0; Object.defineProperty(window, 'orientation', { get: () => window.__wo, configurable: true }); });
+    const turn = async (w, h, wo) => { await cdp.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true });
+      await page.evaluate(a => { window.__wo = a; dispatchEvent(new Event('orientationchange')); dispatchEvent(new Event('resize')); }, mode === 'lock' ? wo : 0);
+      await page.waitForTimeout(450); };
+    await page.evaluate(() => { startEmpty(); sp('home'); }); await page.waitForTimeout(300);
+    const base = await page.evaluate(geo);
+    check(`rotate-back [${mode}]: portrait baseline is 7 equal columns inside the screen`, goodCal(base), JSON.stringify(base.cols));
+    for (let round = 1; round <= 2; round++) {
+      await turn(852, 393, 90);
+      const land = await page.evaluate(() => ({ guard: getComputedStyle(document.getElementById('rotateGuard')).display, tf: getComputedStyle(document.body).transform }));
+      check(`rotate-back [${mode}] r${round}: landscape shows ${mode === 'guard' ? 'the rotate prompt' : 'the counter-rotated app'}`, mode === 'guard' ? land.guard === 'flex' : land.guard === 'none' && land.tf !== 'none', JSON.stringify(land));
+      await turn(393, 852, 0);
+      const g = await page.evaluate(geo);
+      check(`rotate-back [${mode}] r${round}: Home calendar is 7 equal columns inside the screen again`, goodCal(g), JSON.stringify({ cols: g.cols, grid: g.grid.width, vw: g.vw }));
+      check(`rotate-back [${mode}] r${round}: calendar matches the portrait baseline width`, Math.abs(g.cols[0] - base.cols[0]) < 0.5 && Math.abs(g.grid.width - base.grid.width) < 0.5, `${g.cols[0]} vs ${base.cols[0]}`);
+      check(`rotate-back [${mode}] r${round}: no transform left on body; nav and resume bar are inside the screen`, g.tf === 'none' && g.nav.left >= 0 && g.nav.right <= g.vw + 0.5 && g.barShown && g.bar.left >= 0 && g.bar.right <= g.vw + 0.5, JSON.stringify([g.tf, g.nav.right, g.bar.right]));
+    }
+    // other screens + an open sheet: after the round trip nothing may stick out past the right edge or keep a landscape width
+    const stick = () => page.evaluate(() => { const vw = innerWidth; const root = document.getElementById('jkRoot');
+      const act = document.querySelector('.page.active'); const bad = [...act.querySelectorAll('*')].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.right > vw + 1 && !e.closest('.noscrollx,[style*="overflow-x"],.hs,.scrollx'); }).map(e => e.id || e.className).slice(0, 4);
+      return { vw, sw: root.scrollWidth, bad, id: act.id }; });
+    for (const pg of ['metrics', 'routines', 'exercises', 'leaderboard', 'home']) {
+      await page.evaluate(p => sp(p), pg); await page.waitForTimeout(250);
+      const before = await stick();   // some screens have deliberate side-scrolling strips: compare with portrait-before, not with zero
+      await turn(852, 393, 90); await turn(393, 852, 0);
+      const r = await stick();
+      check(`rotate-back [${mode}]: ${pg} is laid out the same as before rotating (nothing newly wider than the screen)`, r.id === 'page-' + pg && r.sw <= r.vw + 1 && JSON.stringify(r.bad) === JSON.stringify(before.bad), JSON.stringify({ before, r }));
+    }
+    await page.evaluate(() => { sp('home'); openQS(); }); await page.waitForTimeout(350);
+    await turn(852, 393, 90); await turn(393, 852, 0);
+    const sh = await page.evaluate(() => { const m = document.querySelector('.mo.open, .mo[style*="flex"]'); const r = m ? m.getBoundingClientRect() : null; const box = m && m.firstElementChild ? m.firstElementChild.getBoundingClientRect() : null; return { open: !!m, vw: innerWidth, vh: innerHeight, r: r && [r.left, r.right, r.bottom], box: box && [box.left, box.right], tf: getComputedStyle(document.body).transform }; });
+    check(`rotate-back [${mode}]: an open sheet still fits the portrait screen after rotating there and back`, sh.open && sh.r[0] >= -0.5 && sh.r[1] <= sh.vw + 0.5 && sh.box[1] <= sh.vw + 0.5 && sh.tf === 'none', JSON.stringify(sh));
+    check(`rotate-back [${mode}]: no page errors`, errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  // The class of cause: a cell that wants to be much wider than its track must not stretch the calendar.
+  { const { page, ctx } = await phone({ width: 393, height: 852 });
+    await page.evaluate(() => { const c = document.querySelectorAll('#calGrid .cd')[10]; c.style.display = 'block'; c.style.whiteSpace = 'nowrap'; c.textContent = 'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW'; });
+    const g = await page.evaluate(() => ({ cols: getComputedStyle(document.getElementById('calGrid')).gridTemplateColumns.split(' ').map(parseFloat), right: document.getElementById('calGrid').getBoundingClientRect().right, vw: innerWidth }));
+    check('calendar: an over-wide cell cannot widen its column or push the grid past the screen', g.cols.length === 7 && Math.max(...g.cols) < 70 && Math.max(...g.cols) - Math.min(...g.cols) < 1 && g.right <= g.vw, JSON.stringify(g));
+    await ctx.close(); }
+}
+
 const MGROUPS_ok = (sc, only) => Object.entries(sc).every(([g, v]) => g === only || v === 0);
 
 await startServer();
 await launch();
 try {
-  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, calLiveToday, pickerAddBar, ...AUTH_FLOW_SUITES, ...STANDALONE_GAP_SUITES, ...SUGGESTED_SUITES, ...LIVE_SUITES, ...WEEKLY_REVIEW_SUITES, ...EXERCISE_PHOTO_SUITES, ...NAV_OVERLAP_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
+  for (const s of [regression, workoutFlow, tapToClear, coward, consistency, prMaxing, jacked, monthly, achievementsPage, narrowAndShots, pastPRs, prReconcile, portraitLock, suggestions, suggestTrained, badgeLadders, sourcedRepCardio, benchGoodlift, confirmCentered, cardioOrder, typeRulebook, haptics, tricepsTier, lifetimeAvgMin, crunchRegex, builtinMachines, exerciseAudit, multiMuscleCredit, profileTabs, signOutCancel, badgeStandard, benchSubstitutes, maxingStandards, badgePopupSections, timedHolds, avatarLightbox, exercisePhoto, backExtLoad, backExtRepair, popupScrollLock, navPinned, importUnits, importMalformed, resetPR, topPRRaw, monthReset, dipRepair, hevyRelabel, categoryChips, routineSwapPrompt, bodyWeightMerge, androidBack, cardioHoldEdit, weightEditUnchanged, cardioHoldBackfill, adv2StartOverOpen, adv2StorageFull, adv2ReorderAtEnd, adv2CorruptHist, adv2SignOutMidWorkout, adv2SignOutHung, adv2TabSpam, adv3TwoTabs, adv3SwUpdate, adv3FriendRemove, adv3CopyFriendWorkout, adv3UnitSwitchBW, adv3BackdatedOrder, adv3ImportDates, adv4BadgeUnits, adv4PlateUnit, adv4StreakDST, adv4Consistency, adv4ImportRuns, adv4DeleteRun, adv4MergeOrder, adv4SignOutOtherTab, adv4SessionLost, adv4Back, adv4RemoveExercise, adv4BigHistory, adv4ModalFocus, doubleVolume, singleBoth, badgesDoneOnly, gymYears, routineMenu, destructiveRound2, calLiveToday, pickerAddBar, rotateBackCalendar, ...AUTH_FLOW_SUITES, ...STANDALONE_GAP_SUITES, ...SUGGESTED_SUITES, ...LIVE_SUITES, ...WEEKLY_REVIEW_SUITES, ...EXERCISE_PHOTO_SUITES, ...NAV_OVERLAP_SUITES].filter(s => !process.env.JK_ONLY || process.env.JK_ONLY.split(',').includes(s.name))) {   // JK_ONLY=suiteA,suiteB runs a subset
     try { await s(); } catch (e) { check(`${s.name}: suite crashed`, false, e.stack.split('\n').slice(0, 3).join(' ')); }
   }
 } finally { await close(); stopServer(); }

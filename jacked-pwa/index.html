@@ -303,13 +303,16 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 .sl{font-size:10px;color:var(--muted);margin-top:1px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 
 /* CALENDAR */
-.cw{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:14px;margin-bottom:20px}
+.cw{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:14px;margin-bottom:20px;min-width:0;overflow:hidden}
 .ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .cm-label{font-family:var(--fh);font-size:19px;font-weight:700}
 .cn{background:var(--bg4);border:none;color:var(--text2);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
-.cg{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-.cdl{font-size:9px;color:var(--muted);text-align:center;padding:3px 0;font-weight:700;text-transform:uppercase}
-.cd{aspect-ratio:1;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;cursor:default;position:relative}
+/* 2026-11-11 (rotate portrait->landscape->portrait left Home's calendar with 3 huge cut-off columns): tracks are
+   minmax(0,1fr), not 1fr (=minmax(auto,1fr)), and every cell is min-width:0, so a track can never be sized from a
+   cell's aspect-ratio/min-content contribution -- only from the card's own width. .cw clips as a last resort. */
+.cg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;width:100%;min-width:0}
+.cdl{min-width:0;font-size:9px;color:var(--muted);text-align:center;padding:3px 0;font-weight:700;text-transform:uppercase}
+.cd{min-width:0;aspect-ratio:1;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;cursor:default;position:relative}
 .cd.today{border:1.5px solid var(--accent);color:var(--accent)}
 .cd.worked{background:rgba(32,211,194,.2);color:var(--accent);font-weight:700}
 .cd.worked::after{content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:3px;height:3px;border-radius:50%;background:var(--accent)}
@@ -2270,6 +2273,13 @@ function moveNavInd(){
   // First placement (boot / nav just shown) jumps into place; after that it glides.
   if(ind.classList.contains('snap')) requestAnimationFrame(()=>requestAnimationFrame(()=>ind.classList.remove('snap')));
 }
+// Rotation self-heal (2026-11-11): after the rotate guard / fake lock hides and re-shows the pages, iOS WebKit can keep
+// the Home calendar grid laid out at the landscape width. Whenever the viewport changes, once things settle, drop the
+// grid out of layout and back so it is measured fresh against the card it is in.
+let _calHealT=0;
+function healCalGrid(){ const g=document.getElementById('calGrid'); if(!g||!g.offsetParent) return;
+  const d=g.style.display; g.style.display='none'; void g.offsetHeight; g.style.display=d; }
+['resize','orientationchange'].forEach(ev=>window.addEventListener(ev,()=>{ clearTimeout(_calHealT); _calHealT=setTimeout(()=>requestAnimationFrame(healCalGrid),120); }));
 window.addEventListener('resize',()=>{ const ind=document.getElementById('navInd'); if(ind){ ind.classList.add('snap'); moveNavInd(); } });
 
 // Show a "return to workout" bar on every page while a session is active
