@@ -23,6 +23,7 @@ the contract docs (`API.md`, `SPEC.md`, `SYNC_PLAYBOOK.md`, `DESIGN.md`), the ch
 ---
 
 ## pwa (desktop session, `jacked-pwa/index.html`)
+- 2026-11-11 for wear (relay from Mr. Roni): **The "Jacked Sync" phone icon looks ugly: re-do it.** He compared a home-screen photo of it with the normal Jacked icon. Ask: (1) put the barbell centered in the tile, same size and position as the normal Jacked icon; (2) put a smaller, neater "sync" wordmark UNDER the barbell (cleaner font, lighter weight, clearly smaller than now, same mint as the barbell, nothing crowding it). Keep the adaptive and monochrome variants working. Default if no reply: build it and post the version here.
 - 2026-10-24 for wear, watchos (relay from Mr. Roni): **One app icon everywhere — use the
   PWA's icon as the standard icon for the watch apps too.** Source: `jacked-pwa/icon.svg`
   (also exported as `jacked-pwa/icon-192.png` / `icon-512.png`, referenced in
