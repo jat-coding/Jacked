@@ -96,7 +96,10 @@ html.jk-doc:not([data-rot]) #jkRoot{position:static;overflow:visible}
 /* Phone-first: stop pinch/double-tap zoom and rubber-band sliding. */
 body{background:var(--bg);color:var(--text);font-family:var(--fb);touch-action:pan-y}
 
-html{--navB:max(8px,calc(var(--sab) - 14px))}
+/* ONE source of truth for the bottom nav footprint (Mr. Roni 2026-11-11: nothing may sit behind the nav).
+   --navH = nav height, --navTop = distance from screen bottom to the nav's top edge. Anything bottom-pinned,
+   or any sheet/overlay padding, must use --navTop (or --navTop + gap), never a literal 62px/70px/80px. */
+html{--navB:max(8px,calc(var(--sab) - 14px));--navH:62px;--navTop:calc(var(--navH) + var(--navB))}
 nav{position:fixed;left:12px;right:12px;bottom:calc(var(--navB) - var(--standaloneGap));background:var(--bg2);border:1px solid var(--border);border-radius:30px;display:flex;z-index:100;padding:5px}
 .nb{flex:1;padding:8px 2px 7px;border-radius:24px;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--muted);font-family:var(--fb);font-size:9px;font-weight:600;cursor:pointer;transition:color .2s;letter-spacing:.3px;text-transform:uppercase;-webkit-appearance:none}
 .nb.active{color:var(--accent)}
@@ -148,7 +151,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    reserve both. #recapFull/#gymYears measured clean in that run's modest SEED data -- both
    turned out to have the same unreserved padding here and needed their own fixes too, below
    (2026-10-23 exhaustive sweep, after worst-case/stress content exposed both). */
-#badgeFull{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + 62px + var(--navB));-webkit-overflow-scrolling:touch}
+#badgeFull{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--navTop));-webkit-overflow-scrolling:touch}
 #recapFull,#gymYears{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--sab));-webkit-overflow-scrolling:touch}
 #badgeFull.open,#recapFull.open,#gymYears.open{display:flex;animation:pageIn .2s ease-out}
 /* Gym years (2026-10-16, redesigned 2026-10-23 per voice memo): every day of a person's history, one square per
@@ -162,7 +165,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    23-45px past the nav's reserved zone -- a years-into-use user would hit this for real. #gymYears
    is still the scroll container itself after the flat-grid redesign, so this padding still lives
    here regardless of the inner grid structure change. */
-#gymYears{padding-left:16px;padding-right:16px;padding-bottom:calc(20px + 62px + var(--navB))}
+#gymYears{padding-left:16px;padding-right:16px;padding-bottom:calc(20px + var(--navTop))}
 .gy-year{margin:0 0 18px;text-align:left}
 .gy-yh{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 8px;padding-top:12px;border-top:1px solid var(--border)}
 .gy-yh b{font-family:var(--fh);font-size:22px;font-weight:800}
@@ -215,7 +218,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    WebKit measurement (tests/e2e/nav-buffer-audit.mjs, "Monthly recap") found the Share button
    60px past the nav's reserved zone (negative = hidden under it) on every phone/orientation
    tested. Matches the established 62px nav height + navB pattern used everywhere else. */
-#recapFull{overflow-y:auto;padding-top:calc(10px + var(--sat));padding-bottom:calc(10px + 62px + var(--navB))}
+#recapFull{overflow-y:auto;padding-top:calc(10px + var(--sat));padding-bottom:calc(10px + var(--navTop))}
 #recapFull .bf-foot{display:flex;justify-content:center}#recapShareBtn{width:min(100%,280px)}
 #recapFull .bf-x{top:calc(8px + var(--sat))}
 .bgrp{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);opacity:.6;margin:12px 0 0}
@@ -251,7 +254,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 @media (prefers-reduced-motion:reduce){.jh *,.jh::after,:root[data-jacked] .pt,:root[data-jacked] body::before{animation:none!important}}
 #recapCard{cursor:pointer;padding:16px;margin-bottom:20px}
 .bf-foot{max-width:460px;width:100%;margin:8px auto 0}.mo.ctr{align-items:center;padding-top:calc(var(--sat) + 8px)}
-.md{background:var(--bg2);border:1px solid var(--border2);border-radius:24px 24px 0 0;width:100%;max-width:640px;max-height:calc(var(--ah)*.92);overflow-y:auto;padding:6px 20px calc(40px + 62px + var(--navB));overscroll-behavior:contain}
+.md{background:var(--bg2);border:1px solid var(--border2);border-radius:24px 24px 0 0;width:100%;max-width:640px;max-height:calc(var(--ah)*.92);overflow-y:auto;padding:6px 20px calc(40px + var(--navTop));overscroll-behavior:contain}
 .mo.ctr .md{border-radius:20px;max-width:400px;padding:24px;max-height:calc(var(--ah)*.92 - var(--sat))}
 /* #profModal is tall/scrollable (Body Metrics, Data & Backup, Feedback, Account) and its last
    buttons (Sign Out) can reach the real bottom -- the shared .mo.ctr .md rule above gives it a
@@ -259,14 +262,14 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    device screenshot 2026-10-23 (Sign Out nearly touching the nav) even though the headless audit
    called Profile/Settings clean -- scoped to this modal only, not applied to the shorter .mo.ctr
    dialogs (confirm/plate-calc/etc.) that don't reach the bottom and don't need it. */
-#profModal .md{padding-bottom:calc(24px + 62px + var(--navB))}
+#profModal .md{padding-bottom:calc(24px + var(--navTop))}
 /* Same latent bug as #profModal above, found by the same exhaustive sweep (2026-10-23): these
    two other `.mo.ctr` dialogs looked clean under the modest nav-buffer-audit SEED because their
    content never got tall enough to actually need to scroll -- a real WebKit measurement with
    worst-case content (6 PRs/4 suggested/4 notes for the finish summary; two workouts logged on
    one day, 8 exercises each, for the day-detail popup) pushed both past max-height and found
    their last button 22-27px past the nav's reserved zone with the flat 24px .mo.ctr .md padding. */
-#fsModal .md,#dayModal .md{padding-bottom:calc(24px + 62px + var(--navB))}
+#fsModal .md,#dayModal .md{padding-bottom:calc(24px + var(--navTop))}
 .drag-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 16px;flex-shrink:0}
 .mh{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .mt{font-family:var(--fh);font-size:26px;font-weight:800}
@@ -494,32 +497,32 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    class gets overridden by `.ae-md{padding:0 20px;overflow:hidden}` (later in source order),
    so .ae-list -- not the shared .md rule -- is this sheet's real bottom reserve; the audit
    measured the last exercise row landing under the nav's reserved zone with the old flat 10px. */
-.ae-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(10px + 62px + var(--navB))}
+.ae-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(10px + var(--navTop))}
 .ae-grp{font-family:var(--fh);font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);padding:10px 2px 6px;position:sticky;top:0;z-index:3;background:var(--bg2);box-shadow:0 4px 6px -4px var(--bg2)}
 /* Picker confirm bar (Grant Berry, 2026-11-11: "add button is hidden behind the routine/home tabs"):
    the bar used to sit flush at the screen bottom, i.e. inside the fixed nav's footprint, and the
    nav can paint over a sheet on a real iPhone. The bar now ends ABOVE the nav's zone (62px + navB),
    matching every other sheet's bottom reserve; the sheet's own background fills the strip below it. */
-.ms-bar{flex-shrink:0;position:relative;z-index:5;background:var(--bg2);border-top:1px solid var(--border2);padding:12px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 -20px calc(62px + var(--navB))}
+.ms-bar{flex-shrink:0;position:relative;z-index:5;background:var(--bg2);border-top:1px solid var(--border2);padding:12px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 -20px calc(var(--navTop))}
 /* bar showing: it already clears the nav, so the list only needs a small tail */
 .ae-md.has-bar .ae-list{padding-bottom:10px}
 /* While typing, hide fixed bottom chrome so the keyboard overlays it cleanly. */
 body.kb nav,body.kb .install-banner,body.kb #resumeBar{display:none!important}
 /* Persistent return-to-workout bar, sits just above the bottom nav. */
-#resumeBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(70px + var(--navB) - var(--standaloneGap));z-index:96;background:var(--accent);color:var(--on-accent);font-family:var(--fb);font-weight:700;font-size:14px;text-align:center;padding:11px 16px;cursor:pointer;box-shadow:0 -4px 16px rgba(0,0,0,.35)}
+#resumeBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(var(--navTop) + 8px - var(--standaloneGap));z-index:96;background:var(--accent);color:var(--on-accent);font-family:var(--fb);font-weight:700;font-size:14px;text-align:center;padding:11px 16px;cursor:pointer;box-shadow:0 -4px 16px rgba(0,0,0,.35)}
 #resumeBar.show{display:block}
 /* Compact rest-timer bar, above the bottom nav. */
-#restBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(70px + var(--navB) - var(--standaloneGap));z-index:97;background:var(--bg2);border:1px solid var(--border2);padding:8px 14px;align-items:center;justify-content:center;gap:12px;box-shadow:0 -4px 16px rgba(0,0,0,.4)}
+#restBar{display:none;position:fixed;left:12px;right:12px;border-radius:16px;bottom:calc(var(--navTop) + 8px - var(--standaloneGap));z-index:97;background:var(--bg2);border:1px solid var(--border2);padding:8px 14px;align-items:center;justify-content:center;gap:12px;box-shadow:0 -4px 16px rgba(0,0,0,.4)}
 #restBar.show{display:flex}
 body.kb #restBar{display:none!important}
 /* When the rest bar is showing, lift the return-to-workout bar above it. */
-body.resting #resumeBar{bottom:calc(118px + var(--navB));z-index:98}
+body.resting #resumeBar{bottom:calc(var(--navTop) + 56px);z-index:98}
 /* No visible scrollbar anywhere (Mr. Roni, 2026-09-25): a styled ::-webkit-scrollbar makes iOS draw a permanent scroll bar on every popup, even when nothing scrolls. Content still scrolls by touch. */
 *{scrollbar-width:none}
 ::-webkit-scrollbar{display:none;width:0;height:0}
 
 /* install banner */
-.install-banner{position:fixed;bottom:calc(80px - var(--standaloneGap));left:16px;right:16px;background:var(--bg2);border:1px solid rgba(32,211,194,.3);border-radius:var(--rl);padding:14px 16px;z-index:99;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.install-banner{position:fixed;bottom:calc(var(--navTop) + 18px - var(--standaloneGap));left:16px;right:16px;background:var(--bg2);border:1px solid rgba(32,211,194,.3);border-radius:var(--rl);padding:14px 16px;z-index:99;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
 .install-banner.hidden{display:none}
 
 /* ===== Visual revamp (v0.14): periwinkle accent + depth ===== */

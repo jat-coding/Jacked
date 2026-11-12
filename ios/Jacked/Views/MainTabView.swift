@@ -7,7 +7,6 @@ struct MainTabView: View {
     @StateObject private var session = WorkoutSession()
     @StateObject private var catalog = ExerciseCatalog()
     @StateObject private var friends = FriendsStore()
-    @State private var barH: CGFloat = 40
     @State private var tab: Tab = Tab(rawValue: DevHooks.tab ?? "") ?? .home
 
     enum Tab: String, Hashable { case routines, library, home, metrics, friends }
@@ -21,21 +20,22 @@ struct MainTabView: View {
             FriendsView().toolbar(.hidden, for: .tabBar).tag(Tab.friends)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            // The resume bar is an overlay on the capsule, not part of the inset: overlays add no layout
-            // height, so the tab bar sits at the same y with or without an open workout. The bar's bottom
-            // edge is lifted by its own measured height so it floats just above the capsule.
-            NavCapsule(tab: $tab, requests: friends.friends.filter(\.pending).count)
-                .overlay(alignment: .top) {
-                    if session.active != nil && !session.presented {
-                        Button { Haptics.light(); session.presented = true } label: {
-                            Label("Return to workout", systemImage: "arrow.uturn.left").font(Theme.body(14, .bold))
-                                .foregroundStyle(Theme.onAccent).padding(.horizontal, 18).padding(.vertical, 10)
-                                .background(Theme.accent, in: Capsule())
-                        }
-                        .background(GeometryReader { g in Color.clear.onAppear { barH = g.size.height } })
-                        .offset(y: -(barH + 8))
+            // ONE bottom-bar mechanism (Mr. Roni 2026-11-11: nothing may sit behind the nav bar): everything that
+            // floats at the bottom of a tab page lives in THIS inset, so every tab's ScrollView/list gets the
+            // combined height as real safe area and its last row can always scroll clear. The resume pill used to
+            // be an overlay (no layout height), so it covered the bottom of the page; stacked above the capsule
+            // it lifts the content instead, and the capsule itself still sits at the same y either way.
+            // Sheets are presented modally above all of this and need no inset.
+            VStack(spacing: 8) {
+                if session.active != nil && !session.presented {
+                    Button { Haptics.light(); session.presented = true } label: {
+                        Label("Return to workout", systemImage: "arrow.uturn.left").font(Theme.body(14, .bold))
+                            .foregroundStyle(Theme.onAccent).padding(.horizontal, 18).padding(.vertical, 10)
+                            .background(Theme.accent, in: Capsule())
                     }
                 }
+                NavCapsule(tab: $tab, requests: friends.friends.filter(\.pending).count)
+            }
         }
         .ignoresSafeArea(.keyboard)   // outside the inset: the keyboard never lifts the tab bar (or the screens under it)
         .onReceive(NotificationCenter.default.publisher(for: .jackedOpenTab)) { n in
