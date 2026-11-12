@@ -1892,6 +1892,7 @@ async function loadDB() {
       return { ...fixed, images };
     });
     dbLoaded = true; dbLoading = false;
+    if (aw && hydrateAWFromLib()) liveRender();   // a workout started before the library arrived gets its real equipment now
     if (typeof renderSuggest==='function') renderSuggest();   // secondary muscles now known
     if (el) el.innerHTML = `${allDB.length} loaded ✓`;
     renderEx();
@@ -1903,6 +1904,33 @@ async function loadDB() {
     if (el) el.innerHTML = `<span style="color:var(--muted);font-size:12px">${uic('warning')} Couldn’t load</span>`;
     renderEx();
   }
+}
+
+// Mr. Roni, 2026-11-11: "The dips exercises and all other bodyweight exercises aren't defaulting to bodyweight."
+// Every start path copies equipment out of byId() at the moment of the tap. If the exercise library hasn't
+// arrived yet (it loads from the network after boot, and since the 2026-11-03 move to our own bucket the service
+// worker never cached it, so a gym with no signal never got it at all), byId() falls back to a blank entry and
+// the workout is saved with equip '' for every library lift. isBodyweightEx() then says no, so dips, pull-ups,
+// push-ups etc. showed a plain weight box instead of Bodyweight for the whole workout. Fill those blanks from the
+// library once it is here. An entry he already typed a weight into is left exactly as logged (that number may be
+// his body weight or added plates; guessing either way would rewrite what he recorded).
+function hydrateAWFromLib(){
+  if(!aw||!dbLoaded||!Array.isArray(aw.exercises)) return 0;
+  let n=0;
+  aw.exercises.forEach(e=>{
+    if(!e||!e.exId||e.equip) return;
+    const lib=byId(e.exId);
+    if(!lib||!lib.equip) return;   // not in the library (custom with no equipment, unknown id): nothing to fill
+    if((e.sets||[]).some(s=>(s.weight||0)>0)) return;
+    e.equip=lib.equip;
+    if(lib.assist&&!e.assist) e.assist=true;
+    if(!e.muscle&&lib.muscle) e.muscle=lib.muscle;
+    if(!e.imgUrl){ const u=imgUrl(lib); if(u) e.imgUrl=u; }
+    if(e.name===exName(e.exId,e.exId.replace(/_/g,' ').replace(/-/g,' '))) e.name=lib.name;   // byId's slug fallback name
+    if(lib.tracking&&e.tracking!==lib.tracking&&!(e.sets||[]).some(s=>s.done)) e.tracking=lib.tracking;   // e.g. Plank: timed, not reps
+    n++;
+  });
+  return n;
 }
 
 // User overrides: renamed exercises + favourites.
@@ -4164,6 +4192,7 @@ function updWT() {
 }
 
 function renderWS() {
+  hydrateAWFromLib();   // cheap no-op unless an entry was saved with blank equipment (see the function)
   stampSingle(aw);   // a set's Single / Both choice is explicit from the moment it is drawn
   const prs=gPR();
   const doneAll=aw.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
