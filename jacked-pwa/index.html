@@ -359,8 +359,8 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 /* Mini stat bar, just below the fixed .ab header -- shown only once the big .wstats tile has
    scrolled out of view (Mr. Roni, 2026-10-05 9:46pm: lost sight of weight/sets once scrolled
    into the exercise list). Low-profile on purpose -- a thin line, not a second big tile. */
-.wmini{position:fixed;top:calc(76px + var(--sat));left:16px;right:16px;z-index:85;background:rgba(10,10,11,.96);border:1px solid var(--border2);border-radius:10px;padding:5px 14px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:11px;color:var(--muted);opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .15s,transform .15s;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-.wmini.show{opacity:1;transform:translateY(0)}
+.wmini{position:fixed;top:calc(76px + var(--sat) + 10px);left:16px;right:16px;z-index:85;background:rgba(10,10,11,.96);border:0;border-radius:12px;padding:6px 14px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:11px;color:var(--muted);opacity:0;transform:scale(.86);transform-origin:50% 0;pointer-events:none;transition:opacity .28s cubic-bezier(.22,1,.36,1),transform .28s cubic-bezier(.22,1,.36,1);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.wmini.show{opacity:1;transform:scale(1)}
 .wmini b{color:var(--accent);font-weight:800;font-size:12px}
 .wstats-v{font-family:var(--fh);font-size:24px;font-weight:800;color:var(--accent);line-height:1}
 .wstats-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
@@ -4199,7 +4199,7 @@ function renderWS() {
   const volAll=aw.exercises.reduce((a,e)=>a+(isWT(e)?e.sets.filter(s=>s.done).reduce((b,s)=>b+(volWeight(e,s,aw)*s.reps),0):0),0);
   let h=`<div class="wstats"><div><div class="wstats-v">${fmtW(volAll)}</div><div class="wstats-l">${uL()} lifted</div></div><div style="width:1px;background:var(--border)"></div><div><div class="wstats-v">${doneAll}</div><div class="wstats-l">sets done</div></div></div>`;
   const wMiniEl=document.getElementById('wMini');
-  if(wMiniEl) wMiniEl.innerHTML=`<b>${fmtW(volAll)} ${uL()}</b> lifted<span style="width:1px;height:12px;background:var(--border)"></span><b>${doneAll}</b> sets done`;
+  if(wMiniEl) wMiniEl.innerHTML=`<b>${fmtW(volAll)} ${uL()}</b> lifted<b>${doneAll}</b> sets done`;
   h+=aw.exercises.map((ex,ei)=>{
     const pr=prs[ex.exId];
     const ih=ex.imgUrl
@@ -9949,7 +9949,9 @@ function _wMiniSync(){
   if(!mini) return;
   if(!page||page.id!=='page-active'){ mini.classList.remove('show'); return; }
   const tile=document.querySelector('#page-active .wstats');
-  const headerH=mini.getBoundingClientRect().top;   // mini sits right under .ab; its own top = header height
+  const ab=document.querySelector('#page-active .ab')||document.querySelector('.ab');
+  const headerH=ab?ab.getBoundingClientRect().bottom:76;   // real header height (grows with the HR line)
+  mini.style.top=(headerH+10)+'px';                         // 10px breathing room under the bar
   mini.classList.toggle('show', !!tile && tile.getBoundingClientRect().bottom<headerH);
 }
 window.addEventListener('scroll',_wMiniSync,{passive:true});
