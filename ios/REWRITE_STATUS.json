@@ -1,6 +1,6 @@
 {
  "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
- "updated": "2026-11-10T00:00:00-07:00",
+ "updated": "2026-11-15T19:30:00-07:00",
  "stages": [
   {
    "id": "kickoff",
@@ -201,6 +201,17 @@
     "Added the pieces that were missing: tapping a friend's profile photo enlarges it, Send Feedback in My Profile, and the web app's haptic taps (tab change, set ticked, rest over, Single/Both).",
     "The app icon was compared to the web app's 512px icon pixel by pixel: identical.",
     "Not on the iPhone: the phone-and-watch shared live workout (that is the Apple Watch stage below), invite links that open the app directly (needs an Apple-hosted link file, see the blocker list), and the 'save to cloud?' prompt (not applicable: the iPhone app saves to your account from the first workout)."
+   ]
+  },
+  {
+   "id": "pwa-catch-up",
+   "title": "Catch up with the PWA",
+   "status": "todo",
+   "summary": "The web app has 33 things the iPhone app is missing and 31 it only half does. The full list is in ios/PARITY.md, biggest gaps first.",
+   "detail": [
+    "Checked 2026-11-15: every change ever made to the web app, row by row against the iPhone code. 220 things match, 33 are missing, 31 are partly there, 19 only matter in a browser.",
+    "Biggest missing pieces: the live workout shared with the watch, refreshing when you come back to the app, tap a set box to clear it, the add-exercise picker (recent and favourites first, muscle chips, switch pre-filtered), auto-finishing a forgotten workout, the gold look while you hold Jacked, and the live tier chip during a workout.",
+    "From now on, any web app change you can see adds or updates a row in ios/PARITY.md in the same commit."
    ]
   },
   {
