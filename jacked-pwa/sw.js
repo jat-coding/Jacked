@@ -53,6 +53,26 @@ self.addEventListener('fetch', e => {
   // erased newer workouts (caught by network capture in harness testing —
   // this silently defeated v1.5's merge-safety on repeat backups, and the
   // poisoned entry persisted across days on resident pages).
+  // EXCEPT the public, read-only exercise library (exercises.json + photos) in our own bucket: it moved off
+  // raw.githubusercontent.com on 2026-11-03 and this early return silently dropped its offline cache, so with no
+  // signal at the gym the library never loaded and every workout started there lost its equipment -- dips,
+  // pull-ups, push-ups stopped defaulting to Bodyweight (Mr. Roni, 2026-11-11). Same cache-first + background
+  // refresh as the old GitHub copy below. Only this public path; every other supabase.co request stays network-only.
+  if (req.url.includes('supabase.co/storage/v1/object/public/exercise-images/')) {
+    e.respondWith(
+      caches.match(req).then(cached => {
+        const network = fetch(req).then(r => {
+          if (r && r.status === 200) {
+            const clone = r.clone();
+            caches.open(CACHE).then(c => c.put(req, clone));
+          }
+          return r;
+        }).catch(() => cached);
+        return cached || network;
+      })
+    );
+    return;
+  }
   if (req.url.includes('supabase.co')) return; // network, no SW involvement
 
   // supabase-js CDN script: pinned to an exact version in index.html (no more floating
