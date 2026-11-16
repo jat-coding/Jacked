@@ -454,6 +454,11 @@
 				TargetAttributes = {
 					A8C2956D5A96270E8EAE45C9 = {
 						CreatedOnToolsVersion = 15.2;
+						ProvisioningStyle = Automatic;
+					};
+					309E17480B4B7D19E17A00C9 = {
+						CreatedOnToolsVersion = 15.2;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
