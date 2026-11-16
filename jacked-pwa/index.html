@@ -4203,7 +4203,7 @@ function renderWS() {
   h+=aw.exercises.map((ex,ei)=>{
     const pr=prs[ex.exId];
     const ih=ex.imgUrl
-      ?`<img class="ebi" src="${exImgSrc(ex.imgUrl)}" onerror="this.style.display='none'" loading="lazy">`
+      ?`<img class="ebi" data-lid="${ex.lid||''}" data-exid="${String(ex.exId).replace(/"/g,'')}" src="${exImgSrc(ex.imgUrl)}" onerror="this.style.display='none'" loading="lazy">`
       :`<div class="ebi" style="display:flex;align-items:center;justify-content:center">${exIcon(ex.muscle,58)}</div>`;
     const cab=ex.cable||'pulley';
     const tracking=ex.tracking||'weight_reps';
@@ -4360,7 +4360,16 @@ function renderWS() {
     <button class="btn bg" onclick="openAEModal('workout')">+ Add Exercise</button>
     <button class="btn bg" onclick="openPlate()">Plates</button>
   </div>`;
-  document.getElementById('wSession').innerHTML=h;
+  // Thumbnails survive the redraw: innerHTML makes brand-new <img> nodes, which blank and reload
+  // (flicker on + Add Set / - Set). Keep the old, already-decoded node for any exercise whose src is unchanged.
+  const wsEl=document.getElementById('wSession');
+  const keepImg=new Map();
+  wsEl.querySelectorAll('img.ebi[data-exid]').forEach(im=>keepImg.set((im.dataset.lid||'')+'|'+im.dataset.exid+'|'+im.getAttribute('src'),im));
+  wsEl.innerHTML=h;
+  if(keepImg.size) wsEl.querySelectorAll('img.ebi[data-exid]').forEach(im=>{
+    const old=keepImg.get((im.dataset.lid||'')+'|'+im.dataset.exid+'|'+im.getAttribute('src'));
+    if(old&&old!==im){ keepImg.delete((im.dataset.lid||'')+'|'+im.dataset.exid+'|'+im.getAttribute('src')); im.replaceWith(old); }
+  });
   if(typeof _wMiniSync==='function') _wMiniSync();
   saveAW();
   _wsDrawn=aw.exercises.map(e=>({lid:e.lid,sids:(e.sets||[]).map(s=>s.sid)}));   // after saveAW: ids are stamped by then
