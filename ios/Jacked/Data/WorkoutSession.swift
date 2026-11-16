@@ -21,6 +21,20 @@ final class WorkoutSession: ObservableObject {
         let routine: (id: String, name: String)?
         var notes: [WorkoutMath.Note] = []
         var savedToServer: Bool
+        /// Heaviest finished set of each weight-and-reps exercise, in workout order.
+        var topLifts: [TopLift] = []
+    }
+
+    struct TopLift { let name: String; let weight: Double; let reps: Double }
+
+    /// The heaviest done set per exercise (ties go to more reps). Exercises with no weighted done set are skipped.
+    static func topLifts(_ exercises: [LogExercise]) -> [TopLift] {
+        exercises.compactMap { e in
+            guard WorkoutMath.isWT(e) else { return nil }
+            let best = e.sets.filter { $0.done && $0.weight > 0 }
+                .max { ($0.weight, $0.reps) < ($1.weight, $1.reps) }
+            return best.map { TopLift(name: e.name, weight: $0.weight, reps: $0.reps) }
+        }
     }
 
     private var code: String?
@@ -261,7 +275,7 @@ final class WorkoutSession: ObservableObject {
                                               prNames: Set(f.prs.map(\.name)), settings: settings, bw: jsNum(store.backup.raw["jk_bw"]))
         summary = Summary(name: f.rec["name"]?.string ?? a.name, duration: f.duration, sets: f.sets, volume: f.volume,
                           prs: f.prs, suggested: f.suggested, exerciseIds: a.exercises.map(\.exId), routine: routine,
-                          notes: notes, savedToServer: ok)
+                          notes: notes, savedToServer: ok, topLifts: Self.topLifts(a.exercises))
         active = nil
         presented = false
         Haptics.success()

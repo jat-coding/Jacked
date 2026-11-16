@@ -7,6 +7,7 @@ import SwiftUI
 struct WorkoutShareCard: View {
     let name: String, dateLabel: String, duration: String, sets: Int, volume: String, unit: String
     let prs: [(name: String, detail: String)]
+    var tops: [(name: String, detail: String)] = []
 
     static let width: CGFloat = 1080
     static var height: CGFloat { 1350 }
@@ -46,6 +47,17 @@ struct WorkoutShareCard: View {
                     }
                     if prs.count > 4 { Text("+ \(prs.count - 4) more").font(Theme.body(26)).foregroundStyle(sub) }
                 }
+                if !tops.isEmpty {
+                    Text("TOP LIFTS").font(Theme.body(26, .semibold)).tracking(2).foregroundStyle(sub).padding(.top, prs.isEmpty ? 48 : 20).padding(.bottom, 10)
+                    ForEach(Array(tops.prefix(prs.isEmpty ? 6 : max(0, 3 - prs.count)).enumerated()), id: \.offset) { _, t in
+                        HStack {
+                            Text(t.name).font(Theme.body(30, .semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                            Spacer(minLength: 16)
+                            Text(t.detail).font(Theme.heading(36, .bold)).foregroundStyle(Theme.text)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
                 Spacer(minLength: 0)
                 Text("Tracked with Jacked").font(Theme.body(26, .semibold)).foregroundStyle(Color(hex: 0x6A6A78))
                     .frame(maxWidth: .infinity)
@@ -71,6 +83,7 @@ struct WorkoutShareCard: View {
         dateLabel = date.formatted(.dateTime.month(.abbreviated).day().year())
         duration = s.duration; sets = s.sets
         volume = HomeMath.fmtV(settings.display(s.volume)); unit = settings.unitLabel
+        tops = s.topLifts.map { t in (t.name, "\(WorkoutMath.n(settings.display(t.weight)))\(settings.unitLabel) × \(Int(t.reps))") }
         prs = s.prs.map { p in (p.name, p.label ?? "\(WorkoutMath.n(settings.display(p.weight)))\(settings.unitLabel) × \(Int(p.reps))") }
     }
 

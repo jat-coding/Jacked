@@ -637,6 +637,16 @@ struct FinishSummarySheet: View {
                     }
                     .padding(12).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
                 }
+                if !s.topLifts.isEmpty { BlockTitle(text: "Top lift per exercise").padding(.top, 6) }
+                ForEach(Array(s.topLifts.enumerated()), id: \.offset) { _, t in
+                    HStack {
+                        Text(t.name).font(Theme.body(13, .semibold)).lineLimit(1)
+                        Spacer()
+                        Text("\(WorkoutMath.n(settings.display(t.weight)))\(settings.unitLabel) × \(Int(t.reps))")
+                            .font(Theme.heading(16, .bold)).foregroundStyle(Theme.text)
+                    }
+                    .padding(12).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+                }
                 if !s.suggested.isEmpty { BlockTitle(text: "Suggested PRs").padding(.top, 6) }
                 ForEach(Array(s.suggested.enumerated()), id: \.offset) { _, p in
                     let implied = WorkoutMath.e1rm(p.weight, p.reps)
