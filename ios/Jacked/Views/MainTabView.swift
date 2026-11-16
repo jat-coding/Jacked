@@ -52,6 +52,15 @@ struct MainTabView: View {
             Button("Discard & start", role: .destructive) { Haptics.warning(); let f = session.busyStart; session.busyStart = nil; f?() }
             Button("Keep it", role: .cancel) { session.busyStart = nil }
         }
+        .confirmationDialog("Update \"\(session.routineChoice?.routine?.name ?? "")\" with the exercises you did?",
+                            isPresented: Binding(get: { session.routineChoice != nil }, set: { _ in }), titleVisibility: .visible) {
+            Button("Update workout") {
+                guard let s = session.routineChoice, let r = s.routine else { return }
+                session.routineChoice = nil
+                Task { await session.updateRoutine(id: r.id, ids: s.exerciseIds, store: store, auth: auth); session.summary = s }
+            }
+            Button("Keep original", role: .cancel) { session.summary = session.routineChoice; session.routineChoice = nil }
+        }
         .sheet(item: $session.summary) { s in
             FinishSummarySheet(s: s)
                 .environmentObject(auth).environmentObject(store).environmentObject(session)

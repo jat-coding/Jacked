@@ -602,76 +602,38 @@ struct PlateCalcSheet: View {
     }
 }
 
-/// #fsModal: the finish summary, plus save-as-routine / update-routine.
+/// The finish summary: total weight lifted, time, sets, and only the PRs hit (exercise, weight x reps), with Share.
+/// Shown after the keep-original / update-workout prompt has been answered.
 struct FinishSummarySheet: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
-    @EnvironmentObject private var session: WorkoutSession
     let s: WorkoutSession.Summary
-    @State private var naming = false
-    @State private var routineName = ""
-    @State private var done: String?
     @State private var card: Image?
 
     var body: some View {
         let settings = store.backup.settings
         ScrollView {
             VStack(spacing: 12) {
-                SFIcon(s.prs.isEmpty ? "dumbbell" : "trophy.fill", 38)
-                    .foregroundStyle(s.prs.isEmpty ? Theme.muted : Color(hex: 0xFFD700)).padding(.top, 24)
-                Text(s.name).font(Theme.heading(26, .extraBold)).foregroundStyle(Theme.text)
+                Text(s.name).font(Theme.heading(26, .extraBold)).foregroundStyle(Theme.text).padding(.top, 24)
                 Text(s.savedToServer ? "Workout complete" : "Workout complete · saved on this phone, will sync when online")
                     .font(Theme.body(12)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
                 HStack(spacing: 8) {
-                    stat(s.duration, "Time"); stat("\(s.sets)", "Sets"); stat(HomeMath.fmtV(settings.display(s.volume)), "\(settings.unitLabel) Lifted")
+                    stat(HomeMath.fmtV(settings.display(s.volume)), "\(settings.unitLabel) Lifted"); stat(s.duration, "Time"); stat("\(s.sets)", "Sets")
                 }
-                stat("\(s.prs.count)", "Personal Records", gold: true)
-                if !s.prs.isEmpty { BlockTitle(text: "New PRs").padding(.top, 6) }
+                if !s.prs.isEmpty { BlockTitle(text: "PRs").padding(.top, 6) }
                 ForEach(Array(s.prs.enumerated()), id: \.offset) { _, p in
                     HStack {
-                        Text("★ \(p.name)").font(Theme.body(13, .semibold))
+                        Text(p.name).font(Theme.body(13, .semibold)).foregroundStyle(Theme.text)
                         Spacer()
                         Text(p.label ?? "\(WorkoutMath.n(settings.display(p.weight)))\(settings.unitLabel) × \(Int(p.reps))")
-                            .font(Theme.heading(16, .bold)).foregroundStyle(Theme.accent)
+                            .font(Theme.heading(16, .bold)).foregroundStyle(Color(hex: 0xFFD700))
                     }
                     .padding(12).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
-                }
-                if !s.suggested.isEmpty { BlockTitle(text: "Suggested PRs").padding(.top, 6) }
-                ForEach(Array(s.suggested.enumerated()), id: \.offset) { _, p in
-                    let implied = WorkoutMath.e1rm(p.weight, p.reps)
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack {
-                            Text(p.name).font(Theme.body(13, .semibold)); Spacer()
-                            Text("\(WorkoutMath.n((settings.display(implied) * 10).rounded() / 10))\(settings.unitLabel)")
-                                .font(Theme.heading(16, .bold)).foregroundStyle(Color(hex: 0xD9B84A))
-                        }
-                        Text("Estimated from \(WorkoutMath.n(settings.display(p.weight)))\(settings.unitLabel) × \(Int(p.reps)). Becomes your PR once you lift \(WorkoutMath.n((settings.display(implied) * 10).rounded() / 10))\(settings.unitLabel).")
-                            .font(Theme.body(11)).foregroundStyle(Theme.muted)
-                    }
-                    .padding(12).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
-                }
-                ForEach(Array(s.notes.enumerated()), id: \.offset) { _, n in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text(n.up ? "▲" : "▼"); Text(n.text).frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .font(Theme.body(12.5)).foregroundStyle(n.up ? Theme.accentBright : Theme.muted)
-                    .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
-                }
-                if let done { Text(done).font(Theme.body(13, .semibold)).foregroundStyle(Theme.accent) }
-                if let r = s.routine, done == nil {
-                    Button("Update \"\(r.name)\" with these exercises") {
-                        Task { await session.updateRoutine(id: r.id, ids: s.exerciseIds, store: store, auth: auth); done = "Routine updated" }
-                    }.buttonStyle(GhostButtonStyle())
-                }
-                if done == nil {
-                    Button("Save as a new routine…") { naming = true }.buttonStyle(GhostButtonStyle())
                 }
                 if let card {
                     ShareLink(item: card, message: Text("Finished \(s.name) on Jacked: \(s.duration), \(s.sets) sets, \(HomeMath.fmtV(settings.display(s.volume))) \(settings.unitLabel) lifted."),
                               preview: SharePreview("\(s.name) on Jacked", image: card)) {
-                        Text("Share workout").frame(maxWidth: .infinity)
+                        Text("Share").frame(maxWidth: .infinity)
                     }.buttonStyle(GhostButtonStyle())
                 }
                 Button("Done") { dismiss() }.buttonStyle(AccentButtonStyle()).padding(.top, 4)
@@ -684,21 +646,11 @@ struct FinishSummarySheet: View {
             // New-PR moment: a second, distinct success tap just after the finish one.
             if !s.prs.isEmpty { DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { Haptics.success() } }
         }
-        .alert("Name this routine:", isPresented: $naming) {
-            TextField("My Routine", text: $routineName)
-            Button("Save") {
-                Task {
-                    await session.saveAsRoutine(name: routineName, ids: s.exerciseIds, store: store, auth: auth)
-                    done = "Routine \"\(routineName.isEmpty ? "My Routine" : routineName)\" saved"
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
     }
 
-    private func stat(_ v: String, _ l: String, gold: Bool = false) -> some View {
+    private func stat(_ v: String, _ l: String) -> some View {
         VStack(spacing: 2) {
-            Text(v).font(Theme.heading(24, .black)).foregroundStyle(gold ? Color(hex: 0xFFD700) : Theme.text)
+            Text(v).font(Theme.heading(24, .black)).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.5)
             Text(l).font(Theme.body(11)).foregroundStyle(Theme.muted)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 12)

@@ -10,6 +10,9 @@ final class WorkoutSession: ObservableObject {
         if active != oldValue { save(); RestLiveActivity.sync(endsAtMs: active?.restEndsAt, workoutName: active?.name ?? "Workout") }
     } }
     @Published var summary: Summary?
+    /// Set instead of `summary` when the workout's exercises differ from its routine: the keep-original / update prompt
+    /// answers it, and only then does the summary show.
+    @Published var routineChoice: Summary?
     @Published var presented = false
 
     struct Summary: Identifiable {
@@ -259,9 +262,10 @@ final class WorkoutSession: ObservableObject {
         guard let f = result else { return }
         let notes = WorkoutMath.progressNotes(exercises: a.exercises, pre: pre, postHistory: store.backup.raw["jk_hist"]?.array ?? [],
                                               prNames: Set(f.prs.map(\.name)), settings: settings, bw: jsNum(store.backup.raw["jk_bw"]))
-        summary = Summary(name: f.rec["name"]?.string ?? a.name, duration: f.duration, sets: f.sets, volume: f.volume,
+        let made = Summary(name: f.rec["name"]?.string ?? a.name, duration: f.duration, sets: f.sets, volume: f.volume,
                           prs: f.prs, suggested: f.suggested, exerciseIds: a.exercises.map(\.exId), routine: routine,
                           notes: notes, savedToServer: ok)
+        if made.routine != nil { routineChoice = made } else { summary = made }
         active = nil
         presented = false
         Haptics.success()
