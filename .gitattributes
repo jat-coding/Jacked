@@ -1,0 +1,3 @@
+# BOARD.md is an append-only log every branch edits; union keeps both sides' lines
+# instead of conflicting (nightly-lessons 2026-11-15-jacked-merge-conflicts).
+watch-client/BOARD.md merge=union
