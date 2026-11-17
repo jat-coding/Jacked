@@ -33,8 +33,9 @@ struct BadgeLift { let key: String; let label: String; let v: Double; let tier: 
 /// count ticked sets. The one write computeBadges makes (jk_monthBadges: this month's Challenge
 /// group, done/comeback flags, the months Jacked was held) comes back as `monthBadges` + `dirty`
 /// so the caller can save it through the merge + compare-and-swap layer like the web app does.
-/// Hevy-imported workouts are judged by their stored exercise id (the web app re-matches them by
-/// name once the library has loaded; not ported yet).
+/// Hevy-imported workouts are re-matched by name once the library has loaded, exactly like the web
+/// app's badgeStdId (pin table, qualifier exclusions, equipment agreement); before that, and for
+/// every other workout, the stored exercise id decides.
 extension MetricsMath {
     struct BadgeResult { var list: [Badge]; var monthBadges: [String: JSONValue]; var dirty: Bool; var ladders: BadgeLadders }
     struct BadgeLadders { var bench, ohp, squat, pullup, pushup, cardio: [Double] }
@@ -64,10 +65,36 @@ extension MetricsMath {
     }
 
     // MARK: which exercise counts (badgeStdId / isStdEx / repBadgeEx / stdRun)
-    func badgeStdId(_ ex: HEx) -> String? { ex.exId.isEmpty || ex.exId.hasPrefix("cex") ? nil : ex.exId }
-    func isStdEx(_ ex: HEx, _ key: String) -> Bool { badgeStdId(ex).map { BadgeTables.BADGE_STD[key]?.contains($0) ?? false } ?? false }
-    func repBadgeEx(_ ex: HEx, _ kind: String) -> Bool { !ex.log.assist && WorkoutMath.bwMode(ex.log) != "assist" && isStdEx(ex, kind) }
-    func stdRun(_ ex: HEx) -> Bool { ex.log.tracking == "distance" && isStdEx(ex, "cardio") }
+    /// HEVY_BADGE_NAME: Hevy's exact names for the dumbbell / Smith versions the badges credit (the general
+    /// matcher files them elsewhere), pinned by exact name.
+    static let HEVY_BADGE_NAME = ["bench press (smith machine)": "Smith_Machine_Bench_Press", "overhead press (dumbbell)": "Standing_Dumbbell_Press"]
+    private static func bre(_ p: String) -> NSRegularExpression { try! NSRegularExpression(pattern: p, options: [.caseInsensitive]) }
+    private static let badgeParenRe = bre(#"\(([^)]*)\)"#)
+    private static let badgeQualOkRe = bre(#"^\s*(barbell|dumbbell|bodyweight|body weight|weighted|smith machine)\s*$"#)
+    private static let badgeExcludeRe = bre(#"assist|\bband|\bknee|\b(single|one)[ -]?arm\b|\balternating\b"#)
+    private static let badgeSmithRe = bre("smith"), badgeMachineRe = bre("machine")
+    /// badgeStdId(ex, w): the library id a logged exercise counts as for a badge, or nil.
+    func badgeStdId(_ ex: HEx, _ w: HWorkout) -> String? {
+        if Self.test(WorkoutMath.importedId, w.w.id), lib.dbLoaded, !ex.name.isEmpty {   // imported (Hevy CSV) workout
+            let name = ex.name
+            let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            if let pin = Self.HEVY_BADGE_NAME[key] { return pin }
+            let ns = name as NSString
+            let q = Self.badgeParenRe.firstMatch(in: name, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range(at: 1)) } ?? ""
+            let smith = Self.test(Self.badgeSmithRe, name)
+            if (!q.isEmpty && !Self.test(Self.badgeQualOkRe, q)) || Self.test(Self.badgeExcludeRe, name) || (Self.test(Self.badgeMachineRe, name) && !smith) { return nil }
+            guard let rid = badgeNames.resolve(name, lib) else { return nil }
+            // The "(Equipment)" in the name has to agree with the library exercise it landed on.
+            if smith { return (BadgeTables.BADGE_STD["benchSmith"]! + BadgeTables.BADGE_STD["ohpSmith"]!).contains(rid) ? rid : nil }
+            let qe = q.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), eq = (lib.db(rid)?.dbEquip ?? "").lowercased()
+            if (qe == "barbell" || qe == "dumbbell") && !eq.isEmpty && eq != qe { return nil }
+            return rid
+        }
+        return ex.exId.isEmpty || ex.exId.hasPrefix("cex") ? nil : ex.exId
+    }
+    func isStdEx(_ ex: HEx, _ key: String, _ w: HWorkout) -> Bool { badgeStdId(ex, w).map { BadgeTables.BADGE_STD[key]?.contains($0) ?? false } ?? false }
+    func repBadgeEx(_ ex: HEx, _ kind: String, _ w: HWorkout) -> Bool { !ex.log.assist && WorkoutMath.bwMode(ex.log) != "assist" && isStdEx(ex, kind, w) }
+    func stdRun(_ ex: HEx, _ w: HWorkout) -> Bool { ex.log.tracking == "distance" && isStdEx(ex, "cardio", w) }
 
     // MARK: ladders (badgeT and friends)
     static func mccullochFactor(_ age: Int?) -> Double {
@@ -141,7 +168,7 @@ extension MetricsMath {
         let V = Self.LIFT_VARIANTS[badge]!
         var v = [Double](repeating: 0, count: V.count)
         for w in h { for ex in w.exercises {
-            guard let i = V.firstIndex(where: { isStdEx(ex, $0.key) }) else { continue }
+            guard let i = V.firstIndex(where: { isStdEx(ex, $0.key, w) }) else { continue }
             for s in ex.log.sets where s.done && s.reps >= minReps { let c = s.weight * 2.20462 * V[i].mult; if c > v[i] { v[i] = c } }
         } }
         let lifts = V.indices.filter { v[$0] > 0 }.map { i in
@@ -156,13 +183,13 @@ extension MetricsMath {
     }
     func repTierOf(_ key: String, _ h: [HWorkout], _ T: BadgeLadders) -> (tier: String?, value: Double) {
         var best = 0.0
-        for w in h { for ex in w.exercises where repBadgeEx(ex, key) { for s in ex.log.sets where s.done && s.reps > best { best = s.reps } } }
+        for w in h { for ex in w.exercises where repBadgeEx(ex, key, w) { for s in ex.log.sets where s.done && s.reps > best { best = s.reps } } }
         return (Self.tierOfLive(best, key == "pullup" ? T.pullup : T.pushup), best)
     }
     func cardioBreakdown(_ src: [HWorkout], _ T: BadgeLadders) -> (tier: String?, value: Double, lifts: [BadgeLift]) {
         var v = [Double](repeating: .infinity, count: Self.CARDIO_LEGS.count)
-        for w in src { for ex in w.exercises where stdRun(ex) {
-            guard let id = badgeStdId(ex), let i = Self.CARDIO_LEGS.firstIndex(where: { $0.ids.contains(id) }) else { continue }
+        for w in src { for ex in w.exercises where stdRun(ex, w) {
+            guard let id = badgeStdId(ex, w), let i = Self.CARDIO_LEGS.firstIndex(where: { $0.ids.contains(id) }) else { continue }
             for s in ex.log.sets where s.done && s.weight > 0 && s.reps > 0 { let me = WorkoutMath.mileEquiv(s.weight, s.reps); if me < v[i] { v[i] = me } }
         } }
         let lifts = Self.CARDIO_LEGS.indices.filter { v[$0].isFinite }.map { i in
@@ -177,7 +204,7 @@ extension MetricsMath {
     }
     func bestLb(_ key: String, _ minReps: Double, _ src: [HWorkout]) -> Double {
         var best = 0.0
-        for w in src { for ex in w.exercises where isStdEx(ex, key) { for s in ex.log.sets where s.done && s.reps >= minReps { best = max(best, s.weight * 2.20462) } } }
+        for w in src { for ex in w.exercises where isStdEx(ex, key, w) { for s in ex.log.sets where s.done && s.reps >= minReps { best = max(best, s.weight * 2.20462) } } }
         return best
     }
     /// bestWeekTotal(): best rolling 7-day total of prCount.
@@ -237,10 +264,10 @@ extension MetricsMath {
             var bench = 0.0, squat = 0.0, dead = 0.0; var by: Variant?
             for ex in w.exercises {
                 let lb = ex.log.sets.filter(\.done).reduce(0.0) { max($0, $1.weight) } * 2.20462
-                if let bv = Self.LIFT_VARIANTS["bench"]!.first(where: { isStdEx(ex, $0.key) }) {
+                if let bv = Self.LIFT_VARIANTS["bench"]!.first(where: { isStdEx(ex, $0.key, w) }) {
                     let c = lb * bv.mult; if c > bench { bench = c; by = bv }
-                } else if isStdEx(ex, "squat") { squat = max(squat, lb) }
-                else if isStdEx(ex, "deadlift") { dead = max(dead, lb) }
+                } else if isStdEx(ex, "squat", w) { squat = max(squat, lb) }
+                else if isStdEx(ex, "deadlift", w) { dead = max(dead, lb) }
             }
             if bench > 0 && squat > 0 && dead > 0 {
                 let t = bench + squat + dead
@@ -495,18 +522,18 @@ extension MetricsMath {
         for w in h { for ex in w.exercises {
             if key == "bench" || key == "ohp" {
                 let V = Self.LIFT_VARIANTS[key]!
-                guard let i = V.firstIndex(where: { isStdEx(ex, $0.key) }) else { continue }
+                guard let i = V.firstIndex(where: { isStdEx(ex, $0.key, w) }) else { continue }
                 for s in ex.log.sets where s.done && s.reps >= 1 {
                     out.append(TierEntry(ms: w.ms, ex: ex.name, reps: s.reps, weight: s.weight, value: s.weight * 2.20462 * V[i].mult, variant: V[i].label))
                 }
             } else if key == "squat" {
-                guard isStdEx(ex, "squat") else { continue }
+                guard isStdEx(ex, "squat", w) else { continue }
                 for s in ex.log.sets where s.done && s.reps >= 1 { out.append(TierEntry(ms: w.ms, ex: ex.name, reps: s.reps, weight: s.weight, value: s.weight * 2.20462, variant: nil)) }
             } else if key == "pullup" || key == "pushup" {
-                guard repBadgeEx(ex, key) else { continue }
+                guard repBadgeEx(ex, key, w) else { continue }
                 for s in ex.log.sets where s.done { out.append(TierEntry(ms: w.ms, ex: ex.name, reps: s.reps, weight: 0, value: s.reps, variant: nil)) }
             } else if key == "cardio" {
-                guard stdRun(ex) else { continue }
+                guard stdRun(ex, w) else { continue }
                 for s in ex.log.sets where s.done && s.weight > 0 && s.reps > 0 {
                     out.append(TierEntry(ms: w.ms, ex: ex.name, reps: s.reps, weight: s.weight, value: WorkoutMath.mileEquiv(s.weight, s.reps), variant: nil))
                 }
@@ -567,7 +594,7 @@ extension MetricsMath {
         let ids = BadgeTables.BADGE_STD[key] ?? []
         var best: String?, bestTs = -Double.infinity
         for w in hist { let t = w.ms ?? -.infinity
-            for ex in w.exercises { if let id = badgeStdId(ex), ids.contains(id), t > bestTs { bestTs = t; best = id } } }
+            for ex in w.exercises { if let id = badgeStdId(ex, w), ids.contains(id), t > bestTs { bestTs = t; best = id } } }
         return best ?? ids.first ?? ""
     }
 
