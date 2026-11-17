@@ -1,6 +1,10 @@
 // Parity fixtures for the Swift badge port (ios/Jacked/Data/BadgeMath.swift): runs the PWA's REAL
-// computeBadges() and helpers (no copy) with dbLoaded=true (the library is loaded, so Hevy-imported
-// workouts are re-matched by name, like the Swift port does whenever it has the library), writes badges-fixtures.json. Derived from metrics-gen.mjs.
+// computeBadges() and helpers (no copy), writes badges-fixtures.json. Derived from metrics-gen.mjs.
+// Since 2026-11-16 (Mr. Roni): imported (Hevy CSV) workouts never count toward any badge, and a kg user's weight tier
+// follows the whole kg the page shows. Every account here is also run with its imported workouts removed and must give
+// the same badges (imports present but not counted).
+//   BADGES_ACCOUNT=<raw.json> [JACKED_HTML=<index.html>] [BADGES_NOW=<iso>] node badges-gen.mjs <exercises.json>
+//     prints one account's badges and exits (before/after impact check; JACKED_HTML points at another build of the web app).
 // (metrics-gen header follows)
 // Parity fixtures for the Swift Metrics port (ios/Jacked/Data/MetricsMath.swift).
 // Runs the PWA's REAL stats functions (topPRSet, recapData, muscleUsage, exCredits, musclePerf and
@@ -11,7 +15,7 @@
 //   TZ=America/Denver node metrics-gen.mjs <exercises.json> [count]
 import fs from 'node:fs'; import vm from 'node:vm'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
-const html = fs.readFileSync(path.join(here, '../../../jacked-pwa/index.html'), 'utf8');
+const html = fs.readFileSync(process.env.JACKED_HTML || path.join(here, '../../../jacked-pwa/index.html'), 'utf8');
 function extract(name) {
   const fn = html.search(new RegExp(`^(async )?function ${name}\\(`, 'm'));
   if (fn >= 0) {
@@ -30,6 +34,7 @@ function extract(name) {
   }
   return html.slice(at, i) + ';';
 }
+const OPTIONAL = new Set(['isImportedW', 'badgeHist', 'wReached', 'wTierOf', 'HEVY_BADGE_NAME', 'BADGE_SMITH_IDS', '_stdByName']);   // differ between builds (impact mode)
 const names = ['S', 'gH', 'histClean', 'gPR', 'gProf', 'gSet', 'gBW', 'gBWlog', 'gCEx', '_cexMemo', 'cexById', 'gRenameEx', 'exName', 'gExOverride',
   'exOverride', 'WARMUPS', 'MACHINES', 'RUNS', 'prettyDB', 'EQUIP_TAG', 'EQUIP_FIX', 'mapMuscle', 'TIMED_HOLDS', 'dbTracking', 'byId', 'dayKey',
   'isWT', 'isCardio', 'isHold', 'isPlainBW', 'bwMode', 'bwCapable', 'isBodyweightEx', 'NOT_BW_IDS', 'effWeight', 'e1rm', 'IMPORTED_ID',
@@ -39,13 +44,15 @@ const names = ['S', 'gH', 'histClean', 'gPR', 'gProf', 'gSet', 'gBW', 'gBWlog', 
   'STR_WINDOW_DAYS', 'STR_BEST_ONLY', 'STR_REF_ISOLATION', 'TRI_ISO_STD', 'TRI_ONE_ARM', 'TRI_COMPOUND', 'BW_IS_LOAD', 'strLoad',
   'ladderScore', 'strengthScore', 'badgeAgeFactor', 'ageFromBirthday', 'gAge', 'muscleStrengthRatio', 'creditStrength', 'triStrength',
   'musclePerf', 'EXCLUDED_CATS', 'MECH_FIX', '_EXID_RE', '_EXIMG_RE'];
-for (const n of ["computeBadges", "bestWeekTotal", "bestStreak", "liftVariant", "BADGE_DB_BONUS", "LIFT_VARIANTS", "creditLb", "isStdEx", "badgeStdId", "BADGE_STD", "HEVY_BADGE_NAME", "BADGE_SMITH_IDS", "_stdByName", "badgeT", "benchLadder", "benchBasis", "thresholds_lb", "GL_BENCH", "BENCH_POINTS", "MCCULLOCH", "mccullochFactor", "BENCH_FALLBACK_LB", "stdLadder", "interpStd", "SQUAT_STD", "OHP_STD", "repLadder", "repInterp", "REP_STD_AGES", "PULLUP_STD", "PUSHUP_STD", "cardioLadder", "wmaMileFactor", "CARDIO_STD", "WMA_MILE", "benchTierOf", "liftVariantsOf", "tierOfLive", "tierOfLiveLow", "TIER_RANK", "lbTxt", "lbN", "uL", "wUnit", "ohpTierOf", "repTierOf", "repBadgeEx", "bwMode", "cardioBreakdown", "CARDIO_LEGS", "stdRun", "mileEquiv", "fmtClock", "MCOL", "resolveExercise", "normName", "allEx", "isCustomEx", "isCardioCat", "RESOLVE_ALIAS", "RESOLVE_SOFT", "guessMuscle", "impId"]) if (!names.includes(n)) names.push(n);
+for (const n of ["computeBadges", "bestWeekTotal", "bestStreak", "liftVariant", "BADGE_DB_BONUS", "LIFT_VARIANTS", "creditLb", "isStdEx", "badgeStdId", "BADGE_STD", "isImportedW", "badgeHist", "wReached", "wTierOf", "badgeT", "benchLadder", "benchBasis", "thresholds_lb", "GL_BENCH", "BENCH_POINTS", "MCCULLOCH", "mccullochFactor", "BENCH_FALLBACK_LB", "stdLadder", "interpStd", "SQUAT_STD", "OHP_STD", "repLadder", "repInterp", "REP_STD_AGES", "PULLUP_STD", "PUSHUP_STD", "cardioLadder", "wmaMileFactor", "CARDIO_STD", "WMA_MILE", "benchTierOf", "liftVariantsOf", "tierOfLive", "tierOfLiveLow", "TIER_RANK", "lbTxt", "lbN", "uL", "wUnit", "ohpTierOf", "repTierOf", "repBadgeEx", "bwMode", "cardioBreakdown", "CARDIO_LEGS", "stdRun", "mileEquiv", "fmtClock", "MCOL", "resolveExercise", "normName", "allEx", "isCustomEx", "isCardioCat", "RESOLVE_ALIAS", "RESOLVE_SOFT", "guessMuscle", "impId"]) if (!names.includes(n)) names.push(n);
+if (process.env.JACKED_HTML) names.push('HEVY_BADGE_NAME', 'BADGE_SMITH_IDS', '_stdByName');
+const extractOpt = n => { try { return extract(n); } catch (e) { if (OPTIONAL.has(n)) return ''; throw e; } };
 const store = {};
 const ctx = { localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
   console, shapeOk: () => true, storageFullWarn: () => {}, crownCodes: () => new Set(), __NOW: 0, __RAWDB: null };
 vm.createContext(ctx);
 vm.runInContext(`const __RD=Date; Date=class extends __RD{ constructor(...a){ if(a.length===0) super(__NOW); else super(...a); } static now(){ return __NOW; } };
-let allDB=[]; let dbLoaded=true;\nvar document={documentElement:{hasAttribute:()=>false,toggleAttribute(){}}};\n` + names.map(extract).join('\n') + `
+let allDB=[]; let dbLoaded=true;\nvar document={documentElement:{hasAttribute:()=>false,toggleAttribute(){}}};\n` + names.map(extractOpt).join('\n') + `
 globalThis.__loadDB=raw=>{ allDB=raw.filter(e=>{ const cat=(e.category||'').toLowerCase(); if(EXCLUDED_CATS.has(cat)) return false; if(!_EXID_RE.test(e.id||'')) return false; return true; })
   .map(e=>{ const fixed=MECH_FIX[e.id]?{...e,mechanic:MECH_FIX[e.id]}:e; const images=(Array.isArray(fixed.images)?fixed.images:[]).filter(im=>typeof im==='string'&&_EXIMG_RE.test(im)); return {...fixed,images}; }); return allDB.length; };
 globalThis.__run=()=>{
@@ -59,6 +66,27 @@ globalThis.__run=()=>{
 const dbPath = process.argv[2]; if (!dbPath) throw new Error('usage: badges-gen.mjs <exercises.json> [count]');
 const rawDB = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
 console.log('allDB', ctx.__loadDB(rawDB));
+const RESET = "_cexMemo={raw:undefined,map:null}; if(typeof _stdByName!=='undefined') _stdByName.clear()";
+const IMPORTED = /^w\d+_\d+$/;
+function runRaw(raw, now) {
+  for (const k of Object.keys(store)) delete store[k];
+  for (const [k, v] of Object.entries(raw)) store[k] = JSON.stringify(v);
+  vm.runInContext(RESET, ctx); ctx.__NOW = now;
+  return JSON.parse(JSON.stringify(ctx.__run()));
+}
+// Imports present but not counted: the same account without its imported workouts must give the same badges.
+let noImpBad = 0;
+function checkNoImports(name, raw, now, expected) {
+  const hist = raw.jk_hist || []; if (!hist.some(w => w && IMPORTED.test(w.id || ''))) return;
+  const e2 = runRaw({ ...raw, jk_hist: hist.filter(w => !(w && IMPORTED.test(w.id || ''))) }, now);
+  if (JSON.stringify(e2) !== JSON.stringify(expected)) { noImpBad++; if (noImpBad <= 3) console.log('IMPORT COUNTED', name); }
+}
+if (process.env.BADGES_ACCOUNT) {   // impact mode: one account, print and exit
+  const raw = JSON.parse(fs.readFileSync(process.env.BADGES_ACCOUNT, 'utf8')), now = +new Date(process.env.BADGES_NOW || Date.now());
+  const r = runRaw(raw, now);
+  for (const b of r.list) console.log((b.earned ? 'EARNED ' : '-      ') + b.name + (b.tier ? ' [' + b.tier + ']' : '') + ' | ' + b.desc);
+  process.exit(0);
+}
 
 let seed = 20261108; const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
 const pick = a => a[Math.floor(rnd() * a.length)], maybe = (p = 0.5) => rnd() < p;
@@ -120,9 +148,11 @@ for (let i = 0; i < N; i++) {
   for (const k of Object.keys(store)) delete store[k];
   for (const [k, v] of Object.entries(raw)) store[k] = JSON.stringify(v);
   ctx._cexMemo = { raw: undefined, map: null };
-  vm.runInContext('_cexMemo={raw:undefined,map:null}; _stdByName.clear()', ctx);   // the name cache is per account (renames change the library)
+  vm.runInContext('_cexMemo={raw:undefined,map:null}', ctx);
   ctx.__NOW = now;
-  cases.push({ name: 'case' + i, now, raw, expected: JSON.parse(JSON.stringify(ctx.__run())) });
+  const expected = JSON.parse(JSON.stringify(ctx.__run()));
+  checkNoImports('case' + i, raw, now, expected);
+  cases.push({ name: 'case' + i, now, raw, expected });
 }
 
 // Clock-change fixtures (Mr. Roni, 2026-11-10): PR-Maxing counts calendar days, so 7 PRs inside 7 calendar days earn it even when
@@ -141,7 +171,7 @@ for (const [label, m, d] of [['denver-spring', 2, 8], ['denver-fall', 10, 1], ['
   }
 }
 
-// ---- Hevy name re-match + tier-threshold fixtures (2026-11-16; cases from artifacts achievements-audit bugs 2, 3, 4) ----
+// ---- Hevy imports (never counted, 2026-11-16) + tier-threshold fixtures (cases from artifacts achievements-audit bugs 2, 3, 4) ----
 // `wants` = ABSOLUTE expectations [[badge, field, value]] checked on web AND ios by badges-compare.py (the web rulebook).
 const KP = 2.20462, L = (y, m, d, h = 12) => new Date(y, m - 1, d, h).toISOString();
 const BASE = { jk_prof: { name: 'T', sex: 'male', birthday: '1990-05-01' }, jk_bw: 80, jk_settings: { wUnit: 'lb' } };
@@ -150,8 +180,9 @@ function addCase(name, nowIso, hist, raw = {}, wants) {
   for (const k of Object.keys(store)) delete store[k];
   const r = { ...BASE, ...raw, jk_hist: hist }; for (const k of Object.keys(r)) if (r[k] === undefined) delete r[k];
   for (const [k, v] of Object.entries(r)) store[k] = JSON.stringify(v);
-  vm.runInContext('_cexMemo={raw:undefined,map:null}; _stdByName.clear()', ctx); ctx.__NOW = now;
+  vm.runInContext(RESET, ctx); ctx.__NOW = now;
   const expected = JSON.parse(JSON.stringify(ctx.__run()));
+  checkNoImports(name, r, now, expected);
   const c = { name, now, raw: r, expected }; if (wants) c.wants = wants; cases.push(c); return expected;
 }
 const badge = (e, n) => e.list.find(b => b.name === n);
@@ -159,12 +190,17 @@ const R = n => vm.runInContext(`resolveExercise(${JSON.stringify(n)})||impId(${J
 const impEx = (name, sets, extra = {}) => ({ exId: R(name), name, muscle: '', tracking: 'weight_reps', sets: sets.map(([weight, reps]) => ({ weight, reps, done: true })), ...extra });
 const IW = (exs, date = L(2026, 11, 7), j = 1) => ({ id: 'w1700000000000_' + j, name: 'Hevy', date, duration: '45:00', sets: 3, totalVolume: 100, exercises: exs });
 const NOW8 = L(2026, 11, 8);
-// (a) the audit's four differences plus every exclusion branch of badgeStdId, each as its own imported account
+const EX = (exId, sets) => ({ exId, name: exId.replace(/_/g, ' '), muscle: '', tracking: 'weight_reps', sets: sets.map(([weight, reps]) => ({ weight, reps, done: true })) });
+const AW = exs => ({ id: 'w' + (+new Date(L(2026, 11, 7))), name: 'W', date: L(2026, 11, 7), duration: '45:00', sets: 3, totalVolume: 100, exercises: exs });
+const EXI = { bench: 'Barbell_Bench_Press_-_Medium_Grip', ohp: 'Standing_Military_Press', squat: 'Barbell_Squat', dbBench: 'Dumbbell_Bench_Press', smith: 'Smith_Machine_Bench_Press' };
+// (a) Hevy names, each as its own imported account: none of it counts, whatever the name or the stored id
+const NOTHING = [['Bench-Maxing', 'tier', null], ['Shoulder-Maxing', 'tier', null], ['Leg-Maxing', 'tier', null], ['Pull-up-Maxing', 'tier', null], ['Push-up-Maxing', 'tier', null],
+  ['Cardio-Maxing', 'tier', null], ['1000lb Club', 'earned', false], ['Variety-Maxing', 'desc', '0 / 100 different exercises logged'], ['PR-Maxing', 'earned', false], ['Consistency-Maxing', 'earned', false], ['Coward-Maxing', 'earned', false]];
 const HEVY = [
-  ['Pull Up (Assisted)', [[0, 25]], [['Pull-up-Maxing', 'tier', null]]], ['Pull Up (Band)', [[0, 25]], [['Pull-up-Maxing', 'tier', null]]],
+  ['Pull Up (Assisted)', [[0, 25]]], ['Pull Up (Band)', [[0, 25]]],
   ['Pull Up', [[0, 25]]], ['Pull Up (Weighted)', [[10, 25]]], ['Pull Up (Bodyweight)', [[0, 25]]], ['Chin Up', [[0, 25]]], ['Band Assisted Pull Up', [[0, 25]]],
   ['Push Up', [[0, 40]]], ['Push Up (Knee)', [[0, 40]]], ['Knee Push Up', [[0, 40]]], ['Push Up (Weighted)', [[10, 40]]],
-  ['Bench Press (Smith Machine)', [[100, 1]], [['Bench-Maxing', 'tier', 'bronze']]], ['  bench  PRESS (smith machine) ', [[100, 1]]],
+  ['Bench Press (Smith Machine)', [[100, 1]]], ['  bench  PRESS (smith machine) ', [[100, 1]]],
   ['Bench Press (Barbell)', [[100, 1]]], ['Bench Press (Dumbbell)', [[50, 1]]], ['Bench Press (Cable)', [[100, 1]]], ['Bench Press (Machine)', [[100, 1]]],
   ['Bench Press', [[100, 1]]], ['Incline Bench Press (Barbell)', [[100, 1]]], ['Single Arm Bench Press (Dumbbell)', [[50, 1]]], ['Chest Press (Machine)', [[100, 1]]],
   ['Overhead Press (Dumbbell)', [[40, 1]]], ['Overhead Press (Barbell)', [[60, 1]]], ['Overhead Press (Smith Machine)', [[60, 1]]], ['Overhead Press', [[60, 1]]],
@@ -174,21 +210,32 @@ const HEVY = [
   ['Squat', [[120, 1]]], ['Full Squat', [[120, 1]]], ['Deadlift (Barbell)', [[150, 1]]], ['Deadlift (Trap Bar)', [[150, 1]]], ['Deadlift (Dumbbell)', [[60, 1]]], ['Deadlift', [[150, 1]]],
   ['Running', [[3.1, 28]]], ['Treadmill', [[1, 7]]], ['Running (Treadmill)', [[1, 7]]], ['Mystery Lift (Barbell)', [[100, 1]]], ['Décliné Bench Press', [[100, 1]]],
 ];
-for (const [name, sets, wants] of HEVY) {
+for (const [name, sets] of HEVY) {
   const run = /^(Running|Treadmill)/.test(name);
-  addCase('hevy_' + name.trim().replace(/\W+/g, '_'), NOW8, [IW([impEx(name, sets, run ? { tracking: 'distance' } : {})])], {}, wants);
+  addCase('hevy_' + name.trim().replace(/\W+/g, '_'), NOW8, [IW([impEx(name, sets, run ? { tracking: 'distance' } : {})])], {}, NOTHING);
 }
-// Overhead Press (Dumbbell) 40 kg: web credits it as the dumbbell press at +15% (101 lb), not the barbell 88 lb.
-{ const e = cases.find(c => c.name === 'hevy_Overhead_Press_Dumbbell_').expected, sh = badge(e, 'Shoulder-Maxing');
-  if (!(sh.lifts || []).some(l => l.key === 'ohpDb' && l.disp === '101 lb')) throw new Error('fixture drift: web no longer credits Overhead Press (Dumbbell) as ohpDb 101 lb: ' + JSON.stringify(sh.lifts)); }
-// the same names with the same stored id inside a NON-imported workout: stored id decides, the name is ignored
+// the same names with the same stored id inside a workout made in Jacked: counts, the stored id decides
 for (const name of ['Pull Up (Assisted)', 'Bench Press (Smith Machine)', 'Overhead Press (Dumbbell)'])
   addCase('nothevy_' + name.replace(/\W+/g, '_'), NOW8, [{ ...IW([impEx(name, [[60, 12]])]), id: 'w' + (+new Date(L(2026, 11, 7))) }]);
-// imported workout whose exercise has no name: stored id decides; a custom exercise with a badge-like name never wins the re-match
-addCase('hevy_noname', NOW8, [IW([{ exId: 'Pullups', muscle: '', tracking: 'weight_reps', sets: [{ weight: 0, reps: 12, done: true }] }])]);
+// imported workout whose exercise has no name, or sits next to a same-named custom: still nothing
+addCase('hevy_noname', NOW8, [IW([{ exId: 'Pullups', muscle: '', tracking: 'weight_reps', sets: [{ weight: 0, reps: 25, done: true }] }])], {}, NOTHING);
 addCase('hevy_custom_same_name', NOW8, [IW([impEx('Pull Up', [[0, 12]]), impEx('Bench Press (Barbell)', [[100, 1]])])],
-  { jk_cex: [{ id: 'cex_9', name: 'Pull Up', muscle: 'lats', equip: 'bodyweight', tracking: 'bodyweight_reps' }, { id: 'cex_10', name: 'Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps' }] });
-addCase('hevy_all_in_one_club', NOW8, [IW([impEx('Bench Press (Smith Machine)', [[160, 1]]), impEx('Squat (Barbell)', [[170, 1]]), impEx('Deadlift (Barbell)', [[190, 1]])])]);
+  { jk_cex: [{ id: 'cex_9', name: 'Pull Up', muscle: 'lats', equip: 'bodyweight', tracking: 'bodyweight_reps' }, { id: 'cex_10', name: 'Bench Press', muscle: 'chest', equip: 'barbell', tracking: 'weight_reps' }] }, NOTHING);
+addCase('hevy_all_in_one_club', NOW8, [IW([impEx('Bench Press (Smith Machine)', [[160, 1]]), impEx('Squat (Barbell)', [[170, 1]]), impEx('Deadlift (Barbell)', [[190, 1]])])], {}, NOTHING);
+// the same lifts by library id: counted in a workout made in Jacked, not counted in an imported one, and an import never adds to a Jacked workout
+{ const big = () => [EX('Smith_Machine_Bench_Press', [[160, 1]]), EX('Barbell_Squat', [[170, 1]]), EX('Barbell_Deadlift', [[190, 1]]), EX('Pullups', [[0, 30]]), EX('Pushups', [[0, 60]]),
+    EX('Standing_Military_Press', [[90, 1]]), { ...EX('bi_run_outdoor', [[1, 6]]), tracking: 'distance' }];
+  const YES = ['Bench-Maxing', 'Shoulder-Maxing', 'Leg-Maxing', 'Pull-up-Maxing', 'Push-up-Maxing', 'Cardio-Maxing', '1000lb Club'].map(n => [n, 'earned', true]);
+  addCase('imp_ids_native', NOW8, [AW(big())], {}, YES);
+  addCase('imp_ids_imported', NOW8, [IW(big())], {}, NOTHING);
+  addCase('imp_ids_mixed', NOW8, [AW([EX('Barbell_Bench_Press_-_Medium_Grip', [[40, 1]])]), IW(big())], {}, [['Bench-Maxing', 'tier', null], ['1000lb Club', 'earned', false], ['Pull-up-Maxing', 'tier', null], ['Variety-Maxing', 'desc', '1 / 100 different exercises logged']]);
+  // PR-Maxing and Consistency-Maxing: 7 PRs / 7 days in a row count only from workouts made in Jacked
+  const wk = imp => Array.from({ length: 7 }, (_, j) => { const d = new Date(2026, 10, 1 + j, 12);
+    return { id: imp ? 'w1700000000000_' + j : 'w' + (+d), name: 'W', date: d.toISOString(), duration: '45:00', sets: 3, totalVolume: 100, prCount: 1, exercises: [EX('Leg_Press', [[100, 8]])] }; });
+  addCase('imp_week_native', NOW8, wk(false), {}, [['PR-Maxing', 'earned', true], ['Consistency-Maxing', 'earned', true]]);
+  addCase('imp_week_imported', NOW8, wk(true), {}, NOTHING);
+  addCase('imp_week_half', NOW8, wk(false).slice(0, 4).concat(wk(true).slice(4)), {}, [['PR-Maxing', 'earned', false], ['Consistency-Maxing', 'earned', false]]);
+}
 // (b) random Hevy-style accounts: imported and app workouts mixed, names from the pool, stored id = what the import wrote
 const POOL = HEVY.map(x => x[0]).concat(['Lat Pulldown (Cable)', 'Bicep Curl (Dumbbell)', 'Leg Press (Machine)', 'Triceps Pushdown', 'Romanian Deadlift (Barbell)',
   'Incline Bench Press (Dumbbell)', 'Seated Cable Row - V Grip (Cable)', 'Lateral Raise (Dumbbell)', 'Hip Thrust (Barbell)', 'Plank', 'Dip', 'Front Squat', 'Push Press']);
@@ -212,13 +259,9 @@ for (let i = 0; i < +(process.env.PARITY_HEVY_N || 200); i++) {
   addCase('hevyrand' + i, new Date(now).toISOString(), hist, { jk_bw: pick([55, 70, 81.6, 95.25, 120, undefined]),
     jk_prof: { name: 'T', sex: pick(['male', 'female', undefined]), birthday: pick(['1990-05-01', '1960-11-07', '', undefined]) }, jk_settings: maybe(0.6) ? { wUnit: pick(['lb', 'kg']) } : undefined });
 }
-// (c) tier thresholds. Bug 3: a Hevy lb file stores Math.round(lb/2.20462*100)/100 kg, which can read a hair under its own rung.
-// Bug 4: a kg user lifting exactly the whole-kg number the page shows for a rung. Parity only (ios must equal web); where the WEB
-// answer is below the tier the typed number names, it is counted and printed here as a web finding, not asserted.
+// (c) tier thresholds. Imported (Hevy lb file) weights at every step: never a tier. App-typed lb weights: the tier the typed number names.
+// kg user (2026-11-16): lifting exactly the whole kg the page shows for a rung reaches it; one kg less is the tier below. Asserted on web AND ios.
 const tierFor = (lb, T) => lb >= T[2] ? 'gold' : lb >= T[1] ? 'silver' : lb >= T[0] ? 'bronze' : null;
-const EXI = { bench: 'Barbell_Bench_Press_-_Medium_Grip', ohp: 'Standing_Military_Press', squat: 'Barbell_Squat', dbBench: 'Dumbbell_Bench_Press', smith: 'Smith_Machine_Bench_Press' };
-const AW = exs => ({ id: 'w' + (+new Date(L(2026, 11, 7))), name: 'W', date: L(2026, 11, 7), duration: '45:00', sets: 3, totalVolume: 100, exercises: exs });
-const EX = (exId, sets) => ({ exId, name: exId.replace(/_/g, ' '), muscle: '', tracking: 'weight_reps', sets: sets.map(([weight, reps]) => ({ weight, reps, done: true })) });
 const webLow = { hevy2dp: [], app: [], kg: [] };
 for (let lb = 5; lb <= 1000; lb += 5) for (const mode of ['app', 'hevy']) {
   const w = mode === 'app' ? lb / KP : Math.round(lb / KP * 100) / 100;
@@ -226,7 +269,7 @@ for (let lb = 5; lb <= 1000; lb += 5) for (const mode of ['app', 'hevy']) {
     : addCase(`thr_hevy_${lb}`, NOW8, [IW([impEx('Bench Press (Barbell)', [[w, 1]]), impEx('Overhead Press (Barbell)', [[w, 1]]), impEx('Squat (Barbell)', [[w, 1]])])]);
   for (const [bn, k] of [['Bench-Maxing', 'bench'], ['Shoulder-Maxing', 'ohpFrac'], ['Leg-Maxing', 'squatFrac']]) {
     const T = e.T[k] || e.T[k.replace('Frac', '')], t = tierFor(lb, T), got = badge(e, bn).tier;
-    if (t !== got) (mode === 'app' ? webLow.app : webLow.hevy2dp).push(`${bn} ${lb} lb: typed number names ${t}, web gives ${got}`);
+    if (mode === 'hevy' ? got !== null : t !== got) (mode === 'app' ? webLow.app : webLow.hevy2dp).push(`${bn} ${lb} lb: typed number names ${t}, web gives ${got}`);
   }
 }
 // every rung of several ladders (body weight / sex / age vary the rungs), typed exactly: lb user via Hevy 2dp, kg user at the shown whole kg
@@ -237,12 +280,16 @@ for (const [tag, prof] of [['m80', {}], ['f60', { jk_bw: 60, jk_prof: { name: 'T
     const rungs = T[key] || T[key + 'Frac'];
     rungs.forEach((rungLb, i) => {
       const tierName = ['bronze', 'silver', 'gold'][i];
-      let e = addCase(`thr_rung_hevy_${tag}_${key}_${i}`, NOW8, [IW([impEx(hevyName, [[Math.round(rungLb / KP * 100) / 100, 1]])])], prof);
-      if (badge(e, bn).tier !== tierName) webLow.hevy2dp.push(`${bn} ${tag} ${tierName} rung ${rungLb} lb from a Hevy lb file: web gives ${badge(e, bn).tier}`);
+      const TN = ['bronze', 'silver', 'gold'], kgU = { ...prof, jk_settings: { wUnit: 'kg' } }, one = kgv => [AW([EX(id, [[kgv, 1]])])];
+      addCase(`thr_rung_hevy_${tag}_${key}_${i}`, NOW8, [IW([impEx(hevyName, [[Math.round(rungLb / KP * 100) / 100, 1]])])], prof, [[bn, 'tier', null]]);
       const shownKg = Math.round(rungLb / KP);
-      e = addCase(`thr_rung_kg_${tag}_${key}_${i}`, NOW8, [AW([EX(id, [[shownKg, 1]])])], { ...prof, jk_settings: { wUnit: 'kg' } });
+      const e = addCase(`thr_rung_kg_${tag}_${key}_${i}`, NOW8, one(shownKg), kgU, [[bn, 'tier', tierName]]);
       if (badge(e, bn).tier !== tierName) webLow.kg.push(`${bn} ${tag} ${tierName} rung shows ${shownKg} kg (${rungLb} lb): lifting ${shownKg} kg gives ${badge(e, bn).tier}`);
-      addCase(`thr_rung_kg_plus1_${tag}_${key}_${i}`, NOW8, [AW([EX(id, [[shownKg + 1, 1]])])], { ...prof, jk_settings: { wUnit: 'kg' } });
+      addCase(`thr_rung_kg_minus1_${tag}_${key}_${i}`, NOW8, one(shownKg - 1), kgU, [[bn, 'tier', i ? TN[i - 1] : null]]);
+      addCase(`thr_rung_kg_plus1_${tag}_${key}_${i}`, NOW8, one(shownKg + 1), kgU, [[bn, 'tier', Math.round(rungLb / KP) + 1 >= Math.round((rungs[i + 1] || Infinity) / KP) ? TN[i + 1] : tierName]]);
+      for (const d of [-0.6, -0.5, -0.4, 0.4, 0.5]) addCase(`thr_rung_kg_frac${d}_${tag}_${key}_${i}`, NOW8, one(shownKg + d), kgU);   // parity only: rounding to the shown kg
+      addCase(`thr_rung_lbuser_kgw_${tag}_${key}_${i}`, NOW8, one(shownKg), prof);   // an lb user is compared exactly, as before
+      addCase(`thr_rung_lbuser_exact_${tag}_${key}_${i}`, NOW8, one(rungLb / KP), prof);
     });
   }
   // dumbbell (+15%) and Smith (-15%) credited weights right at the bench rungs
@@ -250,10 +297,12 @@ for (const [tag, prof] of [['m80', {}], ['f60', { jk_bw: 60, jk_prof: { name: 'T
     addCase(`thr_rung_smith_${tag}_${i}`, NOW8, [AW([EX(EXI.smith, [[rungLb / 0.85 / KP, 1]])])], prof); });
 }
 // 1000lb Club at exactly 1000 from a Hevy lb file, and one below
-addCase('thr_club_1000_hevy', NOW8, [IW([impEx('Bench Press (Barbell)', [[Math.round(300 / KP * 100) / 100, 1]]), impEx('Squat (Barbell)', [[Math.round(350 / KP * 100) / 100, 1]]), impEx('Deadlift (Barbell)', [[Math.round(350 / KP * 100) / 100, 1]])])]);
+addCase('thr_club_1000_hevy', NOW8, [IW([impEx('Bench Press (Barbell)', [[Math.round(300 / KP * 100) / 100, 1]]), impEx('Squat (Barbell)', [[Math.round(350 / KP * 100) / 100, 1]]), impEx('Deadlift (Barbell)', [[Math.round(350 / KP * 100) / 100, 1]])])], {}, [['1000lb Club', 'earned', false]]);
 addCase('thr_club_1000_app', NOW8, [AW([EX(EXI.bench, [[300 / KP, 1]]), EX(EXI.squat, [[350 / KP, 1]]), EX('Barbell_Deadlift', [[350 / KP, 1]])])], {}, [['1000lb Club', 'earned', true]]);
 addCase('thr_club_999_app', NOW8, [AW([EX(EXI.bench, [[300 / KP, 1]]), EX(EXI.squat, [[350 / KP, 1]]), EX('Barbell_Deadlift', [[349 / KP, 1]])])], {}, [['1000lb Club', 'earned', false]]);
 fs.writeFileSync(path.join(here, 'badges-web-threshold-findings.json'), JSON.stringify(webLow, null, 1));
 console.log('WEB threshold findings (web answer below the tier the typed number names): hevy 2dp', webLow.hevy2dp.length, '| app storage', webLow.app.length, '| kg shown rung', webLow.kg.length);
+console.log('accounts whose imported workouts changed a badge:', noImpBad);
+if (noImpBad || webLow.hevy2dp.length || webLow.app.length || webLow.kg.length) { console.error('WEB RULE BROKEN: imports counted', noImpBad, '| imported weight got a tier', webLow.hevy2dp.length, '| app lb', webLow.app.length, '| kg shown rung', webLow.kg.length); process.exitCode = 1; }
 fs.writeFileSync(path.join(here, 'badges-fixtures.json'), JSON.stringify(cases));
 console.log('node finished', cases.length, 'accounts');

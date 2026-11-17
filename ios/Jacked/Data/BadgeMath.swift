@@ -33,9 +33,8 @@ struct BadgeLift { let key: String; let label: String; let v: Double; let tier: 
 /// count ticked sets. The one write computeBadges makes (jk_monthBadges: this month's Challenge
 /// group, done/comeback flags, the months Jacked was held) comes back as `monthBadges` + `dirty`
 /// so the caller can save it through the merge + compare-and-swap layer like the web app does.
-/// Hevy-imported workouts are re-matched by name once the library has loaded, exactly like the web
-/// app's badgeStdId (pin table, qualifier exclusions, equipment agreement); before that, and for
-/// every other workout, the stored exercise id decides.
+/// Hevy-imported workouts never count toward any badge (Mr. Roni, 2026-11-16), exactly like the web
+/// app's badgeStdId / badgeHist; for every other workout the stored exercise id decides.
 extension MetricsMath {
     struct BadgeResult { var list: [Badge]; var monthBadges: [String: JSONValue]; var dirty: Bool; var ladders: BadgeLadders }
     struct BadgeLadders { var bench, ohp, squat, pullup, pushup, cardio: [Double] }
@@ -65,31 +64,14 @@ extension MetricsMath {
     }
 
     // MARK: which exercise counts (badgeStdId / isStdEx / repBadgeEx / stdRun)
-    /// HEVY_BADGE_NAME: Hevy's exact names for the dumbbell / Smith versions the badges credit (the general
-    /// matcher files them elsewhere), pinned by exact name.
-    static let HEVY_BADGE_NAME = ["bench press (smith machine)": "Smith_Machine_Bench_Press", "overhead press (dumbbell)": "Standing_Dumbbell_Press"]
-    private static func bre(_ p: String) -> NSRegularExpression { try! NSRegularExpression(pattern: p, options: [.caseInsensitive]) }
-    private static let badgeParenRe = bre(#"\(([^)]*)\)"#)
-    private static let badgeQualOkRe = bre(#"^\s*(barbell|dumbbell|bodyweight|body weight|weighted|smith machine)\s*$"#)
-    private static let badgeExcludeRe = bre(#"assist|\bband|\bknee|\b(single|one)[ -]?arm\b|\balternating\b"#)
-    private static let badgeSmithRe = bre("smith"), badgeMachineRe = bre("machine")
+    /// isImportedW(w): an imported (Hevy / Strong CSV) workout, id w<ms>_<n>. Imported history never counts toward
+    /// a badge (Mr. Roni, 2026-11-16): only workouts made in Jacked do.
+    static func isImportedW(_ w: HWorkout) -> Bool { test(WorkoutMath.importedId, w.w.id) }
+    /// badgeHist(h): the history badges read (imports left out).
+    static func badgeHist(_ h: [HWorkout]) -> [HWorkout] { h.filter { !isImportedW($0) } }
     /// badgeStdId(ex, w): the library id a logged exercise counts as for a badge, or nil.
     func badgeStdId(_ ex: HEx, _ w: HWorkout) -> String? {
-        if Self.test(WorkoutMath.importedId, w.w.id), lib.dbLoaded, !ex.name.isEmpty {   // imported (Hevy CSV) workout
-            let name = ex.name
-            let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-            if let pin = Self.HEVY_BADGE_NAME[key] { return pin }
-            let ns = name as NSString
-            let q = Self.badgeParenRe.firstMatch(in: name, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range(at: 1)) } ?? ""
-            let smith = Self.test(Self.badgeSmithRe, name)
-            if (!q.isEmpty && !Self.test(Self.badgeQualOkRe, q)) || Self.test(Self.badgeExcludeRe, name) || (Self.test(Self.badgeMachineRe, name) && !smith) { return nil }
-            guard let rid = badgeNames.resolve(name, lib) else { return nil }
-            // The "(Equipment)" in the name has to agree with the library exercise it landed on.
-            if smith { return (BadgeTables.BADGE_STD["benchSmith"]! + BadgeTables.BADGE_STD["ohpSmith"]!).contains(rid) ? rid : nil }
-            let qe = q.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), eq = (lib.db(rid)?.dbEquip ?? "").lowercased()
-            if (qe == "barbell" || qe == "dumbbell") && !eq.isEmpty && eq != qe { return nil }
-            return rid
-        }
+        if Self.isImportedW(w) { return nil }
         return ex.exId.isEmpty || ex.exId.hasPrefix("cex") ? nil : ex.exId
     }
     func isStdEx(_ ex: HEx, _ key: String, _ w: HWorkout) -> Bool { badgeStdId(ex, w).map { BadgeTables.BADGE_STD[key]?.contains($0) ?? false } ?? false }
@@ -160,6 +142,10 @@ extension MetricsMath {
                      pullup: repLadder(BadgeTables.PULLUP_STD), pushup: repLadder(BadgeTables.PUSHUP_STD), cardio: cardioLadder())
     }
     static func tierOfLive(_ v: Double, _ t: [Double]) -> String? { v >= t[2] ? "gold" : v >= t[1] ? "silver" : v >= t[0] ? "bronze" : nil }
+    /// wReached / wTierOf: weight ladders (bench / overhead press / squat), value and rungs in lb. A kg user sees
+    /// both as whole kg (lbN), so for him the tier follows those shown numbers (Mr. Roni, 2026-11-16).
+    func wReached(_ vLb: Double, _ xLb: Double) -> Bool { isLb ? vLb >= xLb : jsRound(vLb / 2.20462) >= jsRound(xLb / 2.20462) }
+    func wTierOf(_ vLb: Double, _ t: [Double]) -> String? { wReached(vLb, t[2]) ? "gold" : wReached(vLb, t[1]) ? "silver" : wReached(vLb, t[0]) ? "bronze" : nil }
     static func tierOfLiveLow(_ v: Double, _ t: [Double]) -> String? { v <= t[2] ? "gold" : v <= t[1] ? "silver" : v <= t[0] ? "bronze" : nil }
 
     // MARK: per-badge bests
@@ -172,7 +158,7 @@ extension MetricsMath {
             for s in ex.log.sets where s.done && s.reps >= minReps { let c = s.weight * 2.20462 * V[i].mult; if c > v[i] { v[i] = c } }
         } }
         let lifts = V.indices.filter { v[$0] > 0 }.map { i in
-            BadgeLift(key: V[i].key, label: V[i].label, v: v[i], tier: T.flatMap { Self.tierOfLive(v[i], $0) }, disp: lbTxt(v[i])) }
+            BadgeLift(key: V[i].key, label: V[i].label, v: v[i], tier: T.flatMap { wTierOf(v[i], $0) }, disp: lbTxt(v[i])) }
         let top = lifts.enumerated().sorted { a, b in
             let ra = Self.TIER_RANK[a.element.tier ?? ""] ?? 0, rb = Self.TIER_RANK[b.element.tier ?? ""] ?? 0
             if ra != rb { return ra > rb }
@@ -236,12 +222,12 @@ extension MetricsMath {
 
     // MARK: computeBadges()
     func computeBadges() -> BadgeResult {
-        let h = hist
+        let h = Self.badgeHist(hist)   // imported workouts never count toward any badge (Mr. Roni, 2026-11-16)
         let dates = Array(Set(h.map(\.w.dayKey).filter { !$0.isEmpty })).sorted()
         let nc = cal.dateComponents([.year, .month, .day], from: now)
         let mAt: (Int) -> Date = { k in self.cal.date(from: DateComponents(year: nc.year, month: nc.month! + k, day: 1))! }
         let mStart = mAt(0)
-        let h3 = last3mo()
+        let h3 = Self.badgeHist(last3mo())
         let today = JackedDate.dayKey(now, calendar: cal)
 
         // 1) Coward-Maxing
@@ -280,7 +266,7 @@ extension MetricsMath {
         let benchR = liftVariantsOf("bench", h3, 1, TH.bench)
         let ohpR = liftVariantsOf("ohp", h3, 1, bwLb > 0 ? TH.ohp : nil)
         let ohpT = haveBW ? ohpR.tier : nil
-        let sq = bestLb("squat", 1, h3), sqT = haveBW ? Self.tierOfLive(sq, TH.squat) : nil
+        let sq = bestLb("squat", 1, h3), sqT = haveBW ? wTierOf(sq, TH.squat) : nil
         let benchBy: (VariantResult) -> String = { r in r.value > 0 ? self.lbTxt(r.value) + (r.by != nil && r.by!.key != "bench" ? " (\(r.by!.label))" : "") : "" }
         let ohpBy: (VariantResult) -> String = { r in self.lbTxt(r.value) + (r.by != nil && r.by!.key != "ohp" ? " (\(r.by!.label))" : "") }
         let pullR = repTierOf("pullup", h3, TH), pushR = repTierOf("pushup", h3, TH)
@@ -298,7 +284,7 @@ extension MetricsMath {
         var ALL: [String: (String, String?, Bool)] = [:]
         if benchAll.value > 0 { ALL["Bench-Maxing"] = (benchBy(benchAll), benchAll.tier, true) }
         if haveBW && ohpAll.value > 0 { ALL["Shoulder-Maxing"] = (ohpBy(ohpAll), ohpAll.tier, true) }
-        if haveBW && qA > 0 { ALL["Leg-Maxing"] = (lbTxt(qA), Self.tierOfLive(qA, TH.squat), true) }
+        if haveBW && qA > 0 { ALL["Leg-Maxing"] = (lbTxt(qA), wTierOf(qA, TH.squat), true) }
         if puR.value > 0 { ALL["Pull-up-Maxing"] = ("\(Int(puR.value)) reps", puR.tier, true) }
         if psR.value > 0 { ALL["Push-up-Maxing"] = ("\(Int(psR.value)) reps", psR.tier, true) }
         if cardioAllR.value.isFinite { ALL["Cardio-Maxing"] = ("\(Self.fmtClock(cardioAllR.value)) per mile", cardioAllR.tier, true) }
@@ -347,22 +333,22 @@ extension MetricsMath {
         let chWins = mb.values.filter { $0["done"]?.truthy ?? false }.count
         let cbWins = mb.values.filter { $0["comeback"]?.truthy ?? false }.count
 
-        func tl(_ best: Double, _ t: [Double], _ fmt: (Double) -> String) -> [Rung] { t.map { (label: fmt($0), reached: best >= $0) } }
+        func tl(_ best: Double, _ t: [Double], _ fmt: (Double) -> String, weight: Bool = false) -> [Rung] { t.map { (label: fmt($0), reached: weight ? wReached(best, $0) : best >= $0) } }
         let lbFmt: (Double) -> String = { "\(self.lbN($0))" }, rFmt: (Double) -> String = { "\(Int(jsRound($0)))" }
         let unit = isLb ? "lb" : "kg"
         let lineOf: ([Rung]) -> String = { $0.map(\.label).joined(separator: " / ") }
         let pullBest = Int(pullR.value), pushBest = Int(pushR.value)
         var list: [Badge] = []
         var b = Badge(name: "Bench-Maxing", icon: "dumbbell", color: Self.MCOL["chest"]!, tiered: true, tier: benchR.tier, earned: benchR.tier != nil)
-        b.ladder = tl(benchR.value, TH.bench, lbFmt)
+        b.ladder = tl(benchR.value, TH.bench, lbFmt, weight: true)
         b.desc = "\(benchOK ? "1-rep bench" : "Standard 1-rep bench") (\(unit)): \(lineOf(b.ladder))" + (benchR.by.map { $0.key != "bench" ? " · \($0.label) \(lbN(benchR.value))" : "" } ?? "")
         b.lifts = benchR.lifts; list.append(b)
         b = Badge(name: "Shoulder-Maxing", icon: "dumbbell", color: Self.MCOL["shoulders"]!, tiered: true, tier: ohpT, earned: ohpT != nil, needsWeight: !haveBW)
-        if haveBW { b.ladder = tl(ohpR.value, TH.ohp, lbFmt); b.lifts = ohpR.lifts }
+        if haveBW { b.ladder = tl(ohpR.value, TH.ohp, lbFmt, weight: true); b.lifts = ohpR.lifts }
         b.desc = !haveBW ? "Enter body weight in Profile to unlock" : "1-rep OHP (\(unit)): \(lineOf(b.ladder))" + (ohpR.by.map { $0.key != "ohp" ? " · \($0.label) \(lbN(ohpR.value))" : "" } ?? "")
         list.append(b)
         b = Badge(name: "Leg-Maxing", icon: "dumbbell", color: Self.MCOL["legs"]!, tiered: true, tier: sqT, earned: sqT != nil, needsWeight: !haveBW)
-        if haveBW { b.ladder = tl(sq, TH.squat, lbFmt) }
+        if haveBW { b.ladder = tl(sq, TH.squat, lbFmt, weight: true) }
         b.desc = !haveBW ? "Enter body weight in Profile to unlock" : "1-rep squat (\(unit)): \(lineOf(b.ladder))"
         list.append(b)
         b = Badge(name: "1000lb Club", icon: "trophy", color: "#ffd700", earned: club)
@@ -544,7 +530,7 @@ extension MetricsMath {
 
     /// The first logged set (by date) that reached each tier of the current ladder.
     func tierCrossingDetail(_ key: String, _ h: [HWorkout], _ T: BadgeLadders) -> [String: TierEntry] {
-        let lower = key == "cardio"
+        let lower = key == "cardio", byWeight = key == "bench" || key == "ohp" || key == "squat"
         let thr = ["bench": T.bench, "ohp": T.ohp, "squat": T.squat, "pullup": T.pullup, "pushup": T.pushup, "cardio": T.cardio][key] ?? []
         var res: [String: TierEntry] = [:]
         let sorted = tierCrossingEntries(key, h).enumerated().sorted { a, b in
@@ -552,7 +538,7 @@ extension MetricsMath {
             return a.offset < b.offset
         }.map(\.element)
         for e in sorted { for (i, t) in ["bronze", "silver", "gold"].enumerated() where res[t] == nil && i < thr.count {
-            if lower ? e.value <= thr[i] : e.value >= thr[i] { res[t] = e }
+            if lower ? e.value <= thr[i] : byWeight ? wReached(e.value, thr[i]) : e.value >= thr[i] { res[t] = e }
         } }
         return res
     }
