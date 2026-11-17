@@ -24,6 +24,7 @@ struct ExLib {
             return e
         }
         for e in db where dbRows[e.id] == nil { dbRows[e.id] = e }
+        badgeLib = { ExerciseCatalog.all(db: db, custom: raw).filter { !$0.custom && !$0.id.hasPrefix("cex") } }
         let cust = (raw["jk_cex"]?.array ?? []).compactMap(\.object).compactMap { o -> CatalogExercise? in
             guard let id = o["id"]?.string else { return nil }
             return CatalogExercise(id: id, name: o["name"]?.string ?? id, muscle: o["muscle"]?.string ?? "", equip: o["equip"]?.string ?? "",
@@ -36,6 +37,10 @@ struct ExLib {
     }
 
     func db(_ id: String) -> CatalogExercise? { id.isEmpty ? nil : dbRows[id] }
+    /// The web app's dbLoaded: the exercise library has arrived.
+    var dbLoaded: Bool { !dbRows.isEmpty }
+    /// allEx() without the custom rows (resolveExercise(name, true)), for the badge name re-match.
+    let badgeLib: () -> [CatalogExercise]
 
     func byId(_ id: String) -> CatalogExercise {
         var e = lib[id] ?? CatalogExercise(id: id, name: id.isEmpty ? "Unknown" : id.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " "),
@@ -69,6 +74,19 @@ struct HWorkout {
     }
 }
 
+/// _stdByName: the badge name re-match, resolved once per name (the scored library is built on first use).
+final class BadgeNameCache {
+    private var cands: [ExerciseMatch.Candidate]?
+    private var byName: [String: String?] = [:]
+    func resolve(_ name: String, _ lib: ExLib) -> String? {
+        if let hit = byName[name] { return hit }
+        if cands == nil { cands = ExerciseMatch.candidates(lib.badgeLib()) }
+        let rid = ExerciseMatch.resolveExercise(name, cands!)
+        byName[name] = rid
+        return rid
+    }
+}
+
 /// The Metrics tab's math, ported function by function from index.html (names in the comments).
 /// Everything takes `now` so the parity run (Tests/parity/metrics-*) can pin the clock.
 struct MetricsMath {
@@ -83,6 +101,7 @@ struct MetricsMath {
     let cal: Calendar
     let hist: [HWorkout]
     let bw: Double
+    let badgeNames = BadgeNameCache()
 
     init(raw: [String: JSONValue], lib: ExLib, now: Date = Date(), calendar: Calendar = .current) {
         self.raw = raw; self.lib = lib; self.now = now; cal = calendar

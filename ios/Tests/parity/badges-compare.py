@@ -36,7 +36,14 @@ for c in exp:
         pr = next((b for b in lst if b["name"] == "PR-Maxing"), {})
         if pr.get("earned") != c["want"]:
             wbad += 1; print("WANT FAIL", c["name"], who, "PR-Maxing earned =", pr.get("earned"), "want", c["want"], "|", pr.get("desc"))
-print("clock fixtures wrong:", wbad)
+# Absolute expectations (Hevy re-match and threshold fixtures): c["wants"] = [[badge, field, value]], on web AND ios.
+for c in exp:
+    for bn, f, v in c.get("wants", []):
+        for who, lst in (("pwa", c["expected"]["list"]), ("ios", got.get(c["name"], {}).get("list", []))):
+            b = next((b for b in lst if b["name"] == bn), {})
+            if b.get(f, "<missing>") != v:
+                wbad += 1; print("WANT FAIL", c["name"], who, bn + "." + f, "=", b.get(f, "<missing>"), "want", v)
+print("absolute-expectation fixtures wrong:", wbad)
 bad += wbad
 print("mismatches by field:", dict(sorted(per.items(), key=lambda x: -x[1])[:15]) or "none")
 print(f"{len(exp) - bad}/{len(exp)} accounts identical")
