@@ -84,3 +84,77 @@ enum LibraryMath {
             .map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
     }
 }
+
+/// The name matcher (index.html normName / resolveExercise): a Hevy-style "Bench Press (Barbell)" to a library
+/// exercise id. Used by the CSV import and by the badge name re-match (badgeStdId).
+enum ExerciseMatch {
+    private static func rx(_ p: String) -> NSRegularExpression { try! NSRegularExpression(pattern: p) }
+
+    static func normName(_ s: String) -> String {
+        var t = s.decomposedStringWithCanonicalMapping.unicodeScalars.filter { !(0x300...0x36F).contains($0.value) }
+            .map(String.init).joined().lowercased()
+        t = t.replacingOccurrences(of: #"\(.*?\)"#, with: " ", options: .regularExpression)
+        t = t.replacingOccurrences(of: "[^a-z0-9 ]", with: " ", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        return t.trimmingCharacters(in: .whitespaces)
+    }
+    private static func words(_ s: String) -> [String] { normName(s).split(separator: " ").map(String.init) }
+    private static func paren(_ s: String) -> String {
+        let re = rx(#"\(([^)]*)\)"#), ns = s as NSString
+        return re.matches(in: s, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range(at: 1)) }.joined(separator: " ")
+    }
+    private static func flatEq(_ s: String) -> String {
+        let f = s.lowercased().replacingOccurrences(of: "[^a-z]", with: "", options: .regularExpression)
+        return ["bodyweight": "bodyonly", "bands": "band", "kettlebells": "kettlebell", "ezcurlbar": "ezbar", "ezbar": "ezbar", "smithmachine": "machine"][f] ?? f
+    }
+    private static let EQ: Set<String> = ["barbell", "dumbbell", "machine", "cable", "bodyonly", "band", "kettlebell", "ezbar", "other", "medicineball", "exerciseball"]
+    private static let SOFT: Set<String> = ["grip", "medium", "med", "standard", "with", "the", "a", "and", "v", "attachment"]
+    private static let ALIAS: [(String, String)] = [(#"\boverhead press\b"#, "standing military press"), (#"\bohp\b"#, "standing military press"),
+                                                    (#"\brdl\b"#, "romanian deadlift"), (#"\bside plank\b"#, "side bridge"), (#"\bskullcrushers?\b"#, "skullcrusher")]
+    private static func tokEq(_ t: String, _ w: String) -> Bool { t == w || t == w + "s" || t == w + "es" || w == t + "s" || w == t + "es" }
+    private static func flat(_ a: [String]) -> String { a.joined().replacingOccurrences(of: "e?s$", with: "", options: .regularExpression) }
+
+    struct Candidate { let e: CatalogExercise; let base: [String]; let detail: [String]; let hay: [String]; let eq: String; let builtIn: Bool }
+
+    /// The scored library for resolveExercise, built once per import (allEx() order).
+    static func candidates(_ lib: [CatalogExercise]) -> [Candidate] {
+        let b = Set(PWATables.builtIns.filter { !$0.id.hasPrefix("wu_") }.map(\.id))
+        return lib.map { e in
+            let base = words(e.name), detail = words(paren(e.name).replacingOccurrences(of: ",", with: " "))
+            return Candidate(e: e, base: base, detail: detail,
+                             hay: base + words(e.equip) + (e.dbName.isEmpty ? [] : words(e.dbName)) + detail, eq: flatEq(e.equip),
+                             builtIn: b.contains(e.id) && !e.custom)
+        }
+    }
+
+    static func resolveExercise(_ keyword: String, _ lib: [Candidate]) -> String? {
+        let all = words(keyword).filter { $0.count > 1 }
+        if all.isEmpty { return nil }
+        let hint = flatEq(paren(keyword)), hintEq = EQ.contains(hint) ? hint : ""
+        let cardio = MetricsMath.guessMuscle(keyword) == "cardio"
+        func pick(_ want: [String]) -> (String, Double)? {
+            var best: CatalogExercise?, bs = Double.infinity
+            let fw = flat(want)
+            for c in lib {
+                if cardio && !LibraryMath.isCardioCat(c.e) { continue }
+                let joined = fw == flat(c.base)
+                if !joined && !want.allSatisfy({ w in c.hay.contains { tokEq($0, w) } }) { continue }
+                var sc = joined ? 0 : c.base.filter { t in !want.contains { tokEq(t, $0) } }.reduce(0.0) { $0 + (SOFT.contains($1) ? 0.5 : 1) }
+                sc += 0.01 * Double(want.filter { !c.base.contains($0) }.count)
+                sc += 0.1 * Double(c.detail.filter { t in !SOFT.contains(t) && !EQ.contains(flatEq(t)) && !want.contains { tokEq(t, $0) } }.count)
+                if !hintEq.isEmpty && c.eq != hintEq { sc += 2 }
+                if c.builtIn { sc += 0.5 }
+                if sc < bs { bs = sc; best = c.e }
+            }
+            return best.map { ($0.id, bs) }
+        }
+        let gripRe = rx("^(wide|close|narrow|neutral|rope|single|one|arm|two)$")
+        func tryAll(_ want: [String]) -> (String, Double)? {
+            pick(want) ?? pick(want.filter { !SOFT.contains($0) && gripRe.firstMatch(in: $0, range: NSRange($0.startIndex..., in: $0)) == nil })
+        }
+        let joinedAll = all.joined(separator: " ")
+        let alias = ALIAS.reduce(joinedAll) { $0.replacingOccurrences(of: $1.0, with: $1.1, options: .regularExpression) }
+        let hits = [tryAll(all), alias != joinedAll ? tryAll(alias.split(separator: " ").map(String.init)) : nil].compactMap { $0 }
+        return hits.enumerated().sorted { $0.element.1 != $1.element.1 ? $0.element.1 < $1.element.1 : $0.offset < $1.offset }.first?.element.0
+    }
+}
