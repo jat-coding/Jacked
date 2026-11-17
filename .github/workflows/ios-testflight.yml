@@ -1,0 +1,111 @@
+# Archive the native iPhone app (ios/) and upload it to TestFlight.
+# Manual only (Actions tab > "iOS TestFlight" > Run workflow) to protect macOS minutes.
+# Needs repo secrets ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (base64 of the .p8). See ios/README.md.
+name: iOS TestFlight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      PROJECT: ios/Jacked.xcodeproj
+      SCHEME: Jacked
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Paths
+        run: |
+          echo "ARCHIVE_PATH=$RUNNER_TEMP/Jacked.xcarchive" >> "$GITHUB_ENV"
+          echo "EXPORT_PATH=$RUNNER_TEMP/export" >> "$GITHUB_ENV"
+          echo "KEY_PATH=$RUNNER_TEMP/AuthKey_ci.p8" >> "$GITHUB_ENV"
+
+      - name: Select latest Xcode
+        run: |
+          set -euo pipefail
+          # Highest-versioned stable Xcode on the image (skips betas / release candidates).
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|rc' | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iphoneos SDK $SDK"
+          if [ "${SDK%%.*}" -lt 26 ]; then
+            echo "::error::iOS SDK $SDK is older than 26; App Store uploads need the iOS 26 SDK"
+            exit 1
+          fi
+
+      - name: Decode App Store Connect API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          for v in ASC_KEY_P8 ASC_KEY_ID ASC_ISSUER_ID; do
+            if [ -z "${!v}" ]; then echo "::error::Repository secret $v is not set"; exit 1; fi
+          done
+          umask 077
+          printf '%s' "$ASC_KEY_P8" | base64 --decode > "$KEY_PATH"
+          if ! grep -q 'BEGIN PRIVATE KEY' "$KEY_PATH"; then
+            echo "::error::ASC_KEY_P8 did not decode to a .p8 private key (it must be the base64 of the whole file)"
+            exit 1
+          fi
+          echo "Key written ($(wc -c < "$KEY_PATH") bytes)"
+
+      - name: List schemes
+        run: xcodebuild -list -project "$PROJECT"
+
+      - name: Archive (automatic signing, both targets)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          echo "Build number $BUILD_NUMBER"
+          xcodebuild archive \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM=CRCPKNW37U \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Export and upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          echo "Uploaded build $BUILD_NUMBER. It appears in App Store Connect > TestFlight once Apple finishes processing (usually 5 to 30 minutes)."
+
+      - name: Delete API key
+        if: always()
+        run: |
+          rm -f "$KEY_PATH"
+          test ! -e "$KEY_PATH" && echo "Key file removed"
