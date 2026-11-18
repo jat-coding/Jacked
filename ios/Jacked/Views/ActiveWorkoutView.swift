@@ -39,6 +39,7 @@ struct ActiveWorkoutView: View {
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.bg.ignoresSafeArea())
             .safeAreaInset(edge: .bottom) { RestBar() }
+            .overlay(alignment: .top) { ToastView(text: $session.toast) }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { session.presented = false } label: { SFIcon("chevron.down") }
@@ -62,6 +63,9 @@ struct ActiveWorkoutView: View {
         .padding(.top, 14)   // room between the sheet grabber and the title
         .background(Theme.bg2.ignoresSafeArea())
         .sheet(isPresented: $showAdd) { AddExerciseSheet().popup() }
+        #if DEBUG
+        .task { if DevHooks.picker == "add" { try? await Task.sleep(nanoseconds: 1_200_000_000); showAdd = true } }
+        #endif
         .alert(session.notice ?? "", isPresented: Binding(get: { session.notice != nil }, set: { if !$0 { session.notice = nil } })) {
             Button("OK", role: .cancel) {}
         }
@@ -109,11 +113,12 @@ struct LiveStats: View {
 
 struct ElapsedClock: View {
     let start: Double
+    var color: Color = Theme.accent
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             let s = max(0, Int(ctx.date.timeIntervalSince1970 - start / 1000))
             Text(s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%02d:%02d", s / 60, s % 60))
-                .font(Theme.body(12, .semibold)).monospacedDigit().foregroundStyle(Theme.accent)
+                .font(Theme.body(12, .semibold)).monospacedDigit().foregroundStyle(color)
         }
     }
 }
@@ -122,6 +127,8 @@ struct ElapsedClock: View {
 struct ExerciseCard: View {
     @EnvironmentObject private var store: BackupStore
     @EnvironmentObject private var session: WorkoutSession
+    @EnvironmentObject private var catalog: ExerciseCatalog
+    @State private var infoEx: CatalogExercise?
     let ei: Int
     let ex: LogExercise
     let settings: Settings
@@ -150,7 +157,11 @@ struct ExerciseCard: View {
             HStack(spacing: 10) {
                 LogThumb(url: ex.imgUrl.map(ExerciseImages.rewrite).flatMap(URL.init(string:)), muscle: ex.muscle)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(ex.name).font(Theme.body(15, .semibold)).foregroundStyle(Theme.text)
+                    // openExInfo: tap the name for the exercise's info page.
+                    Button { infoEx = catalog.byId(ex.exId, raw: store.backup.raw) } label: {
+                        Text(ex.name).font(Theme.body(15, .semibold)).foregroundStyle(Theme.text).multilineTextAlignment(.leading)
+                    }
+                    .buttonStyle(.plain).accessibilityHint("Opens the exercise info")
                     if let pr = prLine { Text(pr).font(Theme.body(11)).foregroundStyle(Theme.muted) }
                 }
                 Spacer()
@@ -233,6 +244,10 @@ struct ExerciseCard: View {
             Button("Got it", role: .cancel) {}
         }
         .sheet(isPresented: $showSwitch) { AddExerciseSheet(replacing: ei).popup() }
+        #if DEBUG
+        .task { if DevHooks.picker == "switch" && ei == 0 { try? await Task.sleep(nanoseconds: 1_200_000_000); showSwitch = true } }
+        #endif
+        .sheet(item: $infoEx) { ExerciseInfoSheet(ex: $0).popup() }
     }
 
     private var removePrompt: String {
@@ -395,9 +410,14 @@ struct NumberField: View {
     let commit: (Double) -> Void
     @State private var text = ""
     @FocusState private var focused: Bool
+    /// The PWA's focusin/focusout on input.si: tapping a box clears it, the old number becomes the
+    /// grey hint, and it comes back on leaving if nothing was typed. `held` is that old text;
+    /// `skipClear` swallows the programmatic clear so the stored set keeps its value.
+    @State private var held: String?
+    @State private var skipClear = false
 
     var body: some View {
-        TextField(fmt(placeholder), text: $text)
+        TextField(held ?? fmt(placeholder), text: $text)
             .keyboardType(keyboard)
             .multilineTextAlignment(.center)
             .font(Theme.body(15, .semibold)).monospacedDigit()
@@ -408,8 +428,21 @@ struct NumberField: View {
             .focused($focused)
             .onAppear { text = value > 0 ? fmt(value) : "" }
             .onChange(of: value) { _, v in if !focused { text = v > 0 ? fmt(v) : "" } }
-            .onChange(of: text) { _, t in if focused { commit(parse?(t) ?? (Double(t.replacingOccurrences(of: ",", with: ".")) ?? 0)) } }
+            .onChange(of: focused) { _, f in
+                if f {
+                    if !text.isEmpty { held = text; skipClear = true; text = "" }
+                } else if let h = held {
+                    held = nil
+                    if text.isEmpty { text = h; commit(value(h)) }
+                }
+            }
+            .onChange(of: text) { _, t in
+                if skipClear { skipClear = false; return }
+                if focused { commit(value(t)) }
+            }
     }
+
+    private func value(_ t: String) -> Double { parse?(t) ?? (Double(t.replacingOccurrences(of: ",", with: ".")) ?? 0) }
 
     private func fmt(_ v: Double) -> String {
         if let format { return v > 0 ? format(v) : "—" }
@@ -520,29 +553,41 @@ struct AddExerciseSheet: View {
     @EnvironmentObject private var catalog: ExerciseCatalog
     @State private var q = ""
     @State private var already = false
+    @State private var chip: String?
+    @State private var chipSet = false
+    @State private var showCreate = false
     /// Switch mode (switchEx): the index of the exercise being replaced.
     var replacing: Int? = nil
 
     var body: some View {
-        let all = catalog.all(custom: store.backup.raw)
-        let words = q.lowercased().split(separator: " ")
-        let shown = words.isEmpty ? all : all.filter { e in words.allSatisfy { (e.name + " " + e.muscle).lowercased().contains($0) } }
+        let raw = store.backup.raw
+        let all = catalog.all(custom: raw)
+        let l = LibraryMath.pickerList(all, raw: raw, query: q, chip: chip)
         NavigationStack {
-            List(shown.prefix(200)) { e in
-                Button {
-                    if let ei = replacing {
-                        if session.replace(ei, with: e, raw: store.backup.raw) { dismiss() } else { already = true }
-                    } else { session.add(e, raw: store.backup.raw); dismiss() }
-                } label: {
-                    HStack(spacing: 10) {
-                        LogThumb(url: e.image.map { URL(string: ExerciseImages.base + $0) } ?? nil, muscle: e.muscle)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(e.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
-                            Text(e.muscle.capitalized).font(Theme.body(11)).foregroundStyle(Theme.muted)
-                        }
+            List {
+                Section {
+                    MuscleChipRow(chip: $chip)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12)).listRowBackground(Color.clear)
+                    if replacing == nil {
+                        // aeModal's "+ Create new exercise": it goes straight into the workout once saved.
+                        Button { showCreate = true } label: { Text("+ Create new exercise").font(Theme.body(14, .semibold)) }
+                            .listRowBackground(Theme.bg2)
                     }
                 }
-                .listRowBackground(Theme.bg2)
+                if !l.recent.isEmpty {
+                    Section { ForEach(l.recent) { row($0) } } header: { groupTitle("\u{21BA} Used before") }
+                }
+                Section {
+                    ForEach(l.rest) { row($0) }
+                    if l.more > 0 {
+                        Text("+\(l.more) more \u{2014} search to narrow results").font(Theme.body(11)).foregroundStyle(Theme.muted)
+                            .frame(maxWidth: .infinity).listRowBackground(Color.clear)
+                    }
+                    if l.recent.isEmpty && l.rest.isEmpty {
+                        Text("No results").font(Theme.heading(18, .bold)).foregroundStyle(Theme.muted)
+                            .frame(maxWidth: .infinity).padding(.vertical, 20).listRowBackground(Color.clear)
+                    }
+                } header: { if !l.recent.isEmpty { groupTitle("All exercises") } }
             }
             .scrollContentBackground(.hidden)
             .background(Theme.bg)
@@ -552,15 +597,82 @@ struct AddExerciseSheet: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
             .overlay { if all.count <= PWATables.builtIns.count { ProgressView().tint(Theme.accent) } }
         }
+        .onAppear {
+            // openAEModal: Switch opens pre-filtered to the old exercise's own muscle group.
+            guard !chipSet else { return }
+            chipSet = true
+            if let ei = replacing, let a = session.active, a.exercises.indices.contains(ei) {
+                chip = LibraryMath.chipOf(catalog.byId(a.exercises[ei].exId, raw: raw))
+            }
+        }
+        .sheet(isPresented: $showCreate) {
+            CreateExerciseSheet(onCreated: { id in
+                Task { @MainActor in
+                    session.add(catalog.byId(id, raw: store.backup.raw), raw: store.backup.raw)
+                    dismiss()
+                }
+            })
+        }
         .task { await catalog.load() }
+    }
+
+    private func groupTitle(_ t: String) -> some View {
+        Text(t).font(Theme.body(11, .bold)).foregroundStyle(Theme.muted).textCase(nil)
+    }
+
+    private func row(_ e: CatalogExercise) -> some View {
+        Button {
+            if let ei = replacing {
+                if session.replace(ei, with: e, raw: store.backup.raw) { dismiss() } else { already = true }
+            } else if session.add(e, raw: store.backup.raw) { dismiss() } else { already = true }
+        } label: {
+            HStack(spacing: 10) {
+                LogThumb(url: e.image.map { URL(string: ExerciseImages.base + $0) } ?? nil, muscle: e.muscle)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(e.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+                    Text([LibraryMath.capW(e.muscle), LibraryMath.capW(e.equip)].filter { !$0.isEmpty }.joined(separator: " \u{00B7} "))
+                        .font(Theme.body(11)).foregroundStyle(Theme.muted)
+                }
+            }
+        }
+        .listRowBackground(Theme.bg2)
+    }
+}
+
+/// buildMuscleChips: the 10 group chips, swipeable; the picked one jumps to the front with a tick
+/// and the row scrolls back to the start. Tap it again to clear.
+struct MuscleChipRow: View {
+    @Binding var chip: String?
+    var body: some View {
+        let cats = chip.map { c in LibraryMath.chipCats.filter { $0.0 == c } + LibraryMath.chipCats.filter { $0.0 != c } } ?? LibraryMath.chipCats
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(cats, id: \.0) { c in
+                        let on = chip == c.0
+                        Button { withAnimation(.easeOut(duration: 0.2)) { chip = on ? nil : c.0 } } label: {
+                            HStack(spacing: 4) {
+                                if on { JIcon("tick", 10) }
+                                Text(c.1)
+                            }
+                        }
+                        .buttonStyle(ChipButtonStyle(on: on)).id(c.0)
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                    }
+                }
+            }
+            .onChange(of: chip) { _, _ in withAnimation { proxy.scrollTo(cats.first?.0, anchor: .leading) } }
+        }
     }
 }
 
 /// #pcModal: plates per side for a target weight, in the user's unit.
 struct PlateCalcSheet: View {
     let settings: Settings
-    @State private var target = ""
-    @State private var bar = ""
+    /// openPlate: the numbers stay between opens, and reset only when the unit changes.
+    @AppStorage("jk_plateTarget") private var target = ""
+    @AppStorage("jk_plateBar") private var bar = ""
+    @AppStorage("jk_plateUnit") private var plateUnit = ""
 
     var body: some View {
         let lb = settings.isLb, u = settings.unitLabel
@@ -592,6 +704,7 @@ struct PlateCalcSheet: View {
         }
         .padding(20)
         .background(Theme.bg2.ignoresSafeArea())
+        .onAppear { if plateUnit != u { target = ""; bar = ""; plateUnit = u } }
     }
 
     private func field(_ label: String, _ v: Binding<String>, _ ph: String) -> some View {
@@ -613,6 +726,22 @@ struct FinishSummarySheet: View {
     @State private var routineName = ""
     @State private var done: String?
     @State private var card: Image?
+    @EnvironmentObject private var catalog: ExerciseCatalog
+
+    /// The changes against the saved routine: switches (A \u{2192} B), adds, removes, and a new order.
+    private func routineChanges(_ rid: String) -> [String] {
+        let raw = store.backup.raw
+        let was = ((raw["jk_routines"]?.array ?? []).first { $0["id"]?.string == rid }?["exercises"]?.array ?? []).compactMap(\.string)
+        let now = s.exerciseIds
+        let name = { (id: String) in catalog.byId(id, raw: raw).name }
+        let removed = was.filter { !now.contains($0) }, added = now.filter { !was.contains($0) }
+        var out: [String] = []
+        for (a, b) in zip(removed, added) { out.append("\(name(a)) \u{2192} \(name(b))") }
+        for a in added.dropFirst(min(removed.count, added.count)) { out.append("Added \(name(a))") }
+        for r in removed.dropFirst(min(removed.count, added.count)) { out.append("Removed \(name(r))") }
+        if was.filter(now.contains) != now.filter(was.contains) { out.append("New exercise order") }
+        return out.isEmpty ? ["Exercise list changed"] : out
+    }
 
     var body: some View {
         let settings = store.backup.settings
@@ -661,9 +790,21 @@ struct FinishSummarySheet: View {
                 }
                 if let done { Text(done).font(Theme.body(13, .semibold)).foregroundStyle(Theme.accent) }
                 if let r = s.routine, done == nil {
-                    Button("Update \"\(r.name)\" with these exercises") {
-                        Task { await session.updateRoutine(id: r.id, ids: s.exerciseIds, store: store, auth: auth); done = "Routine updated" }
-                    }.buttonStyle(GhostButtonStyle())
+                    // maybeUpdateRoutine: one question listing what changed against the routine.
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Update \"\(r.name)\"?").font(Theme.body(15, .bold)).foregroundStyle(Theme.text)
+                        ForEach(routineChanges(r.id), id: \.self) { line in
+                            Text(line).font(Theme.body(13)).foregroundStyle(Theme.text2)
+                        }
+                        HStack(spacing: 8) {
+                            Button("Keep original") { done = "Routine kept as it was" }.buttonStyle(GhostButtonStyle())
+                            Button("Update routine") {
+                                Task { await session.updateRoutine(id: r.id, ids: s.exerciseIds, store: store, auth: auth); done = "Routine updated" }
+                            }.buttonStyle(AccentButtonStyle())
+                        }
+                    }
+                    .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
                 }
                 if done == nil {
                     Button("Save as a new routine…") { naming = true }.buttonStyle(GhostButtonStyle())

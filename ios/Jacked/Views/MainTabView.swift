@@ -9,6 +9,9 @@ struct MainTabView: View {
     @StateObject private var friends = FriendsStore()
     @State private var barH: CGFloat = 40
     @State private var tab: Tab = Tab(rawValue: DevHooks.tab ?? "") ?? .home
+    @Environment(\.scenePhase) private var scenePhase
+    /// PULL ON FOCUS throttle (_lastFocusPull): at most one cloud pull a minute.
+    @State private var lastFocusPull = Date.distantPast
 
     enum Tab: String, Hashable { case routines, library, home, metrics, friends }
 
@@ -28,7 +31,12 @@ struct MainTabView: View {
                 .overlay(alignment: .top) {
                     if session.active != nil && !session.presented {
                         Button { Haptics.light(); session.presented = true } label: {
-                            Label("Return to workout", systemImage: "arrow.uturn.left").font(Theme.body(14, .bold))
+                            HStack(spacing: 8) {
+                                Label("Return to workout", systemImage: "arrow.uturn.left")
+                                // updateResumeBar: the bar carries the running time.
+                                ElapsedClock(start: session.active?.startedAt ?? 0, color: Theme.onAccent.opacity(0.8))
+                            }
+                                .font(Theme.body(14, .bold))
                                 .foregroundStyle(Theme.onAccent).padding(.horizontal, 18).padding(.vertical, 10)
                                 .background(Theme.accent, in: Capsule())
                         }
@@ -37,7 +45,12 @@ struct MainTabView: View {
                     }
                 }
         }
-        .ignoresSafeArea(.keyboard)   // outside the inset: the keyboard never lifts the tab bar (or the screens under it)
+        .ignoresSafeArea(.keyboard)
+        .overlay(alignment: .top) { ToastView(text: $session.toast) }
+        .confirmationDialog("Resume your unfinished workout?", isPresented: $session.askResume, titleVisibility: .visible) {
+            Button("Resume") { session.presented = true }
+            Button("Discard", role: .destructive) { Haptics.warning(); session.cancel() }
+        }   // outside the inset: the keyboard never lifts the tab bar (or the screens under it)
         .onReceive(NotificationCenter.default.publisher(for: .jackedOpenTab)) { n in
             if let t = (n.object as? String).flatMap(Tab.init(rawValue:)) { tab = t }
         }
@@ -54,7 +67,7 @@ struct MainTabView: View {
         }
         .sheet(item: $session.summary) { s in
             FinishSummarySheet(s: s)
-                .environmentObject(auth).environmentObject(store).environmentObject(session)
+                .environmentObject(auth).environmentObject(store).environmentObject(session).environmentObject(catalog)
                 .popup()
         }
         .environmentObject(store)
@@ -69,10 +82,31 @@ struct MainTabView: View {
             let (f, a, cols) = (friends, auth, m.publishColumns(badges: m.computeBadges().list))
             Task { await f.publish(cols, auth: a) }
         }
+        .onChange(of: scenePhase) { _, p in
+            guard p == .active, auth.session != nil else { return }
+            // Coming back to the app (the PWA's visibilitychange handlers): unsent changes go out
+            // again (drainSync), and outside a workout the cloud copy is pulled, at most once a
+            // minute, so a workout logged on the watch or the web shows up (PULL ON FOCUS).
+            // Friends refresh too when that tab is the one showing.
+            if session.active != nil && session.isStale() && !session.askResume {
+                Task { await session.autoFinishStale(store: store, auth: auth) }
+            } else if session.active != nil {
+                if store.dirty { Task { _ = await store.push(auth: auth) } }
+            } else if Date().timeIntervalSince(lastFocusPull) >= 60 {
+                lastFocusPull = Date()
+                Task { await store.refresh(auth: auth) }
+            }
+            if tab == .friends { Task { await friends.refresh(auth: auth) } }
+        }
         .task(id: auth.session?.code) {
             if let code = auth.session?.code {
                 session.load(code: code)
+                // onAuthed: friends + request dot ready before the Friends tab is ever opened.
+                friends.loadCache(code: code)
+                let (f, a) = (friends, auth)
+                Task { await f.refresh(auth: a) }
                 await store.start(for: code, auth: auth)
+                await session.resolveOnLaunch(store: store, auth: auth)
                 await catalog.load()
                 await runDevLog()
             }

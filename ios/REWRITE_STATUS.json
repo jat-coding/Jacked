@@ -1,6 +1,6 @@
 {
  "_doc": "Where the native iPhone rewrite stands, stage by stage. Read live by JatBot OS > Status > Jacked (agent repo scripts/project-pages.json, sources iosLocal/iosRemote; parser frontend/src/jatbot/projectPages.ts iosRewrite()). Any job that moves a stage updates THIS file in the same commit: set status, edit summary/detail, add commits, bump updated (ISO time with offset; the page shows whichever of the working-tree and origin/main copies has the later updated). status: done | gate (blocked on Mr. Roni, his turn) | active (being built now) | todo. Order = build order (IOS_REWRITE_PLAN.md 'Build order'). Plain words only: this text is shown to Mr. Roni as is.",
- "updated": "2026-11-15T19:30:00-07:00",
+ "updated": "2026-11-17T18:05:00-07:00",
  "stages": [
   {
    "id": "kickoff",
@@ -244,6 +244,18 @@
     "Needs everything above.",
     "The signing team and final bundle id, the upload and the review are steps only you can do on the Mac and in App Store Connect."
    ]
+  },
+  {
+   "id": "parity-backlog",
+   "title": "Catch up with the web app",
+   "status": "active",
+   "summary": "31 of the 64 gaps between the web app and the iPhone app closed on 2026-11-17; 33 left.",
+   "detail": [
+    "Built: pull on return to the app, tap a set box to clear it, a better Add/Switch Exercise picker (Used before, muscle chips, no duplicates, create new), auto-finish of a forgotten workout and the Resume question, today lights up after one set, tap an exercise name for its info, a fuller workout detail page, friends ready at launch, delete your own exercise, the routine-update question at Finish, and smaller fixes.",
+    "Builds on the Mac (BUILD SUCCEEDED); checked in the simulator on the throwaway test account only.",
+    "Left: the live workout shared with the watch (rows 1-3 and 60), the gold Jacked look, the live tier chip, the routine editor picker, and smaller items. Two rows wait on your decision (recap share, Unsorted routines). See ios/PARITY.md."
+   ],
+   "commits": []
   }
  ]
 }

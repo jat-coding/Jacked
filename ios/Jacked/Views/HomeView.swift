@@ -30,7 +30,7 @@ struct HomeView: View {
                 syncLine
                 HomeRecapCard()
                 StreakBanner(history: h).padding(.bottom, 20)
-                CalendarCard(history: h, month: $month, onTitle: { showGymYears = true }) { dayKey = DayKey(id: $0) }
+                CalendarCard(history: h, liveToday: liveToday, month: $month, onTitle: { showGymYears = true }) { dayKey = DayKey(id: $0) }
                     .padding(.bottom, 20)
                 Button { if session.active != nil { session.presented = true } else { showStartNote = true } } label: {
                     HStack(spacing: 6) { JIcon("play", 15); Text("Start Workout") }.font(Theme.body(16, .semibold))
@@ -39,7 +39,8 @@ struct HomeView: View {
                 .padding(.bottom, 22)
                 SuggestCard().id("suggest")
                 RecentWorkouts(history: h, settings: settings) { workout = $0 }
-                Text("Jacked for iPhone, preview build")
+                // homeVersion: the build number at the bottom of Home.
+                Text("Jacked " + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""))
                     .font(Theme.body(11))
                     .foregroundStyle(Theme.muted)
                     .padding(.top, 22).padding(.bottom, 6)
@@ -100,6 +101,11 @@ struct HomeView: View {
             ProgressView().tint(Theme.accent).padding(.bottom, 10)
         }
     }
+
+    private var liveToday: Bool {
+        guard let a = session.active, a.exercises.contains(where: { $0.sets.contains(where: \.done) }) else { return false }
+        return JackedDate.dayKey(JackedDate.parse(a.date) ?? Date()) == JackedDate.dayKey(Date())
+    }
 }
 
 /// #streakBanner: only shown while a streak is live (Mr. Roni, 2026-09-26).
@@ -138,6 +144,8 @@ struct StreakBanner: View {
 /// missed past days faint red, today outlined, future days muted (index.html renderCal).
 struct CalendarCard: View {
     let history: [Workout]
+    /// renderCal: today lights as soon as the open workout dated today has one ticked set.
+    var liveToday = false
     @Binding var month: DateComponents
     var onTitle: () -> Void = {}
     var onDay: (String) -> Void
@@ -148,8 +156,8 @@ struct CalendarCard: View {
 
     var body: some View {
         let y = month.year!, m = month.month!
-        let trained = Set(history.map(\.dayKey))
         let today = JackedDate.dayKey(Date())
+        let trained = Set(history.map(\.dayKey)).union(liveToday ? [today] : [])
         let first = cal.date(from: DateComponents(year: y, month: m, day: 1))!
         let lead = cal.component(.weekday, from: first) - 1
         let dim = cal.range(of: .day, in: .month, for: first)!.count

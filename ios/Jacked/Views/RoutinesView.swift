@@ -551,7 +551,8 @@ struct StartWorkoutSheet: View {
     @EnvironmentObject private var catalog: ExerciseCatalog
 
     var body: some View {
-        let rs = (store.backup.raw["jk_routines"]?.array ?? []).compactMap(\.object)
+        // openQS: newest-created routine first.
+        let rs = Array((store.backup.raw["jk_routines"]?.array ?? []).compactMap(\.object).reversed())
         ScrollView {
             VStack(spacing: 12) {
                 Text("START WORKOUT").font(Theme.heading(24, .extraBold)).foregroundStyle(Theme.text).padding(.top, 22)
@@ -562,8 +563,17 @@ struct StartWorkoutSheet: View {
                     Button {
                         dismiss(); session.start(routine: r, catalog: catalog, raw: store.backup.raw)
                     } label: {
-                        HStack {
-                            Text(r["name"]?.string ?? "Routine").font(Theme.body(15, .semibold)).foregroundStyle(Theme.text)
+                        let names = (r["exercises"]?.array ?? []).compactMap(\.string).map { catalog.byId($0, raw: store.backup.raw).name }
+                        let desc = r["desc"]?.string ?? ""
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r["name"]?.string ?? "Routine").font(Theme.body(17, .semibold)).foregroundStyle(Theme.text)
+                                if !desc.isEmpty { Text(desc).font(Theme.body(11)).foregroundStyle(Theme.muted).multilineTextAlignment(.leading) }
+                                // The first 4 exercises as tags, then "+N".
+                                if !names.isEmpty {
+                                    FlowTags(tags: Array(names.prefix(4)) + (names.count > 4 ? ["+\(names.count - 4)"] : [])).padding(.top, 6)
+                                }
+                            }
                             Spacer()
                             SFIcon("play.fill").foregroundStyle(Theme.accent)
                         }
@@ -627,5 +637,42 @@ struct RoutineOrderSheet: View {
         }
         .tint(Theme.accent)
         .preferredColorScheme(.dark)
+    }
+}
+
+/// Small muted tags that wrap onto as many lines as they need (the PWA's .badge.bm row).
+struct FlowTags: View {
+    let tags: [String]
+    var body: some View {
+        WrapLayout(spacing: 4) {
+            ForEach(Array(tags.enumerated()), id: \.offset) { _, t in
+                Text(t).font(Theme.body(11, .semibold)).foregroundStyle(Theme.text2).lineLimit(1)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Theme.bg4, in: Capsule())
+            }
+        }
+    }
+}
+
+struct WrapLayout: Layout {
+    var spacing: CGFloat = 4
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let w = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, row: CGFloat = 0, maxX: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x > 0 && x + s.width > w { x = 0; y += row + spacing; row = 0 }
+            x += s.width + spacing; row = max(row, s.height); maxX = max(maxX, x - spacing)
+        }
+        return CGSize(width: maxX, height: y + row)
+    }
+    func placeSubviews(in b: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = b.minX, y = b.minY, row: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x > b.minX && x + s.width > b.maxX { x = b.minX; y += row + spacing; row = 0 }
+            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+            x += s.width + spacing; row = max(row, s.height)
+        }
     }
 }

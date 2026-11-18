@@ -7,8 +7,17 @@ import Foundation
 @MainActor
 final class WorkoutSession: ObservableObject {
     @Published var active: ActiveWorkout? { didSet {
-        if active != oldValue { save(); RestLiveActivity.sync(endsAtMs: active?.restEndsAt, workoutName: active?.name ?? "Workout") }
+        if active != oldValue {
+            if !loading { touchedAt = Double(Self.nowMs) }   // saveAW's awTouch: the last input of any kind
+            save(); RestLiveActivity.sync(endsAtMs: active?.restEndsAt, workoutName: active?.name ?? "Workout")
+        }
     } }
+    /// awTouch (ms): when the open workout was last changed. Kept beside the workout on disk.
+    private(set) var touchedAt: Double = 0
+    private var loading = false
+    /// maybeResumeAW: a workout found at launch waits for "Resume your unfinished workout?".
+    @Published var askResume = false
+    @Published var toast: String?
     @Published var summary: Summary?
     @Published var presented = false
 
@@ -27,7 +36,50 @@ final class WorkoutSession: ObservableObject {
 
     func load(code: String) {
         self.code = code
-        active = (try? Data(contentsOf: Self.fileURL(code))).flatMap { try? JSONDecoder().decode(ActiveWorkout.self, from: $0) }
+        loading = true
+        let a = (try? Data(contentsOf: Self.fileURL(code))).flatMap { try? JSONDecoder().decode(ActiveWorkout.self, from: $0) }
+        let t = UserDefaults.standard.double(forKey: Self.touchKey(code))
+        touchedAt = t > 0 ? t : (a?.startedAt ?? 0)
+        active = a
+        loading = false
+    }
+
+    // MARK: forgotten workouts (awIsStale / autoFinishStale / maybeResumeAW)
+
+    static let staleIdleMs = 30.0 * 60 * 1000, staleTotalMs = 90.0 * 60 * 1000
+    /// awIsStale: 30 min with no input, or 90 min since it started, whichever comes first.
+    func isStale(now nowArg: Double? = nil) -> Bool {
+        let now = nowArg ?? Double(Self.nowMs)
+        guard let a = active, a.startedAt > 0 else { return false }
+        return (touchedAt > 0 && now - touchedAt > Self.staleIdleMs) || now - a.startedAt > Self.staleTotalMs
+    }
+
+    /// maybeResumeAW, once the saved data is in: a workout with no sets is dropped, a forgotten one is
+    /// finished (or discarded) now, anything else asks Resume / Discard.
+    func resolveOnLaunch(store: BackupStore, auth: AuthStore) async {
+        guard let a = active else { return }
+        if !a.exercises.contains(where: { !$0.sets.isEmpty }) { active = nil; presented = false; return }
+        if isStale() { await autoFinishStale(store: store, auth: auth); return }
+        askResume = true
+    }
+
+    /// autoFinishStale: sets with a number typed in count as done; the clock stops at the last input.
+    /// Nothing logged at all: the workout is discarded.
+    func autoFinishStale(store: BackupStore, auth: AuthStore) async {
+        guard var a = active else { return }
+        for i in a.exercises.indices {
+            for j in a.exercises[i].sets.indices where !a.exercises[i].sets[j].done
+                && (a.exercises[i].sets[j].weight > 0 || a.exercises[i].sets[j].reps > 0) { a.exercises[i].sets[j].done = true }
+        }
+        let end = touchedAt > 0 ? min(touchedAt, Double(Self.nowMs)) : Double(Self.nowMs)
+        loading = true; active = a; loading = false
+        if a.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+            await finish(store: store, auth: auth, endMs: end)
+            toast = "Workout auto-finished after inactivity"
+        } else {
+            active = nil; presented = false
+            toast = "Inactive workout discarded"
+        }
     }
 
     // MARK: start (startEmpty / startEmptyOn / startRW)
@@ -113,6 +165,10 @@ final class WorkoutSession: ObservableObject {
         var e = LogExercise(exId: c.id, name: c.name, muscle: c.muscle, equip: c.equip, assist: c.assist, tracking: c.tracking,
                     imgUrl: c.image.map { ExerciseImages.base + $0 },
                     sets: WorkoutMath.seedSets(exId: c.id, tracking: c.tracking, history: raw["jk_hist"]?.array ?? []))
+        // durUnit: a hold opens in the unit saved on the exercise (set when creating or editing it).
+        if c.tracking == "duration",
+           let u = (raw["jk_cex"]?.array ?? []).compactMap(\.object).first(where: { $0["id"]?.string == c.id })?["durUnit"]?.string,
+           ["sec", "min", "hr"].contains(u) { e.durUnit = u }
         // stampSingle: a Single / Both lift's sets carry an explicit choice from the moment they are drawn.
         if PWATables.SINGLE_BOTH_IDS.contains(c.id) {
             for i in e.sets.indices where e.sets[i].single == nil { e.sets[i].single = PWATables.SINGLE_DEFAULT_IDS.contains(c.id) }
@@ -122,7 +178,12 @@ final class WorkoutSession: ObservableObject {
 
     // MARK: edits (addSet / togSet / uSet / rmEx)
 
-    func add(_ c: CatalogExercise, raw: [String: JSONValue]) { active?.exercises.append(exercise(for: c, raw: raw)) }
+    /// addExToWorkout: an exercise already in the workout is refused (returns false).
+    @discardableResult
+    func add(_ c: CatalogExercise, raw: [String: JSONValue]) -> Bool {
+        guard active?.exercises.contains(where: { $0.exId == c.id }) != true else { return false }
+        active?.exercises.append(exercise(for: c, raw: raw)); return true
+    }
 
     func addSet(_ ei: Int) {
         guard var a = active, a.exercises.indices.contains(ei) else { return }
@@ -177,6 +238,7 @@ final class WorkoutSession: ObservableObject {
         let lo = min(ei, other), hi = max(ei, other)
         if hi - lo > 1 { let m = a.exercises.remove(at: hi); a.exercises.insert(m, at: lo + 1) }
         active = a
+        toast = "Paired as a superset"
     }
 
     func unlinkSuperset(_ ei: Int) {
@@ -227,7 +289,7 @@ final class WorkoutSession: ObservableObject {
     }
     func skipRest() { active?.restEndsAt = nil }
 
-    func cancel() { active = nil; presented = false }
+    func cancel() { active = nil; presented = false; askResume = false }
 
     // MARK: finish (_commitFinish)
 
@@ -324,8 +386,11 @@ final class WorkoutSession: ObservableObject {
         return dir.appendingPathComponent("active-\(String(String.UnicodeScalarView(safe))).json")
     }
 
+    private static func touchKey(_ code: String) -> String { "jk_awTouch_" + code }
+
     private func save() {
         guard let code else { return }
+        UserDefaults.standard.set(touchedAt, forKey: Self.touchKey(code))
         let url = Self.fileURL(code)
         if let a = active, let d = try? JSONEncoder().encode(a) { try? d.write(to: url, options: .atomic) }
         else if active == nil { try? FileManager.default.removeItem(at: url) }

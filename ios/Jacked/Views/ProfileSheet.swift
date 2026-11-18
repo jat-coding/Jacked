@@ -14,6 +14,8 @@ struct ProfileSheet: View {
     @EnvironmentObject private var catalog: ExerciseCatalog
     @Environment(\.dismiss) private var dismiss
 
+    @State private var syncing = false
+    @State private var syncResult: (text: String, ok: Bool)?
     @State private var loaded = false
     @State private var tab = "main"
     @State private var name = ""
@@ -117,7 +119,21 @@ struct ProfileSheet: View {
                         HStack(spacing: 10) {
                             if let u = exportURL { ShareLink(item: u) { Text("Export") }.buttonStyle(GhostButtonStyle()) }
                             Button(importBusy ? "Importing\u{2026}" : "Import") { importing = true }.buttonStyle(GhostButtonStyle()).disabled(importBusy)
-                            Button("Sync now") { Task { await store.refresh(auth: auth) } }.buttonStyle(GhostButtonStyle())
+                            Button(syncing ? "Syncing\u{2026}" : "Sync now") {
+                                // syncNow: say how it went, not just the last-synced time.
+                                Task {
+                                    syncing = true; syncResult = nil
+                                    await store.refresh(auth: auth)
+                                    if store.dirty { _ = await store.push(auth: auth) }
+                                    let ok = store.state == .idle && !store.dirty
+                                    syncResult = (ok ? "Synced \u{2713}" : "Sync incomplete \u{2014} try again later", ok)
+                                    syncing = false
+                                }
+                            }
+                            .buttonStyle(GhostButtonStyle()).disabled(syncing)
+                        }
+                        if let r = syncResult {
+                            Text(r.text).font(Theme.body(13, .semibold)).foregroundStyle(r.ok ? Theme.green : Theme.red)
                         }
                     }
                     .padding(14)
@@ -232,6 +248,15 @@ struct ProfileSheet: View {
                 }
                 rowDivider
                 toggleRow("Auto rest timer", "Start a rest countdown after each completed set", isOn: $autoRest)
+                    // toggleAutoRest: saved the moment it flips, no Save Profile needed.
+                    .onChange(of: autoRest) { _, on in
+                        guard on != store.backup.settings.autoRest else { return }
+                        Task {
+                            _ = await store.edit(auth: auth) { raw in
+                                var st = raw["jk_settings"]?.object ?? [:]; st["autoRest"] = .bool(on); raw["jk_settings"] = .object(st)
+                            }
+                        }
+                    }
             }
         }
     }
