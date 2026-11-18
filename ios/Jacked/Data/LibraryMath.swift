@@ -30,6 +30,30 @@ enum LibraryMath {
         e.muscle.lowercased() == "cardio" || e.category.lowercased() == "cardio" || e.tracking == "distance"
     }
 
+    /// chipOf: the chip an exercise files under, or nil (a custom "Full Body" lift).
+    static func chipOf(_ e: CatalogExercise) -> String? {
+        if e.category.lowercased() == "warmup" { return "warmup" }
+        if isCardioCat(e) { return "cardio" }
+        let g = muscleGroup(e.muscle)
+        return chipCats.contains { $0.0 == g } ? g : nil
+    }
+
+    /// renderAEList: hidden left out, search + chip, ranked like the Library, and (no search) up to 8
+    /// "Used before" exercises pulled to the top. `rest` is capped at `cap`; `more` is what was cut.
+    static func pickerList(_ all: [CatalogExercise], raw: [String: JSONValue], query: String, chip: String?, cap: Int = 60)
+        -> (recent: [CatalogExercise], rest: [CatalogExercise], more: Int) {
+        let full = list(all, raw: raw, query: query, chip: chip, cap: Int.max)
+        var recent: [CatalogExercise] = []
+        if query.trimmingCharacters(in: .whitespaces).isEmpty {
+            let hidden = Set((raw["jk_hiddenEx"]?.array ?? []).compactMap(\.string))
+            var byId: [String: CatalogExercise] = [:]; for e in all where byId[e.id] == nil { byId[e.id] = e }
+            recent = Array(usedIds(raw).compactMap { byId[$0] }.filter { !hidden.contains($0.id) && chipMatch(chip, $0) }.prefix(8))
+        }
+        let rIds = Set(recent.map(\.id))
+        let rest = full.filter { !rIds.contains($0.id) }
+        return (recent, Array(rest.prefix(cap)), max(0, rest.count - cap))
+    }
+
     static func chipMatch(_ flt: String?, _ e: CatalogExercise) -> Bool {
         guard let flt else { return true }
         if flt == "warmup" { return e.category.lowercased() == "warmup" }
@@ -65,7 +89,7 @@ enum LibraryMath {
     }
 
     /// renderEx(): hidden left out, search + chip, favourites -> used before -> the rest (stable), first 80.
-    static func list(_ all: [CatalogExercise], raw: [String: JSONValue], query: String, chip: String?) -> [CatalogExercise] {
+    static func list(_ all: [CatalogExercise], raw: [String: JSONValue], query: String, chip: String?, cap: Int = 80) -> [CatalogExercise] {
         let hidden = Set((raw["jk_hiddenEx"]?.array ?? []).compactMap(\.string))
         let fav = Set((raw["jk_favEx"]?.array ?? []).compactMap(\.string))
         var rank: [String: Int] = [:]; for (i, id) in usedIds(raw).enumerated() { rank[id] = i }
@@ -76,7 +100,7 @@ enum LibraryMath {
             let ua = rank[a.element.id] ?? Int.max, ub = rank[b.element.id] ?? Int.max
             if ua != ub { return ua < ub }
             return a.offset < b.offset
-        }.prefix(80).map(\.element)
+        }.prefix(cap).map(\.element)
     }
 
     static func capW(_ s: String) -> String {

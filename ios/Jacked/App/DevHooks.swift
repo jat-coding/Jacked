@@ -68,6 +68,8 @@ enum DevHooks {
         return (u, p)
     }
     static var tab: String? { env["JACKED_DEV_TAB"] }
+    /// "add" opens the workout's Add Exercise picker, "switch" the Switch picker on exercise 0.
+    static var picker: String? { env["JACKED_DEV_PICKER"].flatMap { $0.isEmpty ? nil : $0 } }
     static var open: String? { env["JACKED_DEV_OPEN"] }
     static var rename: (index: Int, name: String)? {
         guard let r = env["JACKED_DEV_RENAME"], let bar = r.firstIndex(of: "|"), let i = Int(r[..<bar]) else { return nil }

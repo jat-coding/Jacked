@@ -24,6 +24,33 @@ final class FriendsStore: ObservableObject {
 
     func signedOut() { friends = []; sent = []; loaded = false; lastPublished = nil }
 
+    // MARK: jk_friendsCache: the last good list, per account, painted at launch before the network answers.
+
+    private struct Cache: Codable {
+        let accepted: [String]; let pendingIn: [String]; let sentOut: [String]; let rows: [String: [String: JSONValue]]
+    }
+
+    private func apply(_ c: Cache) {
+        let mk: (String, Bool) -> Person? = { code, p in Person(row: c.rows[code] ?? ["code": .string(code)], pending: p) }
+        friends = c.accepted.compactMap { mk($0, false) } + c.pendingIn.compactMap { mk($0, true) }
+        sent = c.sentOut.compactMap { mk($0, false) }
+    }
+
+    /// Shows the cached list for this account straight away (only while nothing fresher is on screen).
+    func loadCache(code: String) {
+        guard !loaded, friends.isEmpty, let d = try? Data(contentsOf: Self.cacheURL(code)),
+              let c = try? JSONDecoder().decode(Cache.self, from: d) else { return }
+        apply(c)
+    }
+
+    private static func cacheURL(_ code: String) -> URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("JackedBackup", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let safe = code.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == "_" }
+        return dir.appendingPathComponent("friends-\(String(String.UnicodeScalarView(safe))).json")
+    }
+
     /// refreshFriends(): only the newest refresh may write the list; a failed one keeps what's shown.
     func refresh(auth: AuthStore) async {
         guard let s = await auth.validSession() else { return }
@@ -49,10 +76,10 @@ final class FriendsStore: ObservableObject {
                 }
             }
             guard g == gen else { return }
-            let mk: (String, Bool) -> Person? = { c, p in Person(row: rows[c] ?? ["code": .string(c)], pending: p) }
-            friends = accepted.compactMap { mk($0, false) } + pendingIn.compactMap { mk($0, true) }
-            sent = sentOut.compactMap { mk($0, false) }
+            let c = Cache(accepted: accepted, pendingIn: pendingIn, sentOut: sentOut, rows: rows)
+            apply(c)
             loaded = true
+            if let d = try? JSONEncoder().encode(c) { try? d.write(to: Self.cacheURL(my), options: .atomic) }
         } catch {
             DevHooks.log("friends refresh failed: \(error.localizedDescription)")
         }
