@@ -24,17 +24,7 @@ struct LibraryView: View {
                         Button("+ Custom") { showCreate = true }.buttonStyle(HeaderPillStyle())
                     }
                     SearchBox(text: $q).padding(.bottom, 10)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(LibraryMath.chipCats, id: \.0) { c in
-                                let on = chip == c.0
-                                Button { chip = on ? nil : c.0 } label: {
-                                    Text(c.1)
-                                }
-                                .buttonStyle(ChipButtonStyle(on: on))
-                            }
-                        }
-                    }
+                    MuscleChipRow(chip: $chip)
                     .padding(.bottom, 16)
                     VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline) {
@@ -174,6 +164,7 @@ struct ExerciseInfoSheet: View {
     @EnvironmentObject private var store: BackupStore
     let ex: CatalogExercise
     @State private var confirmHide = false
+    @State private var confirmDelete = false
     @State private var resetText: String?
     @State private var editing = false
     @State private var photoTick = 0
@@ -222,6 +213,10 @@ struct ExerciseInfoSheet: View {
                     Menu {
                         Button { editing = true } label: { Label("Edit", image: "ic-pencil") }
                         if !ex.custom { Button("Hide from Library", role: .destructive) { confirmHide = true } }
+                        // deleteEx: your own custom exercise can be deleted outright.
+                        if CreateExerciseSheet.isUserCustom(ex.id, raw: store.backup.raw) {
+                            Button(role: .destructive) { confirmDelete = true } label: { Label("Delete exercise", image: "ic-trash") }
+                        }
                     } label: { SFIcon("ellipsis") }
                 }
             }
@@ -266,6 +261,10 @@ struct ExerciseInfoSheet: View {
             .confirmationDialog("Hide this exercise from your library? Built-in exercises can't be deleted, but this removes it from all lists.",
                                 isPresented: $confirmHide, titleVisibility: .visible) {
                 Button("Hide", role: .destructive) { Task { await hide(); dismiss() } }
+            }
+            .confirmationDialog("Delete this custom exercise? It is removed from your library and routines. Logged history is kept.",
+                                isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { Task { await Self.deleteCustom(ex.id, store: store, auth: auth); dismiss() } }
             }
         }
     }
@@ -369,6 +368,27 @@ struct ExerciseInfoSheet: View {
         }
     }
 
+    /// deleteEx for a custom exercise: out of jk_cex and every routine, favourite / rename / override
+    /// cleaned up, its photo dropped. Workout history is not touched.
+    static func deleteCustom(_ id: String, store: BackupStore, auth: AuthStore) async {
+        _ = await store.edit(auth: auth) { raw in
+            raw["jk_cex"] = .array((raw["jk_cex"]?.array ?? []).filter { $0.object?["id"]?.string != id })
+            if var rs = raw["jk_routines"]?.array {
+                var changed = false
+                for i in rs.indices {
+                    guard var o = rs[i].object, let exs = o["exercises"]?.array else { continue }
+                    let n = exs.filter { $0.string != id }
+                    if n.count != exs.count { o["exercises"] = .array(n); rs[i] = .object(o); changed = true }
+                }
+                if changed { raw["jk_routines"] = .array(rs) }
+            }
+            raw["jk_favEx"] = .array((raw["jk_favEx"]?.array ?? []).filter { $0.string != id })
+            if var rn = raw["jk_exRename"]?.object, rn[id] != nil { rn[id] = nil; raw["jk_exRename"] = .object(rn) }
+            if var ov = raw["jk_exOverride"]?.object, ov[id] != nil { ov[id] = nil; raw["jk_exOverride"] = .object(ov) }
+        }
+        ExPhotoStore.remove(id)
+    }
+
     private func hide() async {
         _ = await store.edit(auth: auth) { raw in
             var h = (raw["jk_hiddenEx"]?.array ?? []).compactMap(\.string)
@@ -391,6 +411,8 @@ struct CreateExerciseSheet: View {
     /// web app's locked-down subset (name, muscle, category, equipment, notes, assist); tracking stays put.
     var editing: CatalogExercise? = nil
     var onSaved: () -> Void = {}
+    /// The new exercise's id after a create (the workout picker's "+ Create new exercise" adds it).
+    var onCreated: (String) -> Void = { _ in }
     @EnvironmentObject private var catalog: ExerciseCatalog
     @State private var loaded = false
     @State private var baseName = ""
@@ -451,7 +473,7 @@ struct CreateExerciseSheet: View {
                     if fullForm && tracking == "duration" {
                         Picker("Hold unit", selection: $durUnit) { Text("Seconds").tag("sec"); Text("Minutes").tag("min"); Text("Hours").tag("hr") }
                     }
-                    if editing != nil && (bodyweight || tracking == "bodyweight_reps" || equip == "machine") {
+                    if bodyweight || tracking == "bodyweight_reps" || equip == "machine" {
                         Toggle("Add assist/band weight?", isOn: $assist).tint(Theme.accent)
                     }
                 }
@@ -460,6 +482,15 @@ struct CreateExerciseSheet: View {
             .scrollContentBackground(.hidden).background(Theme.bg2)
             .navigationTitle(editing == nil ? "Create Exercise" : "Edit Exercise").navigationBarTitleDisplayMode(.inline)
             .onAppear { if !loaded { loaded = true; prefill(); baseName = name; baseMuscle = muscle } }
+            // updateEquipFields / updateMuscleFields: sensible tracking defaults while creating
+            // (never clobbering a distance or duration choice).
+            .onChange(of: equip) { _, e in if editing == nil && e == "bodyweight" && tracking == "weight_reps" { tracking = "bodyweight_reps" } }
+            .onChange(of: bodyweight) { _, on in if editing == nil && on && tracking == "weight_reps" { tracking = "bodyweight_reps" } }
+            .onChange(of: muscle) { _, m in
+                guard editing == nil, m == "Cardio" else { return }
+                tracking = "distance"; category = "cardio"
+                if ["barbell", "dumbbell", "ez_bar", "trap_bar"].contains(equip) { equip = "other" }
+            }
             .popup(dirty: loaded && !saving && (name != baseName || muscle != baseMuscle || photo != nil || !notes.isEmpty && editing == nil))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -470,6 +501,8 @@ struct CreateExerciseSheet: View {
             }
         }
     }
+
+    private var assistShown: Bool { bodyweight || tracking == "bodyweight_reps" || equip == "machine" }
 
     /// isUserCustomEx: your own custom exercise (not a built-in warm-up) gets the full form.
     private var fullForm: Bool { editing.map { Self.isUserCustom($0.id, raw: store.backup.raw) } ?? true }
@@ -509,8 +542,10 @@ struct CreateExerciseSheet: View {
             return
         }
         let id = await Self.create(name: name, muscle: muscle, category: category, equip: bodyweight ? "body only" : equip,
-                          tracking: tracking, notes: notes, store: store, auth: auth)
+                          tracking: tracking, notes: notes, assist: assistShown && assist, durUnit: tracking == "duration" ? durUnit : "sec",
+                          store: store, auth: auth)
         if let photo { ExPhotoStore.save(id, image: photo) }
+        onCreated(id)
     }
 
     /// saveCE() editing: a custom exercise is updated in place (jk_cex); a built-in keeps its dataset entry, the
@@ -550,14 +585,14 @@ struct CreateExerciseSheet: View {
     /// saveCE() for a new exercise: the same object shape the PWA writes.
     @discardableResult
     static func create(name: String, muscle: String, category: String, equip: String, tracking: String, notes: String,
-                       store: BackupStore, auth: AuthStore) async -> String {
+                       assist: Bool = false, durUnit: String = "sec", store: BackupStore, auth: AuthStore) async -> String {
         let id = "cex\(Int64(Date().timeIntervalSince1970 * 1000))"
         _ = await store.edit(auth: auth) { raw in
             var c = raw["jk_cex"]?.array ?? []
             c.append(.object(["id": .string(id), "name": .string(name.trimmingCharacters(in: .whitespacesAndNewlines)),
                               "muscle": .string(muscle), "equip": .string(equip), "tracking": .string(tracking),
                               "category": .string(category), "notes": .string(notes.trimmingCharacters(in: .whitespacesAndNewlines)),
-                              "assist": .bool(false), "durUnit": .string("sec"), "images": .array([]), "_c": .bool(true)]))
+                              "assist": .bool(assist), "durUnit": .string(durUnit), "images": .array([]), "_c": .bool(true)]))
             raw["jk_cex"] = .array(c)
         }
         return id

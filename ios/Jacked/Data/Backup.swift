@@ -160,8 +160,11 @@ struct WorkoutExercise: Identifiable {
     let imgUrl: String?
     let durUnit: String?
     let sets: [WorkoutSet]
+    /// The exercise note saved at finish (shown on the workout detail page).
+    let note: String
 
     init(_ o: [String: JSONValue]) {
+        note = o["note"]?.string ?? ""
         exId = o["exId"]?.string ?? ""
         name = o["name"]?.string ?? "Exercise"
         muscle = o["muscle"]?.string ?? ""

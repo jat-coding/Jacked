@@ -135,6 +135,15 @@ struct WorkoutDetailSheet: View {
     @State private var saveNote: String?
     @State private var savingRoutine = false
     @State private var routineName = ""
+    @State private var sugInfo = false
+    private static let gold = Color(hex: 0xFFD700)
+
+    /// The run summary under a distance exercise's name: total miles, then the best pace.
+    private func runLine(_ sets: [WorkoutSet]) -> String {
+        let td = sets.reduce(0) { $0 + $1.weight }
+        let best = sets.map { WorkoutMath.pacePerMile($0.weight, $0.reps) }.filter { $0 > 0 }.min()
+        return WorkoutMath.n((td * 100).rounded() / 100) + " mi" + (best.map { " \u{00B7} best " + WorkoutMath.fmtPace($0) } ?? "")
+    }
 
     init(workout: Workout, settings: Settings) { opened = workout; self.settings = settings }
 
@@ -161,31 +170,66 @@ struct WorkoutDetailSheet: View {
                 .disabled(rawWorkout == nil)
                 .accessibilityLabel("Workout options")
             }
+            // openWD: Sets / Volume (miles for a run-only workout) / Exercises, and a gold PRs tile when it set some.
+            let pr = workout.shownPRs(replay: PRReplay.map(raw: store.backup.raw))
+            let prAt = Set(pr.list.map { "\($0.ei):\($0.si)" }), sugAt = Set(pr.sug.map { "\($0.ei):\($0.si)" })
+            let prN = max(pr.list.count, workout.prCount)
+            Text(JackedDate.short(workout.date) + (workout.duration.isEmpty ? "" : "  \u{00B7}  " + workout.duration))
+                .font(Theme.body(12)).foregroundStyle(Theme.muted)
             HStack(spacing: 8) {
-                stat(JackedDate.short(workout.date), "Date")
-                stat(workout.duration.isEmpty ? "-" : workout.duration, "Time")
                 stat("\(workout.sets)", "Sets")
-                stat(HomeMath.fmtV(settings.display(workout.totalVolume)), settings.unitLabel)
+                if workout.totalVolume > 0 || workout.distance <= 0 {
+                    stat(HomeMath.fmtV(settings.display(workout.totalVolume)), settings.unitLabel + " Vol")
+                } else {
+                    stat(WorkoutMath.n((workout.distance * 100).rounded() / 100), "mi run")
+                }
+                stat("\(workout.exercises.count)", "Exercises")
+                if prN > 0 { stat("\(prN)", "PRs", color: Self.gold) }
             }
-            ForEach(workout.exercises) { e in
+            ForEach(Array(workout.exercises.enumerated()), id: \.element.id) { ei, e in
+                let done = e.sets.filter(\.done)
+                let shown = done.isEmpty ? e.sets : done   // only ticked sets, all of them if none were ticked
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 10) {
                         ExerciseThumb(exercise: e, size: 38)
-                        Text(e.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
-                    }
-                    ForEach(Array(e.sets.enumerated()), id: \.element.id) { i, s in
-                        HStack {
-                            Text("\(i + 1)").font(Theme.body(12, .bold)).foregroundStyle(Theme.muted).frame(width: 22, alignment: .leading)
-                            Text(SetText.describe(s, exercise: e, settings: settings))
-                                .font(Theme.body(13)).foregroundStyle(s.done ? Theme.text2 : Theme.muted)
-                            Spacer()
-                            if s.done { JIcon("tick", 11).foregroundStyle(Theme.accent) }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(e.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+                            if e.tracking == "distance" { Text(runLine(shown)).font(Theme.body(11)).foregroundStyle(Theme.accent) }
                         }
                     }
+                    if !e.note.isEmpty {
+                        Text(e.note).font(Theme.body(12)).foregroundStyle(Theme.text2)
+                            .padding(.horizontal, 9).padding(.vertical, 7).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Theme.bg2, in: RoundedRectangle(cornerRadius: 7))
+                    }
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { i, s in
+                        let si = e.sets.firstIndex { $0.id == s.id } ?? i
+                        let isPR = prAt.contains("\(ei):\(si)"), isSug = !isPR && sugAt.contains("\(ei):\(si)")
+                        HStack(spacing: 6) {
+                            Text("Set \(i + 1)" + (isPR ? " \u{2605}" : "")).font(Theme.body(12, .bold))
+                                .foregroundStyle(isPR ? Self.gold : Theme.muted)
+                            if isSug {
+                                // SUG_EXPLAIN: tap the tag to see what a suggested PR is.
+                                Button { sugInfo = true } label: {
+                                    Text("SUGGESTED").font(Theme.body(9, .bold)).tracking(0.4).foregroundStyle(Color(hex: 0xD9B84A))
+                                        .padding(.horizontal, 6).padding(.vertical, 1)
+                                        .overlay(Capsule().stroke(Color(hex: 0xD9B84A).opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
+                                }
+                                .buttonStyle(.plain).accessibilityHint("Explains suggested PRs")
+                            }
+                            Spacer()
+                            Text(SetText.describe(s, exercise: e, settings: settings))
+                                .font(Theme.body(13, .semibold)).foregroundStyle(isPR ? Self.gold : Theme.text2)
+                        }
+                    }
+                    if shown.isEmpty { Text("No sets logged").font(Theme.body(12)).foregroundStyle(Theme.muted) }
                 }
                 .padding(12)
                 .card(fill: Theme.bg3, radius: Theme.radius)
             }
+        }
+        .alert("Suggested PR", isPresented: $sugInfo) { Button("Got it", role: .cancel) {} } message: {
+            Text("Estimated PR from a higher-rep set. It won\u{2019}t count as a real PR until you lift this exact weight for this rep count.")
         }
         .alert("Name this routine:", isPresented: $savingRoutine) {
             TextField("Name", text: $routineName)
@@ -247,9 +291,9 @@ struct WorkoutDetailSheet: View {
         DevHooks.log("dev save as routine ok=\(ok) \(name) \(ids)")
     }
 
-    private func stat(_ v: String, _ k: String) -> some View {
+    private func stat(_ v: String, _ k: String, color: Color = Theme.text) -> some View {
         VStack(spacing: 2) {
-            Text(v).font(Theme.heading(16, .bold)).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.6)
+            Text(v).font(Theme.heading(16, .bold)).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.6)
             Text(k).font(Theme.body(10)).foregroundStyle(Theme.muted)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 10)
