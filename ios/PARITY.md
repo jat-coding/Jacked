@@ -27,13 +27,13 @@ n/a = only makes sense in a browser, or was removed from the PWA.
 
 ## Counts
 
-Updated 2026-11-17 (parity backlog pass): rows built that day stay in section 1 with status present and their evidence, so the change is visible; before the pass it was missing 33, partial 31, present 220.
+Updated 2026-11-17 (parity backlog pass, then rows 16 and 54 decided by Mr. Roni the same evening): rows built that day stay in section 1 with status present and their evidence, so the change is visible; before the pass it was missing 33, partial 31, present 220.
 
 | status | rows |
 |---|---|
-| missing | 17 |
+| missing | 16 |
 | partial | 16 |
-| present | 251 |
+| present | 252 |
 | n/a | 19 |
 | **total** | **303** |
 
@@ -58,7 +58,7 @@ Updated 2026-11-17 (parity backlog pass): rows built that day stay in section 1 
 | 13 | Tap the exercise name in a workout to open its info page | pwa.html:4262 openExInfo | present | ios/Jacked/Views/ActiveWorkoutView.swift:161 name opens ExerciseInfoSheet | Built 2026-11-17 | 3 |
 | 14 | Workout detail: the set that made the PR is starred gold; a suggested PR set shows its tag | 18cf16b, 252dc08; pwa.html:6441 | present | ios/Jacked/Views/WorkoutSheets.swift:175-225 prAt / sugAt stars and SUGGESTED tag | Built 2026-11-17 | 3 |
 | 15 | Workout detail stat tiles: Sets / Volume / Exercises, gold PRs tile when the workout set PRs, miles for a run | 18cf16b; pwa.html:6399-6416 openWD | present | ios/Jacked/Views/WorkoutSheets.swift:180-189 | Sets / Vol (or mi run) / Exercises / gold PRs. Date + time moved to a line above. Built 2026-11-17 | 3 |
-| 16 | Share the monthly recap as an image + caption | 36dbb18; pwa.html:7629 recapImage, 7669 shareRecap | missing | ios/Jacked/Views/MetricsView.swift RecapSheet (464-555) has no Share | iOS removed it on purpose in 6573b35 (2026-11-10). Confirm with Mr. Roni whether it stays off. Needs Mr. Roni's decision: iOS removed it on purpose (6573b35). | 3 |
+| 16 | Share the monthly recap as an image + caption | 36dbb18; pwa.html:7629 recapImage, 7669 shareRecap | present | ios/Jacked/Views/MetricsView.swift:488-496 ImageRenderer + ShareLink in RecapSheet, :502-507 shareText (same caption as shareRecap) | Built 2026-11-17: Mr. Roni chose to bring it back (undoes 6573b35). BUILD SUCCEEDED; share sheet not tapped on a device | 3 |
 | 17 | Hevy-imported workouts re-matched by exercise name for badges | pwa.html:4763 badgeStdId | missing | ios/Jacked/Data/BadgeMath.swift:36 comment "not ported yet"; :67 uses stored id only | Old imports can be credited differently than on the web | 3 |
 | 18 | Cached friends list paints instantly on launch | 1aa0103; pwa.html:8521 jk_friendsCache | present | ios/Jacked/Data/FriendsStore.swift:28-55 cache per account; ios/Jacked/Views/MainTabView.swift:105 | Built 2026-11-17 | 3 |
 | 19 | Delete your own custom exercise (removes it from routines, keeps history, drops its photo) | 6af01e4; pwa.html:1964 deleteEx | present | ios/Jacked/Views/LibraryView.swift:373 deleteCustom + menu item | Built 2026-11-17. Like the PWA, deleting your only custom exercise can be undone by the cloud merge (an empty local list yields) | 3 |
