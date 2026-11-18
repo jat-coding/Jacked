@@ -32,8 +32,8 @@ Updated 2026-11-17 (parity backlog pass, then rows 16 and 54 decided by Mr. Roni
 | status | rows |
 |---|---|
 | missing | 16 |
-| partial | 16 |
-| present | 252 |
+| partial | 15 |
+| present | 253 |
 | n/a | 19 |
 | **total** | **303** |
 
@@ -96,7 +96,7 @@ Updated 2026-11-17 (parity backlog pass, then rows 16 and 54 decided by Mr. Roni
 | 51 | Muscle Map "how it's scored" popup | 364a823; pwa.html:7397 muscleMapInfo | partial | ios/Jacked/Views/MetricsView.swift:368-407 | Missing the tier-to-Strength-Level mapping and the "before age adjustment" note | 1 |
 | 52 | Repaired PR records rebuilt at launch (back-extension repair marker) | 8565a62; pwa.html:5692 repairBackExtBW, 5745 enforcePRRepairs | partial | ios/Jacked/Data/BackupMerge.swift:49-50, 166-185 | iOS honours the marker in merges but doesn't rebuild a stale record at launch | 1 |
 | 53 | "Add assist/band weight?" toggle when creating an exercise | pwa.html:2957 ceRecompute | present | ios/Jacked/Views/LibraryView.swift:476 toggle shown on create, saved by create() | Built 2026-11-17 | 1 |
-| 54 | Routines with no section file under "Unsorted" | f4b7bc2; pwa.html:6997 suggestSectionId | partial | ios/Jacked/Views/RoutinesView.swift:321-324, 399-410 | iOS removed Unsorted on purpose (02c0ca4) and files them under a muscle group or Full Body, so phone and web can group the same routine differently. Decide which wins and port it to the other. Needs Mr. Roni's decision: which grouping wins. | 1 |
+| 54 | Routines with no section are grouped by muscle group (was: filed under "Unsorted") | f4b7bc2; jacked-pwa/index.html:6963 routineGroupLabel, :6974 suggestSectionId, :6982 routineBlocks, :3127 renderRoutines, :7804 Reorder list | present | ios/Jacked/Views/RoutinesView.swift:321-324, 340-349, 399-410 (unchanged) | Decided 2026-11-17: iOS grouping wins, PWA ported to it. Both: majority group, tie = first of Chest/Back/Shoulders/Biceps/Triceps/Legs/Glutes/Core, none = Full Body; a legacy "Unsorted" section is hidden and its routines shown under their group. tests/e2e/routine-groups.mjs 13/13 | 1 |
 | 55 | Auto rest and body weight save the moment they change | pwa.html:9196 toggleAutoRest, saveBWField | partial | ios/Jacked/Views/ProfileSheet.swift:251 auto rest saves on flip | Body weight still waits for Save Profile | 1 |
 | 56 | Tabler line icons everywhere | 3af3c0b, 141438f, 34047e9 | partial | ios/Jacked/Theme/JIcon.swift:6-37 | A few Apple system icons remain (plus, return arrow, search clear, units check, ellipsis) | 1 |
 | 57 | One centered X closes every popup | 130db44 | partial | ios/Jacked/Views/WorkoutSheets.swift:516-530 SheetScaffold | Exercise info and pickers say "Close", editors "Cancel" (ios/Jacked/Views/LibraryView.swift:220, ios/Jacked/Views/RoutinesView.swift:493, 541) | 1 |

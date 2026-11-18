@@ -3094,8 +3094,8 @@ function routineCardHtml(r){
 }
 // Slim section header -- .blk-t/.blk-head like the rest of the app, but scoped smaller
 // with a rule under the row (see the .rsec .blk-head override above), not a card. Name is
-// inline-editable (contenteditable); readonly=true is the synthetic "Unsorted" fallback
-// bucket shown only if a routine's section vanished.
+// inline-editable (contenteditable); readonly=true is a muscle-group block routineBlocks()
+// made for unsectioned routines (there is no saved section to rename yet).
 function sectionBlockHtml(s,list,readonly){
   const collapsed=gCollapsedSecs().includes(s.id);
   const chev=`<span class="blk-chev" aria-hidden="true">${uic('chevron','currentColor',18)}</span>`;
@@ -3123,19 +3123,8 @@ function renderRoutines() {
   const el=document.getElementById('routinesList');
   const all=gR();
   if (!all.length) { el.innerHTML='<div class="es"><h3>No routines</h3><p>Create your first routine.</p></div>'; return; }
-  const secs=gRS();
-  const grouped=new Set();
-  let html=secs.map(s=>{
-    const list=routinesInSection(s.id);
-    list.forEach(r=>grouped.add(r.id));
-    return sectionBlockHtml(s,list,false);
-  }).join('');
-  const orphans=all.filter(r=>!grouped.has(r.id)).sort((a,b)=>a.name.localeCompare(b.name));
-  // Distinct label from the real, persisted "Unsorted" section suggestSectionId() creates --
-  // this synthetic bucket only ever catches a sectionId that doesn't resolve to any real
-  // section (shouldn't happen post-migration; sections are never deleted), so it must not
-  // read the same on screen as an actual section someone can rename/reorder/pick.
-  if(orphans.length) html+=sectionBlockHtml({id:'',name:'Unfiled'},orphans,true);
+  // Routines with no (or an "Unsorted") section are grouped by muscle group -- see routineBlocks().
+  const html=routineBlocks().map(b=>sectionBlockHtml(b,b.routines,!!b.auto)).join('');
   el.innerHTML=html;
 }
 
@@ -6968,22 +6957,40 @@ function findOrCreateSection(name){
   saveRS([...secs,sec]);
   return sec.id;
 }
-// The group most of a routine's exercises train, restricted to the 8 tracked groups.
-// Null (not 'core' or anything else) on a tie or no exercises -- callers fall back to Unsorted.
-function majorityGroupForRoutine(r){
+// The section a routine files under (same rule as iOS RoutineMath.groupLabel): the group most
+// of its exercises train; on a tie, the tied group listed first in MGROUPS; with no tracked-group
+// exercise at all, "Full Body". Never a catch-all "Unsorted".
+function routineGroupLabel(r){
   const counts={};
   (r.exercises||[]).forEach(id=>{
     const g=muscleGroup(byId(id).muscle);
     if(MGROUPS.includes(g)) counts[g]=(counts[g]||0)+1;
   });
-  const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
-  if(!entries.length) return null;
-  if(entries.length>1&&entries[0][1]===entries[1][1]) return null;
-  return entries[0][0];
+  const vals=Object.values(counts);
+  if(!vals.length) return 'Full Body';
+  const top=Math.max(...vals);
+  return SECTION_LABEL[MGROUPS.find(g=>counts[g]===top)]||'Full Body';
 }
 function suggestSectionId(r){
-  const g=majorityGroupForRoutine(r);
-  return findOrCreateSection(g?SECTION_LABEL[g]:'Unsorted');
+  return findOrCreateSection(routineGroupLabel(r));
+}
+const isUnsortedSec=s=>(s.name||'').toLowerCase()==='unsorted';
+// The routines page's blocks (same as iOS RoutineMath.sections): every real section except one
+// literally named "Unsorted" (made by older builds), each in its display order; then any routine
+// not shown yet (in "Unsorted", or a sectionId that no longer resolves) joins the section named
+// for its muscle group, or a new read-only group block (id 'auto:<Label>') if there is none.
+function routineBlocks(){
+  const all=gR();
+  const blocks=gRS().filter(s=>!isUnsortedSec(s)).map(s=>({id:s.id,name:s.name,routines:routinesInSection(s.id)}));
+  const shown=new Set(); blocks.forEach(b=>b.routines.forEach(r=>shown.add(r.id)));
+  const byName=(a,b)=>a.name.localeCompare(b.name);
+  all.filter(r=>!shown.has(r.id)).sort(byName).forEach(r=>{
+    const label=routineGroupLabel(r);
+    const b=blocks.find(x=>x.name.toLowerCase()===label.toLowerCase());
+    if(b) b.routines=[...b.routines,r].sort(byName);
+    else blocks.push({id:'auto:'+label,name:label,routines:[r],auto:true});
+  });
+  return blocks;
 }
 // One-time upgrade path: any routine saved before sections existed (or whose sectionId
 // no longer resolves) gets auto-filed. Idempotent -- a routine that already has a valid
@@ -7773,7 +7780,7 @@ function cardDragStart(e){
     if(cont.id==='routineOrderList'){
       // Section headers: ids are section ids, this container's order IS section order.
       const old=gRS();
-      saveRS(ids.map(id=>old.find(s=>s.id===id)).filter(Boolean));
+      saveRS([...ids.map(id=>old.find(s=>s.id===id)).filter(Boolean),...old.filter(s=>!ids.includes(s.id))]);
       renderRoutineOrderList(); renderRoutines(); return;
     }
     if(cont.id.startsWith('secROList-')){
@@ -7793,7 +7800,8 @@ function openRoutineOrder(){ renderRoutineOrderList(); om('routineOrderModal'); 
 const _GRIP_SVG=`<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>`;
 function renderRoutineOrderList(){
   const el=document.getElementById('routineOrderList'); if(!el) return;
-  el.innerHTML=gRS().map(s=>{
+  // Same sections the page shows (no "Unsorted"); a drag keeps hidden ones at the end.
+  el.innerHTML=gRS().filter(s=>!isUnsortedSec(s)).map(s=>{
     const list=routinesInSection(s.id);
     return `<div data-id="${s.id}" style="margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;background-clip:padding-box">
