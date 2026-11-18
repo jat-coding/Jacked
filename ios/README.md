@@ -43,8 +43,13 @@ Tests/                   Linux-only check of the Foundation layer (not an Xcode 
 ```
 
 Settings worth knowing: iOS 17.0 minimum (pending Mr. Roni's answer, see plan), portrait only,
-iPhone only, Swift 5 language mode, bundle id `com.inclineinstitute.jacked.ios` (placeholder,
-see plan).
+iPhone only, Swift 5 language mode, bundle id `com.inclineinstitute.jacked` on team `CRCPKNW37U` (the existing App Store record
+Phil's team already owns, set 2026-11-17; the widgets extension is `com.inclineinstitute.jacked.widgets`).
+
+Apple Watch: the watch app (`com.inclineinstitute.jacked.watchkitapp`, its widget
+`com.inclineinstitute.jacked.watchkitapp.widget`) is a child of this app id and will ship inside
+this app. Its code is NOT in this repo yet: it stays in Phil's repo and comes in later as a git
+submodule, embedded in the same archive.
 
 Body text is DM Sans and headings Barlow Condensed (both bundled, OFL). Icons are the PWA's own line icons as template SVGs in Assets.xcassets (regenerate with Tools/gen-icons.py).
 
@@ -96,10 +101,11 @@ writes it to the runner's temp dir with 0600 permissions and deletes it in an `i
 
 ### Before the first run
 
-- The app record for `com.inclineinstitute.jacked.ios` must already exist in App Store Connect
-  (My Apps > + > New App). The upload fails without it.
+- The app record for `com.inclineinstitute.jacked` must exist in App Store Connect. It already
+  does (Phil's team record, with TestFlight testers). The earlier placeholder record made for the
+  old `.ios` id, if one was created, is unused and can be deleted or ignored.
 - First-run signing may stop on a capability: HealthKit and Push Notifications must be enabled on
   the App ID (automatic signing usually does this itself via the API key; if not, enable them under
   Certificates, Identifiers & Profiles > Identifiers). The widgets extension gets its own App ID
-  (`com.inclineinstitute.jacked.ios.widgets`); there is no App Group today.
+  (`com.inclineinstitute.jacked.widgets`); there is no App Group today.
 - Until it has actually run green once, treat this workflow as unverified.
