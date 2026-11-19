@@ -60,8 +60,8 @@ struct RoutinesView: View {
                         Text("No routines yet — edit a routine to move it here.").font(Theme.body(12)).foregroundStyle(Theme.muted)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    ForEach(Array(b.routines.enumerated()), id: \.offset) { _, r in
-                        RoutineRow(r: r) { editing = RoutineDraft(r) }
+                    ForEach(Array(b.routines.enumerated()), id: \.offset) { i, r in
+                        RoutineRow(r: r, first: i == 0) { editing = RoutineDraft(r) }
                     }
                     }
                 }
@@ -215,6 +215,8 @@ struct RoutineRow: View {
     @EnvironmentObject private var session: WorkoutSession
     @EnvironmentObject private var catalog: ExerciseCatalog
     let r: [String: JSONValue]
+    /// First routine under a section header: the header's own rule already separates it, so no top line.
+    var first = false
     var onEdit: () -> Void = {}
     @State private var confirmDelete = false
 
@@ -242,7 +244,7 @@ struct RoutineRow: View {
         }
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
+        .overlay(alignment: .top) { if !first { Rectangle().fill(Theme.border).frame(height: 1) } }
         .confirmationDialog("Delete this routine?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 let id = r["id"]
