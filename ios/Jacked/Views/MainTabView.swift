@@ -234,6 +234,7 @@ struct PageHeader<Trailing: View>: View {
             trailing()
         }
         .frame(height: 62)
+        .padding(.bottom, 8)   // a little air between the title row and the first card, on every tab
     }
 }
 
