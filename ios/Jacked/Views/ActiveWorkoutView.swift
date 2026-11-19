@@ -624,13 +624,13 @@ struct AddExerciseSheet: View {
         NavigationStack {
             List {
                 Section {
-                    MuscleChipRow(chip: $chip)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12)).listRowBackground(Color.clear)
                     if replacing == nil {
                         // aeModal's "+ Create new exercise": it goes straight into the workout once saved.
                         Button { showCreate = true } label: { Text("+ Create new exercise").font(Theme.body(14, .semibold)) }
                             .listRowBackground(Theme.bg2)
                     }
+                    MuscleChipRow(chip: $chip)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12)).listRowBackground(Color.clear)
                 }
                 if !l.recent.isEmpty {
                     Section { ForEach(l.recent) { row($0) } } header: { groupTitle("\u{21BA} Used before") }
