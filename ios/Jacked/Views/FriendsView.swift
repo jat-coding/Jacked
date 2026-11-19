@@ -130,6 +130,7 @@ struct FriendsView: View {
                 Button { crownInfo = true } label: {
                     HStack(spacing: 4) { JIcon("crown", 11).foregroundStyle(Color(hex: 0xFFD700)); Text("Last month's winner") }
                         .font(Theme.body(12, .semibold)).foregroundStyle(Theme.text2)
+                        .padding(.vertical, 8).contentShape(Rectangle()).padding(.vertical, -8)
                 }.buttonStyle(.plain).padding(.top, 6)
             }
             HStack(spacing: 3) {
@@ -138,6 +139,7 @@ struct FriendsView: View {
                         Text(l).font(Theme.body(13, .semibold)).frame(maxWidth: .infinity).padding(.vertical, 7)
                             .foregroundStyle(range == k ? Theme.onAccent : Theme.muted)
                             .background(range == k ? Theme.accent : .clear, in: RoundedRectangle(cornerRadius: 6))
+                            .contentShape(RoundedRectangle(cornerRadius: 6))
                     }.buttonStyle(.plain)
                 }
             }
@@ -179,6 +181,7 @@ struct FriendsView: View {
                             .font(Theme.heading(20, .extraBold)).foregroundStyle(i == 0 && !z ? Theme.accent : Theme.text2)
                         }
                         .padding(12).modifier(RowBox(gilded: hasJacked(p, m: m, badges: nil), you: p.isYou))
+                        .contentShape(Rectangle())
                     }.buttonStyle(.plain)
                 }
             }
@@ -216,6 +219,7 @@ struct FriendsView: View {
                 Button { Task { await toggleCB(p.code) } } label: {
                     Text("\u{2605}").font(.system(size: 16)).foregroundStyle(cb.contains(p.code) ? Color(hex: 0xFFD700) : Theme.muted)
                         .frame(width: 34, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: 8))
+                        .tapTarget(RoundedRectangle(cornerRadius: 8), width: 34, height: 30)
                 }
                 .buttonStyle(.plain).accessibilityLabel("Close buddy")
             }
@@ -381,7 +385,7 @@ struct AddFriendSheet: View {
                 Text("Add Friend").font(Theme.heading(26, .extraBold)).foregroundStyle(Theme.text)
                 Spacer()
                 Button { dismiss() } label: { JIcon("close", 14).foregroundStyle(Theme.text2)
-                    .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()) }.buttonStyle(.plain)
+                    .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()).tapTarget(Circle(), width: 32, height: 32) }.buttonStyle(.plain)
             }
             VStack(spacing: 6) {
                 Text("Invite a friend \u{2014} send your link").font(Theme.body(11)).foregroundStyle(Theme.muted)

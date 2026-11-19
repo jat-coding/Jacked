@@ -216,6 +216,7 @@ private struct PasswordField<Field: Hashable>: View {
                 SFIcon(revealed ? "eye.slash" : "eye", 15)
                     .foregroundStyle(Theme.muted)
                     .frame(width: 34, height: 24)
+                    .tapTarget(Rectangle(), width: 34, height: 24)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(revealed ? "Hide password" : "Show password")
@@ -261,7 +262,7 @@ private struct SwitchLine: View {
                 .foregroundStyle(Theme.accent)
                 .fontWeight(.bold)
                 .underline()
-                .buttonStyle(.plain)
+                .buttonStyle(.plain).padding(.vertical, 8).contentShape(Rectangle()).padding(.vertical, -8)
         }
         .font(Theme.body(13))
         .frame(maxWidth: .infinity)

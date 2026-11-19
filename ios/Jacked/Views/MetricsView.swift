@@ -34,7 +34,7 @@ struct MetricsView: View {
                                 BlockTitle(text: MetricsMath.cardTitles[id] ?? id)
                                 Button { Task { await Self.toggleCard(id, store: store, auth: auth) } } label: {
                                     JIcon("close", 11).foregroundStyle(Theme.text2)
-                                        .frame(width: 26, height: 26).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 8))
+                                        .frame(width: 26, height: 26).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 8)).tapTarget(RoundedRectangle(cornerRadius: 8), width: 26, height: 26)
                                 }
                                 .buttonStyle(.plain).accessibilityLabel("Hide card")
                             }
@@ -335,7 +335,7 @@ struct MuscleMapCard: View {
                     .font(Theme.body(12)).foregroundStyle(Theme.muted)
                 Spacer(minLength: 0)
                 if r.mode == "strength" {
-                    Button(action: info) { JIcon("info", 16).foregroundStyle(Theme.text2) }
+                    Button(action: info) { JIcon("info", 16).foregroundStyle(Theme.text2).frame(width: 16, height: 16).tapTarget(Rectangle(), width: 16, height: 16) }
                         .buttonStyle(.plain).accessibilityLabel("How the muscle rankings are scored")
                 }
             }
@@ -600,7 +600,7 @@ struct HomeRecapCard: View {
                     Task { await store.edit(auth: auth) { $0["jk_recapDismissed"] = .string(key) } }
                 } label: {
                     JIcon("close", 11).foregroundStyle(Theme.text2)
-                        .frame(width: 26, height: 26).background(Theme.bg3, in: Circle())
+                        .frame(width: 26, height: 26).background(Theme.bg3, in: Circle()).tapTarget(Circle(), width: 26, height: 26)
                 }
                 .buttonStyle(.plain).accessibilityLabel("Dismiss")
             }

@@ -38,7 +38,7 @@ struct LibraryView: View {
                             .frame(maxWidth: .infinity).padding(.vertical, 30)
                     }
                     ForEach(shown) { e in
-                        Button { info = e } label: { LibraryRow(e: e, fav: fav.contains(e.id)) }.buttonStyle(.plain)
+                        Button { info = e } label: { LibraryRow(e: e, fav: fav.contains(e.id)).contentShape(Rectangle()) }.buttonStyle(.plain)
                         Divider().overlay(Theme.border)
                     }
                     }

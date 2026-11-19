@@ -700,6 +700,7 @@ struct Seg: View {
                     Text(t).font(Theme.body(14, .semibold)).foregroundStyle(selection == v ? Theme.onAccent : Theme.text2)
                         .frame(maxWidth: .infinity).padding(.vertical, 9)
                         .background(selection == v ? Theme.accent : .clear, in: RoundedRectangle(cornerRadius: 9))
+                        .contentShape(RoundedRectangle(cornerRadius: 9))
                 }
                 .buttonStyle(.plain)
             }
@@ -725,6 +726,7 @@ struct UnitsPicker: View {
                     .foregroundStyle(on ? Theme.accent : Theme.text2)
                     .frame(maxWidth: .infinity).frame(height: 34)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(on ? Theme.accent : Theme.border2, lineWidth: on ? 1.5 : 1))
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? .isSelected : [])

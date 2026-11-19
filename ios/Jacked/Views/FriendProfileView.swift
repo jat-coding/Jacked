@@ -32,7 +32,7 @@ struct FriendProfileSheet: View {
                     }
                     Spacer()
                     Button { dismiss() } label: { JIcon("close", 14).foregroundStyle(Theme.text2)
-                        .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()) }.buttonStyle(.plain)
+                        .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()).tapTarget(Circle(), width: 32, height: 32) }.buttonStyle(.plain)
                 }
                 .padding(.bottom, 16)
                 if let i = workout, p.wd.indices.contains(i) { workoutDetail(p.wd[i]) } else { overview }
@@ -85,6 +85,7 @@ struct FriendProfileSheet: View {
             Button { showBadges = true } label: {
                 StatTile(v: WorkoutMath.n(p.badges), l: "Badges \u{203A}", size: 20, color: Color(hex: 0xFFCA4D))
                     .overlay(alignment: .topTrailing) { SFIcon("medal.fill").foregroundStyle(Color(hex: 0xFFCA4D)).padding(12) }
+                    .contentShape(Rectangle())
             }.buttonStyle(.plain)
         }
         .padding(.bottom, 14)
@@ -100,12 +101,13 @@ struct FriendProfileSheet: View {
             }
             .frame(maxWidth: .infinity).padding(.vertical, 12)
             .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.radius))
         }
         .buttonStyle(.plain).padding(.bottom, 20)
         if !p.wd.isEmpty {
             BlockTitle(text: "Workouts \u{00B7} last 30 days")
             ForEach(Array(p.wd.enumerated()), id: \.offset) { i, w in
-                Button { workout = i } label: { wRow(name: w.name, date: w.date, vol: w.vol, sets: w.sets, dist: w.dist, pace: w.pace, chevron: true) }.buttonStyle(.plain)
+                Button { workout = i } label: { wRow(name: w.name, date: w.date, vol: w.vol, sets: w.sets, dist: w.dist, pace: w.pace, chevron: true).contentShape(Rectangle()) }.buttonStyle(.plain)
             }
         } else {
             BlockTitle(text: "Recent Workouts")
@@ -114,9 +116,12 @@ struct FriendProfileSheet: View {
         }
         if !p.isYou {
             Divider().overlay(Theme.border).padding(.vertical, 18)
-            Button("Remove Friend") { confirmRemove = true }
-                .font(Theme.body(15, .semibold)).foregroundStyle(Theme.red).frame(maxWidth: .infinity).padding(.vertical, 13)
-                .background(Theme.red.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.radius)).buttonStyle(.plain)
+            Button { confirmRemove = true } label: {
+                Text("Remove Friend")
+                    .font(Theme.body(15, .semibold)).foregroundStyle(Theme.red).frame(maxWidth: .infinity).padding(.vertical, 13)
+                    .background(Theme.red.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.radius))
+                    .contentShape(RoundedRectangle(cornerRadius: Theme.radius))
+            }.buttonStyle(.plain)
         }
     }
 
@@ -257,7 +262,7 @@ struct FriendBadgesSheet: View {
                     }
                     Spacer()
                     Button { dismiss() } label: { JIcon("close", 14).foregroundStyle(Theme.text2)
-                        .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()) }.buttonStyle(.plain)
+                        .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()).tapTarget(Circle(), width: 32, height: 32) }.buttonStyle(.plain)
                 }
                 .padding(.bottom, 10)
                 if list.isEmpty {

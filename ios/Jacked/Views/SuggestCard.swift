@@ -20,7 +20,7 @@ struct SuggestCard: View {
                     Spacer()
                     Button { dismiss(today) } label: {
                         JIcon("close", 11).foregroundStyle(Theme.text2)
-                            .frame(width: 26, height: 26).background(Theme.bg3, in: Circle())
+                            .frame(width: 26, height: 26).background(Theme.bg3, in: Circle()).tapTarget(Circle(), width: 26, height: 26)
                     }
                     .buttonStyle(.plain).accessibilityLabel("Dismiss")
                 }
