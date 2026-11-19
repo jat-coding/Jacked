@@ -4,6 +4,7 @@ import SwiftUI
 /// Time, six categories), Close buddies and the rest of your friends with the star toggle, incoming
 /// requests, and requests you sent. Numbers come from FriendsMath (parity-checked, Tests/parity/friends-run.sh).
 struct FriendsView: View {
+    @Environment(\.tabActive) private var tabActive
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
     @EnvironmentObject private var catalog: ExerciseCatalog
@@ -109,7 +110,8 @@ struct FriendsView: View {
             await runDev(you: you)
             #endif
         }
-        .task {
+        .task(id: tabActive) {
+            guard tabActive else { return }   // panes stay mounted when hidden: poll only while this tab shows
             while !Task.isCancelled {   // the PWA polls every 75 s while the Friends tab is open
                 try? await Task.sleep(nanoseconds: 75_000_000_000)
                 await friends.refresh(auth: auth)

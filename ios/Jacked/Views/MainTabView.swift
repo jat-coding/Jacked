@@ -1,5 +1,8 @@
 import SwiftUI
 
+private struct TabActiveKey: EnvironmentKey { static let defaultValue = true }
+extension EnvironmentValues { var tabActive: Bool { get { self[TabActiveKey.self] } set { self[TabActiveKey.self] = newValue } } }
+
 /// The PWA's bottom nav: Routines, Library, Home (centered, the default), Metrics, Friends.
 struct MainTabView: View {
     @EnvironmentObject private var auth: AuthStore
@@ -13,16 +16,35 @@ struct MainTabView: View {
     /// PULL ON FOCUS throttle (_lastFocusPull): at most one cloud pull a minute.
     @State private var lastFocusPull = Date.distantPast
 
+    /// Tabs opened at least once; unvisited ones are not built, so launch does no work for screens never opened.
+    @State private var visited: Set<Tab> = []
+
     enum Tab: String, Hashable { case routines, library, home, metrics, friends }
 
-    var body: some View {
-        TabView(selection: $tab) {
-            RoutinesView().toolbar(.hidden, for: .tabBar).tag(Tab.routines)
-            LibraryView().toolbar(.hidden, for: .tabBar).tag(Tab.library)
-            HomeView().toolbar(.hidden, for: .tabBar).tag(Tab.home)
-            MetricsView().toolbar(.hidden, for: .tabBar).tag(Tab.metrics)
-            FriendsView().toolbar(.hidden, for: .tabBar).tag(Tab.friends)
+    @ViewBuilder private func tabPane<C: View>(_ t: Tab, @ViewBuilder _ content: () -> C) -> some View {
+        if visited.contains(t) || tab == t {
+            content()
+                .environment(\.tabActive, tab == t)
+                .opacity(tab == t ? 1 : 0)
+                .allowsHitTesting(tab == t)
+                .accessibilityHidden(tab != t)
+                .zIndex(tab == t ? 1 : 0)
         }
+    }
+
+    var body: some View {
+        // Not a TabView: its page container animates content whenever `tab` changes inside withAnimation, which
+        // cross-blended the outgoing and incoming screens. Here every visited tab stays mounted (state and scroll
+        // position survive) and a switch is an instant opacity flip; only the nav pill glides.
+        ZStack {
+            tabPane(.routines) { RoutinesView() }
+            tabPane(.library) { LibraryView() }
+            tabPane(.home) { HomeView() }
+            tabPane(.metrics) { MetricsView() }
+            tabPane(.friends) { FriendsView() }
+        }
+        .transaction { $0.animation = nil }
+        .onChange(of: tab, initial: true) { _, t in visited.insert(t) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             // The resume bar is an overlay on the capsule, not part of the inset: overlays add no layout
             // height, so the tab bar sits at the same y with or without an open workout. The bar's bottom
@@ -265,7 +287,7 @@ struct NavCapsule: View {
         HStack(spacing: 0) {
             ForEach(items, id: \.0) { it in
                 let on = tab == it.0
-                Button { Haptics.light(); withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { tab = it.0 } } label: {
+                Button { Haptics.light(); withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { tab = it.0 }  // animates only the pill; panes are transaction-isolated } label: {
                     VStack(spacing: 3) {
                         JIcon(it.1, 20).shadow(color: on ? Theme.accent.opacity(0.7) : .clear, radius: 5)
                         Text(it.2.uppercased()).font(Theme.body(9, .semibold)).tracking(0.3).lineLimit(1)
