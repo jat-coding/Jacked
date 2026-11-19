@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// The workout being logged right now (the PWA's aw / awStart, `jk_activeWorkout`). Kept on the
 /// phone after every change, one file per account, so closing the app never loses a workout in
@@ -9,7 +10,10 @@ final class WorkoutSession: ObservableObject {
     @Published var active: ActiveWorkout? { didSet {
         if active != oldValue {
             if !loading { touchedAt = Double(Self.nowMs) }   // saveAW's awTouch: the last input of any kind
-            save(); RestLiveActivity.sync(endsAtMs: active?.restEndsAt, workoutName: active?.name ?? "Workout")
+            save()
+            // Live Activity request/update is ActivityKit IPC: let the tap's render commit first.
+            let end = active?.restEndsAt, name = active?.name ?? "Workout"
+            Task { @MainActor in RestLiveActivity.sync(endsAtMs: end, workoutName: name) }
         }
     } }
     /// awTouch (ms): when the open workout was last changed. Kept beside the workout on disk.
@@ -271,15 +275,15 @@ final class WorkoutSession: ObservableObject {
     func toggle(_ ei: Int, _ si: Int, raw: [String: JSONValue], settings: Settings) {
         guard var a = active, a.exercises.indices.contains(ei), a.exercises[ei].sets.indices.contains(si) else { return }
         a.exercises[ei].sets[si].done.toggle()
-        if !a.exercises[ei].sets[si].done { Haptics.light() }
-        if a.exercises[ei].sets[si].done {
-            Haptics.medium()
+        let nowDone = a.exercises[ei].sets[si].done
+        if nowDone {
             let sug = WorkoutMath.suggestion(a.exercises[ei], si, raw: raw)
             if !(a.exercises[ei].sets[si].weight > 0) { a.exercises[ei].sets[si].weight = sug.w }
             if !(a.exercises[ei].sets[si].reps > 0) { a.exercises[ei].sets[si].reps = sug.r }
             if settings.autoRest { a.restEndsAt = Double(Self.nowMs) + Double(settings.restDefault) * 1000 }
         }
-        active = a
+        active = a          // state first, so the check fill renders before the haptic
+        if nowDone { Haptics.medium() } else { Haptics.light() }
     }
 
     func startRest(_ seconds: Int) { active?.restEndsAt = Double(Self.nowMs) + Double(seconds) * 1000 }
@@ -378,7 +382,7 @@ final class WorkoutSession: ObservableObject {
         try? FileManager.default.moveItem(at: a, to: b)
     }
 
-    private static func fileURL(_ code: String) -> URL {
+    nonisolated private static func fileURL(_ code: String) -> URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("JackedBackup", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -388,11 +392,28 @@ final class WorkoutSession: ObservableObject {
 
     private static func touchKey(_ code: String) -> String { "jk_awTouch_" + code }
 
+    /// Persist off the main thread. Every keystroke used to JSON-encode the whole workout and do an atomic
+    /// file write (plus a createDirectory) inside the property observer, before the UI could redraw.
+    /// Now the main thread only hands over a snapshot; see ActiveFileWriter.
     private func save() {
         guard let code else { return }
         UserDefaults.standard.set(touchedAt, forKey: Self.touchKey(code))
-        let url = Self.fileURL(code)
-        if let a = active, let d = try? JSONEncoder().encode(a) { try? d.write(to: url, options: .atomic) }
-        else if active == nil { try? FileManager.default.removeItem(at: url) }
+        ActiveFileWriter.write(active) { Self.fileURL(code) }
+    }
+}
+
+/// One serial queue writes the newest snapshot (older ones queued behind it are dropped), in order, so a
+/// later nil (finish / cancel removes the file) can never be overtaken by an earlier write.
+private enum ActiveFileWriter {
+    private static let pending = OSAllocatedUnfairLock<(url: @Sendable () -> URL, workout: ActiveWorkout?)?>(initialState: nil)
+    private static let queue = DispatchQueue(label: "jacked.active-workout.save", qos: .utility)
+    static func write(_ w: ActiveWorkout?, url: @escaping @Sendable () -> URL) {
+        pending.withLock { $0 = (url, w) }
+        queue.async {
+            guard let job = pending.withLock({ p -> (url: @Sendable () -> URL, workout: ActiveWorkout?)? in defer { p = nil }; return p }) else { return }
+            let u = job.url()
+            if let a = job.workout { if let d = try? JSONEncoder().encode(a) { try? d.write(to: u, options: .atomic) } }
+            else { try? FileManager.default.removeItem(at: u) }
+        }
     }
 }

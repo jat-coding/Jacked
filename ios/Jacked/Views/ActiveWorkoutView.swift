@@ -165,6 +165,24 @@ struct LiveStats: View {
     }
 }
 
+/// evaluateProgress walks saved history (decoding workouts until it has three sightings of the lift) and
+/// saved history cannot change while a workout is open, so it is computed once per lift, not once per
+/// keystroke per card. Keyed on everything it reads: history length, bodyweight, rep range.
+@MainActor final class ProgressCache {
+    static let shared = ProgressCache()
+    private var memo: [String: WorkoutMath.Progress] = [:]
+    func progress(exId: String, raw: [String: JSONValue], settings: Settings) -> WorkoutMath.Progress {
+        let hist = raw["jk_hist"]?.array ?? []
+        let bw = jsNum(raw["jk_bw"])
+        let key = "\(exId)|\(hist.count)|\(hist.last?["id"]?.string ?? "")|\(bw)|\(settings.repMin)|\(settings.repMax)"
+        if let m = memo[key] { return m }
+        let p = WorkoutMath.evaluateProgress(exId: exId, history: hist, settings: settings, bw: bw)
+        if memo.count > 200 { memo.removeAll() }
+        memo[key] = p
+        return p
+    }
+}
+
 struct ElapsedClock: View {
     let start: Double
     var color: Color = Theme.accent
@@ -231,6 +249,7 @@ struct ExerciseCard: View {
                     }
                 } label: { SFIcon("ellipsis").foregroundStyle(Theme.text2).frame(width: 32, height: 32) }
             }
+            let chips = makeChips(prIdx: prIdx)
             if !chips.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(chips, id: \.text) { c in
@@ -313,13 +332,13 @@ struct ExerciseCard: View {
 
     /// The badge row: ★ PR once a set beats the record, then Go up / Lighter from saved history
     /// (never tonight's numbers). A PR tonight hides Lighter, like the PWA.
-    private var chips: [Chip] {
+    private func makeChips(prIdx: Int?) -> [Chip] {
         let raw = store.backup.raw
-        let gotPR = WorkoutMath.prIndex(ex, raw: raw) != nil
+        let gotPR = prIdx != nil
         var out: [Chip] = []
         if gotPR { out.append(Chip(text: "★ PR", color: Color(hex: 0xFFD700), info: nil)) }
         guard WorkoutMath.progressTrackable(ex.tracking) else { return out }
-        let p = WorkoutMath.evaluateProgress(exId: ex.exId, history: raw["jk_hist"]?.array ?? [], settings: settings, bw: jsNum(raw["jk_bw"]))
+        let p = ProgressCache.shared.progress(exId: ex.exId, raw: raw, settings: settings)
         if p.up {
             out.append(Chip(text: "▲ Go up", color: Theme.accent,
                             info: "Ready to go up: you've hit \(settings.repMax)+ reps on every set, \(WorkoutMath.progressStreak) workouts in a row, at the same weight."))

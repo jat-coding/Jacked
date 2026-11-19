@@ -176,8 +176,11 @@ enum WorkoutMath {
         }
     }
     static func volWeight(_ e: LogExercise, _ s: LogSet, workoutId: String, bw: Double) -> Double {
-        let imported = importedId.firstMatch(in: workoutId, range: NSRange(workoutId.startIndex..., in: workoutId)) != nil
-        return effWeight(e, s, bw: bw) * (setSingle(e, s) && !imported ? 2 : 1)
+        // The regex only matters for a Single / Both lift; skip it for every other set (this runs per set,
+        // twice per render, for the stats tile and the mini bar).
+        let doubled = setSingle(e, s)
+            && importedId.firstMatch(in: workoutId, range: NSRange(workoutId.startIndex..., in: workoutId)) == nil
+        return effWeight(e, s, bw: bw) * (doubled ? 2 : 1)
     }
 
     struct Best { let si: Int; let weight: Double; let reps: Double }
