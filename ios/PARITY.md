@@ -326,6 +326,7 @@ Updated 2026-11-18 (row 65 added, present); 2026-11-17 (parity backlog pass, the
 | feature | PWA commit or location | iOS status | evidence | notes |
 |---|---|---|---|---|
 | Trusted Programs with today's pick | df5667f | present | ios/Jacked/Views/RoutinesView.swift:147-186 | |
+| One shared bottom inset: nav capsule + Return-to-workout bar (while a workout is open) both reserve space, so no tab/list's last rows sit under either | 2026-11-18 local commit | present (written, NOT compiled) | ios/Jacked/Views/MainTabView.swift safeAreaInset(.bottom) VStack | PWA: --navClear/--resumeX in index.html; tests/e2e/nav-resume-audit.mjs |
 | Remove a Trusted Program (x on each card), synced as jk_hiddenCurated (names); daily pick skips hidden; "Restore removed programs (n)"; section hidden when all removed | 2026-11-18 local commit | present (written, NOT compiled: no Xcode on Linux) | ios/Jacked/Views/RoutinesView.swift TrustedPrograms; ios/Jacked/Data/SuggestMath.swift todaysCuratedPick; ios/Jacked/Data/ImportMath.swift keyShape | PWA: index.html renderCurated/hideCurated/restoreCurated/todaysCuratedPick; tests/e2e/trusted-remove.mjs |
 | + Add to Routines | 79be845, 309681e | present | ios/Jacked/Views/RoutinesView.swift:195-209 | |
 | Routines never added without asking | 9dbce00 | present | ios/Jacked/Views/SuggestCard.swift:109-113 | |

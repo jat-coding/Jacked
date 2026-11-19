@@ -10,7 +10,6 @@ struct MainTabView: View {
     @StateObject private var session = WorkoutSession()
     @StateObject private var catalog = ExerciseCatalog()
     @StateObject private var friends = FriendsStore()
-    @State private var barH: CGFloat = 40
     @State private var tab: Tab = Tab(rawValue: DevHooks.tab ?? "") ?? .home
     @Environment(\.scenePhase) private var scenePhase
     /// PULL ON FOCUS throttle (_lastFocusPull): at most one cloud pull a minute.
@@ -46,26 +45,27 @@ struct MainTabView: View {
         .transaction { $0.animation = nil }
         .onChange(of: tab, initial: true) { _, t in visited.insert(t) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            // The resume bar is an overlay on the capsule, not part of the inset: overlays add no layout
-            // height, so the tab bar sits at the same y with or without an open workout. The bar's bottom
-            // edge is lifted by its own measured height so it floats just above the capsule.
-            NavCapsule(tab: $tab, requests: friends.friends.filter(\.pending).count)
-                .overlay(alignment: .top) {
-                    if session.active != nil && !session.presented {
-                        Button { Haptics.light(); session.presented = true } label: {
-                            HStack(spacing: 8) {
-                                Label("Return to workout", systemImage: "arrow.uturn.left")
-                                // updateResumeBar: the bar carries the running time.
-                                ElapsedClock(start: session.active?.startedAt ?? 0, color: Theme.onAccent.opacity(0.8))
-                            }
-                                .font(Theme.body(14, .bold))
-                                .foregroundStyle(Theme.onAccent).padding(.horizontal, 18).padding(.vertical, 10)
-                                .background(Theme.accent, in: Capsule())
+            // ONE shared bottom inset (Mr. Roni 2026-11-18: Monthly Recaps' last rows sat under the capsule AND the
+            // Return-to-workout bar). The capsule and, while a workout is open, the resume bar above it are laid
+            // out together in this inset, so every tab's scroll content (and its end-of-scroll) clears both
+            // automatically: no per-screen padding numbers. The capsule stays at the same y either way, since the
+            // stack is bottom-anchored and the bar only adds height above it.
+            VStack(spacing: 8) {
+                if session.active != nil && !session.presented {
+                    Button { Haptics.light(); session.presented = true } label: {
+                        HStack(spacing: 8) {
+                            Label("Return to workout", systemImage: "arrow.uturn.left")
+                            // updateResumeBar: the bar carries the running time.
+                            ElapsedClock(start: session.active?.startedAt ?? 0, color: Theme.onAccent.opacity(0.8))
                         }
-                        .background(GeometryReader { g in Color.clear.onAppear { barH = g.size.height } })
-                        .offset(y: -(barH + 8))
+                            .font(Theme.body(14, .bold))
+                            .foregroundStyle(Theme.onAccent).padding(.horizontal, 18).padding(.vertical, 10)
+                            .background(Theme.accent, in: Capsule())
                     }
+                    .transition(.identity)
                 }
+                NavCapsule(tab: $tab, requests: friends.friends.filter(\.pending).count)
+            }
         }
         .ignoresSafeArea(.keyboard)
         .overlay(alignment: .top) { ToastView(text: $session.toast) }
