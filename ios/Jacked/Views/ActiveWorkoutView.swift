@@ -299,12 +299,13 @@ struct ExerciseCard: View {
             HStack(spacing: 8) {
                 Button { session.addSet(ei); Haptics.light() } label: { Label("Add Set", systemImage: "plus") }
                     .buttonStyle(GhostButtonStyle())
-                if ex.sets.count > 1 {
-                    Button { session.removeSet(ei, ex.sets.count - 1) } label: { Text("− Set") }
+                // Always laid out (dimmed at one set) so Add Set never resizes and the pair moves as one row.
+                Button { session.removeSet(ei, ex.sets.count - 1) } label: { Text("− Set") }
                     .buttonStyle(GhostButtonStyle()).frame(width: 90)
+                    .disabled(ex.sets.count <= 1).opacity(ex.sets.count > 1 ? 1 : 0.35)
                     .accessibilityLabel("Remove last set")
-                }
             }
+            .transaction { $0.animation = nil }
         }
         .padding(14)
         .card()
