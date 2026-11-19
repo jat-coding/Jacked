@@ -141,7 +141,7 @@ struct AchievementsSheet: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(20).padding(.top, 10)
         }
         .background(Theme.bg2.ignoresSafeArea())
         .sheet(item: $openBadge) { BadgeDetailSheet(b: $0, m: m, T: result.ladders, onStart: onStart).popup() }
@@ -284,10 +284,10 @@ struct BadgeDetailSheet: View {
                 }
                 if let n = how.note { h("Resets"); para(n) }
             }
-            .padding(20)
+            .padding(20).padding(.top, 10)
         }
         .background(Theme.bg2.ignoresSafeArea())
-        .presentationDragIndicator(.visible)
+        .sheetGrabber()
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
                 if let plan = m.badgePlan(b, db: catalog.db), let onStart {

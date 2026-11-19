@@ -298,6 +298,6 @@ struct NavCapsule: View {
         .background(Color(red: 22 / 255, green: 22 / 255, blue: 30 / 255).opacity(0.62), in: Capsule())
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
         .shadow(color: .black.opacity(0.6), radius: 15, x: 0, y: 10)
-        .padding(.horizontal, 12).padding(.bottom, 4)
+        .padding(.horizontal, 12).padding(.bottom, -2)   // 6pt lower than before; safe-area inset still keeps it clear of the home indicator
     }
 }

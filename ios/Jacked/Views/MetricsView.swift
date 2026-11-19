@@ -392,10 +392,10 @@ private struct MuscleScoringSheet: View {
                     Divider().overlay(Theme.border)
                 }
             }
-            .padding(20)
+            .padding(20).padding(.top, 10)
         }
         .background(Theme.bg2.ignoresSafeArea())
-        .presentationDragIndicator(.visible)
+        .sheetGrabber()
     }
     private func section(_ h: String, _ b: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -483,7 +483,7 @@ struct RecapSheet: View {
         let you = m.yourStats(code: auth.session?.code ?? "", badges: badges)
         let crown = isPrev && m.crownCodes([you] + friends.friends.filter { !$0.pending }).contains(you.code)
         ScrollView {
-            content(crown: crown, tiered: tiered).padding(20)
+            content(crown: crown, tiered: tiered).padding(20).padding(.top, 10)
             // shareRecap: the recap as a picture plus a one-line caption, through the share sheet.
             if let img = ImageRenderer(content: content(crown: crown, tiered: tiered).padding(24).frame(width: 400).background(Theme.bg)
                                         .environment(\.colorScheme, .dark)).uiImage.map(Image.init(uiImage:)) {
@@ -495,7 +495,7 @@ struct RecapSheet: View {
             }
         }
         .background(Theme.bg2.ignoresSafeArea())
-        .presentationDragIndicator(.visible)
+        .sheetGrabber()
     }
 
     /// shareRecap's caption.

@@ -541,7 +541,7 @@ private struct DiscardGuard: ViewModifier {
     @State private var ask = false
     func body(content: Content) -> some View {
         content
-            .presentationDragIndicator(.visible)
+            .sheetGrabber()
             .interactiveDismissDisabled(dirty)
             .background(DismissGuardHook { if dirty { ask = true } })
             .confirmationDialog("Discard your changes?", isPresented: $ask, titleVisibility: .visible) {
@@ -550,9 +550,22 @@ private struct DiscardGuard: ViewModifier {
             }
     }
 }
+/// Custom sheet grabber: the system .presentationDragIndicator can't be repositioned, so hide it and draw our own
+/// a little lower. Sheet content needs ~30pt of top room (grabber ends at y=19).
+private struct SheetGrabber: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .presentationDragIndicator(.hidden)
+            .overlay(alignment: .top) {
+                Capsule().fill(Color.white.opacity(0.3)).frame(width: 36, height: 5).padding(.top, 14)
+                    .allowsHitTesting(false).accessibilityHidden(true)
+            }
+    }
+}
 extension View {
+    func sheetGrabber() -> some View { modifier(SheetGrabber()) }
     /// Standard popup chrome: drag indicator + interactive swipe-down dismissal.
-    func popup() -> some View { presentationDragIndicator(.visible) }
+    func popup() -> some View { sheetGrabber() }
     /// Same, but with unsaved input a swipe-down asks before discarding.
     func popup(dirty: Bool) -> some View { modifier(DiscardGuard(dirty: dirty)) }
 }
@@ -573,14 +586,14 @@ struct SheetScaffold<Content: View>: View {
                 }
                 .accessibilityLabel("Close")
             }
-            .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 12)
+            .padding(.horizontal, 18).padding(.top, 30).padding(.bottom, 12)   // clears the custom grabber
             ScrollView {
                 VStack(spacing: 10) { content() }.padding(.horizontal, 18).padding(.bottom, 24)
             }
         }
         .background(Theme.bg2.ignoresSafeArea())
         .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .sheetGrabber()
     }
 }
 
