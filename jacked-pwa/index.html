@@ -467,7 +467,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
 /* selected picker chip: pinned first, check + clear mark, heavier weight and a ring so it reads as the active filter */
 .chip.sel{display:inline-flex;align-items:center;gap:5px;font-weight:800;padding:6px 10px 6px 9px;margin:4px 2px 4px 4px;box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--accent)}
 .chip.sel .chip-x{opacity:.7;margin-left:1px}
-.cur-card{flex:0 0 auto;width:200px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);padding:14px;white-space:normal}
+.cur-card{position:relative;flex:0 0 auto;width:200px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);padding:14px;white-space:normal}
 .spin{display:inline-block;width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .invite-code{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:16px;text-align:center;margin-bottom:14px}
@@ -535,6 +535,9 @@ body{background-image:none}
 .page>.ph:not(:has(+.sticky-sub)){margin-bottom:12px}   /* 12px under every page header, even when the first block is hidden (Home's recap card) */
 .sticky-sub{background:#000;padding-top:4px}
 /* Lift the main surfaces off the canvas with a soft shadow. */
+.cur-x{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;border:1px solid var(--border2);background:var(--bg3);color:var(--muted);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.cur-x:active{color:var(--text);background:var(--border2)}
+.cur-restore{font-family:inherit;display:block;margin:10px auto 0;background:none;border:0;color:var(--muted);font-size:12px;text-decoration:underline;padding:6px;cursor:pointer}
 .card,.rc,.eb,.metric-card,.cw,.cur-card{box-shadow:var(--shadow)}
 /* Primary buttons get a subtle vertical gradient + accent glow. */
 .ba,.rsb{background:linear-gradient(180deg,var(--accent-bright),var(--accent));box-shadow:0 8px 20px -8px rgba(32,211,194,.65)}
@@ -766,8 +769,9 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <div class="page" id="page-routines">
   <div class="ph"><div class="pt">Routines</div><button class="btn bg sm" onclick="openCR()">+ New</button></div>
   <div id="curatedWrap" class="sec">
-    <div class="blk-t"><svg viewBox='0 0 24 24' width='18' height='18' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
+    <div class="blk-t" id="curatedHead"><svg viewBox='0 0 24 24' width='18' height='18' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
     <div class="chips" id="curatedList" style="gap:10px"></div>
+    <button class="cur-restore" id="curatedRestore" style="display:none" onclick="restoreCurated()"></button>
   </div>
   <div class="sec"><div class="blk-head"><div class="blk-t">My routines</div><div style="display:flex;gap:6px"><button class="btn bg sm" onclick="openRoutineOrder()">Reorder</button></div></div><div id="routinesList"></div></div>
 </div>
@@ -1644,7 +1648,7 @@ async function usernameTaken(u, exceptMine){
 // a wrong-typed value (returns null → the caller's default), and restoreKeys refuses to
 // write one (import / cloud restore). Keys not listed are free-form scalars.
 const KEY_SHAPE={
-  routines:'a',routineSections:'a',collapsedSections:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
+  routines:'a',routineSections:'a',collapsedSections:'a',hiddenCurated:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
   prof:'o',prs:'o',settings:'o',exRename:'o',exOverride:'o',exNotes:'o',cardioPR:'o',holdPR:'o',metrics:'o',
   sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o',prRepair:'o',prReset:'o',prSug:'o',routinesDel:'o'
 };
@@ -2374,12 +2378,14 @@ function dismissSuggest(){ S.s('suggestDismiss', dayKey(new Date())); const el=d
 // through every routine across every CURATED program before repeating any of them.
 function todaysCuratedPick(today){
   const cache=S.g('sugToday')||{};
-  if(cache.day===today && cache.curated) return cache.curated;
+  const hid=gHiddenCur();   // removed trusted programs are never picked (a cached pick from one is dropped)
+  const vis=CURATED_FLAT.filter(c=>!hid.has(CURATED[c.pi].name));
+  if(cache.day===today && cache.curated && !hid.has(CURATED[cache.curated.pi]?.name)) return cache.curated;
   const log=S.g('sugCuratedLog')||{};
   const key=c=>c.pi+'_'+c.ri;
   const shownAgo=k=>{ const d=log[k]; return d?Math.round((new Date(today)-new Date(d))/864e5):999; };
-  const ranked=[...CURATED_FLAT].sort((a,b)=>shownAgo(key(b))-shownAgo(key(a)));
-  const pick=ranked.find(c=>shownAgo(key(c))>=CURATED_FLAT.length-1)||ranked[0]||null;
+  const ranked=[...vis].sort((a,b)=>shownAgo(key(b))-shownAgo(key(a)));
+  const pick=ranked.find(c=>shownAgo(key(c))>=vis.length-1)||ranked[0]||null;
   if(pick){ S.s('sugCuratedLog',{...log,[key(pick)]:today}); }
   S.s('sugToday',{...cache,day:today,curated:pick});
   return pick;
@@ -2666,17 +2672,31 @@ function openExInfo(exId){
 // ============================================================
 // CURATED PROGRAMS (top of Library)
 // ============================================================
+// Removed trusted programs (jk_hiddenCurated: array of program names, synced like any other jk_ key). Restore writes
+// [] rather than deleting the key, so an empty local list wins the merge instead of the cloud's old list coming back.
+const gHiddenCur=()=>new Set(S.g('hiddenCurated')||[]);
+function hideCurated(i){ const p=CURATED[i]; if(!p) return; const h=[...gHiddenCur()]; if(!h.includes(p.name)) h.push(p.name); S.s('hiddenCurated',h); renderCurated(); renderSuggest(); }
+function restoreCurated(){ S.s('hiddenCurated',[]); renderCurated(); renderSuggest(); }
 function renderCurated() {
   const el=document.getElementById('curatedList'); if(!el) return;
+  const hid=gHiddenCur();
+  const wrap=document.getElementById('curatedWrap'), rest=document.getElementById('curatedRestore');
+  const nHid=CURATED.filter(p=>hid.has(p.name)).length;
+  if(rest){ rest.style.display=nHid?'':'none'; rest.textContent=`Restore removed programs (${nHid})`; }
+  const strip=document.getElementById('curatedHead');
+  const allGone=nHid>=CURATED.length;
+  if(strip) strip.style.display=allGone?'none':''; el.style.display=allGone?'none':'';
   const pick=todaysCuratedPick(dayKey(new Date()));
   el.innerHTML=CURATED.map((p,i)=>{
+    if(hid.has(p.name)) return '';
     const days=p.routines.length;
     const routineList=p.routines.map((rt,ri)=>{
       const isPick=pick&&pick.pi===i&&pick.ri===ri;
       return `<div style="font-size:12px;margin-top:3px;${isPick?'color:var(--blue);font-weight:700':'color:var(--text2)'}">${isPick?"Today's pick · ":''}${esc(rt.name)}</div>`;
     }).join('');
     return `<div class="cur-card">
-      <div style="font-family:var(--fh);font-size:18px;font-weight:800;line-height:1.05">${esc(p.name)}</div>
+      <button class="cur-x" onclick="hideCurated(${i})" aria-label="Remove ${esc(p.name)} from Trusted Programs"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div style="font-family:var(--fh);font-size:18px;font-weight:800;line-height:1.05;padding-right:22px">${esc(p.name)}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(p.desc)}</div>
       <div style="margin-top:6px">${routineList}</div>
       <div style="font-size:10px;color:var(--muted);margin-top:6px">${days} workout${days!==1?'s':''} · ${p.source}</div>
