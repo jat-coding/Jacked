@@ -12,6 +12,8 @@ struct ActiveWorkoutView: View {
     @State private var confirmFinish = false
     @State private var confirmCancel = false
     @State private var finishing = false
+    /// PWA _wMiniSync: true once the .wstats tile's bottom edge has scrolled above the header.
+    @State private var statsGone = false
 
     var body: some View {
         let settings = store.backup.settings
@@ -20,6 +22,9 @@ struct ActiveWorkoutView: View {
                 VStack(spacing: 14) {
                     if let a = session.active {
                         LiveStats(workout: a, settings: settings, bw: jsNum(store.backup.raw["jk_bw"]))
+                            .background(GeometryReader { g in
+                                Color.clear.preference(key: StatsBottomKey.self, value: g.frame(in: .named("awScroll")).maxY)
+                            })
                         ForEach(Array(a.exercises.enumerated()), id: \.element.uid) { ei, ex in
                             ExerciseCard(ei: ei, ex: ex, settings: settings)
                         }
@@ -35,6 +40,22 @@ struct ActiveWorkoutView: View {
                         .padding(.bottom, 120)
                 }
                 .padding(.horizontal, 16).padding(.top, 8)
+            }
+            .coordinateSpace(name: "awScroll")
+            .onPreferenceChange(StatsBottomKey.self) { bottom in
+                // scroll space origin is the top of the visible scroll area (just under the nav bar),
+                // so bottom < 0 means the tile has gone up under the header.
+                let gone = bottom < 0
+                if gone != statsGone { withAnimation(.easeOut(duration: 0.15)) { statsGone = gone } }
+            }
+            .overlay(alignment: .top) {
+                if let a = session.active {
+                    MiniStatBar(workout: a, settings: settings, bw: jsNum(store.backup.raw["jk_bw"]))
+                        .padding(.horizontal, 16).padding(.top, 6)
+                        .opacity(statsGone ? 1 : 0)
+                        .offset(y: statsGone ? 0 : -6)
+                        .allowsHitTesting(false)
+                }
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.bg.ignoresSafeArea())
@@ -81,6 +102,43 @@ struct ActiveWorkoutView: View {
     private var finishPrompt: String {
         let n = session.active?.exercises.reduce(0) { $0 + $1.sets.filter(\.done).count } ?? 0
         return n == 0 ? "No sets logged — finish anyway?" : "Finish and save this workout?"
+    }
+}
+
+private struct StatsBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// The PWA's #wMini: "<vol> <unit> lifted | <n> sets done", shown under the header once the
+/// big stats tile has scrolled away. .wmini CSS: 11px muted, bold 12px accent numbers,
+/// 1px divider 12pt tall, 14pt gaps, 10pt radius, border2 outline, near-black fill.
+struct MiniStatBar: View {
+    let workout: ActiveWorkout
+    let settings: Settings
+    let bw: Double
+    var body: some View {
+        let exs = workout.exercises
+        let done = exs.reduce(0) { $0 + $1.sets.filter(\.done).count }
+        let vol = exs.reduce(0.0) { acc, e in
+            WorkoutMath.isWT(e) ? acc + e.sets.filter(\.done).reduce(0.0) { $0 + WorkoutMath.volWeight(e, $1, workoutId: workout.id, bw: bw) * $1.reps } : acc
+        }
+        HStack(spacing: 14) {
+            HStack(spacing: 3) {
+                Text("\(HomeMath.fmtV(settings.display(vol))) \(settings.unitLabel)").font(Theme.body(12, .heavy)).foregroundStyle(Theme.accent)
+                Text("lifted")
+            }
+            Rectangle().fill(Theme.border).frame(width: 1, height: 12)
+            HStack(spacing: 3) {
+                Text("\(done)").font(Theme.body(12, .heavy)).foregroundStyle(Theme.accent)
+                Text("sets done")
+            }
+        }
+        .font(Theme.body(11)).foregroundStyle(Theme.muted)
+        .padding(.horizontal, 14).padding(.vertical, 5)
+        .frame(maxWidth: .infinity)
+        .background(Color(red: 10/255, green: 10/255, blue: 11/255).opacity(0.96), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border2, lineWidth: 1))
     }
 }
 
