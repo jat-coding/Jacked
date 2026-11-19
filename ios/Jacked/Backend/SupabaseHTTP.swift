@@ -3,13 +3,19 @@ import Foundation
 import FoundationNetworking   // Linux only: lets ios/Tests/linux-check.sh compile this layer off a Mac
 #endif
 
-/// Error from a Supabase HTTP call. `status` is the HTTP status (0 = never reached the server).
+/// Error from a Supabase HTTP call. `status` is the HTTP status. 0 = the phone has no connection;
+/// -1 = the request was cancelled (not a failure); -2 = the phone tried but got no usable answer
+/// (timeout, TLS, DNS, anything else).
 struct SupabaseError: Error, LocalizedError {
     let status: Int
     let code: String?
     let message: String
 
+    static let cancelledStatus = -1, unreachableStatus = -2
     var isNetwork: Bool { status == 0 }
+    var isCancelled: Bool { status == Self.cancelledStatus }
+    /// No usable answer from the server for any transport reason: keep local data and the session.
+    var isTransient: Bool { status == 0 || status == Self.unreachableStatus }
     var errorDescription: String? { message }
 }
 
@@ -70,13 +76,27 @@ struct SupabaseHTTP {
         do {
             (data, resp) = try await session.data(for: req)
         } catch {
-            throw SupabaseError(status: 0, code: nil, message: "No connection")
+            throw Self.transportError(error)
         }
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             throw Self.decodeError(status: status, data: data)
         }
         return data
+    }
+
+    /// Only genuine connectivity failures are "No connection"; a cancelled request is not a failure.
+    static func transportError(_ error: Error) -> SupabaseError {
+        if error is CancellationError || (error as? URLError)?.code == .cancelled {
+            return SupabaseError(status: SupabaseError.cancelledStatus, code: nil, message: "Cancelled")
+        }
+        switch (error as? URLError)?.code {
+        case .notConnectedToInternet?, .networkConnectionLost?, .dataNotAllowed?, .internationalRoamingOff?:
+            return SupabaseError(status: 0, code: nil, message: "No connection")
+        default:
+            return SupabaseError(status: SupabaseError.unreachableStatus, code: nil,
+                                 message: "Couldn't reach the server")
+        }
     }
 
     func send(_ method: String, _ path: String,

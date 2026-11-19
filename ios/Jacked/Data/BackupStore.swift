@@ -72,7 +72,10 @@ final class BackupStore: ObservableObject {
             state = .idle
             if dirty { await push(auth: auth) }
         } catch let e as SupabaseError {
-            state = .failed(e.isNetwork ? "Offline, showing the copy on this phone" : "Couldn't sync (\(e.status))")
+            if e.isCancelled { state = .idle; return }   // a refresh cancelled mid-flight is not an error
+            state = .failed(e.isNetwork ? "Offline, showing the copy on this phone"
+                            : e.isTransient ? "Couldn't reach the server, showing the copy on this phone"
+                            : "Couldn't sync (\(e.status))")
         } catch {
             state = .failed("Couldn't read your saved data")
         }

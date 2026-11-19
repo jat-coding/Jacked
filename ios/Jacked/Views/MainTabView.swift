@@ -295,8 +295,9 @@ struct NavCapsule: View {
         }
         .padding(5)
         .background(.ultraThinMaterial, in: Capsule())
-        .background(Color(red: 22 / 255, green: 22 / 255, blue: 30 / 255).opacity(0.62), in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+        .environment(\.colorScheme, .dark)
+        .background(Color.black.opacity(0.6), in: Capsule())   // near-black tint: dark frosted glass, no blue-grey
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
         .shadow(color: .black.opacity(0.6), radius: 15, x: 0, y: 10)
         .padding(.horizontal, 12).padding(.bottom, 4)
     }

@@ -39,7 +39,7 @@ final class AuthStore: ObservableObject {
             let fresh = try await api.refresh(saved)
             KeychainStore.save(fresh)
             phase = .signedIn(fresh)
-        } catch let e as SupabaseError where e.isNetwork || e.status >= 500 {
+        } catch let e as SupabaseError where e.isTransient || e.isCancelled || e.status >= 500 {
             phase = .signedIn(saved)
         } catch {
             KeychainStore.clear()
@@ -145,7 +145,7 @@ final class AuthStore: ObservableObject {
             KeychainStore.save(fresh)
             phase = .signedIn(fresh)
             return fresh
-        } catch let e as SupabaseError where e.isNetwork || e.status >= 500 {
+        } catch let e as SupabaseError where e.isTransient || e.isCancelled || e.status >= 500 {
             return s
         } catch {
             KeychainStore.clear()
@@ -158,6 +158,7 @@ final class AuthStore: ObservableObject {
 
     private static func describe(_ e: SupabaseError, wrongPassword: String) -> String {
         if e.isNetwork { return "No connection, try again" }
+        if e.isTransient { return "Couldn't reach the server, try again" }
         if e.status == 429 { return rateLimited }
         if e.status == 400 { return wrongPassword }
         return "Something went wrong (\(e.status)), try again"
