@@ -11,7 +11,7 @@ await page.waitForTimeout(400);
 const N = await page.evaluate(() => CURATED.length);
 const cards = () => page.locator('#curatedList .cur-card').count();
 check('trp: every program has a card + x', (await cards()) === N && (await page.locator('#curatedList .cur-x').count()) === N);
-check('trp: restore button hidden at start', !(await page.locator('#curatedRestore').isVisible()));
+check('trp: restore button hidden at start', (await page.locator('#curatedRestore').count()) === 0);
 await page.screenshot({ path: SHOTS + '/trp-1-before.png' });
 // Make today's pick come from program 0, then remove program 0: pick must move off it.
 await page.evaluate(() => { const t = dayKey(new Date()); S.s('sugToday', { day: t, curated: { pi: 0, ri: 0, name: CURATED[0].routines[0].name, program: CURATED[0].name, source: CURATED[0].source } }); });
@@ -38,7 +38,7 @@ check('trp: all hidden -> pick is null, no crash', await page.evaluate(() => { l
 await page.evaluate(() => renderSuggest());
 await page.screenshot({ path: SHOTS + '/trp-2-all-removed.png' });
 await page.locator('#curatedRestore').click();
-check('trp: restore brings all back', (await cards()) === N && !(await page.locator('#curatedRestore').isVisible()));
+check('trp: restore brings all back', (await cards()) === N && (await page.locator('#curatedRestore').count()) === 0);
 check('trp: restore writes [] (not delete) so empty list wins merge', await page.evaluate(() => localStorage.getItem('jk_hiddenCurated') === '[]' && mergeBackup({ jk_hiddenCurated: ['X'] }, collectBackup()).jk_hiddenCurated.length === 0));
 await page.locator('#curatedList .cur-x').nth(1).click();
 await page.screenshot({ path: SHOTS + '/trp-3-one-removed.png' });

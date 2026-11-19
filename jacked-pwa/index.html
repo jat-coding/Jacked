@@ -776,7 +776,6 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
   <div id="curatedWrap" class="sec">
     <div class="blk-t" id="curatedHead"><svg viewBox='0 0 24 24' width='18' height='18' fill='#ffd700' stroke='#ffd700' stroke-width='1' style='vertical-align:-2px'><path d='M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245'/></svg> Trusted Programs</div>
     <div class="chips" id="curatedList" style="gap:10px"></div>
-    <button class="cur-restore" id="curatedRestore" style="display:none" onclick="restoreCurated()"></button>
   </div>
   <div class="sec"><div class="blk-head"><div class="blk-t">My routines</div><div style="display:flex;gap:6px"><button class="btn bg sm" onclick="openRoutineOrder()">Reorder</button></div></div><div id="routinesList"></div></div>
 </div>
@@ -2685,9 +2684,15 @@ function restoreCurated(){ S.s('hiddenCurated',[]); renderCurated(); renderSugge
 function renderCurated() {
   const el=document.getElementById('curatedList'); if(!el) return;
   const hid=gHiddenCur();
-  const wrap=document.getElementById('curatedWrap'), rest=document.getElementById('curatedRestore');
+  const wrap=document.getElementById('curatedWrap');
   const nHid=CURATED.filter(p=>hid.has(p.name)).length;
-  if(rest){ rest.style.display=nHid?'':'none'; rest.textContent=`Restore removed programs (${nHid})`; }
+  // The restore button exists only while something is hidden (an empty last child would skew the card's bottom spacing).
+  let rest=document.getElementById('curatedRestore');
+  if(!nHid){ if(rest) rest.remove(); }
+  else{
+    if(!rest){ rest=document.createElement('button'); rest.id='curatedRestore'; rest.className='cur-restore'; rest.onclick=restoreCurated; wrap.appendChild(rest); }
+    rest.textContent=`Restore removed programs (${nHid})`;
+  }
   const strip=document.getElementById('curatedHead');
   const allGone=nHid>=CURATED.length;
   if(strip) strip.style.display=allGone?'none':''; el.style.display=allGone?'none':'';
