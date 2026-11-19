@@ -114,7 +114,7 @@ struct AchievementsSheet: View {
                     Text("Achievements").font(Theme.heading(30, .extraBold)).foregroundStyle(Theme.text)
                     Spacer()
                     Button { dismiss() } label: { JIcon("close", 14).foregroundStyle(Theme.text2)
-                        .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()) }.buttonStyle(.plain)
+                        .frame(width: 32, height: 32).background(Theme.bg3, in: Circle()).tapTarget(Circle(), width: 32, height: 32) }.buttonStyle(.plain)
                 }
                 .padding(.bottom, 14)
                 if let jk {
@@ -127,6 +127,7 @@ struct AchievementsSheet: View {
                         .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
                         .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Color(hex: 0xFFD700).opacity(jk.earned ? 0.8 : 0.25), lineWidth: 1.5))
                         .opacity(jk.earned ? 1 : 0.6)
+                        .contentShape(RoundedRectangle(cornerRadius: Theme.radius))
                     }
                     .buttonStyle(.plain).padding(.bottom, 6)
                 }
@@ -136,7 +137,7 @@ struct AchievementsSheet: View {
                         Text(BadgeUI.groups[gi].uppercased()).font(Theme.body(11, .bold)).tracking(1.5).foregroundStyle(Theme.muted)
                             .padding(.top, 18).padding(.bottom, 4)
                         ForEach(rows) { b in
-                            Button { openBadge = b } label: { row(b) }.buttonStyle(.plain)
+                            Button { openBadge = b } label: { row(b).contentShape(Rectangle()) }.buttonStyle(.plain)
                         }
                     }
                 }

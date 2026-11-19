@@ -218,7 +218,7 @@ struct ExerciseCard: View {
                     JIcon("link", 11)
                     Text("Superset with \(session.supersetPartner(ei))").font(Theme.body(11, .bold))
                     Spacer()
-                    Button { session.unlinkSuperset(ei) } label: { SFIcon("xmark.circle") }
+                    Button { session.unlinkSuperset(ei) } label: { SFIcon("xmark.circle").tapTarget(Circle(), width: 24, height: 24) }
                         .accessibilityLabel("Unlink")
                 }
                 .foregroundStyle(Theme.blue)
@@ -232,13 +232,14 @@ struct ExerciseCard: View {
                     // openExInfo: tap the name for the exercise's info page.
                     Button { infoEx = catalog.byId(ex.exId, raw: store.backup.raw) } label: {
                         Text(ex.name).font(Theme.body(15, .semibold)).foregroundStyle(Theme.text).multilineTextAlignment(.leading)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain).accessibilityHint("Opens the exercise info")
                     if let pr = prLine { Text(pr).font(Theme.body(11)).foregroundStyle(Theme.muted) }
                 }
                 Spacer()
                 Button { session.tapSuperset(ei) } label: {
-                    SFIcon("link").foregroundStyle(picking ? Theme.accent : paired ? Theme.blue : Theme.text2).frame(width: 32, height: 32)
+                    SFIcon("link").foregroundStyle(picking ? Theme.accent : paired ? Theme.blue : Theme.text2).frame(width: 32, height: 32).tapTarget(Rectangle(), width: 32, height: 32)
                 }
                 .accessibilityLabel("Superset")
                 Menu {
@@ -258,6 +259,7 @@ struct ExerciseCard: View {
                                 .padding(.horizontal, 8).padding(.vertical, 3)
                                 .background(c.color.opacity(0.12), in: Capsule())
                                 .overlay(Capsule().stroke(c.color.opacity(0.4), lineWidth: 1))
+                                .contentShape(Capsule())
                         }
                         .buttonStyle(.plain).disabled(c.info == nil)
                     }
@@ -439,6 +441,7 @@ struct SetRow: View {
                     .foregroundStyle(set.done ? Theme.onAccent : Theme.muted)
                     .frame(width: 40, height: 34)
                     .background(set.done ? Theme.accent : Theme.bg3, in: RoundedRectangle(cornerRadius: 9))
+                    .contentShape(RoundedRectangle(cornerRadius: 9))
             }
             .accessibilityLabel(set.done ? "Set \(si + 1) done" : "Mark set \(si + 1) done")
         }
@@ -611,6 +614,7 @@ struct OptionRow<V: Equatable>: View {
                         .foregroundStyle(on ? Theme.onAccent : Theme.text2)
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(on ? Theme.accent : Theme.bg3, in: Capsule())
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }

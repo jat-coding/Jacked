@@ -199,3 +199,14 @@ extension View {
             .shadow(color: pressed ? .clear : Theme.accent.opacity(0.4), radius: 9, x: 0, y: 8))
     }
 }
+
+extension View {
+    /// Tap area at least 44x44pt around a small control without changing layout or visuals:
+    /// pad out, set the hit shape, pad back in (negative padding keeps the layout footprint).
+    func tapTarget<S: Shape>(_ shape: S, width w: CGFloat, height h: CGFloat) -> some View {
+        let px = max(0, (44 - w) / 2), py = max(0, (44 - h) / 2)
+        return self.padding(.horizontal, px).padding(.vertical, py)
+            .contentShape(shape)
+            .padding(.horizontal, -px).padding(.vertical, -py)
+    }
+}

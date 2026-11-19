@@ -214,6 +214,7 @@ struct WorkoutDetailSheet: View {
                                     Text("SUGGESTED").font(Theme.body(9, .bold)).tracking(0.4).foregroundStyle(Color(hex: 0xD9B84A))
                                         .padding(.horizontal, 6).padding(.vertical, 1)
                                         .overlay(Capsule().stroke(Color(hex: 0xD9B84A).opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
+                                        .contentShape(Capsule())
                                 }
                                 .buttonStyle(.plain).accessibilityHint("Explains suggested PRs")
                             }
@@ -379,6 +380,7 @@ struct EditWorkoutSheet: View {
                 Button { removing = ei } label: {
                     JIcon("trash", 13).foregroundStyle(Theme.red)
                         .frame(width: 30, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: 8))
+                        .tapTarget(RoundedRectangle(cornerRadius: 8), width: 30, height: 30)
                 }
                 .accessibilityLabel("Remove exercise")
             }
@@ -408,7 +410,7 @@ struct EditWorkoutSheet: View {
                     }
                     Button { toggleDone(ei, si) } label: {
                         JIcon("tick", 13)
-                            .foregroundStyle(st.done ? Color(hex: 0x4DFF91) : Theme.muted).frame(width: 40, height: 32)
+                            .foregroundStyle(st.done ? Color(hex: 0x4DFF91) : Theme.muted).frame(width: 40, height: 32).tapTarget(Rectangle(), width: 40, height: 32)
                     }
                 }
             }
@@ -582,7 +584,7 @@ struct SheetScaffold<Content: View>: View {
                 Spacer()
                 Button { dismiss() } label: {
                     JIcon("close", 13).foregroundStyle(Theme.text2)
-                        .frame(width: 30, height: 30).background(Theme.bg4, in: Circle())
+                        .frame(width: 30, height: 30).background(Theme.bg4, in: Circle()).tapTarget(Circle(), width: 30, height: 30)
                 }
                 .accessibilityLabel("Close")
             }

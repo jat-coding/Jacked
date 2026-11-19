@@ -168,6 +168,7 @@ struct CalendarCard: View {
                 // #calLabel: tapping the month name opens Gym years, like the web app.
                 Button(action: onTitle) {
                     Text("\(Self.months[m - 1]) \(String(y))").font(Theme.heading(19, .bold)).foregroundStyle(Theme.text)
+                        .padding(.vertical, 8).contentShape(Rectangle()).padding(.vertical, -8)
                 }
                 .buttonStyle(.plain).accessibilityHint("Opens Gym years")
                 Spacer()
@@ -216,6 +217,7 @@ struct CalendarCard: View {
         Button(action: action) {
             SFIcon(icon, 13).foregroundStyle(Theme.text2)
                 .frame(width: 30, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: 8))
+                .tapTarget(RoundedRectangle(cornerRadius: 8), width: 30, height: 30)
         }
     }
 
@@ -243,7 +245,7 @@ struct RecentWorkouts: View {
                 .padding(.vertical, 30)
             } else {
                 ForEach(rec) { w in
-                    Button { onTap(w) } label: { WorkoutRow(workout: w, settings: settings) }
+                    Button { onTap(w) } label: { WorkoutRow(workout: w, settings: settings).contentShape(Rectangle()) }
                         .buttonStyle(.plain)
                         .padding(.bottom, 8)
                 }
@@ -372,7 +374,7 @@ struct GymYearsView: View {
         .overlay(alignment: .topTrailing) {
             Button { dismiss() } label: {
                 JIcon("close", 14).foregroundStyle(Theme.text2)
-                    .frame(width: 34, height: 34).background(Theme.bg3, in: Circle())
+                    .frame(width: 34, height: 34).background(Theme.bg3, in: Circle()).tapTarget(Circle(), width: 34, height: 34)
             }
             .buttonStyle(.plain).accessibilityLabel("Close").padding(.trailing, 16).padding(.top, 8)
         }
