@@ -22,7 +22,7 @@ function extract(name) {
 const names = ['e1rm', 'prE1rm', 'histInsert', 'mileEquiv', 'SUG_EPS', 'sugStands', 'pruneSug', 'dropPreReset', '_prDate',
   'mergePRReset', 'prOkAfterRepair', 'prHeavier', 'prImpliesMore', 'mergePRs', 'mergePRRepair', '_chT', 'chRepairedWinner',
   'mergeHoldPRs', 'mergeCardioPRs', 'EXNOTES_PENDING_KEY', 'getExNotesPending', 'markExNotePending', 'EXNOTES_BOOT_KEY',
-  'bootstrapExNotesPending', 'mergeExNotes', 'EMPTY_LOCAL_YIELDS', 'isEmptyish', 'mergeBackup', 'mergeBWlog'];
+  'bootstrapExNotesPending', 'mergeExNotes', 'EMPTY_LOCAL_YIELDS', 'isEmptyish', '_rT', 'mergeRoutines', 'mergeBackup', 'mergeBWlog'];
 const src = names.map(extract).join('\n');
 const store = {};
 const ctx = { localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } }, console };
@@ -60,7 +60,10 @@ function side() {
   if (maybe(0.25)) b.jk_prRepair = dmap(); if (maybe(0.25)) b.jk_prReset = dmap();
   if (maybe(0.4)) b.jk_exNotes = Object.fromEntries(exIds.filter(() => maybe(0.4)).map(e => [e, pick(['go deeper', '', 'elbows in'])]));
   if (maybe(0.5)) b.jk_bwlog = bwlog(); if (maybe(0.5)) b.jk_bw = pick([80, 79]);
-  for (const k of ['jk_cex', 'jk_routines', 'jk_friends']) if (maybe(0.4)) b[k] = maybe() ? [] : maybe() ? {} : [{ id: k + rnd().toFixed(3) }];
+  if (maybe(0.7)) b.jk_routines = Array.from({ length: Math.floor(rnd() * 5) }, () => { const r = { id: pick(['r1', 'r2', 'r3', 'r4', 5]), name: pick(['A', 'B', 'C']), exercises: [pick(exIds)] };
+    if (maybe(0.7)) r.updatedAt = pick([0, 100, 200, 300, '250', -5, 'x', null]); return maybe(0.05) ? pick([null, 7, { name: 'no id' }]) : r; });
+  if (maybe(0.4)) b.jk_routinesDel = pick([{}, { r1: 150 }, { r2: 100 }, { r3: 400, constructor: 5 }, { r4: '250' }, { r1: 'bad' }, [], 'x']);
+  for (const k of ['jk_cex', 'jk_friends']) if (maybe(0.4)) b[k] = maybe() ? [] : maybe() ? {} : [{ id: k + rnd().toFixed(3) }];
   if (maybe(0.6)) b.jk_settings = { wUnit: pick(['lb', 'kg']), restDefault: pick([60, 90]), future: 'x' };
   if (maybe(0.3)) b.jk_unknownFutureKey = { a: [1, 2, { b: null }] };
   if (maybe(0.3)) b.jk_prof = { name: pick(['A', 'B']), code: '@ios_dev_test' };
@@ -75,6 +78,14 @@ const cases = [
   ['tombstone on cloud removes local copy', { jk_deleted: [2] }, { jk_hist: [{ id: 1 }, { id: 2 }] }, []],
   ['number id vs string id are different', { jk_hist: [{ id: '1', n: 'c' }] }, { jk_hist: [{ id: 1, n: 'l' }] , jk_deleted: ['1'] }, []],
   ['empty local routines yield to cloud', { jk_routines: [{ id: 'r1' }], jk_cex: { x: 1 } }, { jk_routines: [], jk_cex: {} }, []],
+  ['routines: newer cloud wins', { jk_routines: [{ id: 'r1', name: 'cloud', exercises: ['a'], updatedAt: 200 }] }, { jk_routines: [{ id: 'r1', name: 'local', exercises: ['b'], updatedAt: 100 }] }, []],
+  ['routines: newer local wins', { jk_routines: [{ id: 'r1', name: 'cloud', updatedAt: 100 }] }, { jk_routines: [{ id: 'r1', name: 'local', updatedAt: 200 }] }, []],
+  ['routines: cloud-only kept, local-only kept', { jk_routines: [{ id: 'w1', name: 'watch new', updatedAt: 5 }] }, { jk_routines: [{ id: 'p1', name: 'phone new', updatedAt: 6 }] }, []],
+  ['routines: deletion not resurrected', { jk_routines: [{ id: 'r1', name: 'old', updatedAt: 100 }] }, { jk_routines: [], jk_routinesDel: { r1: 200 } }, []],
+  ['routines: edit after delete comes back', { jk_routines: [{ id: 'r1', name: 'watch edit', updatedAt: 300 }] }, { jk_routines: [], jk_routinesDel: { r1: 200 } }, []],
+  ['routines: cloud tombstone removes local legacy routine', { jk_routinesDel: { r1: 200 } }, { jk_routines: [{ id: 'r1', name: 'legacy' }] }, []],
+  ['routines: legacy no updatedAt both sides, local kept', { jk_routines: [{ id: 'r1', name: 'cloud' }] }, { jk_routines: [{ id: 'r1', name: 'local' }, { id: 'r2' }] }, []],
+  ['routines: legacy local loses to stamped cloud', { jk_routines: [{ id: 'r1', name: 'cloud', updatedAt: 1 }] }, { jk_routines: [{ id: 'r1', name: 'local' }] }, []],
   ['notes: pending overlay and delete', { jk_exNotes: { bench: 'cloud', squat: 'cloud2' } }, { jk_exNotes: { bench: 'local', row: 'new' } }, ['bench', 'squat']],
   ['notes: nothing pending follows cloud', { jk_exNotes: { bench: 'watch note' } }, { jk_exNotes: { bench: 'old phone' } }, []],
   ['PR heavier wins, never downgrade', { jk_prs: { bench: { weight: 100, reps: 5, date: '2026-09-01T00:00:00.000Z' } } }, { jk_prs: { bench: { weight: 90, reps: 10, date: '2026-10-01T00:00:00.000Z' } } }, []],

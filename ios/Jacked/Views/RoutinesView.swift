@@ -201,7 +201,8 @@ struct TrustedPrograms: View {
             for (n, r) in p.routines.enumerated() {
                 let secId = RoutineMath.sectionId(for: r.ids, raw: &raw, catalog: catalog)
                 rs.append(.object(["id": .string("r\(base)_\(n)"), "name": .string(r.name), "desc": .string("\(p.name) · \(p.source)"),
-                                   "exercises": .array(r.ids.map(JSONValue.string)), "sectionId": .string(secId)]))
+                                   "exercises": .array(r.ids.map(JSONValue.string)), "sectionId": .string(secId),
+                                   "updatedAt": .number(BackupMerge.nowMs)]))
             }
             raw["jk_routines"] = .array(rs)
         }
@@ -249,6 +250,7 @@ struct RoutineRow: View {
             Button("Delete", role: .destructive) {
                 let id = r["id"]
                 Task { _ = await store.edit(auth: auth) { raw in
+                    if let rid = id?.string { BackupMerge.tombstone(&raw, [rid]) }
                     raw["jk_routines"] = .array((raw["jk_routines"]?.array ?? []).filter { $0["id"] != id })
                 } }
             }
@@ -373,6 +375,11 @@ enum RoutineMath {
                 o["order"] = .array(ids.map(JSONValue.string)); a[i] = .object(o)
             }
             r["jk_routineSections"] = .array(a)
+            let t = BackupMerge.nowMs   // reorder = a change to those routines: stamp them
+            r["jk_routines"] = .array((r["jk_routines"]?.array ?? []).map { v in
+                guard var o = v.object, let id = o["id"]?.string, ids.contains(id) else { return v }
+                BackupMerge.stamp(&o, t); return .object(o)
+            })
         }
     }
 
@@ -435,9 +442,9 @@ enum RoutineMath {
             let obj: [String: JSONValue] = ["name": .string(n), "desc": .string(d.desc.trimmingCharacters(in: .whitespacesAndNewlines)),
                                             "exercises": .array(d.exercises.map(JSONValue.string)), "sectionId": .string(secId)]
             if let id = d.id, let i = rs.firstIndex(where: { $0["id"]?.string == id }), var o = rs[i].object {
-                for (k, v) in obj { o[k] = v }; rs[i] = .object(o)
+                for (k, v) in obj { o[k] = v }; BackupMerge.stamp(&o); rs[i] = .object(o)
             } else {
-                rs.append(.object(obj.merging(["id": .string("r\(now)")]) { a, _ in a }))
+                rs.append(.object(obj.merging(["id": .string("r\(now)"), "updatedAt": .number(BackupMerge.nowMs)]) { a, _ in a }))
             }
             raw["jk_routines"] = .array(rs)
         }

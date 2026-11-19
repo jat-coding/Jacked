@@ -1646,7 +1646,7 @@ async function usernameTaken(u, exceptMine){
 const KEY_SHAPE={
   routines:'a',routineSections:'a',collapsedSections:'a',hist:'a',cex:'a',friends:'a',closeBuddies:'a',favEx:'a',hiddenEx:'a',deleted:'a',bwlog:'a',
   prof:'o',prs:'o',settings:'o',exRename:'o',exOverride:'o',exNotes:'o',cardioPR:'o',holdPR:'o',metrics:'o',
-  sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o',prRepair:'o',prReset:'o',prSug:'o'
+  sugToday:'o',sugLog:'o',sugCuratedLog:'o',activeWorkout:'o',monthBadges:'o',prRepair:'o',prReset:'o',prSug:'o',routinesDel:'o'
 };
 function shapeOk(k,v){
   const t=KEY_SHAPE[k];
@@ -1664,6 +1664,11 @@ let _sfWarnAt=0;
 function storageFullWarn(){ if(Date.now()-_sfWarnAt<10000) return; _sfWarnAt=Date.now(); try{ toast("Phone storage is full — changes can't be saved",'err'); }catch(_){} }
 const gCEx    = () => S.g('cex')      || [];
 const gR      = () => S.g('routines') || [];
+// Per-routine merge stamps (WATCH_BRIDGE.md "Routines"): every routine carries updatedAt (ms epoch), written by
+// whoever changed it; a deletion is remembered in jk_routinesDel {routineId: deletedAtMs}. mergeRoutines() uses both.
+const stampR  = (r,t) => { if(r&&typeof r==='object') r.updatedAt=t||Date.now(); return r; };
+const gRDel   = () => S.g('routinesDel') || {};
+function tombR(ids){ const m=gRDel(), t=Date.now(); (Array.isArray(ids)?ids:[ids]).forEach(id=>{ if(id!=null) m[id]=t; }); S.s('routinesDel',m); }
 const gRS     = () => S.g('routineSections') || [];
 const saveRS  = arr => S.s('routineSections', arr);
 const gCollapsedSecs = () => S.g('collapsedSections') || [];
@@ -1974,7 +1979,7 @@ function deleteEx(id){
       if(!ok) return;
       S.s('cex', gCEx().filter(e=>e.id!==id));
       const rs=gR(); let changed=false;
-      rs.forEach(r=>{ const n=(r.exercises||[]).filter(x=>x!==id); if(n.length!==(r.exercises||[]).length){ r.exercises=n; changed=true; } });
+      rs.forEach(r=>{ const n=(r.exercises||[]).filter(x=>x!==id); if(n.length!==(r.exercises||[]).length){ r.exercises=n; stampR(r); changed=true; } });
       if(changed) S.s('routines',rs);
       removeExPhoto(id);   // drop the orphaned local photo along with the exercise
       finish();
@@ -2770,7 +2775,7 @@ async function addCurated(i) {
   let added=0;
   prog.routines.forEach(rt=>{
     const ids=rt.exercises.map(resolveExercise).filter(Boolean);
-    const obj={ id:'r'+Date.now()+'_'+added, name:rt.name, desc:prog.name+' · '+prog.source, exercises:ids };
+    const obj={ id:'r'+Date.now()+'_'+added, name:rt.name, desc:prog.name+' · '+prog.source, exercises:ids, updatedAt:Date.now() };
     obj.sectionId=suggestSectionId(obj);
     rs.push(obj);
     added++;
@@ -3202,7 +3207,7 @@ function rMenuPick(act) {
 }
 function delR(id) {
   showConfirm('Delete this routine?').then(ok=>{ if(!ok) return;
-  S.s('routines',gR().filter(r=>r.id!==id));
+  tombR(id); S.s('routines',gR().filter(r=>r.id!==id));
   renderRoutines(); toast('Routine deleted','ok'); });
 }
 function renderREP() {
@@ -3233,7 +3238,7 @@ function saveR() {
   if (!n) { toast('Enter a routine name','err'); return; }
   const rs=gR();
   const picked=document.getElementById('rSection').value;
-  const obj={name:n,desc:document.getElementById('rDesc').value.trim(),exercises:[...rExs]};
+  const obj={name:n,desc:document.getElementById('rDesc').value.trim(),exercises:[...rExs],updatedAt:Date.now()};
   obj.sectionId=picked||suggestSectionId(obj);
   if (eRid) { const idx=rs.findIndex(r=>r.id===eRid); rs[idx]={...rs[idx],...obj}; }
   else rs.push({id:'r'+Date.now(),...obj});
@@ -5277,7 +5282,7 @@ function updateRoutineFromWorkout(rid,idsCsv){
   const ids=idsCsv.split(',').filter(Boolean);
   const rs=gR(), idx=rs.findIndex(r=>r.id===rid);
   if(idx<0) return;
-  rs[idx]={...rs[idx],exercises:ids}; S.s('routines',rs);
+  rs[idx]={...rs[idx],exercises:ids,updatedAt:Date.now()}; S.s('routines',rs);
   cm('fsModal'); toast('Routine updated ✓','ok');
 }
 
@@ -6111,7 +6116,7 @@ async function maybeUpdateRoutine(){
   if(removed.length) parts.push('removed '+removed.join(', '));
   if(!parts.length) parts.push('changed the order');
   const yes=await showConfirm('You '+parts.join('; ')+'. Update the routine "'+r.name+'" with these changes?',{okText:'Update routine',cancelText:'Keep original'});
-  if(yes){ r.exercises=after; S.s('routines',rs); toast('Routine updated','ok'); }
+  if(yes){ r.exercises=after; stampR(r); S.s('routines',rs); toast('Routine updated','ok'); }
 }
 // Auto-title an untitled workout after whichever exercise had the highest
 // intensity (best estimated 1RM among weight/bodyweight lifts), falling
@@ -6309,7 +6314,7 @@ function saveAsNewRoutine(idsCsv){
   showConfirm('Name this routine:',{isPrompt:true}).then(nm=>{
     if(nm==null) return;
     const name=nm.trim()||'My Routine';
-    const rs=gR(); rs.push({id:'r'+Date.now(), name, desc:'', exercises:ids}); S.s('routines',rs);
+    const rs=gR(); rs.push({id:'r'+Date.now(), name, desc:'', exercises:ids, updatedAt:Date.now()}); S.s('routines',rs);
     toast('Routine "'+name+'" saved ✓','ok');
   });
 }
@@ -6544,7 +6549,7 @@ function saveWorkoutAsRoutine(id){
     if(nm==null) return;
     const name=nm.trim()||'Saved Workout';
     const rs=gR();
-    rs.push({id:'r'+Date.now(), name, desc:'Saved from '+fmtD(w.date), exercises:ids});
+    rs.push({id:'r'+Date.now(), name, desc:'Saved from '+fmtD(w.date), exercises:ids, updatedAt:Date.now()});
     S.s('routines',rs);
     cm('wdModal'); toast('Saved as routine ✓','ok');
   });
@@ -7000,7 +7005,7 @@ function migrateRoutineSections(){
   const rs=gR();
   let changed=false;
   rs.forEach(r=>{
-    if(!r.sectionId||!gRS().some(s=>s.id===r.sectionId)){ r.sectionId=suggestSectionId(r); changed=true; }
+    if(!r.sectionId||!gRS().some(s=>s.id===r.sectionId)){ r.sectionId=suggestSectionId(r); stampR(r); changed=true; }
   });
   if(changed) S.s('routines',rs);
 }
@@ -7786,7 +7791,7 @@ function cardDragStart(e){
     if(cont.id.startsWith('secROList-')){
       // Routines within one section: save this section's manual order.
       const secId=cont.id.slice('secROList-'.length), secs=gRS(), idx=secs.findIndex(s=>s.id===secId);
-      if(idx>=0){ secs[idx]={...secs[idx],order:ids}; saveRS(secs); }
+      if(idx>=0){ secs[idx]={...secs[idx],order:ids}; saveRS(secs); const t=Date.now(), rs=gR(); rs.forEach(r=>{ if(ids.includes(r.id)) stampR(r,t); }); S.s('routines',rs); }
       renderRoutineOrderList(); renderRoutines(); return;
     }
     const s=gSet();
@@ -8794,12 +8799,45 @@ function mergeExNotes(cloudNotes, localNotes, pending){
 const EMPTY_LOCAL_YIELDS=['jk_cex','jk_routines','jk_friends'];
 const isEmptyish=v=>v==null || (Array.isArray(v)&&v.length===0) || (typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===0);
 
+// jk_routines merged PER ROUTINE ID (Mr. Roni 2026-11-18; WATCH_BRIDGE.md "Routines"). Each routine carries
+// updatedAt (ms epoch, missing = 0 = oldest); the newer side wins whole-routine, a tie keeps local. An id only one
+// side has is kept (a watch's new routine). A deletion lives in jk_routinesDel {id: deletedAtMs}: tombstones are
+// unioned (latest wins) and a routine is dropped when its tombstone is >= its updatedAt, so a routine edited AFTER
+// it was deleted elsewhere comes back. Entries without a usable id stay as the local side had them.
+const _rT=r=>{ const n=Number(r&&r.updatedAt); return n>0?n:0; };
+function mergeRoutines(cloudR, localR, cloudDel, localDel){
+  const obj=v=>(v&&typeof v==='object'&&!Array.isArray(v))?v:{};
+  const del={...obj(cloudDel)};
+  Object.entries(obj(localDel)).forEach(([id,t])=>{ if(!Object.prototype.hasOwnProperty.call(del,id) || !(Number(del[id])>=Number(t))) del[id]=t; });
+  const ok=r=>r&&typeof r==='object'&&!Array.isArray(r)&&r.id!=null;
+  const lr=Array.isArray(localR)?localR:[], cr=Array.isArray(cloudR)?cloudR:[];
+  const byId=new Map(); lr.forEach(r=>{ if(ok(r)&&!byId.has(r.id)) byId.set(r.id,r); });
+  const cById=new Map(); cr.forEach(r=>{ if(ok(r)&&!cById.has(r.id)) cById.set(r.id,r); });
+  const alive=r=>!(typeof r.id==='string' && Object.prototype.hasOwnProperty.call(del,r.id)) || !(Number(del[r.id])>=_rT(r));
+  const out=[], seen=new Set();
+  lr.forEach(r=>{
+    if(!ok(r)){ out.push(r); return; }
+    if(seen.has(r.id)) return; seen.add(r.id);
+    const c=cById.get(r.id), pick=(c&&_rT(c)>_rT(r))?c:byId.get(r.id);
+    if(alive(pick)) out.push(pick);
+  });
+  cr.forEach(r=>{ if(ok(r)&&!seen.has(r.id)){ seen.add(r.id); if(alive(r)) out.push(r); } });
+  return {routines:out, del};
+}
+
 function mergeBackup(cloud, local, pendingNotes){
   cloud=(cloud&&typeof cloud==='object')?cloud:{};
   local=(local&&typeof local==='object')?local:{};
   const out={...cloud, ...local};   // last-write-wins baseline (local wins)
 
   EMPTY_LOCAL_YIELDS.forEach(k=>{ if(isEmptyish(local[k]) && !isEmptyish(cloud[k])) out[k]=cloud[k]; });
+
+  // Routines: per id, newest updatedAt wins, cloud-only kept, tombstones remembered (see mergeRoutines).
+  if(Array.isArray(cloud.jk_routines)||Array.isArray(local.jk_routines)||cloud.jk_routinesDel||local.jk_routinesDel){
+    const mr=mergeRoutines(cloud.jk_routines, local.jk_routines, cloud.jk_routinesDel, local.jk_routinesDel);
+    out.jk_routines=mr.routines;
+    if(Object.keys(mr.del).length) out.jk_routinesDel=mr.del; else delete out.jk_routinesDel;
+  }
 
   // One-time bootstrap on the first merge after this rule shipped: notes that exist only
   // on this device (never backed up) become pending so they are not dropped; keys both

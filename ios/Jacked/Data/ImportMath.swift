@@ -32,7 +32,7 @@ enum ImportMath {
         "routines": "a", "routineSections": "a", "collapsedSections": "a", "hist": "a", "cex": "a", "friends": "a", "closeBuddies": "a",
         "favEx": "a", "hiddenEx": "a", "deleted": "a", "bwlog": "a",
         "prof": "o", "prs": "o", "settings": "o", "exRename": "o", "exOverride": "o", "exNotes": "o", "cardioPR": "o", "holdPR": "o", "metrics": "o",
-        "sugToday": "o", "sugLog": "o", "sugCuratedLog": "o", "activeWorkout": "o", "monthBadges": "o", "prRepair": "o", "prReset": "o", "prSug": "o",
+        "sugToday": "o", "sugLog": "o", "sugCuratedLog": "o", "activeWorkout": "o", "monthBadges": "o", "prRepair": "o", "prReset": "o", "prSug": "o", "routinesDel": "o",
     ]
     static func shapeOk(_ k: String, _ v: JSONValue) -> Bool {
         guard let t = keyShape[k], v != .null else { return true }

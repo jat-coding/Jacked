@@ -378,7 +378,7 @@ struct ExerciseInfoSheet: View {
                 for i in rs.indices {
                     guard var o = rs[i].object, let exs = o["exercises"]?.array else { continue }
                     let n = exs.filter { $0.string != id }
-                    if n.count != exs.count { o["exercises"] = .array(n); rs[i] = .object(o); changed = true }
+                    if n.count != exs.count { o["exercises"] = .array(n); BackupMerge.stamp(&o); rs[i] = .object(o); changed = true }
                 }
                 if changed { raw["jk_routines"] = .array(rs) }
             }

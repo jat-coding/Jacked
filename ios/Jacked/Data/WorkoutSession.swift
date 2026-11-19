@@ -349,7 +349,7 @@ final class WorkoutSession: ObservableObject {
         return await store.edit(auth: auth) { raw in
             var rs = raw["jk_routines"]?.array ?? []
             rs.append(.object(["id": .string("r\(Self.nowMs)"), "name": .string(n.isEmpty ? "My Routine" : n), "desc": .string(""),
-                               "exercises": .array(ids.map(JSONValue.string))]))
+                               "exercises": .array(ids.map(JSONValue.string)), "updatedAt": .number(BackupMerge.nowMs)]))
             raw["jk_routines"] = .array(rs)
         }
     }
@@ -360,7 +360,7 @@ final class WorkoutSession: ObservableObject {
             guard var rs = raw["jk_routines"]?.array else { return }
             for i in rs.indices where rs[i]["id"]?.string == id {
                 guard var o = rs[i].object else { continue }
-                o["exercises"] = .array(ids.filter { !$0.isEmpty && $0 != "?" }.map(JSONValue.string)); rs[i] = .object(o)
+                o["exercises"] = .array(ids.filter { !$0.isEmpty && $0 != "?" }.map(JSONValue.string)); BackupMerge.stamp(&o); rs[i] = .object(o)
             }
             raw["jk_routines"] = .array(rs)
         }

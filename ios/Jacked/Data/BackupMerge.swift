@@ -22,6 +22,14 @@ enum BackupMerge {
 
         for k in emptyLocalYields where isEmptyish(local[k]) && !isEmptyish(cloud[k]) { out[k] = cloud[k] }
 
+        // Routines: per id, newest updatedAt wins, cloud-only kept, tombstones in jk_routinesDel (see mergeRoutines).
+        if cloud["jk_routines"]?.array != nil || local["jk_routines"]?.array != nil
+            || (cloud["jk_routinesDel"]?.truthy ?? false) || (local["jk_routinesDel"]?.truthy ?? false) {
+            let mr = mergeRoutines(cloud["jk_routines"], local["jk_routines"], cloud["jk_routinesDel"], local["jk_routinesDel"])
+            out["jk_routines"] = .array(mr.routines)
+            if mr.del.isEmpty { out["jk_routinesDel"] = nil } else { out["jk_routinesDel"] = .object(mr.del) }
+        }
+
         if let notes = mergeExNotes(cloud["jk_exNotes"], local["jk_exNotes"], pendingNotes) { out["jk_exNotes"] = .object(notes) }
         else { out["jk_exNotes"] = nil }
 
@@ -80,6 +88,54 @@ enum BackupMerge {
     }
 
     // MARK: helpers, same names as index.html
+
+    /// Stamps (ms epoch, the PWA's stampR) and tombstones (the PWA's tombR) every routine write goes through.
+    static var nowMs: Double { (Date().timeIntervalSince1970 * 1000).rounded() }
+    static func stamp(_ o: inout Obj, _ t: Double = nowMs) { o["updatedAt"] = .number(t) }
+    static func tombstone(_ raw: inout Obj, _ ids: [String]) {
+        var m = raw["jk_routinesDel"]?.object ?? [:]
+        let t = nowMs
+        for id in ids { m[id] = .number(t) }
+        raw["jk_routinesDel"] = .object(m)
+    }
+
+    /// _rT: a routine's updatedAt in ms; missing, zero, negative or unreadable = 0 = oldest (legacy routines).
+    static func routineT(_ r: JSONValue?) -> Double {
+        let n = r?["updatedAt"]?.jsNumber ?? .nan
+        return n > 0 ? n : 0
+    }
+
+    /// mergeRoutines (PWA twin): jk_routines merged per routine id. The newer updatedAt wins whole-routine, a tie keeps
+    /// local; an id only one side has is kept; jk_routinesDel {id: deletedAtMs} tombstones are unioned (latest wins) and
+    /// drop a routine whose tombstone is >= its updatedAt. Entries without an id stay as local had them.
+    static func mergeRoutines(_ cloudR: JSONValue?, _ localR: JSONValue?, _ cloudDel: JSONValue?, _ localDel: JSONValue?) -> (routines: [JSONValue], del: Obj) {
+        var del = cloudDel?.object ?? [:]
+        for (id, t) in localDel?.object ?? [:] {
+            if let cur = del[id], cur.jsNumber >= t.jsNumber { continue }
+            del[id] = t
+        }
+        func ok(_ r: JSONValue) -> Bool { guard let o = r.object, let id = o["id"] else { return false }; return id != .null }
+        let lr = localR?.array ?? [], cr = cloudR?.array ?? []
+        var byId: [JSONValue: JSONValue] = [:], cById: [JSONValue: JSONValue] = [:]
+        for r in lr where ok(r) { if byId[r["id"]!] == nil { byId[r["id"]!] = r } }
+        for r in cr where ok(r) { if cById[r["id"]!] == nil { cById[r["id"]!] = r } }
+        func alive(_ r: JSONValue) -> Bool {
+            guard let id = r["id"]?.string, let t = del[id] else { return true }
+            return !(t.jsNumber >= routineT(r))
+        }
+        var out: [JSONValue] = [], seen = Set<JSONValue>()
+        for r in lr {
+            if !ok(r) { out.append(r); continue }
+            let id = r["id"]!
+            if !seen.insert(id).inserted { continue }
+            let pick = (cById[id].map { routineT($0) > routineT(r) } ?? false) ? cById[id]! : byId[id]!
+            if alive(pick) { out.append(pick) }
+        }
+        for r in cr where ok(r) {
+            if seen.insert(r["id"]!).inserted, alive(r) { out.append(r) }
+        }
+        return (out, del)
+    }
 
     static func isEmptyish(_ v: JSONValue?) -> Bool {
         switch v {

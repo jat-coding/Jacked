@@ -287,7 +287,8 @@ struct NavCapsule: View {
         HStack(spacing: 0) {
             ForEach(items, id: \.0) { it in
                 let on = tab == it.0
-                Button { Haptics.light(); withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { tab = it.0 }  // animates only the pill; panes are transaction-isolated } label: {
+                // animates only the pill; panes are transaction-isolated
+                Button { Haptics.light(); withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { tab = it.0 } } label: {
                     VStack(spacing: 3) {
                         JIcon(it.1, 20).shadow(color: on ? Theme.accent.opacity(0.7) : .clear, radius: 5)
                         Text(it.2.uppercased()).font(Theme.body(9, .semibold)).tracking(0.3).lineLimit(1)

@@ -55,6 +55,31 @@ pushed to `origin/main` and live on the phone app (the full dated list is the CH
 
 ## APP-WIDE (watch must mirror)
 
+### A19. Routines merge PER ROUTINE ID — `jk_routines` + `jk_routinesDel` (Mr. Roni: YES, 2026-11-18)
+Replaces the old whole-key "local wins" for `jk_routines`. Phone (PWA `mergeRoutines()`/`mergeBackup()`) and iPhone app
+(`BackupMerge.mergeRoutines`) use the same rule, proven by `ios/Tests/parity` fixtures. This unlocks the watches writing routines
+("Update routine", "Save as a new routine", delete).
+- **Per routine, one new field: `updatedAt`** — integer milliseconds since the epoch (UTC, `Date.now()` style), written by WHOEVER
+  changes the routine: create, rename, exercise list change, section change, reorder inside a section, exercise swap/removal.
+  Stamp the whole routine object. A routine WITHOUT `updatedAt` (every routine that exists today) counts as `0` = oldest.
+- **Merge, per routine `id`:** the copy with the larger `updatedAt` wins as a WHOLE routine (no field-level merge); equal = the
+  phone's (local) copy. A routine id only the cloud has is KEPT (a watch's new routine); an id only the phone has is KEPT.
+  Unknown extra fields on a routine are preserved verbatim, so never strip fields you do not know.
+- **Deletion = tombstone, a NEW top-level key `jk_routinesDel`: an object `{ "<routineId>": <deletedAtMs> }`** (same ms epoch).
+  To delete a routine: remove it from `jk_routines` AND set `jk_routinesDel[id] = now` (keep the other entries). Tombstones are
+  unioned across devices (larger time wins) and never need to be removed. A routine is dropped when its tombstone time is `>=` its
+  `updatedAt` (a tie = deleted). A routine edited AFTER the deletion (`updatedAt` > tombstone) comes back, so only stamp a routine
+  you really changed. Do NOT put a `deleted` flag inside `jk_routines`: the phones read that array directly and would show it.
+- **New routine from a watch:** `id` = `"r" + ms` like the phone (any unique string works), `name` (user typed, A12), `desc` (""),
+  `exercises` (library ids), `updatedAt` = now, and a `sectionId` if you can; the phone files a routine with no valid section by muscle group
+  itself (and stamps it when it does).
+- **Write protocol is unchanged (SYNC_PLAYBOOK §3):** read the blob + `updated_at`, change only your routine(s)/tombstone, write with
+  the `updated_at` CAS, re-read and retry on a miss. Never write `jk_routines` back whole from a stale copy: an unchanged routine
+  you carry along keeps its OLD `updatedAt` and so loses nothing, but do not re-stamp routines you did not change.
+- **Not covered:** section names/order (`jk_routineSections`, incl. each section's `order` list) still merge whole-key, phone wins.
+  Watches may sort routines by recent use without writing anything (as already planned).
+- Old phones (before this build) still do whole-key local-wins; they ignore `updatedAt`/`jk_routinesDel` but keep them in the blob.
+
 ### A18. Editing a logged cardio/hold set rebuilds its PR — build v1.10.74 (staging)
 Mr. Roni, 2026-10-08 (a run edited to 7:24/mi kept its "7:00" PR badge). **Rule:** when Edit Workout saves a
 change to a cardio (`tracking:'distance'`) or timed-hold (`'duration'`) exercise (sets, tracking, position, or the
@@ -387,6 +412,7 @@ Dates are 2026 local (MDT). Tag = which section above holds the rule.
 
 | Date | Commit | Change | Tag |
 |---|---|---|---|
+| 11-18 | local main | Routines merge per id: `jk_routines` entries carry `updatedAt` (ms), deletions go in the new `jk_routinesDel` `{id: deletedAtMs}`; newest wins, cloud-only/local-only kept, legacy = oldest. PWA + iOS identical. Every PWA/iOS routine write stamps `updatedAt` (create, edit, reorder, update-from-workout, save-as, custom-exercise removal). The empty-local-list yield no longer applies to routines | A19 |
 | 10-08 | staging | v1.10.74: Edit Workout rebuilds cardio/hold PRs (`prSets`, `prCount`, `jk_cardioPR`/`jk_holdPR` with a `repaired` stamp) for the cardio/hold exercises an edit changed; weight lifts unchanged; cardio/hold merges let a `repaired` record beat older copies; one-shot `jacked_repairCardioHold1` backfill. Also ships `bcd66f7` (timed-hold stopwatch notation, H.MM / M.SS). Contract: A18 | APP-WIDE |
 | 10-06 | staging | v1.10.72: live shared workout, phase 1 (server + phone). New table `live_workouts` (migration written, NOT applied), `aw` carries `lid`/`sid`/stamps/`mu`/`tomb`, doc format = the Galaxy build's (`472a92e`: `u`/`ud`, `stamps`, inline `del` tombstones, `startedBy`/`finishedBy`), CAS on `rev`, set-level merge, finish lock + finish CAS, auto-finish re-reads the row and only locks in this device's sets, late-set recompute with `lrev`; `mergeBackup()` keeps the higher-`lrev` `jk_hist` entry on an id clash; history keeps `lid`/`sid`. Contract: A17 | APP-WIDE |
 | 10-02 | staging | v1.10.70: body-weight import merge rule (Mr. Roni yes, 11:28pm). `mergeBackup()` unions `jk_bwlog` by date (local wins on a shared date) and derives `jk_bw` from the latest-dated entry, so weights the Jacked Sync companion imports from Health Connect survive the phone's next backup. No new storage keys | APP-WIDE |

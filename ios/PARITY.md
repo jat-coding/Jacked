@@ -27,15 +27,15 @@ n/a = only makes sense in a browser, or was removed from the PWA.
 
 ## Counts
 
-Updated 2026-11-17 (parity backlog pass, then rows 16 and 54 decided by Mr. Roni the same evening): rows built that day stay in section 1 with status present and their evidence, so the change is visible; before the pass it was missing 33, partial 31, present 220.
+Updated 2026-11-18 (row 65 added, present); 2026-11-17 (parity backlog pass, then rows 16 and 54 decided by Mr. Roni the same evening): rows built that day stay in section 1 with status present and their evidence, so the change is visible; before the pass it was missing 33, partial 31, present 220.
 
 | status | rows |
 |---|---|
 | missing | 16 |
 | partial | 15 |
-| present | 253 |
+| present | 254 |
 | n/a | 19 |
-| **total** | **303** |
+| **total** | **304** |
 
 ---
 
@@ -107,6 +107,7 @@ Updated 2026-11-17 (parity backlog pass, then rows 16 and 54 decided by Mr. Roni
 | 62 | Sync now reports "Synced ✓ / Sync incomplete" | 6e5a4d2; pwa.html:9112 syncNow | present | ios/Jacked/Views/ProfileSheet.swift:123-140 | Built 2026-11-17 | 1 |
 | 63 | Plate calculator keeps its numbers until the unit changes | pwa.html:6363 openPlate | present | ios/Jacked/Views/ActiveWorkoutView.swift:673-676 AppStorage, cleared on unit change | Built 2026-11-17 | 1 |
 | 64 | Rest timer bar floats over every page, not just the workout screen | pwa.html:6351 restTick | partial | ios/Jacked/Views/ActiveWorkoutView.swift:423 RestBar | iOS adds a Lock Screen Live Activity instead (ios/Jacked/Features/RestLiveActivity.swift) | 1 |
+| 65 | Routines merge per routine id (updatedAt, newest wins; cloud-only kept; deletions remembered in jk_routinesDel; legacy routines without updatedAt = oldest) | jacked-pwa/index.html mergeRoutines + mergeBackup, stampR/tombR at every routine write; WATCH_BRIDGE.md A19 | present | ios/Jacked/Data/BackupMerge.swift mergeRoutines, stamp/tombstone; stamped in ios/Jacked/Views/RoutinesView.swift (add program, delete, reorder, save), WorkoutSheets.swift, Data/WorkoutSession.swift (save-as / update routine), LibraryView.swift deleteCustom | Decided 2026-11-18 (Mr. Roni: yes, one main rule PWA + iOS). Ends the whole-key local-wins rule for jk_routines and the old "deleting the last routine can be undone by the cloud merge" caveat (row 19 note) for routines. Section order/names (jk_routineSections) still merge whole-key local-wins. Parity fixtures: ios/Tests/parity/gen.mjs (8 named routine cases + fuzz); PWA tests/e2e/routine-merge.mjs | 1 |
 
 ---
 

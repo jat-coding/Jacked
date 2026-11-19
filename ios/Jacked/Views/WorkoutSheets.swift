@@ -284,7 +284,7 @@ struct WorkoutDetailSheet: View {
         let rid = "r\(Int(Date().timeIntervalSince1970 * 1000))"
         let ok = await store.edit(auth: auth) { raw in
             var rs = raw["jk_routines"]?.array ?? []
-            rs.append(.object(["id": .string(rid), "name": .string(name), "desc": .string(desc), "exercises": .array(ids.map(JSONValue.string))]))
+            rs.append(.object(["id": .string(rid), "name": .string(name), "desc": .string(desc), "exercises": .array(ids.map(JSONValue.string)), "updatedAt": .number(BackupMerge.nowMs)]))
             raw["jk_routines"] = .array(rs)
         }
         saveNote = ok ? "Saved as routine \u{2713}" : "Saved on this phone, will sync when online"
