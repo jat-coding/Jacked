@@ -20,6 +20,14 @@ system libs on the desktop host — resolved 2026-09-15
    against the REAL `free-exercise-db` dataset (`dist/exercises.json`, 876 entries), not
    synthetic/made-up exercise names — a fix is only "confirmed" if verified against real
    data.
+3b. **Bottom buffer, every tab and full-screen list (standing rule, Mr. Roni 2026-11-18).** The floating nav capsule
+   and the Return-to-workout bar must never cover the last row or button of ANY tab (Routines, Library, Home,
+   Metrics, Friends) or any full-screen list/page opened from one (Monthly Recaps, Achievements, Badge detail, Gym
+   Years, ...), checked AT END OF SCROLL with a workout OPEN (mid-scroll proves nothing). PWA: bottom padding uses
+   the shared `--navClear` (= `--navTop` + `--resumeX`), never a literal px or `--navTop` alone; run
+   `node tests/e2e/nav-resume-audit.mjs` (0 failures) and look at the end-of-scroll screenshots. iOS: the nav
+   capsule and the resume bar live together in MainTabView's one `safeAreaInset(.bottom)`; a new full-screen
+   page inside a tab must not use `ignoresSafeArea` on its scroll content (backgrounds only).
 4. `git status` clean commit before any push attempt (`scripts/jacked-push.sh` refuses
    otherwise).
 5. Push target: **`main` is the only branch** (the `staging` branch was retired 2026-10-12;

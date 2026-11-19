@@ -100,11 +100,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);touch-action:p
    --navH = nav height, --navTop = distance from screen bottom to the nav's top edge. Anything bottom-pinned,
    or any sheet/overlay padding, must use --navTop (or --navTop + gap), never a literal 62px/70px/80px. */
 html{--navB:max(8px,calc(var(--sab) - 14px));--navH:62px;--navTop:calc(var(--navH) + var(--navB))}
+/* ONE shared bottom inset (Mr. Roni 2026-11-18, Monthly Recaps' last rows under the nav AND the Return-to-workout bar):
+   --navClear = nav capsule (--navTop) + the resume bar's extra height while a workout is open (--resumeX, set by
+   body.resumeOn from updateResumeBar). Every scroll container's bottom padding uses --navClear, never --navTop alone. */
+html,body{--resumeX:0px;--navClear:calc(var(--navTop) + var(--resumeX))}
+body.resumeOn{--resumeX:56px}
 nav{position:fixed;left:12px;right:12px;bottom:calc(var(--navB) - var(--standaloneGap));background:var(--bg2);border:1px solid var(--border);border-radius:30px;display:flex;z-index:100;padding:5px}
 .nb{flex:1;padding:8px 2px 7px;border-radius:24px;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--muted);font-family:var(--fb);font-size:9px;font-weight:600;cursor:pointer;transition:color .2s;letter-spacing:.3px;text-transform:uppercase;-webkit-appearance:none}
 .nb.active{color:var(--accent)}
 .nb svg{width:20px;height:20px;stroke-width:1.8}
-.page{display:none;min-height:var(--ah);padding:0 16px calc(114px + var(--navB))}
+.page{display:none;min-height:var(--ah);padding:0 16px calc(114px + var(--navB) + var(--resumeX))}
 .page.active{display:block}
 /* Sticky page header — tracks scroll and clears the iPhone status-bar/notch. */
 .ph{position:sticky;top:0;z-index:60;display:flex;align-items:center;justify-content:space-between;
@@ -151,7 +156,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    reserve both. #recapFull/#gymYears measured clean in that run's modest SEED data -- both
    turned out to have the same unreserved padding here and needed their own fixes too, below
    (2026-10-23 exhaustive sweep, after worst-case/stress content exposed both). */
-#badgeFull{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--navTop));-webkit-overflow-scrolling:touch}
+#badgeFull{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--navClear));-webkit-overflow-scrolling:touch}
 #recapFull,#gymYears{position:fixed;inset:0;bottom:var(--fixedBottom);z-index:720;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;padding:calc(14px + var(--sat)) 22px calc(20px + var(--sab));-webkit-overflow-scrolling:touch}
 #badgeFull.open,#recapFull.open,#gymYears.open{display:flex;animation:pageIn .2s ease-out}
 /* Gym years (2026-10-16, redesigned 2026-10-23 per voice memo): every day of a person's history, one square per
@@ -165,7 +170,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    23-45px past the nav's reserved zone -- a years-into-use user would hit this for real. #gymYears
    is still the scroll container itself after the flat-grid redesign, so this padding still lives
    here regardless of the inner grid structure change. */
-#gymYears{padding-left:16px;padding-right:16px;padding-bottom:calc(20px + var(--navTop))}
+#gymYears{padding-left:16px;padding-right:16px;padding-bottom:calc(20px + var(--navClear))}
 .gy-year{margin:0 0 18px;text-align:left}
 .gy-yh{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 8px;padding-top:12px;border-top:1px solid var(--border)}
 .gy-yh b{font-family:var(--fh);font-size:22px;font-weight:800}
@@ -218,7 +223,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    WebKit measurement (tests/e2e/nav-buffer-audit.mjs, "Monthly recap") found the Share button
    60px past the nav's reserved zone (negative = hidden under it) on every phone/orientation
    tested. Matches the established 62px nav height + navB pattern used everywhere else. */
-#recapFull{overflow-y:auto;padding-top:calc(10px + var(--sat));padding-bottom:calc(10px + var(--navTop))}
+#recapFull{overflow-y:auto;padding-top:calc(10px + var(--sat));padding-bottom:calc(10px + var(--navClear))}
 #recapFull .bf-foot{display:flex;justify-content:center}#recapShareBtn{width:min(100%,280px)}
 #recapFull .bf-x{top:calc(8px + var(--sat))}
 .bgrp{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);opacity:.6;margin:12px 0 0}
@@ -497,7 +502,7 @@ html.popup-lock,html.popup-lock body{overscroll-behavior:none}
    class gets overridden by `.ae-md{padding:0 20px;overflow:hidden}` (later in source order),
    so .ae-list -- not the shared .md rule -- is this sheet's real bottom reserve; the audit
    measured the last exercise row landing under the nav's reserved zone with the old flat 10px. */
-.ae-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(10px + var(--navTop))}
+.ae-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(10px + var(--navClear))}
 .ae-grp{font-family:var(--fh);font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);padding:10px 2px 6px;position:sticky;top:0;z-index:3;background:var(--bg2);box-shadow:0 4px 6px -4px var(--bg2)}
 /* Picker confirm bar (Grant Berry, 2026-11-11: "add button is hidden behind the routine/home tabs"):
    the bar used to sit flush at the screen bottom, i.e. inside the fixed nav's footprint, and the
@@ -1254,7 +1259,7 @@ input:focus,select:focus,textarea:focus,.si:focus{border-color:var(--accent);box
 <!-- Full-screen achievements page (Metrics > Achievements > View all) -->
 <div id="achFull" role="dialog" aria-modal="true">
   <div class="ph" style="padding-left:16px;padding-right:16px;flex-shrink:0"><div class="pt">Achievements</div><button class="cb" style="width:38px;height:38px;font-size:18px" onclick="closeAch()" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-  <div id="achFullBody" style="padding:12px 16px calc(96px + env(safe-area-inset-bottom))"></div>
+  <div id="achFullBody" style="padding:12px 16px calc(var(--navClear) + 28px)"></div>
 </div>
 
 <div id="badgeFull" role="dialog" aria-modal="true">
@@ -2314,7 +2319,7 @@ window.addEventListener('resize',()=>{ const ind=document.getElementById('navInd
 function updateResumeBar(){
   const bar=document.getElementById('resumeBar'); if(!bar) return;
   const onActive=document.getElementById('page-active').classList.contains('active');
-  bar.classList.toggle('show', !!aw && !onActive);
+  const on=!!aw && !onActive; bar.classList.toggle('show', on); document.body.classList.toggle('resumeOn', on);
 }
 
 // ============================================================
