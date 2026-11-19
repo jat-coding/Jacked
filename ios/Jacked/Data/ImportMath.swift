@@ -29,7 +29,7 @@ enum ImportMath {
 
     /// KEY_SHAPE / shapeOk: a key whose value has the wrong shape (an object where a list belongs) is skipped.
     static let keyShape: [String: Character] = [
-        "routines": "a", "routineSections": "a", "collapsedSections": "a", "hist": "a", "cex": "a", "friends": "a", "closeBuddies": "a",
+        "routines": "a", "routineSections": "a", "collapsedSections": "a", "hiddenCurated": "a", "hist": "a", "cex": "a", "friends": "a", "closeBuddies": "a",
         "favEx": "a", "hiddenEx": "a", "deleted": "a", "bwlog": "a",
         "prof": "o", "prs": "o", "settings": "o", "exRename": "o", "exOverride": "o", "exNotes": "o", "cardioPR": "o", "holdPR": "o", "metrics": "o",
         "sugToday": "o", "sugLog": "o", "sugCuratedLog": "o", "activeWorkout": "o", "monthBadges": "o", "prRepair": "o", "prReset": "o", "prSug": "o", "routinesDel": "o",

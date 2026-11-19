@@ -95,9 +95,12 @@ extension MetricsMath {
     /// change to save when today's pick isn't cached yet (nil when it is).
     struct CuratedPick { let pi: Int; let ri: Int; let name: String; let program: String; let source: String }
     func todaysCuratedPick(today: String) -> (pick: CuratedPick?, write: ((inout [String: JSONValue]) -> Void)?) {
-        let flat = Curated.programs.enumerated().flatMap { pi, p in p.routines.enumerated().map { ri, r in CuratedPick(pi: pi, ri: ri, name: r.name, program: p.name, source: p.source) } }
+        // jk_hiddenCurated: removed trusted programs (names) are never picked, and a cached pick from one is dropped.
+        let hidden = Set((raw["jk_hiddenCurated"]?.array ?? []).compactMap(\.string))
+        let flat = Curated.programs.enumerated().filter { !hidden.contains($0.element.name) }.flatMap { pi, p in p.routines.enumerated().map { ri, r in CuratedPick(pi: pi, ri: ri, name: r.name, program: p.name, source: p.source) } }
         let cache = raw["jk_sugToday"]?.object ?? [:]
-        if cache["day"]?.string == today, let c = cache["curated"]?.object, let pi = c["pi"]?.double, let ri = c["ri"]?.double {
+        if cache["day"]?.string == today, let c = cache["curated"]?.object, let pi = c["pi"]?.double, let ri = c["ri"]?.double,
+           Curated.programs.indices.contains(Int(pi)), !hidden.contains(Curated.programs[Int(pi)].name) {
             return (CuratedPick(pi: Int(pi), ri: Int(ri), name: c["name"]?.string ?? "", program: c["program"]?.string ?? "", source: c["source"]?.string ?? ""), nil)
         }
         let log = raw["jk_sugCuratedLog"]?.object ?? [:]

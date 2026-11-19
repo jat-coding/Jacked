@@ -153,6 +153,11 @@ struct TrustedPrograms: View {
     var body: some View {
         let raw = store.backup.raw
         let pick = MetricsMath(raw: raw, lib: ExLib(db: catalog.db, raw: raw)).todaysCuratedPick(today: JackedDate.dayKey(Date())).pick
+        let hidden = Set((raw["jk_hiddenCurated"]?.array ?? []).compactMap(\.string))
+        let allGone = Curated.programs.allSatisfy { hidden.contains($0.name) }
+        let nHidden = Curated.programs.filter { hidden.contains($0.name) }.count
+        VStack(spacing: 6) {
+        if !allGone {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 SFIcon("star.fill").foregroundStyle(Color(hex: 0xFFD700))
@@ -160,7 +165,7 @@ struct TrustedPrograms: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 10) {
-                    ForEach(Array(Curated.programs.enumerated()), id: \.offset) { i, p in
+                    ForEach(Array(Curated.programs.enumerated()).filter { !hidden.contains($0.element.name) }, id: \.offset) { i, p in
                         VStack(alignment: .leading, spacing: 3) {
                             Text(p.name).font(Theme.heading(18, .extraBold)).foregroundStyle(Theme.text)
                             Text(p.desc).font(Theme.body(11)).foregroundStyle(Theme.muted)
@@ -179,16 +184,46 @@ struct TrustedPrograms: View {
                         }
                         .frame(width: 210, alignment: .leading).frame(minHeight: 150)
                         .padding(14).overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge).stroke(Theme.border2, lineWidth: 1))
+                        .overlay(alignment: .topTrailing) {
+                            // hideCurated: tap removes the program from the strip now (jk_hiddenCurated, synced).
+                            Button { setHidden(p.name, true) } label: {
+                                SFIcon("xmark", 10).foregroundStyle(Theme.muted)
+                                    .frame(width: 24, height: 24).background(Theme.bg3, in: Circle())
+                                    .overlay(Circle().stroke(Theme.border2, lineWidth: 1))
+                                    .frame(width: 44, height: 44).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain).padding(.top, 2).padding(.trailing, 2)
+                            .accessibilityLabel("Remove \(p.name) from Trusted Programs")
+                        }
                     }
                 }
             }
         }
         .padding(14).card()
+        }
+        if nHidden > 0 {
+            Button("Restore removed programs (\(nHidden))") { restoreHidden() }
+                .font(Theme.body(12)).foregroundStyle(Theme.muted).underline().padding(.vertical, 6)
+        }
+        }
         .task {
             #if DEBUG
             if let i = DevHooks.addProgram, Curated.programs.indices.contains(i) { await add(i); DevHooks.log("dev program added \(i)") }
             #endif
         }
+    }
+
+    /// hideCurated: append the program name to jk_hiddenCurated. The daily pick skips hidden programs (SuggestMath).
+    private func setHidden(_ name: String, _ hide: Bool) {
+        Task { _ = await store.edit(auth: auth) { r in
+            var h = (r["jk_hiddenCurated"]?.array ?? []).compactMap(\.string)
+            if hide, !h.contains(name) { h.append(name) }
+            r["jk_hiddenCurated"] = .array(h.map(JSONValue.string))
+        } }
+    }
+    /// restoreCurated: writes [] (not a deleted key) so the empty list wins the merge against the cloud's old one.
+    private func restoreHidden() {
+        Task { _ = await store.edit(auth: auth) { r in r["jk_hiddenCurated"] = .array([]) } }
     }
 
     /// addCurated: every workout of the program becomes one of your routines, desc "<program> · <source>".
