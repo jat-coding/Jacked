@@ -205,6 +205,12 @@ final class WorkoutSession: ObservableObject {
         return true
     }
 
+    /// setCable: Pulley / Single on a cable lift.
+    func setCable(_ ei: Int, _ v: String) {
+        guard var a = active, a.exercises.indices.contains(ei) else { return }
+        a.exercises[ei].cable = v; Haptics.light(); active = a
+    }
+
     /// setSingleArmEx: the Single / Both pair applies to the exercise and every set on it.
     func setSingle(_ ei: Int, _ v: Bool) {
         guard var a = active, a.exercises.indices.contains(ei) else { return }

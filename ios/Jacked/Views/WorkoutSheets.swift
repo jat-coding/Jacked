@@ -49,6 +49,7 @@ struct DaySheet: View {
     var replay: [String: PRReplay.Entry] = [:]
     var onOpen: (Workout) -> Void
     var onLog: () -> Void = {}
+    @State private var sugInfo = false
 
     var body: some View {
         SheetScaffold(title: JackedDate.dayTitle(dayKey)) {
@@ -86,9 +87,12 @@ struct DaySheet: View {
                                     Text(Workout.prSetText(p, settings: settings)).font(Theme.body(11, .bold)).foregroundStyle(Self.gold)
                                 } else if let g {
                                     Text(Workout.prSetText(g, settings: settings)).font(Theme.body(11)).foregroundStyle(Theme.muted)
-                                    Text("SUGGESTED").font(Theme.body(9, .bold)).tracking(0.4).foregroundStyle(Color(hex: 0xD9B84A))
-                                        .padding(.horizontal, 6).padding(.vertical, 1)
-                                        .overlay(Capsule().stroke(Color(hex: 0xD9B84A).opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
+                                    Button { sugInfo = true } label: {
+                                        Text("SUGGESTED").font(Theme.body(9, .bold)).tracking(0.4).foregroundStyle(Color(hex: 0xD9B84A))
+                                            .padding(.horizontal, 6).padding(.vertical, 1)
+                                            .overlay(Capsule().stroke(Color(hex: 0xD9B84A).opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
+                                    }
+                                    .buttonStyle(.plain).accessibilityHint("Explains suggested PRs")
                                 } else {
                                     let n = e.sets.filter(\.done).count
                                     let c = n > 0 ? n : e.sets.count
@@ -108,6 +112,9 @@ struct DaySheet: View {
             }
             Button("+ Log a workout for this day") { onLog() }
                 .buttonStyle(AccentButtonStyle()).padding(.top, 10)
+        }
+        .alert("Suggested PR", isPresented: $sugInfo) { Button("Got it", role: .cancel) {} } message: {
+            Text("Estimated PR from a higher-rep set. It won\u{2019}t count as a real PR until you lift this exact weight for this rep count.")
         }
     }
 
@@ -193,7 +200,8 @@ struct WorkoutDetailSheet: View {
                     HStack(spacing: 10) {
                         ExerciseThumb(exercise: e, size: 38)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(e.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+                            (Text(e.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
+                                + Text(e.cable.map { " \u{00B7} \($0)" } ?? "").font(Theme.body(11)).foregroundStyle(Theme.muted))
                             if e.tracking == "distance" { Text(runLine(shown)).font(Theme.body(11)).foregroundStyle(Theme.accent) }
                         }
                     }
@@ -382,6 +390,10 @@ struct EditWorkoutSheet: View {
                 }
                 .accessibilityLabel("Remove exercise")
             }
+            if isDur {
+                // setDurUnitWE: Sec / Min / Hr for a timed hold; the numbers stay stored in seconds.
+                UnitsPicker(options: [("sec", "Sec"), ("min", "Min"), ("hr", "Hr")], selection: Binding(get: { u }, set: { setDurUnit(ei, $0) }))
+            }
             HStack {
                 Text("SET").frame(width: 30, alignment: .leading)
                 Text(c3.uppercased()).frame(maxWidth: .infinity)
@@ -445,6 +457,12 @@ struct EditWorkoutSheet: View {
             "imgUrl": c.image.map { .string(ExerciseImages.base + $0) } ?? .null,
             "sets": .array([.object(["weight": .number(0), "reps": .number(0), "done": .bool(true)])])
         ])) }
+    }
+    private func setDurUnit(_ ei: Int, _ unit: String) {
+        mutateExercises { exs in
+            guard exs.indices.contains(ei), var o = exs[ei].object else { return }
+            o["durUnit"] = .string(unit); exs[ei] = .object(o)
+        }
     }
     private func setField(_ ei: Int, _ si: Int, _ k: String, _ v: Double) {
         mutateSets(ei) { sets in

@@ -31,6 +31,8 @@ struct LogExercise: Codable, Equatable, Identifiable {
     var supersetId: String?
     /// Hold display unit picked on the card: sec | min | hr (stored values stay seconds).
     var durUnit: String?
+    /// Cable lifts: "pulley" (default) or "single" (setCable).
+    var cable: String?
     var sets: [LogSet] = []
     var id: String { uid }
 }
@@ -94,7 +96,7 @@ extension LogExercise {
         muscle = o["muscle"]?.string ?? ""; equip = o["equip"]?.string ?? ""
         assist = o["assist"]?.truthy ?? false; tracking = o["tracking"]?.string ?? "weight_reps"
         imgUrl = o["imgUrl"]?.string; bwMode = o["bwMode"]?.string; single = o["single"]?.bool
-        supersetId = o["supersetId"]?.string; durUnit = o["durUnit"]?.string
+        supersetId = o["supersetId"]?.string; durUnit = o["durUnit"]?.string; cable = o["cable"]?.string
         sets = (o["sets"]?.array ?? []).compactMap { $0.object.map(LogSet.init(json:)) }
     }
     var json: [String: JSONValue] {
@@ -105,6 +107,7 @@ extension LogExercise {
         if let single { o["single"] = .bool(single) }
         if let supersetId { o["supersetId"] = .string(supersetId) }
         if let durUnit { o["durUnit"] = .string(durUnit) }
+        if let cable { o["cable"] = .string(cable) }
         return o
     }
 }

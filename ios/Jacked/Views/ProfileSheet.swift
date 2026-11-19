@@ -12,7 +12,11 @@ struct ProfileSheet: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var store: BackupStore
     @EnvironmentObject private var catalog: ExerciseCatalog
+    @EnvironmentObject private var workout: WorkoutSession
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var bwFocused: Bool
+    @State private var signOutMsg: String?
+    @State private var signOutChecking = false
 
     @State private var syncing = false
     @State private var syncResult: (text: String, ok: Bool)?
@@ -155,8 +159,12 @@ struct ProfileSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Rectangle().fill(Theme.border).frame(height: 1)
                     note("Signing out removes this account's copy from this phone. Your workouts stay saved in your account.")
-                    Button("Sign Out") { Task { dismiss(); store.signedOut(); await auth.logOut() } }
-                        .buttonStyle(GhostButtonStyle())
+                    Button(signOutChecking ? "Syncing\u{2026}" : "Sign Out") { Task { await startSignOut() } }
+                        .buttonStyle(GhostButtonStyle()).disabled(signOutChecking)
+                        .confirmationDialog("Sign out on this device?", isPresented: Binding(get: { signOutMsg != nil }, set: { if !$0 { signOutMsg = nil } }), titleVisibility: .visible) {
+                            Button("Sign Out", role: .destructive) { Task { dismiss(); store.signedOut(); await auth.logOut() } }
+                            Button("Cancel", role: .cancel) {}
+                        } message: { Text(signOutMsg ?? "") }
                     Button("Delete Account") { showDelete = true }
                         .buttonStyle(DestructiveGhostButtonStyle())
                     Text("Jacked for iPhone " + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""))
@@ -268,6 +276,9 @@ struct ProfileSheet: View {
                 rowDivider
                 row("Body Weight (\(unit == "kg" ? "kg" : "lb"))") {
                     TextField(unit == "kg" ? "80" : "175", text: $bw).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                        .focused($bwFocused)
+                        // saveBWField: a weigh-in saves the moment the box is left, no Save Profile needed.
+                        .onChange(of: bwFocused) { _, f in if !f { Task { await saveBWField() } } }
                 }
                 rowDivider
                 row("Birthday") {
@@ -333,6 +344,34 @@ struct ProfileSheet: View {
         bwShown = kg > 0 ? Self.shown(kg, unit) : 0
         bw = kg > 0 ? WorkoutMath.jsNumberString(bwShown) : ""
         if let b = p["birthday"]?.string, let d = Self.dayFmt.date(from: b) { hasBirthday = true; birthday = d }
+    }
+
+    /// saveBWField() / logWeight(): a changed weight box is a weigh-in, saved on its own.
+    private func saveBWField() async {
+        let shownUnit = store.backup.settings.wUnit == "kg" ? "kg" : "lb"
+        let v = Double(bw.replacingOccurrences(of: ",", with: ".")) ?? 0
+        guard v > 0, v != bwShown else { return }
+        let kg = shownUnit == "lb" ? v / 2.20462 : v
+        _ = await store.edit(auth: auth) { raw in
+            raw["jk_bw"] = .number(kg)
+            var log = (raw["jk_bwlog"]?.array ?? []).compactMap(\.object)
+            let today = JackedDate.dayKey(Date())
+            if let i = log.firstIndex(where: { $0["d"]?.string == today }) { log[i]["kg"] = .number(kg) } else { log.append(["d": .string(today), "kg": .number(kg)]) }
+            log.sort { ($0["d"]?.string ?? "") < ($1["d"]?.string ?? "") }
+            raw["jk_bwlog"] = .array(log.map(JSONValue.object))
+        }
+        bwShown = Self.shown(kg, shownUnit); bw = WorkoutMath.jsNumberString(bwShown)
+    }
+
+    /// signOut(): blocked mid-workout; flush anything unsent first; then say what is actually true.
+    private func startSignOut() async {
+        if workout.active != nil { message = ("Finish or cancel your workout first \u{2014} signing out would lose it", false); return }
+        signOutChecking = true; defer { signOutChecking = false }
+        if store.dirty { _ = await store.push(auth: auth) }
+        let code = auth.session?.code ?? "your account"
+        signOutMsg = store.dirty || store.state != .idle
+            ? "Some recent changes have NOT reached the cloud yet (offline?). Signing out now would lose them. Try again once you're online."
+            : "Your workouts, PRs and routines are backed up to \(code) in the cloud \u{2014} log in again any time to get them back."
     }
 
     /// saveProf(): same checks and the same keys as the web app, one careful save.

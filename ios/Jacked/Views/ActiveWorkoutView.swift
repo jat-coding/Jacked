@@ -12,6 +12,7 @@ struct ActiveWorkoutView: View {
     @State private var confirmFinish = false
     @State private var confirmCancel = false
     @State private var finishing = false
+    @State private var tileBottom: CGFloat = 1000   // LiveStats' bottom edge in the scroll view's space
 
     var body: some View {
         let settings = store.backup.settings
@@ -20,6 +21,7 @@ struct ActiveWorkoutView: View {
                 VStack(spacing: 14) {
                     if let a = session.active {
                         LiveStats(workout: a, settings: settings, bw: jsNum(store.backup.raw["jk_bw"]))
+                            .background(GeometryReader { g in Color.clear.preference(key: TileBottomKey.self, value: g.frame(in: .named("awScroll")).maxY) })
                         ForEach(Array(a.exercises.enumerated()), id: \.element.uid) { ei, ex in
                             ExerciseCard(ei: ei, ex: ex, settings: settings)
                         }
@@ -36,8 +38,14 @@ struct ActiveWorkoutView: View {
                 }
                 .padding(.horizontal, 16).padding(.top, 8)
             }
+            .coordinateSpace(name: "awScroll")
+            .onPreferenceChange(TileBottomKey.self) { tileBottom = $0 }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.bg.ignoresSafeArea())
+            // wMini: once the big lifted / sets tile scrolls off the top, a slim bar keeps the two numbers in view.
+            .overlay(alignment: .top) {
+                if tileBottom < 0, let a = session.active { LiveMiniBar(workout: a, settings: settings, bw: jsNum(store.backup.raw["jk_bw"])) }
+            }
             .safeAreaInset(edge: .bottom) { RestBar() }
             .overlay(alignment: .top) { ToastView(text: $session.toast) }
             .toolbar {
@@ -84,17 +92,48 @@ struct ActiveWorkoutView: View {
     }
 }
 
+private struct TileBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = 1000
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// The two numbers both stat views show: volume lifted so far and sets done.
+private func liveTotals(_ workout: ActiveWorkout, bw: Double) -> (done: Int, vol: Double) {
+    let exs = workout.exercises
+    let done = exs.reduce(0) { $0 + $1.sets.filter(\.done).count }
+    let vol = exs.reduce(0.0) { acc, e in
+        WorkoutMath.isWT(e) ? acc + e.sets.filter(\.done).reduce(0.0) { $0 + WorkoutMath.volWeight(e, $1, workoutId: workout.id, bw: bw) * $1.reps } : acc
+    }
+    return (done, vol)
+}
+
+/// #wMini: the slim stat bar shown while the big tile is scrolled away.
+struct LiveMiniBar: View {
+    let workout: ActiveWorkout
+    let settings: Settings
+    let bw: Double
+    var body: some View {
+        let t = liveTotals(workout, bw: bw)
+        HStack(spacing: 10) {
+            (Text(HomeMath.fmtV(settings.display(t.vol))).fontWeight(.bold) + Text(" \(settings.unitLabel) lifted"))
+            Rectangle().fill(Theme.border).frame(width: 1, height: 12)
+            (Text("\(t.done)").fontWeight(.bold) + Text(" sets done"))
+        }
+        .font(Theme.body(12)).foregroundStyle(Theme.text2)
+        .frame(maxWidth: .infinity).padding(.vertical, 7)
+        .background(Theme.bg2.opacity(0.96))
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
+        .allowsHitTesting(false)
+    }
+}
+
 /// The .wstats card at the top of the live workout: volume lifted so far and sets done.
 struct LiveStats: View {
     let workout: ActiveWorkout
     let settings: Settings
     let bw: Double
     var body: some View {
-        let exs = workout.exercises
-        let done = exs.reduce(0) { $0 + $1.sets.filter(\.done).count }
-        let vol = exs.reduce(0.0) { acc, e in
-            WorkoutMath.isWT(e) ? acc + e.sets.filter(\.done).reduce(0.0) { $0 + WorkoutMath.volWeight(e, $1, workoutId: workout.id, bw: bw) * $1.reps } : acc
-        }
+        let (done, vol) = liveTotals(workout, bw: bw)
         HStack(spacing: 0) {
             stat(HomeMath.fmtV(settings.display(vol)), "\(settings.unitLabel) lifted")
             Rectangle().fill(Theme.border).frame(width: 1, height: 36)
@@ -189,6 +228,9 @@ struct ExerciseCard: View {
                         .buttonStyle(.plain).disabled(c.info == nil)
                     }
                 }
+            }
+            if ex.equip.lowercased().contains("cable") {
+                OptionRow(label: "Cable", options: [("Pulley", "pulley"), ("Single", "single")], selected: ex.cable ?? "pulley") { session.setCable(ei, $0) }
             }
             if PWATables.SINGLE_BOTH_IDS.contains(ex.exId) && ex.tracking == "weight_reps" {
                 OptionRow(label: "Arm", options: [("Single", true), ("Both", false)], selected: WorkoutMath.exSingleUI(ex)) {

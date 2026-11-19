@@ -452,6 +452,23 @@ struct RoutineEditorSheet: View {
     @State private var picking: Int? = nil   // -1 = add, else replace that index
     @State private var saving = false
     @State private var initial: RoutineDraft? = nil
+    @State private var newSectionAsk = false
+    @State private var newSectionName = ""
+
+    /// findOrCreateSection(): an existing section of that name (any case) is reused, else a new one is saved.
+    private func findOrCreateSection(_ raw: String) async {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let secs = (store.backup.raw["jk_routineSections"]?.array ?? []).compactMap(\.object)
+        if let hit = secs.first(where: { ($0["name"]?.string ?? "").lowercased() == name.lowercased() })?["id"]?.string { draft.sectionId = hit; return }
+        let id = "sec\(Int(Date().timeIntervalSince1970 * 1000))" + String(UUID().uuidString.prefix(5)).lowercased()
+        _ = await store.edit(auth: auth) { r in
+            var a = r["jk_routineSections"]?.array ?? []
+            a.append(.object(["id": .string(id), "name": .string(name), "order": .null]))
+            r["jk_routineSections"] = .array(a)
+        }
+        draft.sectionId = id
+    }
 
     var body: some View {
         let raw = store.backup.raw
@@ -464,6 +481,10 @@ struct RoutineEditorSheet: View {
                     Picker("Section", selection: $draft.sectionId) {
                         Text("Auto-suggest from exercises").tag("")
                         ForEach(Array(secs.enumerated()), id: \.offset) { _, s in Text(s["name"]?.string ?? "").tag(s["id"]?.string ?? "") }
+                        Text("+ New section\u{2026}").tag("__new__")
+                    }
+                    .onChange(of: draft.sectionId) { old, new in
+                        if new == "__new__" { draft.sectionId = old; newSectionName = ""; newSectionAsk = true }
                     }
                 }
                 Section("Exercises") {
@@ -488,6 +509,11 @@ struct RoutineEditorSheet: View {
             .scrollContentBackground(.hidden).background(Theme.bg2)
             .navigationTitle(draft.id == nil ? "New Routine" : "Edit Routine").navigationBarTitleDisplayMode(.inline)
             .onAppear { if initial == nil { initial = draft } }
+            .alert("New section name:", isPresented: $newSectionAsk) {
+                TextField("Name", text: $newSectionName)
+                Button("Cancel", role: .cancel) {}
+                Button("Add") { Task { await findOrCreateSection(newSectionName) } }
+            }
             .popup(dirty: initial != nil && initial != draft && !saving)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

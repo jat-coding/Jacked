@@ -159,6 +159,8 @@ struct WorkoutExercise: Identifiable {
     let tracking: String
     let imgUrl: String?
     let durUnit: String?
+    /// "pulley" | "single" on a cable lift, shown beside the name (setCable).
+    let cable: String?
     let sets: [WorkoutSet]
     /// The exercise note saved at finish (shown on the workout detail page).
     let note: String
@@ -171,6 +173,7 @@ struct WorkoutExercise: Identifiable {
         tracking = o["tracking"]?.string ?? "weight_reps"
         imgUrl = o["imgUrl"]?.string
         durUnit = o["durUnit"]?.string
+        cable = o["cable"]?.string
         sets = (o["sets"]?.array ?? []).compactMap { $0.object.map(WorkoutSet.init) }
     }
 
