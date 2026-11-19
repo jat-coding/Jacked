@@ -95,6 +95,7 @@ struct OutlinedButtonStyle: ButtonStyle {
             .background(configuration.isPressed ? pressedFill : Color.clear,
                         in: RoundedRectangle(cornerRadius: Theme.radius))
             .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(border, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.radius))   // the whole rectangle taps, not just the lettering
     }
 }
 
@@ -136,6 +137,7 @@ struct HeaderPillStyle: ButtonStyle {
             .padding(.horizontal, 14).padding(.vertical, 8)
             .background(configuration.isPressed ? Theme.bg3 : Color.clear, in: Capsule())
             .overlay(Capsule().stroke(Theme.border2, lineWidth: 1))
+            .contentShape(Capsule())
     }
 }
 
@@ -149,6 +151,7 @@ struct ChipButtonStyle: ButtonStyle {
             .padding(.horizontal, 13).padding(.vertical, 6)
             .background(on ? Theme.accent : Color.clear, in: Capsule())
             .overlay(Capsule().stroke(on ? Theme.accent : Theme.border, lineWidth: 1))
+            .contentShape(Capsule())
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
