@@ -62,10 +62,6 @@ struct ActiveWorkoutView: View {
             .safeAreaInset(edge: .bottom) { RestBar() }
             .overlay(alignment: .top) { ToastView(text: $session.toast) }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { session.presented = false } label: { SFIcon("chevron.down") }
-                        .accessibilityLabel("Minimize")
-                }
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
                         Text(session.active?.name ?? "Workout").font(Theme.heading(20, .extraBold)).foregroundStyle(Theme.text)
