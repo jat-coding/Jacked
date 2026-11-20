@@ -17,11 +17,11 @@ struct FriendsView: View {
     struct Cat { let k, icon: String; let col: Color; let label, how: String }
     static let cats = [
         Cat(k: "volume", icon: "dumbbell.fill", col: Color(hex: 0x5AA9FF), label: "Weight", how: "Total weight lifted since the 1st"),
-        Cat(k: "prs", icon: "trophy.fill", col: Color(hex: 0xFFD700), label: "PRs", how: "PRs set since the 1st"),
+        Cat(k: "prs", icon: "trophy.fill", col: Theme.gold, label: "PRs", how: "PRs set since the 1st"),
         Cat(k: "workouts", icon: "calendar", col: Color(hex: 0x4B3FD6), label: "Sessions", how: "Workouts since the 1st"),
         Cat(k: "streak", icon: "flame.fill", col: Theme.orange, label: "Streak", how: "Longest run of training days this month"),
         Cat(k: "consistency", icon: "chart.bar.fill", col: Color(hex: 0xB07CFF), label: "Consistency", how: "Share of this month's days so far with a workout"),
-        Cat(k: "badges", icon: "medal.fill", col: Color(hex: 0xFFCA4D), label: "Badges", how: "Monthly badges earned this month"),
+        Cat(k: "badges", icon: "medal.fill", col: Theme.amber, label: "Badges", how: "Monthly badges earned this month"),
     ]
 
     var body: some View {
@@ -42,7 +42,7 @@ struct FriendsView: View {
                                 Text("+ Friend")
                                 if !pending.isEmpty {
                                     Text("\(pending.count)").font(Theme.body(10, .semibold)).foregroundStyle(.white)
-                                        .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16).background(Color(hex: 0xFF453A), in: Capsule())
+                                        .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16).background(Theme.alert, in: Capsule())
                                 }
                             }
                         }
@@ -62,7 +62,7 @@ struct FriendsView: View {
                             muted(friends.loaded ? "No friends yet. Tap + Friend to add by username." : "Loading friends...")
                         }   // every friend starred: the web app hides the rest-of-friends block entirely
                     }
-                    .padding(16).card()
+                    .cwCard()
                     if !pending.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(spacing: 6) { JIcon("hourglass", 16).foregroundStyle(Theme.text).padding(.bottom, 12); BlockTitle(text: "Pending") }
@@ -73,7 +73,7 @@ struct FriendsView: View {
                                 }
                             }
                         }
-                        .padding(16).card()
+                        .cwCard()
                     }
                     if !friends.sent.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
@@ -84,7 +84,7 @@ struct FriendsView: View {
                                 }
                             }
                         }
-                        .padding(16).card()
+                        .cwCard()
                     }
                 }
                 .padding(.horizontal, 16).padding(.bottom, 30)
@@ -126,7 +126,7 @@ struct FriendsView: View {
             HStack(alignment: .top) {
                 BlockTitle(text: "Leaderboards")
                 Button { crownInfo = true } label: {
-                    HStack(spacing: 4) { JIcon("crown", 11).foregroundStyle(Color(hex: 0xFFD700)); Text("Last month's winner") }
+                    HStack(spacing: 4) { JIcon("crown", 11).foregroundStyle(Theme.gold); Text("Last month's winner") }
                         .font(Theme.body(12, .semibold)).foregroundStyle(Theme.text2)
                 }.buttonStyle(.plain).padding(.top, 6)
             }
@@ -135,15 +135,15 @@ struct FriendsView: View {
                     Button { range = k } label: {
                         Text(l).font(Theme.body(13, .semibold)).frame(maxWidth: .infinity).padding(.vertical, 7)
                             .foregroundStyle(range == k ? Theme.onAccent : Theme.muted)
-                            .background(range == k ? Theme.accent : .clear, in: RoundedRectangle(cornerRadius: 6))
+                            .background(range == k ? Theme.accent : .clear, in: RoundedRectangle(cornerRadius: Theme.radiusXS))
                     }.buttonStyle(.plain)
                 }
             }
-            .padding(3).background(Theme.bg4, in: RoundedRectangle(cornerRadius: 8)).padding(.bottom, 10)
+            .padding(3).background(Theme.bg4, in: RoundedRectangle(cornerRadius: Theme.radiusSM)).padding(.bottom, 10)
             CmpChips(cats: Self.cats, on: $cmp)
             if range == "month" { Text(def.how).font(Theme.body(11)).foregroundStyle(Theme.muted).padding(.bottom, 8) }
             if buddies.isEmpty {
-                (Text("Mark friends as ") + Text("\u{2605}").foregroundColor(Color(hex: 0xFFD700)) + Text(" close buddies below to compare them here."))
+                (Text("Mark friends as ") + Text("\u{2605}").foregroundColor(Theme.gold) + Text(" close buddies below to compare them here."))
                     .font(Theme.body(13)).foregroundStyle(Theme.muted).padding(.vertical, 6)
             } else {
                 let people = [you] + buddies
@@ -164,7 +164,7 @@ struct FriendsView: View {
                         HStack(spacing: 12) {
                             Group {
                                 if z { Text("\u{2013}").foregroundStyle(Theme.muted) }
-                                else if i < 3 { SFIcon("medal.fill").foregroundStyle([Color(hex: 0xFFD700), Color(hex: 0xB8B8C8), Color(hex: 0xCD7F32)][i]) }
+                                else if i < 3 { SFIcon("medal.fill").foregroundStyle([Theme.gold, Color(hex: 0xB8B8C8), Color(hex: 0xCD7F32)][i]) }
                                 else { Text("#\(i + 1)").foregroundStyle(Theme.muted) }
                             }
                             .font(Theme.heading(20, .extraBold)).frame(width: 32)
@@ -181,7 +181,7 @@ struct FriendsView: View {
                 }
             }
         }
-        .padding(16).card()
+        .cwCard()
     }
 
     private func value(_ k: String, _ p: Person, _ m: MetricsMath) -> Double {
@@ -212,8 +212,8 @@ struct FriendsView: View {
                 Avatar(p: p, size: 42)
                 nameBlock(p, sub: "\(p.username) \u{00B7} \(WorkoutMath.n(p.workouts)) workouts \u{00B7} \(WorkoutMath.n(p.badges))", medal: true, crown: crown.contains(p.code))
                 Button { Task { await toggleCB(p.code) } } label: {
-                    Text("\u{2605}").font(.system(size: 16)).foregroundStyle(cb.contains(p.code) ? Color(hex: 0xFFD700) : Theme.muted)
-                        .frame(width: 34, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: 8))
+                    Text("\u{2605}").font(.system(size: 16)).foregroundStyle(cb.contains(p.code) ? Theme.gold : Theme.muted)
+                        .frame(width: 34, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
                 }
                 .buttonStyle(.plain).accessibilityLabel("Close buddy")
             }
@@ -235,7 +235,7 @@ struct FriendsView: View {
     private func nameBlock(_ p: Person, sub: String, medal: Bool = false, crown: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
-                if crown { JIcon("crown", 12).foregroundStyle(Color(hex: 0xFFD700)) }
+                if crown { JIcon("crown", 12).foregroundStyle(Theme.gold) }
                 Text(p.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text).lineLimit(1)
                 if p.isYou { Text("(You)").font(Theme.body(10, .bold)).foregroundStyle(Theme.accent) }
             }
@@ -250,7 +250,7 @@ struct FriendsView: View {
 
     private func subTitle(star: Bool, _ t: String) -> some View {
         HStack(spacing: 4) {
-            if star { JIcon("starfill", 11).foregroundStyle(Color(hex: 0xFFD700)) }
+            if star { JIcon("starfill", 11).foregroundStyle(Theme.gold) }
             Text(t.uppercased())
         }
         .font(Theme.body(11, .bold)).tracking(0.8).foregroundStyle(Theme.muted).padding(.bottom, 6)
@@ -316,11 +316,11 @@ struct RowBox: ViewModifier {
     func body(content: Content) -> some View {
         if gilded {
             content.padding(.horizontal, plain ? 0 : 0)
-                .background(LinearGradient(colors: [Color(hex: 0xFFD700).opacity(0.10), Color(hex: 0xFFD700).opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                .background(LinearGradient(colors: [Theme.gold.opacity(0.10), Theme.gold.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing),
                             in: RoundedRectangle(cornerRadius: Theme.radius))
-                .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Color(hex: 0xFFD700).opacity(0.55), lineWidth: 1)).padding(.bottom, 8)
+                .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.gold.opacity(0.55), lineWidth: 1)).padding(.bottom, 8)
         } else if plain {
-            content.overlay(alignment: .top) { Rectangle().fill(Color(hex: 0x23232B)).frame(height: 1) }
+            content.overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
         } else if you {   // .lbyou
             content.background(Theme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: Theme.radius))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.accent, lineWidth: 1)).padding(.bottom, 8)

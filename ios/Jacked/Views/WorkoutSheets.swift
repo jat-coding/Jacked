@@ -68,7 +68,7 @@ struct DaySheet: View {
                                 Text(w.name).font(Theme.heading(18, .extraBold)).foregroundStyle(Theme.accent)
                                 if w.prCount > 0 {
                                     Text("\u{2605} \(w.prCount) PR\(w.prCount > 1 ? "s" : "")")
-                                        .font(Theme.body(11, .bold)).foregroundStyle(Color(hex: 0xFFD700))
+                                        .font(Theme.body(11, .bold)).foregroundStyle(Theme.gold)
                                 }
                             }
                             Spacer()
@@ -88,9 +88,9 @@ struct DaySheet: View {
                                 } else if let g {
                                     Text(Workout.prSetText(g, settings: settings)).font(Theme.body(11)).foregroundStyle(Theme.muted)
                                     Button { sugInfo = true } label: {
-                                        Text("SUGGESTED").font(Theme.body(9, .bold)).tracking(0.4).foregroundStyle(Color(hex: 0xD9B84A))
+                                        Text("SUGGESTED").font(Theme.body(9, .bold)).tracking(0.4).foregroundStyle(Theme.goldSoft)
                                             .padding(.horizontal, 6).padding(.vertical, 1)
-                                            .overlay(Capsule().stroke(Color(hex: 0xD9B84A).opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
+                                            .overlay(Capsule().stroke(Theme.goldSoft.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
                                     }
                                     .buttonStyle(.plain).accessibilityHint("Explains suggested PRs")
                                 } else {
@@ -118,7 +118,7 @@ struct DaySheet: View {
         }
     }
 
-    private static let gold = Color(hex: 0xFFD700)
+    private static let gold = Theme.gold
 
     private func summary(_ w: Workout) -> String {
         let load = w.totalVolume > 0 || w.distance <= 0
@@ -143,7 +143,7 @@ struct WorkoutDetailSheet: View {
     @State private var savingRoutine = false
     @State private var routineName = ""
     @State private var sugInfo = false
-    private static let gold = Color(hex: 0xFFD700)
+    private static let gold = Theme.gold
 
     /// The run summary under a distance exercise's name: total miles, then the best pace.
     private func runLine(_ sets: [WorkoutSet]) -> String {
@@ -208,7 +208,7 @@ struct WorkoutDetailSheet: View {
                     if !e.note.isEmpty {
                         Text(e.note).font(Theme.body(12)).foregroundStyle(Theme.text2)
                             .padding(.horizontal, 9).padding(.vertical, 7).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Theme.bg2, in: RoundedRectangle(cornerRadius: 7))
+                            .background(Theme.bg2, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
                     }
                     ForEach(Array(shown.enumerated()), id: \.element.id) { i, s in
                         let si = e.sets.firstIndex { $0.id == s.id } ?? i
@@ -219,9 +219,9 @@ struct WorkoutDetailSheet: View {
                             if isSug {
                                 // SUG_EXPLAIN: tap the tag to see what a suggested PR is.
                                 Button { sugInfo = true } label: {
-                                    Text("SUGGESTED").font(Theme.body(9, .bold)).tracking(0.4).foregroundStyle(Color(hex: 0xD9B84A))
+                                    Text("SUGGESTED").font(Theme.body(9, .bold)).tracking(0.4).foregroundStyle(Theme.goldSoft)
                                         .padding(.horizontal, 6).padding(.vertical, 1)
-                                        .overlay(Capsule().stroke(Color(hex: 0xD9B84A).opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
+                                        .overlay(Capsule().stroke(Theme.goldSoft.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
                                 }
                                 .buttonStyle(.plain).accessibilityHint("Explains suggested PRs")
                             }
@@ -254,7 +254,7 @@ struct WorkoutDetailSheet: View {
                 EditWorkoutSheet(id: id, original: w, settings: settings) { ok in
                     saveNote = ok ? "Workout updated \u{2713}" : "Saved on this phone, will sync when online"
                 }
-                .presentationBackground(Theme.bg2)
+                .popup()
             }
         }
         .confirmationDialog("Delete this workout?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -346,7 +346,7 @@ struct EditWorkoutSheet: View {
                 Text("Name").font(Theme.body(11, .semibold)).foregroundStyle(Theme.muted)
                 TextField("Workout", text: $name)
                     .font(Theme.body(15, .semibold)).foregroundStyle(Theme.text)
-                    .padding(10).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 9))
+                    .padding(10).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
                 DatePicker("Date", selection: $day, displayedComponents: .date)
                     .font(Theme.body(14, .semibold)).foregroundStyle(Theme.text2).tint(Theme.accent)
             }
@@ -386,7 +386,7 @@ struct EditWorkoutSheet: View {
                 Spacer()
                 Button { removing = ei } label: {
                     JIcon("trash", 13).foregroundStyle(Theme.red)
-                        .frame(width: 30, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: 8))
+                        .frame(width: 30, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
                 }
                 .accessibilityLabel("Remove exercise")
             }
@@ -559,7 +559,7 @@ private struct DiscardGuard: ViewModifier {
     @State private var ask = false
     func body(content: Content) -> some View {
         content
-            .presentationDragIndicator(.visible)
+            .sheetChrome()
             .interactiveDismissDisabled(dirty)
             .background(DismissGuardHook { if dirty { ask = true } })
             .confirmationDialog("Discard your changes?", isPresented: $ask, titleVisibility: .visible) {
@@ -570,7 +570,11 @@ private struct DiscardGuard: ViewModifier {
 }
 extension View {
     /// Standard popup chrome: drag indicator + interactive swipe-down dismissal.
-    func popup() -> some View { presentationDragIndicator(.visible) }
+    func popup() -> some View { sheetChrome() }
+    /// `.md`: every sheet is bg2 with a 24pt top radius and a drag grabber, never the system grey.
+    func sheetChrome() -> some View {
+        presentationDragIndicator(.visible).presentationBackground(Theme.bg2).presentationCornerRadius(24)
+    }
     /// Same, but with unsaved input a swipe-down asks before discarding.
     func popup(dirty: Bool) -> some View { modifier(DiscardGuard(dirty: dirty)) }
 }
@@ -598,7 +602,7 @@ struct SheetScaffold<Content: View>: View {
         }
         .background(Theme.bg2.ignoresSafeArea())
         .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .sheetChrome()
     }
 }
 

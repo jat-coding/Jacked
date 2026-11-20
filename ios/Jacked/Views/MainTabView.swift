@@ -199,7 +199,8 @@ struct PlaceholderTab: View {
 /// `.ph` / `.pt`: the big condensed page title at the top of every tab.
 struct PageHeader<Trailing: View>: View {
     let title: String
-    var accentDot = true
+    /// Only Home's "JACKED." carries the teal dot (index.html:744); every other tab title is plain.
+    var accentDot = false
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
@@ -216,8 +217,22 @@ struct PageHeader<Trailing: View>: View {
 }
 
 extension PageHeader where Trailing == EmptyView {
-    init(title: String, accentDot: Bool = true) {
+    init(title: String, accentDot: Bool = false) {
         self.init(title: title, accentDot: accentDot, trailing: { EmptyView() })
+    }
+}
+
+/// `.es`: the one empty state. Centred, 44pt above and below, condensed 22pt title in text2, muted line under it.
+struct EmptyState: View {
+    let title: String
+    var subtitle: String? = nil
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(title).font(Theme.heading(22, .bold)).foregroundStyle(Theme.text2)
+            if let subtitle { Text(subtitle).font(Theme.body(13)).foregroundStyle(Theme.muted) }
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity).padding(.vertical, 44).padding(.horizontal, 20)
     }
 }
 
@@ -234,21 +249,36 @@ struct BlockTitle: View {
     }
 }
 
-/// `.cw`-style card: bg2, 1px border, large radius.
+/// `.sec` / `.cw` (the PWA's "hybrid layout" card, index.html:619): soft top-to-bottom gradient
+/// #1a1a21 -> #131318, 20pt radius, no border, a 1px top highlight and a deep drop shadow.
+/// Pass `fill` for a flat inner card (stat well, list row) instead; those keep a 1px border.
 struct CardBackground: ViewModifier {
-    var fill: Color = Theme.bg2
-    var radius: CGFloat = Theme.radiusLarge
+    var fill: Color? = nil
+    var radius: CGFloat = Theme.radiusCard
     func body(content: Content) -> some View {
-        content
-            .background(fill, in: RoundedRectangle(cornerRadius: radius))
-            .overlay(RoundedRectangle(cornerRadius: radius).stroke(Theme.border, lineWidth: 1))
+        let shape = RoundedRectangle(cornerRadius: radius)
+        if let fill {
+            content
+                .background(fill, in: shape)
+                .overlay(shape.stroke(Theme.border, lineWidth: 1))
+        } else {
+            content
+                .background(
+                    shape.fill(LinearGradient(colors: [Color(hex: 0x1A1A21), Color(hex: 0x131318)], startPoint: .top, endPoint: .bottom))
+                        .shadow(color: .black.opacity(0.55), radius: 15, x: 0, y: 12)
+                )
+                .overlay(shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(0.05), .clear], startPoint: .top, endPoint: .center), lineWidth: 1))
+        }
     }
 }
 
 extension View {
-    func card(fill: Color = Theme.bg2, radius: CGFloat = Theme.radiusLarge) -> some View {
-        modifier(CardBackground(fill: fill, radius: radius))
+    /// `fill: nil` = the PWA gradient card; `fill:` = a flat inner card with a hairline border.
+    func card(fill: Color? = nil, radius: CGFloat? = nil) -> some View {
+        modifier(CardBackground(fill: fill, radius: radius ?? (fill == nil ? Theme.radiusCard : Theme.radius)))
     }
+    /// The standard top-level card: `.cw` padding (18) + the card background.
+    func cwCard() -> some View { padding(Theme.cardPad).card() }
 }
 
 /// The PWA's floating bottom nav: a frosted capsule (nav, index.html:99/535), five buttons, and a teal pill
@@ -283,7 +313,7 @@ struct NavCapsule: View {
                     }
                     .overlay(alignment: .top) {
                         if it.0 == .friends && requests > 0 {
-                            Circle().fill(Color(hex: 0xFF453A)).frame(width: 8, height: 8)
+                            Circle().fill(Theme.alert).frame(width: 8, height: 8)
                                 .overlay(Circle().stroke(Theme.bg, lineWidth: 2)).offset(x: 12, y: 5)
                         }
                     }

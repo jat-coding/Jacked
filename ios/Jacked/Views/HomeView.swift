@@ -21,7 +21,7 @@ struct HomeView: View {
         ScrollViewReader { proxy in
         ScrollView {
             VStack(spacing: 0) {
-                PageHeader(title: "JACKED") {
+                PageHeader(title: "JACKED", accentDot: true) {
                     Button { showAccount = true } label: {
                         AvatarBadge(name: store.backup.profileName, url: store.backup.avatarURL)
                     }
@@ -29,14 +29,14 @@ struct HomeView: View {
                 }
                 syncLine
                 HomeRecapCard()
-                StreakBanner(history: h).padding(.bottom, 20)
+                StreakBanner(history: h).padding(.bottom, Theme.blockGap)
                 CalendarCard(history: h, liveToday: liveToday, month: $month, onTitle: { showGymYears = true }) { dayKey = DayKey(id: $0) }
-                    .padding(.bottom, 20)
+                    .padding(.bottom, Theme.blockGap)
                 Button { if session.active != nil { session.presented = true } else { showStartNote = true } } label: {
                     HStack(spacing: 6) { JIcon("play", 15); Text("Start Workout") }.font(Theme.body(16, .semibold))
                 }
                 .buttonStyle(AccentButtonStyle())
-                .padding(.bottom, 22)
+                .padding(.bottom, Theme.blockGap)
                 SuggestCard().id("suggest")
                 RecentWorkouts(history: h, settings: settings) { workout = $0 }
                 // homeVersion: the build number at the bottom of Home.
@@ -134,8 +134,7 @@ struct StreakBanner: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(18)
-            .card()
+            .cwCard()
         }
     }
 }
@@ -193,16 +192,15 @@ struct CalendarCard: View {
                 }
             }
         }
-        .padding(14)
-        .card()
+        .cwCard()
     }
 
     private func dayCell(_ d: Int, isToday: Bool, isFuture: Bool, worked: Bool) -> some View {
-        let bg: Color = isFuture ? .clear : worked ? Theme.accent.opacity(0.2) : isToday ? .clear : Color(hex: 0xFF4D4D).opacity(0.07)
-        let fg: Color = isFuture ? Theme.muted : worked || isToday ? Theme.accent : Color(hex: 0xFF4D4D).opacity(0.4)
+        let bg: Color = isFuture ? .clear : worked ? Theme.accent.opacity(0.2) : isToday ? .clear : Theme.missed.opacity(0.07)
+        let fg: Color = isFuture ? Theme.muted : worked || isToday ? Theme.accent : Theme.missed.opacity(0.4)
         return ZStack(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: 6).fill(bg)
-            if isToday { RoundedRectangle(cornerRadius: 6).stroke(Theme.accent, lineWidth: 1.5) }
+            RoundedRectangle(cornerRadius: Theme.radiusXS).fill(bg)
+            if isToday { RoundedRectangle(cornerRadius: Theme.radiusXS).stroke(Theme.accent, lineWidth: 1.5) }
             Text("\(d)")
                 .font(Theme.body(11, worked && !isFuture ? .bold : .medium))
                 .foregroundStyle(fg)
@@ -215,7 +213,7 @@ struct CalendarCard: View {
     private func navButton(_ icon: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             SFIcon(icon, 13).foregroundStyle(Theme.text2)
-                .frame(width: 30, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: 8))
+                .frame(width: 30, height: 30).background(Theme.bg4, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
         }
     }
 
@@ -236,11 +234,7 @@ struct RecentWorkouts: View {
             BlockTitle(text: "Recent workouts")
             let rec = Array(history.reversed().prefix(6))
             if rec.isEmpty {
-                VStack(spacing: 6) {
-                    Text("No workouts yet").font(Theme.heading(20, .bold)).foregroundStyle(Theme.text)
-                    Text("Tap Log to start your first session.").font(Theme.body(13)).foregroundStyle(Theme.muted)
-                }
-                .padding(.vertical, 30)
+                EmptyState(title: "No workouts yet", subtitle: "Tap Log to start your first session.")
             } else {
                 ForEach(rec) { w in
                     Button { onTap(w) } label: { WorkoutRow(workout: w, settings: settings) }
@@ -341,8 +335,7 @@ struct GymYearsView: View {
                 }
                 .frame(maxWidth: .infinity).multilineTextAlignment(.center)
                 if years.isEmpty {
-                    Text("No training days yet.").font(Theme.body(15, .semibold)).foregroundStyle(Theme.text2)
-                        .frame(maxWidth: .infinity).padding(.top, 30)
+                    EmptyState(title: "No training days yet")
                 }
                 ForEach(years, id: \.self) { y in
                     let n = days.filter { $0.hasPrefix("\(y)-") }.count

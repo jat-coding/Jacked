@@ -34,8 +34,7 @@ struct LibraryView: View {
                         else { Text("\(all.count) loaded \u{2713}").font(Theme.body(13)).foregroundStyle(Theme.muted) }
                     }
                     if shown.isEmpty {
-                        Text("No results").font(Theme.heading(20, .bold)).foregroundStyle(Theme.muted)
-                            .frame(maxWidth: .infinity).padding(.vertical, 30)
+                        EmptyState(title: "No results")
                     }
                     ForEach(shown) { e in
                         Button { info = e } label: { LibraryRow(e: e, fav: fav.contains(e.id)) }.buttonStyle(.plain)
@@ -107,7 +106,7 @@ struct LibraryRow: View {
         HStack(spacing: 10) {
             LogThumb(url: (e.custom ? ExPhotoStore.url(e.id) : nil) ?? e.image.map { URL(string: ExerciseImages.base + $0) } ?? nil, muscle: e.muscle, size: 52)
             VStack(alignment: .leading, spacing: 2) {
-                (Text(fav ? "★ " : "").foregroundColor(Color(hex: 0xFFD700)) + Text(e.name))
+                (Text(fav ? "★ " : "").foregroundColor(Theme.gold) + Text(e.name))
                     .font(Theme.body(13, .semibold)).foregroundStyle(Theme.text).lineLimit(2)
                 Text(meta).font(Theme.body(11)).foregroundStyle(Theme.muted).lineLimit(1)
             }
@@ -141,7 +140,7 @@ struct LibraryRow: View {
                 Text("\(WorkoutMath.n(jsNum(p["reps"])))r PR").font(Theme.body(9)).foregroundStyle(Theme.muted)
                 if let sug, WorkoutMath.prE1rm(sug) > jsNum(p["weight"]) + WorkoutMath.sugEps {
                     Text("\(WorkoutMath.n((settings.display(WorkoutMath.prE1rm(sug)) * 10).rounded() / 10))\(settings.unitLabel) suggested")
-                        .font(Theme.body(9, .semibold)).foregroundStyle(Color(hex: 0xD9B84A))
+                        .font(Theme.body(9, .semibold)).foregroundStyle(Theme.goldSoft)
                 }
             }
         }
@@ -292,7 +291,7 @@ struct ExerciseInfoSheet: View {
             let w = { (kg: Double) in "\(WorkoutMath.n((settings.display(kg) * 10).rounded() / 10))\(settings.unitLabel)" }
             let s = w(WorkoutMath.prE1rm(g))
             VStack(alignment: .leading, spacing: 3) {
-                HStack { Text("Suggested PR").font(Theme.body(13, .semibold)); Spacer(); Text(s).font(Theme.heading(16, .bold)).foregroundStyle(Color(hex: 0xD9B84A)) }
+                HStack { Text("Suggested PR").font(Theme.body(13, .semibold)); Spacer(); Text(s).font(Theme.heading(16, .bold)).foregroundStyle(Theme.goldSoft) }
                 Text("Estimated from \(w(jsNum(g["weight"]))) × \(WorkoutMath.n(jsNum(g["reps"])))"
                      + (p.map { ". Your PR is \(w(jsNum($0["weight"]))) × \(WorkoutMath.n(jsNum($0["reps"])))" } ?? "")
                      + ". Lift \(s) and it becomes your PR.")
@@ -452,7 +451,7 @@ struct CreateExerciseSheet: View {
                                     Image(uiImage: img).resizable().scaledToFill()
                                 } else { ZStack { Theme.bg4; SFIcon("dumbbell").foregroundStyle(Theme.muted) } }
                             }
-                            .frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 10))
+                            .frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: Theme.radius))
                             PhotosPicker(selection: $photoItem, matching: .images) { Text("Choose photo") }
                             Spacer()
                             if photo != nil || (!photoRemoved && editing.flatMap { ExPhotoStore.url($0.id) } != nil) {

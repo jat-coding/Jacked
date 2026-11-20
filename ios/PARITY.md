@@ -37,6 +37,26 @@ Updated 2026-11-18 (rows 17, 25, 28, 40, 42, 43, 45, 55 built or closed; counts 
 | n/a | 20 |
 | **total** | **303** |
 
+## Design audit 2026-11-19 (iPhone vs the PWA, cosmetic only)
+
+Method: every screen enumerated from `Jacked/Views`, tokens compared with the PWA CSS (`:root`, `.cw`/`.sec` at index.html:619, `.md` :257, `.es` :450, `.btn.sm`), simulator screenshots of Home, Routines, Library, Metrics, Friends, My Profile and a workout detail after the change. Behaviour unchanged.
+
+| deviation found | PWA | fix (shared token or component) |
+|---|---|---|
+| Cards were flat bg2, 1px border, 18pt radius | gradient #1a1a21 to #131318, 20pt, no border, top highlight, shadow | `CardBackground` / `.card()` rewritten; new `.cwCard()` |
+| Card padding was 14, 16 or 18 depending on screen | 18 | `Theme.cardPad`, `.cwCard()` on every top-level card |
+| Suggested-today card hand-rolled its own fill | same card with a blue outline | uses `.cwCard()` plus blue stroke |
+| Routines / Library / Metrics / Friends titles had the teal dot | only JACKED. has it | `PageHeader.accentDot` defaults off; Home passes true |
+| Header actions (+ New, + Custom, Reorder, + Friend) were 14pt capsules | `.btn.bg.sm`: 12pt text, 12pt radius | `HeaderPillStyle` |
+| Sheets mixed system grey, black and bg2, no shared top radius | `.md`: bg2, 24pt top radius | `sheetChrome()` inside `popup()`, `popup(dirty:)`, `SheetScaffold`; Reorder and Add Exercise pickers now bg2 |
+| Five different empty states | `.es` | `EmptyState` component |
+| Hex literals retyped (gold x30, suggested gold, amber, missed red, alert red, hairline, stat well) | one CSS value each | `Theme.gold/goldSoft/amber/missed/alert/hairline/well` |
+| 37 bare corner radii (2, 6, 7, 8, 9, 10, 14, 20) | scale | `Theme.radiusXS/SM/radius/Tile/Card`; 7 and 9 folded to 8, 10 to 12 |
+| Block gaps 20 and 22 mixed on Home | 22 | `Theme.blockGap` |
+| Badge colours duplicated (teal, grey) | tokens | `BadgeUI` now points at `Theme.accent` / `Theme.muted` |
+
+Not changed, on purpose: the floating nav is dark glass here, solid bg2 in the PWA (decided in e33118b). Still open: gold-while-holding-Jacked look (row 11), pinned page titles (row 32), Friends "Loading friends..." is text where Home uses a spinner. Not captured on screen after the change: the live workout, Finish summary, Add Friend, Create Exercise, Routine editor, Achievements and Recap sheets (they compile and take the same chrome).
+
 ---
 
 ## 1. Missing and partial, ranked by how much a user would notice

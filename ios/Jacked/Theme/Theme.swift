@@ -21,8 +21,26 @@ enum Theme {
     static let text = Color(hex: 0xF3F3F8)        // --text
     static let text2 = Color(hex: 0xA4A4B4)       // --text2
 
-    static let radius: CGFloat = 12               // --r
-    static let radiusLarge: CGFloat = 18          // --rl
+    // Extra colours the PWA hard-codes in its CSS (one name each, so screens stop retyping hex).
+    static let gold = Color(hex: 0xFFD700)        // PR stars, crown, Jacked badge, gold tier
+    static let goldSoft = Color(hex: 0xD9B84A)    // "suggested" PR tag and suggested-weight text
+    static let amber = Color(hex: 0xFFCA4D)       // badge medal
+    static let missed = Color(hex: 0xFF4D4D)      // calendar days without a workout
+    static let alert = Color(hex: 0xFF453A)       // unread dot / count badge
+    static let hairline = Color(hex: 0x23232B)    // .sec row dividers
+    static let well = Color(hex: 0x0D0D11)        // .sc stat tile / dark well inside a card
+
+    // Corner radii. One scale; screens use these names, not bare numbers.
+    static let radiusXS: CGFloat = 6              // calendar day cell, segmented-control inner pill
+    static let radiusSM: CGFloat = 8              // .ic / small pills, set boxes, thumbnails
+    static let radius: CGFloat = 12               // --r  (buttons, inputs, inner cards)
+    static let radiusLarge: CGFloat = 18          // --rl (legacy: outlined sub-panels)
+    static let radiusTile: CGFloat = 14           // .sc stat tile
+    static let radiusCard: CGFloat = 20           // .cw / .sec: the one card radius
+
+    /// Card inner padding (.cw padding:18) and the gap between two blocks (22).
+    static let cardPad: CGFloat = 18
+    static let blockGap: CGFloat = 22
 
     /// --fh: Barlow Condensed (bundled, OFL). Falls back to the system font if missing.
     static func heading(_ size: CGFloat, _ weight: HeadingWeight = .bold) -> Font {
@@ -127,15 +145,18 @@ struct DestructiveFilledButtonStyle: ButtonStyle {
     }
 }
 
-/// Page-header action pill (+ Custom, Reorder, + New, + Friend, Back): outlined capsule.
+/// Page-header action (+ Custom, Reorder, + New, + Friend, Back): the PWA's `.btn.bg.sm`, an outlined
+/// 12pt-radius button (not a capsule), 12pt semibold text, 7x14 padding.
 struct HeaderPillStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(Theme.body(14, .semibold))
-            .foregroundStyle(Theme.text)
-            .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(configuration.isPressed ? Theme.bg3 : Color.clear, in: Capsule())
-            .overlay(Capsule().stroke(Theme.border2, lineWidth: 1))
+            .font(Theme.body(12, .semibold))
+            .foregroundStyle(Theme.text2)
+            .padding(.horizontal, 14).padding(.vertical, 7)
+            .frame(minHeight: 32)
+            .background(configuration.isPressed ? Theme.bg3 : Color.clear, in: RoundedRectangle(cornerRadius: Theme.radius))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.border2, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.radius))
     }
 }
 

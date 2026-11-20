@@ -10,7 +10,7 @@ struct WorkoutShareCard: View {
 
     static let width: CGFloat = 1080
     static var height: CGFloat { 1350 }
-    private let gold = Color(hex: 0xFFD700), line = Color(hex: 0x2C2C38), tile = Color(hex: 0x0D0D11), sub = Color(hex: 0x8A8A98)
+    private let gold = Theme.gold, line = Color(hex: 0x2C2C38), tile = Theme.well, sub = Color(hex: 0x8A8A98)
 
     var body: some View {
         ZStack(alignment: .topLeading) {

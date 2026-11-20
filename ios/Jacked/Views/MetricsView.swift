@@ -34,13 +34,13 @@ struct MetricsView: View {
                                 BlockTitle(text: MetricsMath.cardTitles[id] ?? id)
                                 Button { Task { await Self.toggleCard(id, store: store, auth: auth) } } label: {
                                     JIcon("close", 11).foregroundStyle(Theme.text2)
-                                        .frame(width: 26, height: 26).background(Theme.bg3, in: RoundedRectangle(cornerRadius: 8))
+                                        .frame(width: 26, height: 26).background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
                                 }
                                 .buttonStyle(.plain).accessibilityLabel("Hide card")
                             }
                             cardBody(id, m)
                         }
-                        .padding(16).card().id(id)
+                        .cwCard().id(id)
                     }
                 }
                 .padding(.horizontal, 16).padding(.bottom, 30)
@@ -132,7 +132,7 @@ struct MetricsView: View {
             }
             if let t = l.top {
                 HStack(spacing: 10) {
-                    JIcon("trophy", 22).foregroundStyle(Color(hex: 0xFFD700))
+                    JIcon("trophy", 22).foregroundStyle(Theme.gold)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("TOP PR").font(Theme.body(11, .semibold)).tracking(0.5).foregroundStyle(Theme.muted)
                         Text(t.name).font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
@@ -159,7 +159,7 @@ struct MetricsView: View {
                             HStack(spacing: 5) {
                                 Text("\(r.label) \(String(r.y))").font(Theme.body(14, .bold)).foregroundStyle(Theme.text)
                                 if crowned && r.y * 12 + (r.m + 1) == now.year! * 12 + now.month! - 1 {
-                                    JIcon("crown", 12).foregroundStyle(Color(hex: 0xFFD700))
+                                    JIcon("crown", 12).foregroundStyle(Theme.gold)
                                 }
                             }
                             Text(Self.recapLine(r, s)).font(Theme.body(12)).foregroundStyle(Theme.muted)
@@ -234,7 +234,7 @@ struct StatTile: View {
             Text(l.uppercased()).font(Theme.body(10, .semibold)).tracking(0.5).foregroundStyle(Theme.muted).lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(12)
-        .background(Color(hex: 0x0D0D11), in: RoundedRectangle(cornerRadius: 14))
+        .background(Theme.well, in: RoundedRectangle(cornerRadius: Theme.radiusTile))
     }
 }
 
@@ -395,7 +395,7 @@ private struct MuscleScoringSheet: View {
             .padding(20)
         }
         .background(Theme.bg2.ignoresSafeArea())
-        .presentationDragIndicator(.visible)
+        .sheetChrome()
     }
     private func section(_ h: String, _ b: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -495,7 +495,7 @@ struct RecapSheet: View {
             }
         }
         .background(Theme.bg2.ignoresSafeArea())
-        .presentationDragIndicator(.visible)
+        .sheetChrome()
     }
 
     /// shareRecap's caption.
@@ -519,7 +519,7 @@ struct RecapSheet: View {
                     StatTile(v: "\(r.prs)", l: "PRs", color: Theme.text); StatTile(v: "\(r.days)", l: "Days trained", color: Theme.text)
                 }
                 if let b = r.best {
-                    row("trophy.fill", Color(hex: 0xFFD700), "Best lift", "\(b.name) \u{2014} \(MetricsView.dW(b.w, s)) \(s.unitLabel) \u{00D7} \(WorkoutMath.n(b.r))")
+                    row("trophy.fill", Theme.gold, "Best lift", "\(b.name) \u{2014} \(MetricsView.dW(b.w, s)) \(s.unitLabel) \u{00D7} \(WorkoutMath.n(b.r))")
                 }
                 if let w = r.bestWeek {
                     row("calendar", Theme.accent, "Best week", "Week of \(Self.md.string(from: w.start)) \u{2014} \(HomeMath.fmtV(s.display(w.vol))) \(s.unitLabel) in \(w.n) session\(w.n != 1 ? "s" : "")")
@@ -531,9 +531,9 @@ struct RecapSheet: View {
                     HStack(spacing: 6) {
                         ForEach(chips, id: \.1) { c in
                             HStack(spacing: 5) { SFIcon(c.0, 12); Text(c.1.uppercased()).font(Theme.body(11, .heavy)).tracking(0.5) }
-                                .foregroundStyle(Color(hex: 0xFFD700)).padding(.horizontal, 10).padding(.vertical, 4)
-                                .background(Color(hex: 0xFFD700).opacity(0.08), in: Capsule())
-                                .overlay(Capsule().stroke(Color(hex: 0xFFD700).opacity(0.4), lineWidth: 1))
+                                .foregroundStyle(Theme.gold).padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(Theme.gold.opacity(0.08), in: Capsule())
+                                .overlay(Capsule().stroke(Theme.gold.opacity(0.4), lineWidth: 1))
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -604,7 +604,7 @@ struct HomeRecapCard: View {
                 }
                 .buttonStyle(.plain).accessibilityLabel("Dismiss")
             }
-            .padding(16).card().contentShape(Rectangle())
+            .cwCard().contentShape(Rectangle())
             .onTapGesture { open = d }
             .padding(.bottom, 20)
             .sheet(item: $open) { RecapSheet(r: $0, settings: s).popup() }

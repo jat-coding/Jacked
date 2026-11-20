@@ -17,8 +17,8 @@ enum BadgeUI {
             return Color(hex: UInt32(h, radix: 16) ?? 0x20D3C2)
         }
     }
-    static let tierColor: [String: Color] = ["bronze": Color(hex: 0xCD7F32), "silver": Color(hex: 0xB8B8C8), "gold": Color(hex: 0xFFD700)]
-    static let teal = Color(hex: 0x20D3C2), lockedGrey = Color(hex: 0x70707F)
+    static let tierColor: [String: Color] = ["bronze": Color(hex: 0xCD7F32), "silver": Color(hex: 0xB8B8C8), "gold": Theme.gold]
+    static let teal = Theme.accent, lockedGrey = Theme.muted
 
     // MARK: earned-tier highlight (same award math: Badge.tier / Badge.ladder.reached from computeBadges)
     /// Colour for tier `i` (1 bronze ... 3 gold) when `rank` tiers are earned: unearned muted, earned in the
@@ -82,7 +82,7 @@ struct BadgesCardRow: View {
         let list = BadgeUI.visible(badges).filter { $0.name != "Coward-Maxing" }
         Button(action: open) {
             HStack(spacing: 10) {
-                SFIcon("medal.fill").foregroundStyle(Color(hex: 0xFFCA4D))
+                SFIcon("medal.fill").foregroundStyle(Theme.amber)
                 Text("Badges earned").font(Theme.body(14, .semibold)).foregroundStyle(Theme.text)
                 Spacer()
                 Text("\(list.filter(\.earned).count) / \(list.count)").font(Theme.heading(18, .extraBold)).foregroundStyle(Theme.accent)
@@ -120,12 +120,12 @@ struct AchievementsSheet: View {
                 if let jk {
                     Button { openBadge = jk } label: {
                         HStack(spacing: 10) {
-                            JIcon("crown", 24).foregroundStyle(jk.earned ? Color(hex: 0xFFD700) : BadgeUI.lockedGrey)
-                            Text("Jacked").font(Theme.heading(26, .extraBold)).foregroundStyle(jk.earned ? Color(hex: 0xFFD700) : Theme.muted)
+                            JIcon("crown", 24).foregroundStyle(jk.earned ? Theme.gold : BadgeUI.lockedGrey)
+                            Text("Jacked").font(Theme.heading(26, .extraBold)).foregroundStyle(jk.earned ? Theme.gold : Theme.muted)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 14)
                         .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radius))
-                        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Color(hex: 0xFFD700).opacity(jk.earned ? 0.8 : 0.25), lineWidth: 1.5))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.gold.opacity(jk.earned ? 0.8 : 0.25), lineWidth: 1.5))
                         .opacity(jk.earned ? 1 : 0.6)
                     }
                     .buttonStyle(.plain).padding(.bottom, 6)
@@ -199,7 +199,7 @@ struct BadgeDetailSheet: View {
         let xKey = MetricsMath.BADGE_KEY[b.name]
         let cross = xKey.map { m.tierCrossingDetail($0, m.last3mo(), T) } ?? [:]
         let teal = b.earned && b.tier == nil && b.name != "Coward-Maxing" && b.name != "Jacked"
-        let col: Color = b.tier.flatMap { BadgeUI.tierColor[$0] } ?? (b.name == "Jacked" && b.earned ? Color(hex: 0xFFD700) : teal ? BadgeUI.teal : b.earned ? Theme.green : BadgeUI.lockedGrey)
+        let col: Color = b.tier.flatMap { BadgeUI.tierColor[$0] } ?? (b.name == "Jacked" && b.earned ? Theme.gold : teal ? BadgeUI.teal : b.earned ? Theme.green : BadgeUI.lockedGrey)
         let status = b.tier ?? (b.earned ? "earned" : "locked")
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
@@ -287,7 +287,7 @@ struct BadgeDetailSheet: View {
             .padding(20)
         }
         .background(Theme.bg2.ignoresSafeArea())
-        .presentationDragIndicator(.visible)
+        .sheetChrome()
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
                 if let plan = m.badgePlan(b, db: catalog.db), let onStart {

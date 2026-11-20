@@ -40,7 +40,7 @@ struct FriendProfileSheet: View {
             .padding(20)
         }
         .background(Theme.bg2.ignoresSafeArea())
-        .sheet(isPresented: $lightbox) { AvatarLightbox(url: URL(string: p.avatarUrl)).popup() }
+        .sheet(isPresented: $lightbox) { AvatarLightbox(url: URL(string: p.avatarUrl)).presentationDragIndicator(.visible) }
         .overlay(alignment: .top) { ToastView(text: $friends.toast) }
         .sheet(isPresented: $showBadges) { FriendBadgesSheet(p: p, m: m).popup() }
         .sheet(isPresented: $showGymYears) { GymYearsView(who: p.isYou ? "You" : p.name, days: Set(p.days)).popup() }
@@ -62,16 +62,16 @@ struct FriendProfileSheet: View {
     @ViewBuilder private var overview: some View {
         if p.hasJacked {
             HStack(spacing: 12) {
-                JIcon("crown", 26).foregroundStyle(Color(hex: 0xFFD700)).shadow(color: Color(hex: 0xFFD700).opacity(0.6), radius: 6)
+                JIcon("crown", 26).foregroundStyle(Theme.gold).shadow(color: Theme.gold.opacity(0.6), radius: 6)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("JACKED").font(Theme.heading(17, .extraBold)).tracking(1).foregroundStyle(Color(hex: 0xFFD700))
+                    Text("JACKED").font(Theme.heading(17, .extraBold)).tracking(1).foregroundStyle(Theme.gold)
                     Text("\(p.isYou ? "You hold" : "Holds") every monthly and 3-month badge, with every tiered badge earned.").font(Theme.body(12)).foregroundStyle(Theme.muted)
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(LinearGradient(colors: [Color(hex: 0xFFD700).opacity(0.12), Color(hex: 0xFFD700).opacity(0.03)], startPoint: .topLeading, endPoint: .bottomTrailing),
+            .background(LinearGradient(colors: [Theme.gold.opacity(0.12), Theme.gold.opacity(0.03)], startPoint: .topLeading, endPoint: .bottomTrailing),
                         in: RoundedRectangle(cornerRadius: Theme.radius))
-            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Color(hex: 0xFFD700).opacity(0.55), lineWidth: 1)).padding(.bottom, 12)
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.gold.opacity(0.55), lineWidth: 1)).padding(.bottom, 12)
         }
         HStack(spacing: 8) {
             StatTile(v: WorkoutMath.n(p.workouts), l: "Workouts")
@@ -83,8 +83,8 @@ struct FriendProfileSheet: View {
             StatTile(v: WorkoutMath.n(p.streak), l: "Day Streak", size: 20, color: Theme.orange)
                 .overlay(alignment: .topTrailing) { SFIcon("flame.fill").foregroundStyle(Theme.orange).padding(12) }
             Button { showBadges = true } label: {
-                StatTile(v: WorkoutMath.n(p.badges), l: "Badges \u{203A}", size: 20, color: Color(hex: 0xFFCA4D))
-                    .overlay(alignment: .topTrailing) { SFIcon("medal.fill").foregroundStyle(Color(hex: 0xFFCA4D)).padding(12) }
+                StatTile(v: WorkoutMath.n(p.badges), l: "Badges \u{203A}", size: 20, color: Theme.amber)
+                    .overlay(alignment: .topTrailing) { SFIcon("medal.fill").foregroundStyle(Theme.amber).padding(12) }
             }.buttonStyle(.plain)
         }
         .padding(.bottom, 14)
@@ -136,7 +136,7 @@ struct FriendProfileSheet: View {
             Spacer()
             Text(metric + (chevron ? " \u{203A}" : "")).font(Theme.heading(16, .bold)).foregroundStyle(Theme.text2)
         }
-        .padding(.vertical, 12).overlay(alignment: .top) { Rectangle().fill(Color(hex: 0x23232B)).frame(height: 1) }.contentShape(Rectangle())
+        .padding(.vertical, 12).overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }.contentShape(Rectangle())
     }
 
     private func copy(_ w: SharedWorkout) {
@@ -227,14 +227,14 @@ struct MiniCalendar: View {
                         Text("\(d)").font(Theme.body(12, worked ? .bold : .regular))
                             .foregroundStyle(worked ? Theme.onAccent : Theme.text2)
                             .frame(maxWidth: .infinity, minHeight: 30)
-                            .background(worked ? Theme.accent : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(ds == today ? Theme.accent : .clear, lineWidth: 1))
+                            .background(worked ? Theme.accent : Color.clear, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
+                            .overlay(RoundedRectangle(cornerRadius: Theme.radiusSM).stroke(ds == today ? Theme.accent : .clear, lineWidth: 1))
                             .onTapGesture { if worked { tap(ds) } }
                     }
                 }
             }
         }
-        .padding(14).card()
+        .cwCard()
     }
 }
 
@@ -276,7 +276,7 @@ struct FriendBadgesSheet: View {
                             Text(BadgeUI.tierWordsText(m.badgeShortHow(shown, ladders), rank: BadgeUI.rank(b.t), base: Theme.muted)).font(Theme.body(12))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        let tc = BadgeUI.tierColor[b.t] ?? (b.n == "Jacked" ? Color(hex: 0xFFD700) : Theme.green)
+                        let tc = BadgeUI.tierColor[b.t] ?? (b.n == "Jacked" ? Theme.gold : Theme.green)
                         Text(b.t.isEmpty ? "Earned" : b.t.capitalized).font(Theme.body(11, .bold)).foregroundStyle(tc)
                             .padding(.horizontal, 8).padding(.vertical, 3).background(tc.opacity(0.13), in: Capsule()).overlay(Capsule().stroke(tc.opacity(0.4), lineWidth: 1))
                     }
@@ -298,7 +298,7 @@ struct AvatarLightbox: View {
             Color.black.opacity(0.9).ignoresSafeArea().onTapGesture { dismiss() }
             CachedImage(url: url) { Color.clear }
                 .aspectRatio(1, contentMode: .fit).frame(maxWidth: 480)
-                .clipShape(RoundedRectangle(cornerRadius: 20)).padding(.horizontal, 16).frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusCard)).padding(.horizontal, 16).frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
             Button { dismiss() } label: {
                 JIcon("close", 16).foregroundStyle(.white).frame(width: 36, height: 36).background(Color.black.opacity(0.55), in: Circle())

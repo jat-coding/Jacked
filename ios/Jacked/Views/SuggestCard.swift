@@ -48,10 +48,9 @@ struct SuggestCard: View {
                     .padding(.top, 10)
                 }
             }
-            .padding(18)
-            .background(Theme.bg2, in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color(red: 77 / 255, green: 158 / 255, blue: 1).opacity(0.3), lineWidth: 1))
-            .padding(.bottom, 22)
+            .cwCard()
+            .overlay(RoundedRectangle(cornerRadius: Theme.radiusCard).stroke(Theme.blue.opacity(0.3), lineWidth: 1))
+            .padding(.bottom, Theme.blockGap)
             .task(id: "\(today)|\(store.loadedCode ?? "")|\(store.freshThisLaunch)") {
                 // todaysCuratedPick caches the pick per day in the synced blob, like the web app.
                 // Only after this launch's server read: a pick made from an old disk copy could disagree with

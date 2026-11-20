@@ -27,11 +27,7 @@ struct RoutinesView: View {
                     }
                 }
                 if blocks.isEmpty {
-                    VStack(spacing: 4) {
-                        Text("No routines").font(Theme.heading(22, .bold)).foregroundStyle(Theme.text2)
-                        Text("Create your first routine.").font(Theme.body(13)).foregroundStyle(Theme.muted)
-                    }
-                    .padding(.vertical, 30)
+                    EmptyState(title: "No routines", subtitle: "Create your first routine.")
                 }
                 let collapsed = Set((raw["jk_collapsedSections"]?.array ?? []).compactMap(\.string))
                 ForEach(blocks, id: \.id) { b in
@@ -155,7 +151,7 @@ struct TrustedPrograms: View {
         let pick = MetricsMath(raw: raw, lib: ExLib(db: catalog.db, raw: raw)).todaysCuratedPick(today: JackedDate.dayKey(Date())).pick
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                SFIcon("star.fill").foregroundStyle(Color(hex: 0xFFD700))
+                SFIcon("star.fill").foregroundStyle(Theme.gold)
                 Text("TRUSTED PROGRAMS").font(Theme.heading(24, .extraBold)).foregroundStyle(Theme.text)
             }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -183,7 +179,7 @@ struct TrustedPrograms: View {
                 }
             }
         }
-        .padding(14).card()
+        .cwCard()
         .task {
             #if DEBUG
             if let i = DevHooks.addProgram, Curated.programs.indices.contains(i) { await add(i); DevHooks.log("dev program added \(i)") }
@@ -262,7 +258,7 @@ struct FlowChips: View {
             ForEach(Array(items.enumerated()), id: \.offset) { _, t in
                 Text(t).font(Theme.body(11, .semibold)).foregroundStyle(Theme.text2)
                     .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Theme.bg3, in: RoundedRectangle(cornerRadius: 6))
+                    .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radiusXS))
             }
         }
     }
@@ -561,7 +557,7 @@ struct ExercisePickerSheet: View {
                 }
                 .listRowBackground(Theme.bg2)
             }
-            .scrollContentBackground(.hidden).background(Theme.bg)
+            .scrollContentBackground(.hidden).background(Theme.bg2)
             .searchable(text: $q, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search exercises")
             .navigationTitle("Add Exercise").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }

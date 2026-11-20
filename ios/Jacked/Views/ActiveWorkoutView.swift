@@ -273,8 +273,7 @@ struct ExerciseCard: View {
                 }
             }
         }
-        .padding(14)
-        .card()
+        .cwCard()
         .overlay(alignment: .leading) {
             if paired { RoundedRectangle(cornerRadius: 2).fill(Theme.blue).frame(width: 3).padding(.vertical, 10) }
         }
@@ -305,7 +304,7 @@ struct ExerciseCard: View {
         let raw = store.backup.raw
         let gotPR = WorkoutMath.prIndex(ex, raw: raw) != nil
         var out: [Chip] = []
-        if gotPR { out.append(Chip(text: "★ PR", color: Color(hex: 0xFFD700), info: nil)) }
+        if gotPR { out.append(Chip(text: "★ PR", color: Theme.gold, info: nil)) }
         guard WorkoutMath.progressTrackable(ex.tracking) else { return out }
         let p = WorkoutMath.evaluateProgress(exId: ex.exId, history: raw["jk_hist"]?.array ?? [], settings: settings, bw: jsNum(raw["jk_bw"]))
         if p.up {
@@ -370,7 +369,7 @@ struct SetRow: View {
             HStack {
                 HStack(spacing: 2) {
                     Text("\(si + 1)").font(Theme.body(14, .bold))
-                    if star { JIcon("starfill", 9).foregroundStyle(Color(hex: 0xFFD700)) }
+                    if star { JIcon("starfill", 9).foregroundStyle(Theme.gold) }
                 }
                 .padding(.leading, 10)  // breathing room from the done-row highlight's left edge
                 .frame(width: 34, alignment: .leading).foregroundStyle(set.done ? Theme.accent : Theme.text2)
@@ -402,12 +401,12 @@ struct SetRow: View {
                 } else { Text("—").frame(maxWidth: .infinity).foregroundStyle(Theme.muted) }
             }
             .padding(.vertical, 2)
-            .background(set.done ? Theme.accent.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 9))
+            .background(set.done ? Theme.accent.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
             Button { session.toggle(ei, si, raw: store.backup.raw, settings: settings) } label: {
                 JIcon("tick", 14)
                     .foregroundStyle(set.done ? Theme.onAccent : Theme.muted)
                     .frame(width: 40, height: 34)
-                    .background(set.done ? Theme.accent : Theme.bg3, in: RoundedRectangle(cornerRadius: 9))
+                    .background(set.done ? Theme.accent : Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
             }
             .accessibilityLabel(set.done ? "Set \(si + 1) done" : "Mark set \(si + 1) done")
         }
@@ -465,7 +464,7 @@ struct NumberField: View {
             .font(Theme.body(15, .semibold)).monospacedDigit()
             .foregroundStyle(Theme.text)
             .padding(.vertical, 7)
-            .background(Theme.bg3, in: RoundedRectangle(cornerRadius: 9))
+            .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
             .frame(maxWidth: .infinity)
             .focused($focused)
             .onAppear { text = value > 0 ? fmt(value) : "" }
@@ -533,7 +532,7 @@ struct NoteField: View {
         TextField(note.isEmpty ? "Add note (remembered next time)…" : note, text: $text)
             .font(Theme.body(13)).foregroundStyle(Theme.text)
             .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(Theme.bg3, in: RoundedRectangle(cornerRadius: 9))
+            .background(Theme.bg3, in: RoundedRectangle(cornerRadius: Theme.radiusSM))
             .submitLabel(.done)
             .onSubmit {
                 let v = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -557,7 +556,7 @@ struct ReorderSheet: View {
                 .onMove { session.moveExercises(from: $0, to: $1) }
             }
             .environment(\.editMode, .constant(.active))
-            .scrollContentBackground(.hidden).background(Theme.bg)
+            .scrollContentBackground(.hidden).background(Theme.bg2)
             .navigationTitle("Reorder").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
@@ -626,8 +625,7 @@ struct AddExerciseSheet: View {
                             .frame(maxWidth: .infinity).listRowBackground(Color.clear)
                     }
                     if l.recent.isEmpty && l.rest.isEmpty {
-                        Text("No results").font(Theme.heading(18, .bold)).foregroundStyle(Theme.muted)
-                            .frame(maxWidth: .infinity).padding(.vertical, 20).listRowBackground(Color.clear)
+                        EmptyState(title: "No results").listRowBackground(Color.clear)
                     }
                 } header: { if !l.recent.isEmpty { groupTitle("All exercises") } }
             }
@@ -790,7 +788,7 @@ struct FinishSummarySheet: View {
         ScrollView {
             VStack(spacing: 12) {
                 SFIcon(s.prs.isEmpty ? "dumbbell" : "trophy.fill", 38)
-                    .foregroundStyle(s.prs.isEmpty ? Theme.muted : Color(hex: 0xFFD700)).padding(.top, 24)
+                    .foregroundStyle(s.prs.isEmpty ? Theme.muted : Theme.gold).padding(.top, 24)
                 Text(s.name).font(Theme.heading(26, .extraBold)).foregroundStyle(Theme.text)
                 Text(s.savedToServer ? "Workout complete" : "Workout complete · saved on this phone, will sync when online")
                     .font(Theme.body(12)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
@@ -815,7 +813,7 @@ struct FinishSummarySheet: View {
                         HStack {
                             Text(p.name).font(Theme.body(13, .semibold)); Spacer()
                             Text("\(WorkoutMath.n((settings.display(implied) * 10).rounded() / 10))\(settings.unitLabel)")
-                                .font(Theme.heading(16, .bold)).foregroundStyle(Color(hex: 0xD9B84A))
+                                .font(Theme.heading(16, .bold)).foregroundStyle(Theme.goldSoft)
                         }
                         Text("Estimated from \(WorkoutMath.n(settings.display(p.weight)))\(settings.unitLabel) × \(Int(p.reps)). Becomes your PR once you lift \(WorkoutMath.n((settings.display(implied) * 10).rounded() / 10))\(settings.unitLabel).")
                             .font(Theme.body(11)).foregroundStyle(Theme.muted)
@@ -881,7 +879,7 @@ struct FinishSummarySheet: View {
 
     private func stat(_ v: String, _ l: String, gold: Bool = false) -> some View {
         VStack(spacing: 2) {
-            Text(v).font(Theme.heading(24, .black)).foregroundStyle(gold ? Color(hex: 0xFFD700) : Theme.text)
+            Text(v).font(Theme.heading(24, .black)).foregroundStyle(gold ? Theme.gold : Theme.text)
             Text(l).font(Theme.body(11)).foregroundStyle(Theme.muted)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 12)
