@@ -170,6 +170,14 @@ struct ExerciseInfoSheet: View {
     @State private var photoTick = 0
     @State private var toast: String?
 
+    /// The note Edit saves: the custom entry's "notes" (jk_cex), else the built-in override layer (jk_exOverride).
+    private var savedNote: String {
+        let raw = store.backup.raw
+        let cex = (raw["jk_cex"]?.array ?? []).compactMap(\.object).first { $0["id"]?.string == ex.id }
+        let n = cex?["notes"]?.string ?? raw["jk_exOverride"]?[ex.id]?.object?["notes"]?.string ?? ""
+        return n.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         let raw = store.backup.raw, settings = store.backup.settings
         let fav = (raw["jk_favEx"]?.array ?? []).contains(.string(ex.id))
@@ -191,8 +199,14 @@ struct ExerciseInfoSheet: View {
                             .buttonStyle(GhostButtonStyle())
                     }
                     chart(raw: raw, settings: settings)
+                    if !savedNote.isEmpty {
+                        BlockTitle(text: "Notes").padding(.top, 6)
+                        Text(savedNote).font(Theme.body(13)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
+                    }
                     if ex.instructions.isEmpty {
-                        Text("No instructions available.").font(Theme.body(13)).foregroundStyle(Theme.muted).padding(.top, 6)
+                        if savedNote.isEmpty {
+                            Text("No instructions available.").font(Theme.body(13)).foregroundStyle(Theme.muted).padding(.top, 6)
+                        }
                     } else {
                         BlockTitle(text: "How to perform").padding(.top, 6)
                         ForEach(Array(ex.instructions.enumerated()), id: \.offset) { i, s in
